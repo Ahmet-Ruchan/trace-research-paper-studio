@@ -29,10 +29,13 @@ export type GenerationProgress = {
   title: string;
   detail: string;
   attempt?: number;
+  activityAt?: string;
+  heartbeat?: boolean;
 };
 
 export type GenerationStreamEvent =
   | ({ type: "progress" } & GenerationProgress)
+  | { type: "checkpoint"; checkpoint: unknown; completed: string[] }
   | { type: "result"; project: unknown; warnings: string[] }
   | { type: "error"; error: string; detail?: unknown };
 
@@ -46,5 +49,5 @@ export const initialGenerationProgress: GenerationProgress = {
 export function isGenerationStreamEvent(value: unknown): value is GenerationStreamEvent {
   if (!value || typeof value !== "object" || !("type" in value)) return false;
   const type = (value as { type?: unknown }).type;
-  return type === "progress" || type === "result" || type === "error";
+  return type === "progress" || type === "checkpoint" || type === "result" || type === "error";
 }

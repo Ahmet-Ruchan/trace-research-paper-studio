@@ -24,10 +24,12 @@ a workspace for reading, checking, editing, teaching, and publishing research.
 - Accepts research papers as PDF files up to 35 MB
 - Adds up to three optional public web sources
 - Extracts a structured evidence map with page-level references
+- Splits evidence extraction into four bounded, independently validated passes
 - Separates reported results, methods, background, interpretation, and limitations
 - Builds an editable visual narrative from verified claims
-- Streams live generation progress to the interface
+- Streams partial structured output, live model activity, and 10-second heartbeats
 - Automatically retries transient provider and structured-output failures
+- Checkpoints completed evidence passes and resumes them after a failed request
 - Rejects stories with broken claim, page, metric, or evidence links
 - Provides dedicated **Lab**, **Story**, and **Preview** workspaces
 - Renders six reusable interactive visual grammars
@@ -44,7 +46,8 @@ application. Instead, it uses a constrained pipeline:
 ```text
 PDF + optional sources
           ↓
-    Evidence extraction
+ Segmented evidence extraction
+ overview · methods · results · limits
           ↓
  Validated PaperEvidence
           ↓
@@ -146,6 +149,9 @@ npm run check
   response type, timeout, and payload size to reduce SSRF risk.
 - PDF and web contents are treated as untrusted source material, not instructions.
 - Generated output must satisfy Zod schemas and additional semantic integrity checks.
+- Model calls have explicit per-attempt deadlines and bounded retry policies.
+- At most two evidence passes run concurrently to avoid uncontrolled rate pressure.
+- Completed passes are checkpointed locally without storing the API key.
 - Verified paper claims require an excerpt and a visible PDF page number.
 - Comparison visuals may only use numeric values already recorded in evidence.
 - The renderer uses trusted components instead of executing model-generated code.

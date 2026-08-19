@@ -1,3 +1,4 @@
+import type { EvidencePassId } from "./evidence-pipeline";
 import type { PaperEvidence } from "./schema";
 
 type PromptOptions = {
@@ -32,14 +33,47 @@ Hard rules:
 9. Use ${languageName[options.language]} for all reader-facing prose. Preserve official names and technical terms where useful.
 10. Write for ${audienceDescriptions[options.audience]}. Requested depth: ${options.depth}.
 11. IDs must be unique, stable kebab-case strings. Use only "paper" and the SOURCE IDs explicitly supplied below in source references.
-12. Put every number that could be visualized into metrics, with its exact numeric value, display form, unit, context, page, and excerpt.
-13. A limitations array and at least one limitation claim are required even when the paper does not explicitly label a limitations section. In that case, describe only boundaries directly supported by scope, assumptions, complexity, or evaluation evidence and mark uncertain interpretations needs-review.
+12. In the results task, put every number that could be visualized into metrics, with its exact numeric value, display form, unit, context, page, and excerpt.
+13. In the limitations task, a limitations array and at least one limitation claim are required even when the paper does not explicitly label a limitations section. In that case, describe only boundaries directly supported by scope, assumptions, complexity, or evaluation evidence and mark uncertain interpretations needs-review.
 
 Supplementary web sources are optional context and must not override the paper. Their source IDs and cleaned text appear below. If empty, use only the paper.
 
 ${options.webContext || "No supplementary web sources were provided."}
 
 Return only schema-compliant structured data.`;
+}
+
+const passInstructions: Record<EvidencePassId, string> = {
+  overview: `TASK: Build only the paper overview.
+- Extract bibliographic metadata, thesis, plain-language summary, and research question.
+- Build a concise glossary of terms required to understand the paper.
+- Add source-linked background or author-interpretation claims that support the thesis and scope.
+- Claim IDs in this pass must start with "overview-".
+- Do not output methods, findings, metrics, or limitations fields.`,
+  methods: `TASK: Analyze only the methods and technical mechanism.
+- Extract the concrete methods, architecture, experimental setup, datasets, and evaluation procedure that the paper actually uses.
+- Claims may use only kind "method" or "background" and must include direct source references.
+- Claim IDs in this pass must start with "method-".
+- Do not summarize results or invent implications.`,
+  results: `TASK: Analyze only findings, experiments, and numeric evidence.
+- Extract the reported findings and the claims that directly support them.
+- Claims may use only kind "reported-result", "author-interpretation", or "background".
+- Claim IDs in this pass must start with "result-".
+- Put every potentially visualized number into metrics with exact value, display form, unit, context, page, and excerpt.
+- Do not compare numbers from incompatible tasks as if they share one scale.`,
+  limitations: `TASK: Analyze only limitations, assumptions, scope boundaries, and tradeoffs.
+- Include explicit author limitations and boundaries directly implied by the evaluated scope, complexity, data, or assumptions.
+- Claims may use only kind "limitation" or "author-interpretation".
+- Claim IDs in this pass must start with "limit-".
+- If a limitation is inferred rather than explicitly stated, mark it "needs-review" and anchor it to the evidence that establishes the boundary.`,
+};
+
+export function buildEvidencePassPrompt(options: PromptOptions, passId: EvidencePassId) {
+  const base = buildEvidencePrompt(options).replace(
+    "Return only schema-compliant structured data.",
+    "",
+  );
+  return `${base}\n\n${passInstructions[passId]}\n\nReturn only the schema-compliant object for this task. Keep the output focused; completeness inside this task matters more than repeating general context.`;
 }
 
 export function buildStoryPrompt(

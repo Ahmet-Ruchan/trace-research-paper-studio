@@ -45,14 +45,16 @@ export const glossaryItemSchema = z.object({
   sourceRef: sourceReferenceSchema.optional(),
 });
 
+export const paperMetadataSchema = z.object({
+  title: z.string(),
+  authors: z.array(z.string()),
+  year: z.string(),
+  venue: z.string(),
+  doi: z.string().optional(),
+});
+
 export const paperEvidenceSchema = z.object({
-  paper: z.object({
-    title: z.string(),
-    authors: z.array(z.string()),
-    year: z.string(),
-    venue: z.string(),
-    doi: z.string().optional(),
-  }),
+  paper: paperMetadataSchema,
   sources: z.array(sourceSchema).min(1),
   thesis: z.string(),
   plainSummary: z.string(),
@@ -173,4 +175,3 @@ export type StoryVisual = z.infer<typeof visualSchema>;
 export type StorySection = z.infer<typeof storySectionSchema>;
 export type StorySpec = z.infer<typeof storySpecSchema>;
 export type ResearchProject = z.infer<typeof researchProjectSchema>;
-

@@ -19,6 +19,17 @@ import { StoryView } from "./story-view";
 
 type WorkspaceMode = "lab" | "story" | "preview";
 const STORAGE_KEY = "trace-research-project-v1";
+const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
+
+function checkpointPartCount(raw: string | null) {
+  if (!raw) return 0;
+  try {
+    const value = JSON.parse(raw) as { parts?: Record<string, unknown> };
+    return value.parts ? Object.values(value.parts).filter(Boolean).length : 0;
+  } catch {
+    return 0;
+  }
+}
 
 function download(name: string, content: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -40,6 +51,7 @@ export function AppShell() {
   const [hydrated, setHydrated] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<GenerationProgress>(initialGenerationProgress);
   const generationController = useRef<AbortController | undefined>(undefined);
+  const checkpointCount = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -50,6 +62,7 @@ export function AppShell() {
       }
       if (search.get("new") === "1") {
         window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(CHECKPOINT_KEY);
         setHydrated(true);
         return;
       }
@@ -77,6 +90,8 @@ export function AppShell() {
   async function generate(options: GenerationOptions) {
     const controller = new AbortController();
     generationController.current = controller;
+    const savedCheckpoint = window.localStorage.getItem(CHECKPOINT_KEY);
+    checkpointCount.current = checkpointPartCount(savedCheckpoint);
     setGenerationProgress(initialGenerationProgress);
     setLoading(true); setError(undefined); setWarnings([]);
     try {
@@ -88,6 +103,7 @@ export function AppShell() {
       form.set("audience", options.audience);
       form.set("depth", options.depth);
       form.set("model", options.model);
+      if (savedCheckpoint) form.set("checkpoint", savedCheckpoint);
       const response = await fetch("/api/generate", {
         method: "POST",
         body: form,
@@ -121,8 +137,14 @@ export function AppShell() {
             const event: unknown = JSON.parse(line);
             if (!isGenerationStreamEvent(event)) continue;
             if (event.type === "progress") setGenerationProgress(event);
+            if (event.type === "checkpoint") {
+              window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(event.checkpoint));
+              checkpointCount.current = event.completed.length;
+            }
             if (event.type === "error") throw new Error(event.error);
             if (event.type === "result") {
+              window.localStorage.removeItem(CHECKPOINT_KEY);
+              checkpointCount.current = 0;
               projectData = event.project;
               responseWarnings = event.warnings;
               setGenerationProgress({
@@ -155,17 +177,21 @@ export function AppShell() {
       setMode("lab");
     } catch (caught) {
       const aborted = controller.signal.aborted || caught instanceof DOMException && caught.name === "AbortError";
-      setError(aborted ? "Üretim iptal edildi; API key ve geçici dosyalar saklanmadı." : caught instanceof Error ? caught.message : "Beklenmeyen bir hata oluştu.");
+      const resumeNote = checkpointCount.current > 0
+        ? ` ${checkpointCount.current}/4 evidence aşaması kaydedildi; Paper’ı incele’ye yeniden basarak buradan devam edebilirsin.`
+        : "";
+      setError(aborted ? "Üretim iptal edildi; API key ve geçici dosyalar saklanmadı." : `${caught instanceof Error ? caught.message : "Beklenmeyen bir hata oluştu."}${resumeNote}`);
     } finally {
       if (generationController.current === controller) generationController.current = undefined;
       setLoading(false);
     }
   }
 
-  function openSample() { setProject(structuredClone(sampleProject)); setMode("lab"); setError(undefined); }
+  function openSample() { window.localStorage.removeItem(CHECKPOINT_KEY); setProject(structuredClone(sampleProject)); setMode("lab"); setError(undefined); }
   function newProject() {
     if (project && !window.confirm("Mevcut local projeyi kapatıp yeni bir paper ile başlamak istiyor musun?")) return;
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(CHECKPOINT_KEY);
     setProject(undefined); setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]);
   }
 
@@ -207,12 +233,21 @@ export function AppShell() {
 
 function GenerationOverlay({ progress, onCancel }: { progress: GenerationProgress; onCancel: () => void }) {
   const [elapsed, setElapsed] = useState(0);
+  const [clock, setClock] = useState(0);
   useEffect(() => {
     const startedAt = Date.now();
-    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1_000)), 1_000);
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setClock(now);
+      setElapsed(Math.floor((now - startedAt) / 1_000));
+    }, 1_000);
     return () => window.clearInterval(timer);
   }, []);
 
   const activeIndex = generationStages.findIndex((stage) => stage.id === progress.stage);
-  return <div className="generation-overlay" role="status" aria-live="polite"><div className="generation-card"><div className="generation-orbit"><span /><span /><span /></div><div className="generation-status-line"><p className="landing-eyebrow"><span /> Evidence pipeline çalışıyor</p><small>{elapsed < 60 ? `${elapsed} sn` : `${Math.floor(elapsed / 60)} dk ${elapsed % 60} sn`}</small></div><h2>{progress.title}</h2><p>{progress.detail}</p><div className="generation-stages">{generationStages.map((stage, index) => <span key={stage.id} className={index < activeIndex ? "done" : index === activeIndex ? "active" : ""}><i>{index < activeIndex ? "✓" : String(index + 1).padStart(2, "0")}</i><b>{stage.label}</b><small>{stage.description}</small></span>)}</div><div className="generation-meter"><i style={{ width: `${Math.max(2, Math.min(100, progress.progress))}%` }} /></div><div className="generation-footer"><span>%{Math.round(progress.progress)} tamamlandı{progress.attempt ? ` · deneme ${progress.attempt}` : ""}</span><button onClick={onCancel}>İptal et</button></div></div></div>;
+  const activityAge = progress.activityAt && clock
+    ? Math.max(0, Math.floor((clock - new Date(progress.activityAt).getTime()) / 1_000))
+    : 0;
+  const activityLabel = activityAge < 3 ? "model aktif" : `son model aktivitesi ${activityAge} sn önce`;
+  return <div className="generation-overlay" role="status" aria-live="polite"><div className="generation-card"><div className="generation-orbit"><span /><span /><span /></div><div className="generation-status-line"><p className="landing-eyebrow"><span /> Evidence pipeline çalışıyor</p><small>{elapsed < 60 ? `${elapsed} sn` : `${Math.floor(elapsed / 60)} dk ${elapsed % 60} sn`}</small></div><h2>{progress.title}</h2><p>{progress.detail}</p><div className="generation-live"><i className={activityAge < 12 ? "active" : ""} /><span>{activityLabel}</span><small>10 sn heartbeat</small></div><div className="generation-stages">{generationStages.map((stage, index) => <span key={stage.id} className={index < activeIndex ? "done" : index === activeIndex ? "active" : ""}><i>{index < activeIndex ? "✓" : String(index + 1).padStart(2, "0")}</i><b>{stage.label}</b><small>{stage.description}</small></span>)}</div><div className="generation-meter"><i style={{ width: `${Math.max(2, Math.min(100, progress.progress))}%` }} /></div><div className="generation-footer"><span>%{Math.round(progress.progress)} tamamlandı{progress.attempt ? ` · deneme ${progress.attempt}` : ""}</span><button onClick={onCancel}>İptal et</button></div></div></div>;
 }
