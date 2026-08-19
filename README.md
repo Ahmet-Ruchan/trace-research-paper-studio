@@ -43,6 +43,32 @@ When it finishes, your default browser opens the completed local Trace website.
 The same job folder contains a `.trace.json` file that can be archived, shared,
 or imported from **Library → Trace JSON** in the full application.
 
+### Global install from GitHub
+
+No clone and no local filesystem path are required. Run the command for your
+agent from any directory:
+
+**Codex**
+
+```bash
+codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main && codex plugin add trace-paper-studio@trace-research-tools
+```
+
+**Claude Code**
+
+```bash
+claude plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --scope user && claude plugin install trace-paper-studio@trace-research-tools --scope user
+```
+
+**Gemini CLI**
+
+```bash
+gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
+```
+
+Restart the agent or open a new session after installation. The plugin is then
+available globally across projects for that user.
+
 ## What Trace does
 
 - Accepts research papers as PDF files up to 35 MB
@@ -198,19 +224,20 @@ The local result is served only on `127.0.0.1`; paper content is not published.
 
 ### Codex installation
 
-1. Add this GitHub repository as a plugin marketplace:
+For a global user installation, copy and run this single terminal command:
 
-   ```bash
-   codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio
-   ```
+```bash
+codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main && codex plugin add trace-paper-studio@trace-research-tools
+```
 
-2. Install Trace:
+The equivalent two-step form is:
 
-   ```bash
-   codex plugin add trace-paper-studio@personal
-   ```
+```bash
+codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main
+codex plugin add trace-paper-studio@trace-research-tools
+```
 
-3. Start a new Codex session and ask:
+Start a new Codex session and ask:
 
    ```text
    Take ./papers/attention-is-all-you-need.pdf and give me the output using the Trace plugin.
@@ -222,19 +249,20 @@ open the result. You can also invoke the skill explicitly with
 
 ### Claude Code installation
 
-1. In Claude Code, add the marketplace:
+For a global user installation, copy and run this single terminal command:
 
-   ```text
-   /plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio
-   ```
+```bash
+claude plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --scope user && claude plugin install trace-paper-studio@trace-research-tools --scope user
+```
 
-2. Install the plugin:
+The same setup can be run interactively inside Claude Code:
 
-   ```text
-   /plugin install trace-paper-studio@trace-research-tools
-   ```
+```text
+/plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio
+/plugin install trace-paper-studio@trace-research-tools
+```
 
-3. Start a new session and ask:
+Run `/reload-plugins` or start a new session, then ask:
 
    ```text
    Take ./papers/attention-is-all-you-need.pdf and give me the output using the Trace plugin.
@@ -251,15 +279,15 @@ claude --plugin-dir ./plugins/trace-paper-studio
 
 ### Gemini CLI installation
 
-1. Install the GitHub extension:
+Install globally from GitHub with one command:
 
-   ```bash
-   gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
-   ```
+```bash
+gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
+```
 
-2. Restart Gemini CLI.
+Restart Gemini CLI.
 
-3. Ask normally, or use the bundled command:
+Ask normally, or use the bundled command:
 
    ```text
    Take ./papers/attention-is-all-you-need.pdf and give me the output using the Trace plugin.

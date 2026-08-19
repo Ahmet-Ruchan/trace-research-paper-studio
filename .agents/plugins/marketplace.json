@@ -1,7 +1,7 @@
 {
-  "name": "personal",
+  "name": "trace-research-tools",
   "interface": {
-    "displayName": "Personal"
+    "displayName": "Trace Research Tools"
   },
   "plugins": [
     {

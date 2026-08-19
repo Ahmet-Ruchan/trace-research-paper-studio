@@ -1,6 +1,6 @@
 {
   "name": "trace-paper-studio",
-  "version": "0.1.0+codex.20260819210632",
+  "version": "0.2.0+codex.20260819212352",
   "description": "Analyze papers with the active agent model, export Trace JSON, and open the finished local website.",
   "author": {
     "name": "Ahmet Ruchan",
