@@ -127,9 +127,54 @@ function inspectProject(args, print = true) {
   const text = (value) => typeof value === "string" && value.trim().length > 0;
   const unique = (values) => new Set(values).size === values.length;
   const requireText = (value, path) => { if (!text(value)) issues.push(`${path}: dolu metin gerekli`); };
-  const requireArray = (value, path, min = 0) => {
-    if (!Array.isArray(value) || value.length < min) issues.push(`${path}: en az ${min} öğeli dizi gerekli`);
-    return array(value);
+  const requireArray = (value, path, min = 0, max = Infinity) => {
+    if (!Array.isArray(value)) {
+      issues.push(`${path}: dizi gerekli`);
+      return [];
+    }
+    if (value.length < min) issues.push(`${path}: en az ${min} öğe gerekli (bulunan ${value.length})`);
+    if (value.length > max) issues.push(`${path}: en fazla ${max} öğe olabilir (bulunan ${value.length})`);
+    return value;
+  };
+  const requireStrings = (value, path, min = 0, max = Infinity) =>
+    requireArray(value, path, min, max).forEach((entry, index) => requireText(entry, `${path}[${index}]`));
+  const requireEnum = (value, path, allowed) => {
+    if (!allowed.includes(value)) issues.push(`${path}: ${allowed.join(" | ")} değerlerinden biri olmalı`);
+  };
+  const requireOptionalText = (value, path) => {
+    if (value !== undefined && !text(value)) issues.push(`${path}: verildiyse dolu metin olmalı`);
+  };
+  const requireItems = (value, path, shape, min = 0, max = Infinity) => {
+    requireArray(value, path, min, max).forEach((item, index) => {
+      const itemPath = `${path}[${index}]`;
+      if (!object(item)) {
+        issues.push(`${itemPath}: nesne gerekli`);
+        return;
+      }
+      shape(item, itemPath);
+    });
+  };
+  const TONES = ["paper", "accent", "ink"];
+  const CELL_TONES = ["low", "medium", "high", "neutral"];
+  const NODE_GROUPS = ["input", "core", "output", "evidence"];
+  const VISUAL_TYPES = [
+    "metric", "flow", "comparison", "concept", "layers",
+    "quote", "architecture", "equation", "timeline", "matrix", "infographic",
+  ];
+  const requireSourceRef = (reference, path, sourceIds) => {
+    if (!object(reference)) {
+      issues.push(`${path}: nesne gerekli`);
+      return;
+    }
+    if (!sourceIds.has(reference.sourceId)) issues.push(`${path}.sourceId: bilinmeyen kaynak`);
+    requireText(reference.excerpt, `${path}.excerpt`);
+    requireOptionalText(reference.locator, `${path}.locator`);
+    if (reference.page !== undefined && !(Number.isInteger(reference.page) && reference.page > 0)) {
+      issues.push(`${path}.page: pozitif tamsayı olmalı`);
+    }
+    if (reference.sourceId === "paper" && reference.page === undefined) {
+      issues.push(`${path}.page: paper kaynağı için PDF sayfası zorunlu`);
+    }
   };
 
   if (!object(project)) issues.push("root: nesne gerekli");
@@ -151,7 +196,16 @@ function inspectProject(args, print = true) {
   requireArray(evidence?.methods, "evidence.methods", 1);
   requireArray(evidence?.findings, "evidence.findings", 1);
   requireArray(evidence?.limitations, "evidence.limitations", 1);
+  requireOptionalText(evidence?.paper?.doi, "evidence.paper.doi");
+  requireStrings(evidence?.paper?.authors, "evidence.paper.authors", 1);
   const sources = requireArray(evidence?.sources, "evidence.sources", 1);
+  requireItems(evidence?.sources, "evidence.sources", (source, path) => {
+    requireText(source.id, `${path}.id`);
+    requireEnum(source.type, `${path}.type`, ["paper", "web"]);
+    requireText(source.title, `${path}.title`);
+    requireOptionalText(source.url, `${path}.url`);
+    requireOptionalText(source.fileName, `${path}.fileName`);
+  }, 1);
   const sourceIdValues = sources.map((source) => source?.id).filter(text);
   const sourceIds = new Set(sourceIdValues);
   if (!sourceIds.has("paper")) issues.push('evidence.sources: id "paper" olan ana kaynak gerekli');
@@ -166,30 +220,38 @@ function inspectProject(args, print = true) {
     if (!["reported-result", "author-interpretation", "method", "background", "limitation"].includes(claim?.kind)) issues.push(`${path}.kind geçersiz`);
     if (!["verified", "needs-review"].includes(claim?.confidence)) issues.push(`${path}.confidence geçersiz`);
     requireArray(claim?.sourceRefs, `${path}.sourceRefs`, 1).forEach((reference, refIndex) => {
-      const refPath = `${path}.sourceRefs[${refIndex}]`;
-      if (!sourceIds.has(reference?.sourceId)) issues.push(`${refPath}.sourceId bilinmeyen kaynak`);
-      requireText(reference?.excerpt, `${refPath}.excerpt`);
-      if (reference?.sourceId === "paper" && !(Number.isInteger(reference?.page) && reference.page > 0)) issues.push(`${refPath}.page pozitif tamsayı olmalı`);
+      requireSourceRef(reference, `${path}.sourceRefs[${refIndex}]`, sourceIds);
     });
   });
   if (!claims.some((claim) => claim?.kind === "method")) issues.push("evidence.claims: yöntem claim’i gerekli");
   if (!claims.some((claim) => claim?.kind === "limitation")) issues.push("evidence.claims: sınırlılık claim’i gerekli");
   if (!claims.some((claim) => claim?.confidence === "verified")) issues.push("evidence.claims: verified claim gerekli");
-  requireArray(evidence?.metrics, "evidence.metrics").forEach((metric, index) => {
-    requireText(metric?.id, `evidence.metrics[${index}].id`);
-    if (typeof metric?.value !== "number" || !Number.isFinite(metric.value)) issues.push(`evidence.metrics[${index}].value: sonlu sayı gerekli`);
-    if (!sourceIds.has(metric?.sourceRef?.sourceId)) issues.push(`evidence.metrics[${index}].sourceRef: bilinmeyen kaynak`);
-    requireText(metric?.sourceRef?.excerpt, `evidence.metrics[${index}].sourceRef.excerpt`);
+  const metrics = requireArray(evidence?.metrics, "evidence.metrics");
+  const metricIdValues = metrics.map((metric) => metric?.id).filter(text);
+  if (!unique(metricIdValues)) issues.push("evidence.metrics: metric id değerleri benzersiz olmalı");
+  requireItems(evidence?.metrics, "evidence.metrics", (metric, path) => {
+    requireText(metric.id, `${path}.id`);
+    requireText(metric.label, `${path}.label`);
+    if (typeof metric.value !== "number" || !Number.isFinite(metric.value)) issues.push(`${path}.value: sonlu sayı gerekli`);
+    requireText(metric.displayValue, `${path}.displayValue`);
+    requireText(metric.unit, `${path}.unit`);
+    requireText(metric.context, `${path}.context`);
+    requireSourceRef(metric.sourceRef, `${path}.sourceRef`, sourceIds);
   });
-  requireArray(evidence?.glossary, "evidence.glossary");
+  const metricValues = metrics.map((metric) => metric?.value).filter((value) => typeof value === "number");
+  requireItems(evidence?.glossary, "evidence.glossary", (item, path) => {
+    requireText(item.term, `${path}.term`);
+    requireText(item.definition, `${path}.definition`);
+    if (item.sourceRef !== undefined) requireSourceRef(item.sourceRef, `${path}.sourceRef`, sourceIds);
+  });
 
   const story = project?.story;
   if (!object(story)) issues.push("story: nesne gerekli");
   ["title", "dek", "readingTime"].forEach((key) => requireText(story?.[key], `story.${key}`));
   if (!/^#[0-9a-f]{6}$/i.test(story?.accent ?? "")) issues.push("story.accent: #RRGGBB gerekli");
   const targetStory = project?.depth === "concise" ? 5 : project?.depth === "deep" ? 8 : 6;
-  const sections = requireArray(story?.sections, "story.sections", targetStory);
-  if (sections.length !== targetStory) issues.push(`story.sections: tam ${targetStory} bölüm gerekli`);
+  const sections = requireArray(story?.sections, "story.sections", 5, 8);
+  if (sections.length !== targetStory) issues.push(`story.sections: tam ${targetStory} bölüm gerekli (bulunan ${sections.length})`);
   const sectionIds = sections.map((section) => section?.id).filter(text);
   if (!unique(sectionIds)) issues.push("story.sections: section id değerleri benzersiz olmalı");
   const visualTypes = new Set();
@@ -200,23 +262,123 @@ function inspectProject(args, print = true) {
     requireArray(section?.claimIds, `${path}.claimIds`, 1).forEach((id) => {
       if (!claimIds.includes(id)) issues.push(`${path}.claimIds: bilinmeyen ${id}`);
     });
-    requireText(section?.visual?.type, `${path}.visual.type`);
-    requireText(section?.visual?.eyebrow, `${path}.visual.eyebrow`);
-    requireText(section?.visual?.caption, `${path}.visual.caption`);
-    if (text(section?.visual?.type)) visualTypes.add(section.visual.type);
-    if (section?.visual?.type === "architecture") {
-      const nodeIds = requireArray(section.visual.nodes, `${path}.visual.nodes`, 3).map((node) => node?.id);
-      requireArray(section.visual.edges, `${path}.visual.edges`, 2).forEach((edge) => {
-        if (!nodeIds.includes(edge?.from) || !nodeIds.includes(edge?.to)) issues.push(`${path}.visual.edges: bilinmeyen node bağlantısı`);
-      });
+    const visual = section?.visual;
+    const vPath = `${path}.visual`;
+    if (!object(visual)) {
+      issues.push(`${vPath}: nesne gerekli`);
+      return;
     }
-    if (section?.visual?.type === "matrix") {
-      const columns = requireArray(section.visual.columns, `${path}.visual.columns`, 2);
-      requireArray(section.visual.rows, `${path}.visual.rows`, 2).forEach((row) => {
-        if (array(row?.cells).length !== columns.length) issues.push(`${path}.visual.rows: hücre/sütun sayısı eşleşmiyor`);
-      });
+    requireEnum(visual.type, `${vPath}.type`, VISUAL_TYPES);
+    requireText(visual.eyebrow, `${vPath}.eyebrow`);
+    requireText(visual.caption, `${vPath}.caption`);
+    if (text(visual.type)) visualTypes.add(visual.type);
+
+    const labelDetail = (item, itemPath) => {
+      requireText(item.label, `${itemPath}.label`);
+      requireText(item.detail, `${itemPath}.detail`);
+    };
+
+    switch (visual.type) {
+      case "metric":
+        requireItems(visual.items, `${vPath}.items`, (item, itemPath) => {
+          requireText(item.label, `${itemPath}.label`);
+          requireText(item.value, `${itemPath}.value`);
+          requireText(item.note, `${itemPath}.note`);
+        }, 1);
+        break;
+      case "flow":
+        requireItems(visual.items, `${vPath}.items`, labelDetail, 1);
+        break;
+      case "comparison":
+        requireItems(visual.items, `${vPath}.items`, (item, itemPath) => {
+          requireText(item.label, `${itemPath}.label`);
+          if (typeof item.value !== "number" || !Number.isFinite(item.value)) {
+            issues.push(`${itemPath}.value: sonlu sayı gerekli`);
+          } else if (!metricValues.some((value) => Math.abs(value - item.value) < 1e-9)) {
+            issues.push(`${itemPath}.value: ${item.value} evidence.metrics içinde yok`);
+          }
+          requireText(item.displayValue, `${itemPath}.displayValue`);
+          if (typeof item.highlight !== "boolean") issues.push(`${itemPath}.highlight: boolean gerekli`);
+        }, 1);
+        break;
+      case "concept":
+        requireText(visual.center, `${vPath}.center`);
+        requireItems(visual.items, `${vPath}.items`, labelDetail, 1);
+        break;
+      case "layers":
+        requireItems(visual.items, `${vPath}.items`, (item, itemPath) => {
+          labelDetail(item, itemPath);
+          requireEnum(item.tone, `${itemPath}.tone`, TONES);
+        }, 1);
+        break;
+      case "quote":
+        requireText(visual.quote, `${vPath}.quote`);
+        requireText(visual.attribution, `${vPath}.attribution`);
+        break;
+      case "architecture": {
+        const nodeIds = [];
+        requireItems(visual.nodes, `${vPath}.nodes`, (node, nodePath) => {
+          requireText(node.id, `${nodePath}.id`);
+          requireText(node.label, `${nodePath}.label`);
+          requireText(node.detail, `${nodePath}.detail`);
+          requireEnum(node.group, `${nodePath}.group`, NODE_GROUPS);
+          if (text(node.id)) nodeIds.push(node.id);
+        }, 3, 8);
+        if (!unique(nodeIds)) issues.push(`${vPath}.nodes: node id değerleri benzersiz olmalı`);
+        requireItems(visual.edges, `${vPath}.edges`, (edge, edgePath) => {
+          if (!nodeIds.includes(edge.from)) issues.push(`${edgePath}.from: bilinmeyen node`);
+          if (!nodeIds.includes(edge.to)) issues.push(`${edgePath}.to: bilinmeyen node`);
+          requireText(edge.label, `${edgePath}.label`);
+        }, 2, 12);
+        break;
+      }
+      case "equation":
+        requireText(visual.formula, `${vPath}.formula`);
+        requireItems(visual.terms, `${vPath}.terms`, (term, termPath) => {
+          requireText(term.symbol, `${termPath}.symbol`);
+          requireText(term.label, `${termPath}.label`);
+          requireText(term.detail, `${termPath}.detail`);
+        }, 2, 7);
+        requireStrings(visual.steps, `${vPath}.steps`, 2, 5);
+        break;
+      case "timeline":
+        requireItems(visual.items, `${vPath}.items`, (item, itemPath) => {
+          labelDetail(item, itemPath);
+          requireEnum(item.tone, `${itemPath}.tone`, TONES);
+        }, 3, 7);
+        break;
+      case "matrix": {
+        const columns = requireArray(visual.columns, `${vPath}.columns`, 2, 5);
+        requireStrings(visual.columns, `${vPath}.columns`, 2, 5);
+        requireItems(visual.rows, `${vPath}.rows`, (row, rowPath) => {
+          requireText(row.label, `${rowPath}.label`);
+          requireItems(row.cells, `${rowPath}.cells`, (cell, cellPath) => {
+            requireText(cell.label, `${cellPath}.label`);
+            requireEnum(cell.tone, `${cellPath}.tone`, CELL_TONES);
+          }, 2, 5);
+          if (Array.isArray(row.cells) && row.cells.length !== columns.length) {
+            issues.push(`${rowPath}.cells: sütun sayısıyla eşleşmiyor (${row.cells.length} ≠ ${columns.length})`);
+          }
+        }, 2, 6);
+        break;
+      }
+      case "infographic":
+        requireItems(visual.items, `${vPath}.items`, (item, itemPath) => {
+          labelDetail(item, itemPath);
+          requireText(item.badge, `${itemPath}.badge`);
+        }, 3, 6);
+        break;
+      default:
+        break;
     }
   });
+  const linkedStoryKinds = new Set(
+    sections.flatMap((section) => array(section?.claimIds))
+      .map((id) => claims.find((claim) => claim?.id === id)?.kind)
+      .filter(Boolean),
+  );
+  if (!linkedStoryKinds.has("method")) issues.push("story.sections: en az bir yöntem claim’ine bağlanmalı");
+  if (!linkedStoryKinds.has("limitation")) issues.push("story.sections: en az bir sınırlılık claim’ine bağlanmalı");
   if (visualTypes.size < 3) issues.push("story.sections: en az 3 farklı görsel türü gerekli");
   if (![...visualTypes].some((type) => ADVANCED_VISUALS.has(type))) issues.push("story.sections: gelişmiş görsel türü gerekli");
   requireText(story?.closing?.title, "story.closing.title");
@@ -226,32 +388,79 @@ function inspectProject(args, print = true) {
     const report = project.deepReport;
     ["title", "dek", "readingTime"].forEach((key) => requireText(report?.[key], `deepReport.${key}`));
     const targetReport = project?.depth === "concise" ? 6 : project?.depth === "deep" ? 9 : 7;
-    const reportSections = requireArray(report?.sections, "deepReport.sections", targetReport);
-    if (reportSections.length !== targetReport) issues.push(`deepReport.sections: tam ${targetReport} bölüm gerekli`);
+    const reportSections = requireArray(report?.sections, "deepReport.sections", 6, 9);
+    if (reportSections.length !== targetReport) issues.push(`deepReport.sections: tam ${targetReport} bölüm gerekli (bulunan ${reportSections.length})`);
+    const reportIdValues = reportSections.map((section) => section?.id).filter(text);
+    if (!unique(reportIdValues)) issues.push("deepReport.sections: section id değerleri benzersiz olmalı");
     REPORT_KINDS.forEach((kind) => {
       if (!reportSections.some((section) => section?.kind === kind)) issues.push(`deepReport.sections: ${kind} bölümü gerekli`);
     });
-    reportSections.forEach((section, index) => requireArray(section?.claimIds, `deepReport.sections[${index}].claimIds`, 1).forEach((id) => {
-      if (!claimIds.includes(id)) issues.push(`deepReport.sections[${index}].claimIds: bilinmeyen ${id}`);
-    }));
-    requireArray(report?.openQuestions, "deepReport.openQuestions", 3);
+    requireItems(report?.sections, "deepReport.sections", (section, path) => {
+      requireText(section.id, `${path}.id`);
+      requireEnum(section.kind, `${path}.kind`, REPORT_KINDS);
+      requireText(section.title, `${path}.title`);
+      requireText(section.summary, `${path}.summary`);
+      requireStrings(section.analysis, `${path}.analysis`, 2, 5);
+      requireArray(section.claimIds, `${path}.claimIds`, 1).forEach((id) => {
+        if (!claimIds.includes(id)) issues.push(`${path}.claimIds: bilinmeyen ${id}`);
+      });
+    }, 6, 9);
+    requireStrings(report?.openQuestions, "deepReport.openQuestions", 3, 8);
   }
 
   if (project?.technicalAppendix !== undefined) {
     const appendix = project.technicalAppendix;
     requireText(appendix?.title, "technicalAppendix.title");
     requireText(appendix?.overview, "technicalAppendix.overview");
+    const requireClaimLinks = (item, path) => {
+      requireArray(item.claimIds, `${path}.claimIds`, 1).forEach((id) => {
+        if (!claimIds.includes(id)) issues.push(`${path}.claimIds: bilinmeyen ${id}`);
+      });
+    };
+    requireItems(appendix?.equations, "technicalAppendix.equations", (item, path) => {
+      requireText(item.id, `${path}.id`);
+      requireText(item.label, `${path}.label`);
+      requireText(item.expression, `${path}.expression`);
+      requireText(item.explanation, `${path}.explanation`);
+      requireItems(item.variables, `${path}.variables`, (variable, variablePath) => {
+        requireText(variable.symbol, `${variablePath}.symbol`);
+        requireText(variable.meaning, `${variablePath}.meaning`);
+      }, 0, 10);
+      requireClaimLinks(item, path);
+    }, 0, 8);
+    const equationIdValues = array(appendix?.equations).map((item) => item?.id).filter(text);
+    if (!unique(equationIdValues)) issues.push("technicalAppendix.equations: equation id değerleri benzersiz olmalı");
+    requireItems(appendix?.algorithmSteps, "technicalAppendix.algorithmSteps", (item, path) => {
+      requireText(item.label, `${path}.label`);
+      requireText(item.detail, `${path}.detail`);
+      requireClaimLinks(item, path);
+    }, 2, 10);
+    requireItems(appendix?.codeSketches, "technicalAppendix.codeSketches", (item, path) => {
+      requireText(item.title, `${path}.title`);
+      requireText(item.language, `${path}.language`);
+      requireText(item.code, `${path}.code`);
+      requireText(item.explanation, `${path}.explanation`);
+      requireClaimLinks(item, path);
+    }, 0, 3);
+    requireItems(appendix?.complexity, "technicalAppendix.complexity", (item, path) => {
+      requireText(item.operation, `${path}.operation`);
+      requireText(item.cost, `${path}.cost`);
+      requireText(item.context, `${path}.context`);
+      requireClaimLinks(item, path);
+    }, 0, 6);
     const linked = [
-      ...requireArray(appendix?.equations, "technicalAppendix.equations"),
-      ...requireArray(appendix?.algorithmSteps, "technicalAppendix.algorithmSteps", 2),
-      ...requireArray(appendix?.codeSketches, "technicalAppendix.codeSketches"),
-      ...requireArray(appendix?.complexity, "technicalAppendix.complexity"),
+      ...array(appendix?.equations),
+      ...array(appendix?.algorithmSteps),
+      ...array(appendix?.codeSketches),
+      ...array(appendix?.complexity),
     ];
-    linked.forEach((item, index) => requireArray(item?.claimIds, `technicalAppendix.items[${index}].claimIds`, 1).forEach((id) => {
-      if (!claimIds.includes(id)) issues.push(`technicalAppendix.items[${index}].claimIds: bilinmeyen ${id}`);
-    }));
     if (!linked.length) issues.push("technicalAppendix: en az bir kanıta bağlı teknik öğe gerekli");
-    requireArray(appendix?.implementationNotes, "technicalAppendix.implementationNotes", 2);
+    requireStrings(appendix?.implementationNotes, "technicalAppendix.implementationNotes", 2, 10);
+  }
+
+  if (project?.generation !== undefined) {
+    requireText(project.generation?.provider, "generation.provider");
+    requireText(project.generation?.model, "generation.model");
   }
 
   if (issues.length) {
