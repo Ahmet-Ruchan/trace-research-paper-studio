@@ -1,0 +1,218 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Download, FileJson, FlaskConical, LayoutTemplate, MoreHorizontal, Plus, Share2 } from "lucide-react";
+import { buildStandaloneStory } from "@/lib/export-story";
+import {
+  generationStages,
+  initialGenerationProgress,
+  isGenerationStreamEvent,
+  type GenerationProgress,
+} from "@/lib/generation-events";
+import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
+import { sampleProject } from "@/lib/sample-project";
+import { EvidenceDrawer } from "./evidence-drawer";
+import { LabView } from "./lab-view";
+import { Onboarding, type GenerationOptions } from "./onboarding";
+import { StoryEditor } from "./story-editor";
+import { StoryView } from "./story-view";
+
+type WorkspaceMode = "lab" | "story" | "preview";
+const STORAGE_KEY = "trace-research-project-v1";
+
+function download(name: string, content: string, type: string) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+export function AppShell() {
+  const [project, setProject] = useState<ResearchProject>();
+  const [mode, setMode] = useState<WorkspaceMode>("lab");
+  const [fileUrl, setFileUrl] = useState<string>();
+  const [selectedClaimId, setSelectedClaimId] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress>(initialGenerationProgress);
+  const generationController = useRef<AbortController | undefined>(undefined);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const search = new URLSearchParams(window.location.search);
+      const requestedMode = search.get("mode");
+      if (requestedMode === "story" || requestedMode === "preview" || requestedMode === "lab") {
+        setMode(requestedMode);
+      }
+      if (search.get("new") === "1") {
+        window.localStorage.removeItem(STORAGE_KEY);
+        setHydrated(true);
+        return;
+      }
+      if (search.get("sample") === "1") {
+        setProject(structuredClone(sampleProject));
+        setHydrated(true);
+        return;
+      }
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try { setProject(researchProjectSchema.parse(JSON.parse(stored))); }
+        catch { window.localStorage.removeItem(STORAGE_KEY); }
+      }
+      setHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (project && hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+  }, [project, hydrated]);
+
+  useEffect(() => () => { if (fileUrl) URL.revokeObjectURL(fileUrl); }, [fileUrl]);
+
+  async function generate(options: GenerationOptions) {
+    const controller = new AbortController();
+    generationController.current = controller;
+    setGenerationProgress(initialGenerationProgress);
+    setLoading(true); setError(undefined); setWarnings([]);
+    try {
+      const form = new FormData();
+      form.set("paper", options.file);
+      form.set("sources", JSON.stringify(options.sources));
+      form.set("apiKey", options.apiKey);
+      form.set("language", options.language);
+      form.set("audience", options.audience);
+      form.set("depth", options.depth);
+      form.set("model", options.model);
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        body: form,
+        signal: controller.signal,
+        headers: { Accept: "application/x-ndjson, application/json" },
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
+        throw new Error(data?.error ?? "Paper üretilemedi.");
+      }
+
+      let projectData: unknown;
+      let responseWarnings: string[] = [];
+      const contentType = response.headers.get("content-type") ?? "";
+
+      if (contentType.includes("application/x-ndjson")) {
+        if (!response.body) throw new Error("Üretim akışı başlatılamadı.");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          buffer += decoder.decode(value, { stream: !done });
+          const lines = buffer.split("\n");
+          buffer = done ? "" : (lines.pop() ?? "");
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const event: unknown = JSON.parse(line);
+            if (!isGenerationStreamEvent(event)) continue;
+            if (event.type === "progress") setGenerationProgress(event);
+            if (event.type === "error") throw new Error(event.error);
+            if (event.type === "result") {
+              projectData = event.project;
+              responseWarnings = event.warnings;
+              setGenerationProgress({
+                stage: "finalize",
+                progress: 100,
+                title: "Research workspace hazır.",
+                detail: "Kanıt haritası ve StorySpec başarıyla oluşturuldu.",
+              });
+            }
+          }
+          if (done) break;
+        }
+      } else {
+        const data = (await response.json()) as {
+          project?: unknown;
+          error?: string;
+          warnings?: string[];
+        };
+        if (!data.project) throw new Error(data.error ?? "Paper üretilemedi.");
+        projectData = data.project;
+        responseWarnings = data.warnings ?? [];
+      }
+
+      if (!projectData) throw new Error("Üretim tamamlandı ancak proje verisi alınamadı.");
+      const nextProject = researchProjectSchema.parse(projectData);
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      setFileUrl(URL.createObjectURL(options.file));
+      setProject(nextProject);
+      setWarnings(responseWarnings);
+      setMode("lab");
+    } catch (caught) {
+      const aborted = controller.signal.aborted || caught instanceof DOMException && caught.name === "AbortError";
+      setError(aborted ? "Üretim iptal edildi; API key ve geçici dosyalar saklanmadı." : caught instanceof Error ? caught.message : "Beklenmeyen bir hata oluştu.");
+    } finally {
+      if (generationController.current === controller) generationController.current = undefined;
+      setLoading(false);
+    }
+  }
+
+  function openSample() { setProject(structuredClone(sampleProject)); setMode("lab"); setError(undefined); }
+  function newProject() {
+    if (project && !window.confirm("Mevcut local projeyi kapatıp yeni bir paper ile başlamak istiyor musun?")) return;
+    window.localStorage.removeItem(STORAGE_KEY);
+    setProject(undefined); setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]);
+  }
+
+  if (!hydrated) return <div className="boot-screen"><span>trace</span></div>;
+  if (!project) {
+    return <><Onboarding onGenerate={generate} onSample={openSample} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>Üretim tamamlanamadı</strong><p>{error}</p><button onClick={() => setError(undefined)}>Kapat</button></div>}</>;
+  }
+
+  const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);
+  const slug = project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trace-story";
+
+  return (
+    <div className="workspace-shell">
+      <header className="workspace-header">
+        <button className="workspace-brand" onClick={() => setMode("lab")}><span className="brand-glyph">t</span><span><strong>trace</strong><small>research studio</small></span></button>
+        <div className="project-identity"><span>Current paper</span><strong>{project.evidence.paper.title}</strong></div>
+        <nav className="mode-tabs" aria-label="Çalışma modu">
+          <button className={mode === "lab" ? "active" : ""} onClick={() => setMode("lab")}><FlaskConical size={15} /> Lab</button>
+          <button className={mode === "story" ? "active" : ""} onClick={() => setMode("story")}><LayoutTemplate size={15} /> Story</button>
+          <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}><Share2 size={15} /> Preview</button>
+        </nav>
+        <div className="workspace-actions">
+          <button title="Proje JSON’unu indir" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
+          <button className="export-button" onClick={() => download(`${slug}.html`, buildStandaloneStory(project), "text/html")}><Download size={16} /> Export</button>
+          <button className="icon-button" title="Yeni paper" onClick={newProject}><Plus size={17} /></button>
+          <button className="icon-button" title="Yakında" disabled><MoreHorizontal size={17} /></button>
+        </div>
+      </header>
+      {warnings.length > 0 && <div className="warning-strip">{warnings.length} yardımcı kaynak okunamadı; analiz kalan kaynaklarla tamamlandı.<button onClick={() => setWarnings([])}>Kapat</button></div>}
+      <div className="workspace-content">
+        {mode === "lab" && <LabView project={project} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} />}
+        {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={setProject} onPreview={() => setMode("preview")} />}
+        {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
+      </div>
+      {mode === "preview" && selectedClaim && <div className="drawer-overlay" onClick={() => setSelectedClaimId(undefined)}><div onClick={(event) => event.stopPropagation()}><EvidenceDrawer claim={selectedClaim} evidence={project.evidence} fileUrl={fileUrl} onClose={() => setSelectedClaimId(undefined)} /></div></div>}
+    </div>
+  );
+}
+
+function GenerationOverlay({ progress, onCancel }: { progress: GenerationProgress; onCancel: () => void }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1_000)), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const activeIndex = generationStages.findIndex((stage) => stage.id === progress.stage);
+  return <div className="generation-overlay" role="status" aria-live="polite"><div className="generation-card"><div className="generation-orbit"><span /><span /><span /></div><div className="generation-status-line"><p className="landing-eyebrow"><span /> Evidence pipeline çalışıyor</p><small>{elapsed < 60 ? `${elapsed} sn` : `${Math.floor(elapsed / 60)} dk ${elapsed % 60} sn`}</small></div><h2>{progress.title}</h2><p>{progress.detail}</p><div className="generation-stages">{generationStages.map((stage, index) => <span key={stage.id} className={index < activeIndex ? "done" : index === activeIndex ? "active" : ""}><i>{index < activeIndex ? "✓" : String(index + 1).padStart(2, "0")}</i><b>{stage.label}</b><small>{stage.description}</small></span>)}</div><div className="generation-meter"><i style={{ width: `${Math.max(2, Math.min(100, progress.progress))}%` }} /></div><div className="generation-footer"><span>%{Math.round(progress.progress)} tamamlandı{progress.attempt ? ` · deneme ${progress.attempt}` : ""}</span><button onClick={onCancel}>İptal et</button></div></div></div>;
+}
