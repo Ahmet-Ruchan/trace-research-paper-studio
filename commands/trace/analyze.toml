@@ -1,0 +1,9 @@
+description = "Analyze a paper, generate Trace JSON, and open its local interactive site"
+prompt = """
+Activate the trace-paper-studio skill and use its complete evidence-first workflow.
+Analyze the paper and options supplied in these arguments:
+
+{{args}}
+
+Use Gemini CLI's active model. Do not call a separate LLM API. Validate the final .trace.json, run the delivery command, and do not finish until the complete local Trace website has opened. Report both the local URL and the portable JSON path.
+"""

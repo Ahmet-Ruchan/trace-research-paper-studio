@@ -15,6 +15,7 @@ export const sampleProject: ResearchProject = {
   language: "tr",
   audience: "student",
   depth: "standard",
+  generation: { provider: "sample", model: "curated-example" },
   evidence: {
     paper: {
       title: "Attention Is All You Need",
@@ -224,6 +225,34 @@ export const sampleProject: ResearchProject = {
       },
     ],
   },
+  deepReport: {
+    title: "Transformer’ı sonuçlarından önce mimarisiyle okumak",
+    dek: "Bu rapor paper’ın temel katkısını, attention mekanizmasını, deneysel kanıtını ve yeniden üretim sınırlarını tek bir kanıt zincirinde inceler.",
+    readingTime: "14 dakikalık derin okuma",
+    sections: [
+      { id: "report-contribution", kind: "contribution", title: "Katkı: sıralı hesaplama zorunluluğunu kaldırmak", summary: "Paper’ın ana yeniliği attention’ı yardımcı bir katmandan bütün encoder–decoder mimarisinin merkezine taşımaktır.", analysis: ["Model recurrent ve convolutional katmanları kaldırarak dizideki konumlar arasında daha kısa bir bilgi yolu kurar.", "Bu katkı yalnızca yeni bir blok önermek değil, eğitim sırasında daha fazla paralellik sağlayan farklı bir hesaplama düzeni tanımlamaktır."], claimIds: ["claim-architecture", "claim-parallel"] },
+      { id: "report-mechanism", kind: "mechanism", title: "Mekanizma: query, key ve value üzerinden ilişki kurmak", summary: "Scaled dot-product attention her konumun hangi diğer konumlardan bilgi alacağını öğrenilmiş temsillerle hesaplar.", analysis: ["Query ve key çarpımı ilişkileri skorlar; ölçekleme büyük boyutlarda softmax davranışını kararlı tutmayı amaçlar.", "Value vektörlerinin ağırlıklı toplamı her token için bağlama duyarlı yeni bir temsil üretir."], claimIds: ["claim-attention"] },
+      { id: "report-multi-head", kind: "mechanism", title: "Çoklu temsil uzaylarında eşzamanlı bakış", summary: "Multi-head attention tek bir ilişki haritası yerine farklı projeksiyonlarda birden çok attention işlemini bir araya getirir.", analysis: ["Base yapı sekiz head kullanarak farklı temsil altuzaylarındaki ilişkilerin aynı katmanda modellenmesini amaçlar.", "Head’lerin belirli dilbilimsel rolleri garanti edilmez; güvenli çıkarım, çoklu projeksiyonların mimarinin ifade kapasitesini genişlettiğidir."], claimIds: ["claim-heads"] },
+      { id: "report-experiment", kind: "experiment", title: "Deney: iki çeviri görevinde raporlanan sonuçlar", summary: "Paper, mimari iddiasını WMT 2014 İngilizce–Almanca ve İngilizce–Fransızca sonuçlarıyla destekler.", analysis: ["Büyük model iki görevde sırasıyla 28.4 ve 41.8 BLEU raporlar; görevler farklı olduğu için skorlar birbirinin doğrudan karşılaştırması değildir.", "Sonuç iddiası kalite kadar eğitim maliyetini de vurgular; bu nedenle skor ve hesaplama bütçesi birlikte okunmalıdır."], claimIds: ["claim-de", "claim-fr"] },
+      { id: "report-critique", kind: "critique", title: "Eleştiri: doğrudan bağlantının karesel maliyeti", summary: "Self-attention kısa bilgi yolları sağlarken standart biçimiyle dizi uzunluğuna göre karesel ilişki matrisi oluşturur.", analysis: ["Her token’ın her token ile karşılaştırılması uzun dizilerde bellek ve hesaplama baskısı yaratır.", "Paper’ın çeviri görevlerindeki başarısı, aynı maliyet profilinin sınırsız bağlamlarda da uygun olduğunu tek başına göstermez."], claimIds: ["claim-limit"] },
+      { id: "report-reproduction", kind: "reproduction", title: "Reprodüksiyon: mimari ve eğitim bütçesini birlikte sabitlemek", summary: "Yeniden üretim için attention bloklarının yanında head sayısı, model boyutu ve raporlanan donanım süresi izlenmelidir.", analysis: ["Base modeldeki sekiz head ve projeksiyon yapısı, mekanizmanın beklenen kapasitesini belirleyen temel ayarlardır.", "Büyük model için raporlanan sekiz P100 GPU üzerinde 3.5 günlük eğitim, sonuçları değerlendirirken gözden kaçırılmaması gereken bütçe bilgisidir."], claimIds: ["claim-heads", "claim-parallel"] },
+      { id: "report-implication", kind: "implication", title: "Çıkarım: ilişki kurmayı mimarinin ilk ilkesi yapmak", summary: "Paper’ın kanıtı, dizi modellemede recurrence’ın zorunlu olmadığını ve attention tabanlı bir alternatifin rekabetçi olabildiğini gösterir.", analysis: ["Paralel eğitim olanağı, model geliştirme döngüsünü ve ölçeklenebilirliği etkileyen pratik bir mimari sonuçtur.", "Bu çıkarım paper’ın değerlendirdiği makine çevirisi kapsamıyla sınırlı tutulmalıdır; başka alanlara genelleme ek kanıt gerektirir."], claimIds: ["claim-architecture", "claim-de", "claim-fr"] },
+    ],
+    openQuestions: ["Karesel attention maliyeti çok daha uzun dizilerde nasıl azaltılabilir?", "Aynı mimari avantaj farklı veri türlerinde ve görevlerde korunur mu?", "Head’lerin öğrendiği ilişkiler ne ölçüde kararlı ve yorumlanabilirdir?"],
+  },
+  technicalAppendix: {
+    title: "Attention mekanizmasından uygulanabilir algoritmaya",
+    overview: "Bu teknik ek, paper’ın kanıtlarına dayanarak scaled dot-product attention’ın hesabını, çoklu head akışını ve reprodüksiyon sırasında görünür tutulması gereken maliyetleri özetler.",
+    equations: [{ id: "scaled-attention", label: "Scaled dot-product attention", expression: "Attention(Q, K, V) = softmax(QKᵀ / √dₖ)V", explanation: "Query ve key çarpımı ilişki skorlarını üretir; ölçeklenmiş softmax ağırlıkları value temsillerini birleştirir.", variables: [{ symbol: "Q", meaning: "Query matrisi" }, { symbol: "K", meaning: "Key matrisi" }, { symbol: "V", meaning: "Value matrisi" }, { symbol: "dₖ", meaning: "Key boyutu" }], claimIds: ["claim-attention"] }],
+    algorithmSteps: [
+      { label: "Girdileri projekte et", detail: "Her head için query, key ve value temsillerini öğrenilmiş doğrusal projeksiyonlarla oluştur.", claimIds: ["claim-heads"] },
+      { label: "İlişkileri skorla", detail: "Query–key çarpımlarını key boyutunun kareköküyle ölçekle ve softmax uygula.", claimIds: ["claim-attention"] },
+      { label: "Head çıktılarını birleştir", detail: "Her head’in value toplamını bir araya getirip çıkış projeksiyonundan geçir.", claimIds: ["claim-heads"] },
+    ],
+    codeSketches: [{ title: "Scaled attention iskeleti", language: "pseudocode", code: "scores = (Q @ transpose(K)) / sqrt(key_dim)\nweights = softmax(scores)\ncontext = weights @ V\nreturn context", explanation: "Bu kod paper’ın yayımlanmış kaynak kodu değil; denklemdeki hesaplama sırasını görünür kılan güvenli bir pseudocode taslağıdır.", claimIds: ["claim-attention"] }],
+    complexity: [{ operation: "Self-attention ilişkileri", cost: "O(n² · d)", context: "Her konumun diğer bütün konumlarla karşılaştırılması dizi uzunluğunda karesel ilişki sayısı oluşturur.", claimIds: ["claim-limit"] }],
+    implementationNotes: ["Base modelde sekiz attention head kullanıldığını sabitle.", "Görevler farklı olduğu için EN→DE ve EN→FR BLEU skorlarını tek ölçekli bir karşılaştırma gibi yorumlama.", "Eğitim bütçesini raporlanan sekiz P100 GPU ve 3.5 günlük büyük-model koşuluyla birlikte kaydet."],
+  },
   story: {
     title: "Sırayı ortadan kaldıran mimari",
     dek: "Transformer bir cümleyi kelime kelime takip etmek yerine, tüm ilişkileri aynı anda görmeyi önerdi. Modern yapay zekânın dönüm noktası böyle başladı.",
@@ -277,15 +306,16 @@ export const sampleProject: ResearchProject = {
         body: "Scaled dot-product attention önce query ve key vektörlerinin benzerliğini ölçer. Sonuçları ölçekler, softmax ile ağırlıklara dönüştürür ve value vektörlerini bu ağırlıklarla birleştirir.",
         claimIds: ["claim-attention"],
         visual: {
-          type: "layers",
+          type: "equation",
           eyebrow: "Attention(Q, K, V)",
           caption: "Karşılaştır → ölçekle → ağırlıklandır → birleştir.",
-          items: [
-            { label: "Q × Kᵀ", detail: "İlişki skorları", tone: "paper" },
-            { label: "÷ √dₖ", detail: "Kararlı ölçek", tone: "accent" },
-            { label: "softmax", detail: "Toplamı 1 olan ağırlıklar", tone: "paper" },
-            { label: "× V", detail: "Yeni bağlamsal temsil", tone: "ink" },
+          formula: "Attention(Q, K, V) = softmax(QKᵀ / √dₖ)V",
+          terms: [
+            { symbol: "Q", label: "Query", detail: "Aranan ilişki" },
+            { symbol: "K", label: "Key", detail: "Eşleşme anahtarı" },
+            { symbol: "V", label: "Value", detail: "Taşınan içerik" },
           ],
+          steps: ["Q ve K ile ilişki skorlarını hesapla", "Skorları √dₖ ile ölçekle", "Softmax ağırlıklarıyla V temsillerini birleştir"],
         },
       },
       {
@@ -355,4 +385,3 @@ export const sampleProject: ResearchProject = {
     },
   },
 };
-

@@ -1,0 +1,6 @@
+{
+  "name": "trace-research-paper-studio",
+  "version": "0.2.0",
+  "description": "Analyze papers with Gemini CLI's active model, export Trace JSON, and open the finished local website.",
+  "contextFileName": "GEMINI.md"
+}

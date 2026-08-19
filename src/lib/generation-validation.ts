@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import type { PaperEvidence, SourceReference, StorySpec } from "./schema";
+import type { DeepReport, PaperEvidence, SourceReference, StorySpec, TechnicalAppendix } from "./schema";
 
 export class IntegrityError extends Error {
   readonly issues: string[];
@@ -100,7 +100,29 @@ export function validateStoryIntegrity(
         if (!exists) issues.push(`${section.id} görselindeki ${item.value} evidence metrics içinde yok`);
       });
     }
+    if (section.visual.type === "architecture") {
+      const nodeIds = new Set(section.visual.nodes.map((node) => node.id));
+      section.visual.edges.forEach((edge) => {
+        if (!nodeIds.has(edge.from)) issues.push(`${section.id} bilinmeyen edge başlangıcı: ${edge.from}`);
+        if (!nodeIds.has(edge.to)) issues.push(`${section.id} bilinmeyen edge bitişi: ${edge.to}`);
+      });
+    }
+    if (section.visual.type === "matrix") {
+      const matrix = section.visual;
+      matrix.rows.forEach((row) => {
+        if (row.cells.length !== matrix.columns.length) {
+          issues.push(`${section.id} matrix satırı sütun sayısıyla eşleşmiyor: ${row.label}`);
+        }
+      });
+    }
   });
+
+  const visualTypes = new Set(story.sections.map((section) => section.visual.type));
+  const advancedVisuals = new Set(["architecture", "equation", "timeline", "matrix", "infographic"]);
+  if (visualTypes.size < 3) issues.push("Story en az üç farklı görsel gramer kullanmalı");
+  if (![...visualTypes].some((type) => advancedVisuals.has(type))) {
+    issues.push("Story en az bir gelişmiş mimari, denklem, timeline, matrix veya infographic görseli içermeli");
+  }
 
   const linkedClaims = story.sections.flatMap((section) =>
     section.claimIds.map((claimId) => claims.get(claimId)).filter(Boolean),
@@ -113,6 +135,49 @@ export function validateStoryIntegrity(
   }
 
   if (issues.length) throw new IntegrityError("Story", issues);
+}
+
+export function validateDeepReportIntegrity(
+  report: DeepReport,
+  evidence: PaperEvidence,
+  expectedSectionCount: number,
+) {
+  const issues: string[] = [];
+  const claimIds = new Set(evidence.claims.map((claim) => claim.id));
+  const duplicateSections = duplicates(report.sections.map((section) => section.id));
+  if (report.sections.length !== expectedSectionCount) {
+    issues.push(`${expectedSectionCount} yerine ${report.sections.length} rapor bölümü üretildi`);
+  }
+  if (duplicateSections.length) issues.push(`Tekrarlanan report ID: ${duplicateSections.join(", ")}`);
+  report.sections.forEach((section) => section.claimIds.forEach((claimId) => {
+    if (!claimIds.has(claimId)) issues.push(`${section.id} bilinmeyen claim kullanıyor: ${claimId}`);
+  }));
+  const kinds = new Set(report.sections.map((section) => section.kind));
+  ["contribution", "mechanism", "experiment", "critique", "reproduction", "implication"].forEach((kind) => {
+    if (!kinds.has(kind as DeepReport["sections"][number]["kind"])) issues.push(`Report ${kind} bölümü içermeli`);
+  });
+  if (issues.length) throw new IntegrityError("DeepReport", issues);
+}
+
+export function validateTechnicalAppendixIntegrity(
+  appendix: TechnicalAppendix,
+  evidence: PaperEvidence,
+) {
+  const issues: string[] = [];
+  const claimIds = new Set(evidence.claims.map((claim) => claim.id));
+  const linkedItems = [
+    ...appendix.equations,
+    ...appendix.algorithmSteps,
+    ...appendix.codeSketches,
+    ...appendix.complexity,
+  ];
+  linkedItems.forEach((item, index) => item.claimIds.forEach((claimId) => {
+    if (!claimIds.has(claimId)) issues.push(`Technical item ${index + 1} bilinmeyen claim kullanıyor: ${claimId}`);
+  }));
+  const duplicateEquations = duplicates(appendix.equations.map((equation) => equation.id));
+  if (duplicateEquations.length) issues.push(`Tekrarlanan equation ID: ${duplicateEquations.join(", ")}`);
+  if (!linkedItems.length) issues.push("Technical appendix en az bir kanıta bağlı teknik öğe içermeli");
+  if (issues.length) throw new IntegrityError("TechnicalAppendix", issues);
 }
 
 export function describeValidationError(error: unknown) {

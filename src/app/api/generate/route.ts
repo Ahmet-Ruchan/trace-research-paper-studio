@@ -1,18 +1,49 @@
+import { createHash } from "node:crypto";
 import { GoogleGenAI, createPartFromUri } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import OpenAI from "openai";
 import { z } from "zod";
+import {
+  evidenceCheckpointSchema,
+  evidencePassIds,
+  evidencePassLabels,
+  evidencePassSchemas,
+  mergeEvidenceParts,
+  validateEvidencePass,
+  type EvidenceCheckpoint,
+  type EvidencePassId,
+  type EvidencePassOutputs,
+} from "@/lib/evidence-pipeline";
 import type { GenerationProgress, GenerationStreamEvent } from "@/lib/generation-events";
 import {
   describeValidationError,
+  validateDeepReportIntegrity,
   validateEvidenceIntegrity,
   validateStoryIntegrity,
+  validateTechnicalAppendixIntegrity,
 } from "@/lib/generation-validation";
-import { buildEvidencePrompt, buildStoryPrompt } from "@/lib/prompts";
+import { buildDeepReportPrompt, buildEvidencePassPrompt, buildStoryPrompt, buildTechnicalAppendixPrompt } from "@/lib/prompts";
 import {
-  paperEvidenceSchema,
+  getProvider,
+  getProviderForModel,
+  generationTaskRoles,
+  resolveProviderModel,
+  type GenerationTaskRole,
+  type ModelAssignment,
+  type ModelTeam,
+  type ProviderId,
+} from "@/lib/model-providers";
+import { omitNullObjectFields, openAiJsonSchema } from "@/lib/openai-structured";
+import {
   researchProjectSchema,
+  deepReportSchema,
   storySpecSchema,
-  type PaperEvidence,
+  technicalAppendixSchema,
+  type DeepReport,
+  type Source,
   type StorySpec,
+  type TechnicalAppendix,
 } from "@/lib/schema";
 import { fetchPublicSource, type FetchedSource } from "@/lib/safe-fetch";
 
@@ -20,24 +51,64 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MAX_PDF_BYTES = 35 * 1024 * 1024;
+const MAX_CHECKPOINT_BYTES = 750 * 1024;
 const MAX_STRUCTURE_ATTEMPTS = 2;
-const allowedModels = new Set([
-  "gemini-3.7-flash",
-  "gemini-3.1-pro-preview",
-  "gemini-2.5-flash",
-]);
+const MAX_NETWORK_ATTEMPTS = 2;
+const MODEL_TIMEOUT_MS = 120_000;
+const HEARTBEAT_MS = 10_000;
+const EVIDENCE_CONCURRENCY = 2;
+const OPENROUTER_STRUCTURED_FALLBACK_MODEL = "google/gemini-3.7-flash";
 
 type GenerationInput = {
   file: File;
-  apiKey: string;
+  apiKeys: Partial<Record<ProviderId, string>>;
+  assignments: ModelTeam;
   urls: string[];
   language: "tr" | "en";
   audience: "general" | "student" | "expert";
   depth: "concise" | "standard" | "deep";
+  provider: ProviderId;
   model: string;
+  checkpoint?: unknown;
+};
+
+type ProviderPreparationInput = {
+  file: File;
+  apiKey: string;
+  provider: ProviderId;
+  model: string;
+  needsDocument: boolean;
+  taskRole: GenerationTaskRole;
+};
+
+type StructuredGeneration = {
+  prompt: string;
+  schema: z.ZodType;
+  schemaName: string;
+  maxOutputTokens: number;
+  includeDocument: boolean;
+  signal: AbortSignal;
+  onChunk: (receivedCharacters: number, chunks: number) => void;
+};
+
+type ProviderRuntime = {
+  label: string;
+  effectiveModel: string;
+  generateStructured: (request: StructuredGeneration) => Promise<string>;
+  cleanup: () => Promise<void>;
+};
+
+type TaggedProviderError = Error & {
+  providerId?: ProviderId;
+  modelId?: string;
+  taskRole?: GenerationTaskRole;
+  errorType?: string;
+  providerCode?: string;
+  attemptedModel?: string;
 };
 
 type StreamWriter = (event: GenerationStreamEvent) => void;
+type ProgressWriter = (progress: GenerationProgress) => void;
 
 function jsonError(message: string, status: number, detail?: unknown) {
   return Response.json({ error: message, detail }, { status });
@@ -47,7 +118,7 @@ function parseJsonResponse(text: string | undefined, stage: string) {
   if (!text) throw new Error(`${stage} aşaması boş yanıt döndürdü.`);
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
-    return JSON.parse(cleaned) as unknown;
+    return omitNullObjectFields(JSON.parse(cleaned));
   } catch {
     throw new Error(`${stage} aşaması geçerli JSON döndürmedi.`);
   }
@@ -55,6 +126,10 @@ function parseJsonResponse(text: string | undefined, stage: string) {
 
 function expectedSections(depth: GenerationInput["depth"]) {
   return depth === "concise" ? 5 : depth === "deep" ? 8 : 6;
+}
+
+function expectedReportSections(depth: GenerationInput["depth"]) {
+  return depth === "concise" ? 6 : depth === "deep" ? 9 : 7;
 }
 
 function throwIfAborted(signal: AbortSignal) {
@@ -76,19 +151,53 @@ async function abortableDelay(ms: number, signal: AbortSignal) {
   });
 }
 
+function errorStatus(error: unknown) {
+  if (!error || typeof error !== "object") return undefined;
+  if ("status" in error) return Number((error as { status?: unknown }).status);
+  if ("cause" in error) return errorStatus((error as { cause?: unknown }).cause);
+  return undefined;
+}
+
 function isTransientError(error: unknown) {
-  const status =
-    typeof error === "object" && error && "status" in error
-      ? Number((error as { status?: unknown }).status)
-      : undefined;
+  const status = errorStatus(error);
   const message = error instanceof Error ? error.message : String(error);
   return (
+    (error instanceof Error && error.name === "AbortError") ||
+    status === 408 ||
     status === 429 ||
     (status !== undefined && status >= 500) ||
-    /RESOURCE_EXHAUSTED|UNAVAILABLE|DEADLINE_EXCEEDED|ECONNRESET|ETIMEDOUT|fetch failed/i.test(
+    /RESOURCE_EXHAUSTED|UNAVAILABLE|DEADLINE_EXCEEDED|ECONNRESET|ETIMEDOUT|UND_ERR_HEADERS_TIMEOUT|terminated|fetch failed/i.test(
       message,
     )
   );
+}
+
+function safeDiagnostic(error: unknown) {
+  const value = error as TaggedProviderError & { name?: unknown; code?: unknown; cause?: { name?: unknown; code?: unknown } };
+  return {
+    name: error instanceof Error ? error.name : typeof error,
+    status: errorStatus(error),
+    code: typeof value?.code === "string" ? value.code : undefined,
+    causeName: typeof value?.cause?.name === "string" ? value.cause.name : undefined,
+    causeCode: typeof value?.cause?.code === "string" ? value.cause.code : undefined,
+    provider: value?.providerId,
+    model: value?.modelId,
+    taskRole: value?.taskRole,
+    errorType: value?.errorType,
+    providerCode: value?.providerCode,
+    attemptedModel: value?.attemptedModel,
+  };
+}
+
+function tagProviderError(error: unknown, assignment: ModelAssignment, taskRole: GenerationTaskRole) {
+  if (error instanceof Error) {
+    Object.assign(error, {
+      providerId: assignment.provider,
+      modelId: assignment.model,
+      taskRole,
+    });
+  }
+  return error;
 }
 
 async function withTransientRetry<T>(
@@ -97,15 +206,16 @@ async function withTransientRetry<T>(
   onRetry: (attempt: number) => void,
 ) {
   let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= MAX_NETWORK_ATTEMPTS; attempt += 1) {
     throwIfAborted(signal);
     try {
       return await operation();
     } catch (error) {
       lastError = error;
-      if (attempt === 3 || !isTransientError(error)) throw error;
+      throwIfAborted(signal);
+      if (attempt === MAX_NETWORK_ATTEMPTS || !isTransientError(error)) throw error;
       onRetry(attempt + 1);
-      await abortableDelay(750 * 2 ** (attempt - 1), signal);
+      await abortableDelay(900 * 2 ** (attempt - 1), signal);
     }
   }
   throw lastError;
@@ -115,7 +225,6 @@ async function generateValidated<T>({
   stage,
   schema,
   request,
-  prepare,
   validate,
   signal,
   onStructureRetry,
@@ -124,7 +233,6 @@ async function generateValidated<T>({
   stage: string;
   schema: z.ZodType<T>;
   request: (feedback?: string) => Promise<string | undefined>;
-  prepare?: (value: T) => T;
   validate: (value: T) => void;
   signal: AbortSignal;
   onStructureRetry: (attempt: number, issues: string[]) => void;
@@ -134,33 +242,45 @@ async function generateValidated<T>({
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= MAX_STRUCTURE_ATTEMPTS; attempt += 1) {
-    const text = await withTransientRetry(
-      () => request(feedback),
-      signal,
-      onNetworkRetry,
-    );
+    const text = await withTransientRetry(() => request(feedback), signal, onNetworkRetry);
     try {
       const parsed = schema.parse(parseJsonResponse(text, stage));
-      const prepared = prepare ? prepare(parsed) : parsed;
-      validate(prepared);
-      return prepared;
+      validate(parsed);
+      return parsed;
     } catch (error) {
       lastError = error;
       const issues = describeValidationError(error);
       if (attempt === MAX_STRUCTURE_ATTEMPTS) break;
       onStructureRetry(attempt + 1, issues);
-      feedback = `The previous response failed validation. Regenerate the complete object from the source and fix every issue below. Do not mention this retry in the output.\n- ${issues.join("\n- ")}`;
+      feedback = `The previous response failed validation. Regenerate the complete object for this task and fix every issue below. Do not mention this retry in the output.\n- ${issues.join("\n- ")}`;
     }
   }
 
   throw lastError;
 }
 
+async function collectStructuredStream(
+  createStream: () => ReturnType<GoogleGenAI["models"]["generateContentStream"]>,
+  onChunk: (receivedCharacters: number, chunks: number) => void,
+) {
+  const stream = await createStream();
+  let text = "";
+  let chunks = 0;
+  for await (const chunk of stream) {
+    const delta = chunk.text ?? "";
+    if (!delta) continue;
+    text += delta;
+    chunks += 1;
+    onChunk(text.length, chunks);
+  }
+  return text;
+}
+
 async function waitUntilActive(
   ai: GoogleGenAI,
   name: string,
   signal: AbortSignal,
-  emit: StreamWriter,
+  progress: ProgressWriter,
 ) {
   for (let attempt = 0; attempt < 90; attempt += 1) {
     throwIfAborted(signal);
@@ -169,10 +289,9 @@ async function waitUntilActive(
     if (state === "ACTIVE") return file;
     if (state === "FAILED") throw new Error("PDF model tarafından işlenemedi.");
     if (attempt > 0 && attempt % 8 === 0) {
-      emit({
-        type: "progress",
+      progress({
         stage: "document",
-        progress: Math.min(28, 18 + attempt / 4),
+        progress: Math.min(25, 18 + attempt / 5),
         title: "PDF model için hazırlanıyor.",
         detail: "Belge sayfaları ve görsel katmanları ayrıştırılıyor.",
       });
@@ -180,6 +299,454 @@ async function waitUntilActive(
     await abortableDelay(1_000, signal);
   }
   throw new Error("PDF işleme zaman aşımına uğradı.");
+}
+
+async function collectOpenRouterStream(
+  response: Response,
+  onChunk: (receivedCharacters: number, chunks: number) => void,
+) {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined) as { error?: { code?: number; message?: string; metadata?: Record<string, unknown> } } | undefined;
+    const error = new Error(payload?.error?.message ?? `OpenRouter isteği ${response.status} koduyla başarısız oldu.`);
+    Object.assign(error, {
+      status: payload?.error?.code ?? response.status,
+      errorType: payload?.error?.metadata?.error_type,
+      providerCode: payload?.error?.metadata?.provider_code,
+    });
+    throw error;
+  }
+  if (!response.body) throw new Error("OpenRouter yanıt akışı açılamadı.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let chunks = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = done ? "" : (lines.pop() ?? "");
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      const event = JSON.parse(data) as {
+        error?: { code?: number; message?: string; metadata?: Record<string, unknown> };
+        choices?: Array<{ delta?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+      };
+      if (event.error) {
+        const providerError = new Error(event.error.message ?? "OpenRouter model hatası.");
+        Object.assign(providerError, {
+          status: event.error.code,
+          errorType: event.error.metadata?.error_type,
+          providerCode: event.error.metadata?.provider_code,
+        });
+        throw providerError;
+      }
+      const content = event.choices?.[0]?.delta?.content;
+      const delta = typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content.map((part) => part.text ?? "").join("")
+          : "";
+      if (!delta) continue;
+      text += delta;
+      chunks += 1;
+      onChunk(text.length, chunks);
+    }
+    if (done) break;
+  }
+  return text;
+}
+
+async function assertOpenRouterModelCompatible(
+  apiKey: string,
+  model: string,
+  signal: AbortSignal,
+) {
+  if (model === "openrouter/auto") return { outputModalities: ["text"] };
+  const response = await fetch(`https://openrouter.ai/api/v1/model/${model}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+    signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined) as { error?: { message?: string } } | undefined;
+    const error = new Error(payload?.error?.message ?? `OpenRouter modeli bulunamadı: ${model}`);
+    Object.assign(error, { status: response.status });
+    throw error;
+  }
+  const payload = await response.json() as {
+    data?: {
+      architecture?: { output_modalities?: string[] };
+      supported_parameters?: string[];
+    };
+  };
+  const outputModalities = payload.data?.architecture?.output_modalities ?? [];
+  const supportedParameters = payload.data?.supported_parameters ?? [];
+  if (!outputModalities.includes("text")) {
+    throw new Error(`OpenRouter modeli ${model} metin/JSON çıktısı üretmiyor. Trace görevleri için output modality “text” olan bir model seç.`);
+  }
+  if (!supportedParameters.includes("structured_outputs")) {
+    throw new Error(`OpenRouter modeli ${model} strict structured output desteklemiyor. Uyumlu model kataloğundan başka bir model seç.`);
+  }
+  return { outputModalities };
+}
+
+function shouldUseOpenRouterFallback(error: unknown) {
+  const status = errorStatus(error);
+  const message = error instanceof Error ? error.message : String(error);
+  return (status !== undefined && status >= 500) || /Provider returned error|upstream provider/i.test(message);
+}
+
+async function prepareProviderRuntime(
+  input: ProviderPreparationInput,
+  signal: AbortSignal,
+  progress: ProgressWriter,
+  markProviderActivity: () => void,
+): Promise<ProviderRuntime> {
+  if (input.provider === "gemini") {
+    const ai = new GoogleGenAI({
+      apiKey: input.apiKey,
+      httpOptions: {
+        timeout: MODEL_TIMEOUT_MS,
+        retryOptions: { attempts: 1 },
+      },
+    });
+    let activeName: string | undefined;
+    let activeFile: { uri: string; mimeType: string } | undefined;
+    try {
+      if (input.needsDocument) {
+        const uploaded = await ai.files.upload({
+          file: input.file,
+          config: {
+            mimeType: "application/pdf",
+            displayName: input.file.name,
+            abortSignal: signal,
+          },
+        });
+        markProviderActivity();
+        if (!uploaded.name) throw new Error("PDF yükleme kimliği alınamadı.");
+        activeName = uploaded.name;
+        progress({
+          stage: "document",
+          progress: 18,
+          title: "PDF alındı, sayfalar çözümleniyor.",
+          detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · Gemini`,
+        });
+        const readyFile = await waitUntilActive(ai, uploaded.name, signal, progress);
+        markProviderActivity();
+        if (!readyFile.uri || !readyFile.mimeType) throw new Error("PDF model URI bilgisi eksik.");
+        activeFile = { uri: readyFile.uri, mimeType: readyFile.mimeType };
+      }
+
+      return {
+        label: "Gemini",
+        effectiveModel: input.model,
+        generateStructured: ({
+          prompt: requestPrompt,
+          schema,
+          maxOutputTokens,
+          includeDocument,
+          signal: requestSignal,
+          onChunk,
+        }) => {
+          if (includeDocument && !activeFile) throw new Error("Gemini PDF kimliği bulunamadı.");
+          return collectStructuredStream(
+            () =>
+              ai.models.generateContentStream({
+                model: input.model,
+                contents: includeDocument
+                  ? [
+                      {
+                        role: "user",
+                        parts: [
+                          createPartFromUri(activeFile!.uri, activeFile!.mimeType),
+                          { text: requestPrompt },
+                        ],
+                      },
+                    ]
+                  : requestPrompt,
+                config: {
+                  temperature: includeDocument ? 0.1 : 0.4,
+                  maxOutputTokens,
+                  responseMimeType: "application/json",
+                  responseJsonSchema: z.toJSONSchema(schema),
+                  abortSignal: requestSignal,
+                },
+              }),
+            onChunk,
+          );
+        },
+        cleanup: async () => {
+          if (!activeName) return;
+          const name = activeName;
+          activeName = undefined;
+          await ai.files.delete({ name }).catch(() => undefined);
+        },
+      };
+    } catch (error) {
+      if (activeName) await ai.files.delete({ name: activeName }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  if (input.provider === "anthropic") {
+    const ai = new Anthropic({ apiKey: input.apiKey, maxRetries: 0, timeout: MODEL_TIMEOUT_MS });
+    const documentData = input.needsDocument
+      ? Buffer.from(await input.file.arrayBuffer()).toString("base64")
+      : undefined;
+    if (input.needsDocument) {
+      markProviderActivity();
+      progress({
+        stage: "document",
+        progress: 22,
+        title: "PDF Claude için görsel ve metin katmanlarına ayrıldı.",
+        detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · Messages API`,
+      });
+    }
+    return {
+      label: "Claude",
+      effectiveModel: input.model,
+      generateStructured: async ({
+        prompt: requestPrompt,
+        schema,
+        maxOutputTokens,
+        includeDocument,
+        signal: requestSignal,
+        onChunk,
+      }) => {
+        if (includeDocument && !documentData) throw new Error("Claude PDF içeriği bulunamadı.");
+        const stream = ai.messages.stream({
+          model: input.model,
+          max_tokens: maxOutputTokens,
+          temperature: includeDocument ? 0.1 : 0.4,
+          messages: [{
+            role: "user",
+            content: includeDocument ? [
+              {
+                type: "document",
+                source: { type: "base64", media_type: "application/pdf", data: documentData! },
+                cache_control: { type: "ephemeral" },
+              },
+              { type: "text", text: requestPrompt },
+            ] : requestPrompt,
+          }],
+          output_config: {
+            format: zodOutputFormat(schema as z.ZodObject<z.ZodRawShape>),
+          },
+        }, { signal: requestSignal, timeout: MODEL_TIMEOUT_MS });
+        let text = "";
+        let chunks = 0;
+        stream.on("text", (delta) => {
+          text += delta;
+          chunks += 1;
+          onChunk(text.length, chunks);
+        });
+        const message = await stream.finalMessage();
+        if (message.stop_reason !== "end_turn" && message.stop_reason !== "stop_sequence") {
+          throw new Error(`Claude yanıtı tamamlanamadı: ${message.stop_reason ?? "unknown"}.`);
+        }
+        return message.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("") || text;
+      },
+      cleanup: async () => undefined,
+    };
+  }
+
+  if (input.provider === "openrouter") {
+    const capabilities = await assertOpenRouterModelCompatible(input.apiKey, input.model, signal);
+    const imageOutputModel = capabilities.outputModalities.includes("image");
+    const effectiveModel = imageOutputModel ? OPENROUTER_STRUCTURED_FALLBACK_MODEL : input.model;
+    if (imageOutputModel) {
+      await assertOpenRouterModelCompatible(input.apiKey, effectiveModel, signal);
+      progress({
+        stage: input.taskRole === "visual" ? "story" : "document",
+        progress: input.taskRole === "visual" ? 78 : 12,
+        title: "OpenRouter structured model’e yönlendirildi.",
+        detail: `${input.model} görsel çıktı modeli; Trace canvas JSON’u ${effectiveModel} ile üretilecek.`,
+      });
+    }
+    const documentData = input.needsDocument
+      ? Buffer.from(await input.file.arrayBuffer()).toString("base64")
+      : undefined;
+    if (input.needsDocument) {
+      markProviderActivity();
+      progress({
+        stage: "document",
+        progress: 22,
+        title: "PDF OpenRouter isteği için hazırlandı.",
+        detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · ${input.model}`,
+      });
+    }
+    return {
+      label: imageOutputModel ? `OpenRouter · ${effectiveModel}` : "OpenRouter",
+      effectiveModel,
+      generateStructured: async ({
+        prompt: requestPrompt,
+        schema,
+        schemaName,
+        maxOutputTokens,
+        includeDocument,
+        signal: requestSignal,
+        onChunk,
+      }) => {
+        if (includeDocument && !documentData) throw new Error("OpenRouter PDF içeriği bulunamadı.");
+        const timeoutSignal = AbortSignal.timeout(MODEL_TIMEOUT_MS);
+        const combinedSignal = AbortSignal.any([requestSignal, timeoutSignal]);
+        const requestModel = async (model: string) => {
+          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            signal: combinedSignal,
+            headers: {
+              Authorization: `Bearer ${input.apiKey}`,
+              "Content-Type": "application/json",
+              "HTTP-Referer": "https://github.com/Ahmet-Ruchan/trace-research-paper-studio",
+              "X-Title": "Trace Research Studio",
+            },
+            body: JSON.stringify({
+            model,
+            modalities: ["text"],
+            messages: [{
+              role: "user",
+              content: includeDocument ? [
+                { type: "file", file: { filename: input.file.name, file_data: `data:application/pdf;base64,${documentData!}` } },
+                { type: "text", text: requestPrompt },
+              ] : requestPrompt,
+            }],
+            temperature: includeDocument ? 0.1 : 0.4,
+            max_tokens: maxOutputTokens,
+            stream: true,
+            response_format: {
+              type: "json_schema",
+              json_schema: { name: schemaName, strict: true, schema: openAiJsonSchema(schema) },
+            },
+            provider: { require_parameters: true, allow_fallbacks: true },
+            ...(includeDocument ? { plugins: [{ id: "file-parser", pdf: { engine: "cloudflare-ai" } }] } : {}),
+            }),
+          });
+          try {
+            return await collectOpenRouterStream(response, onChunk);
+          } catch (error) {
+            if (error instanceof Error) Object.assign(error, { attemptedModel: model });
+            throw error;
+          }
+        };
+        try {
+          return await requestModel(effectiveModel);
+        } catch (error) {
+          if (effectiveModel === OPENROUTER_STRUCTURED_FALLBACK_MODEL || !shouldUseOpenRouterFallback(error)) {
+            throw error;
+          }
+          markProviderActivity();
+          progress({
+            stage: input.taskRole === "visual" ? "story" : "evidence",
+            progress: input.taskRole === "visual" ? 80 : 36,
+            title: "OpenRouter endpoint’i yeniden yönlendiriliyor.",
+            detail: `${effectiveModel} upstream hatası verdi; ${OPENROUTER_STRUCTURED_FALLBACK_MODEL} ile güvenli tekrar deneniyor.`,
+          });
+          await assertOpenRouterModelCompatible(input.apiKey, OPENROUTER_STRUCTURED_FALLBACK_MODEL, requestSignal);
+          return requestModel(OPENROUTER_STRUCTURED_FALLBACK_MODEL);
+        }
+      },
+      cleanup: async () => undefined,
+    };
+  }
+
+  const ai = new OpenAI({
+    apiKey: input.apiKey,
+    maxRetries: 0,
+    timeout: MODEL_TIMEOUT_MS,
+  });
+  let activeFileId: string | undefined;
+  if (input.needsDocument) {
+    const uploaded = await ai.files.create(
+      {
+        file: input.file,
+        purpose: "user_data",
+        expires_after: { anchor: "created_at", seconds: 3_600 },
+      },
+      { signal, timeout: MODEL_TIMEOUT_MS },
+    );
+    activeFileId = uploaded.id;
+    markProviderActivity();
+    progress({
+      stage: "document",
+      progress: 22,
+      title: "PDF OpenAI çalışma alanına alındı.",
+      detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · Responses API`,
+    });
+  }
+  return {
+    label: "OpenAI",
+    effectiveModel: input.model,
+    generateStructured: async ({
+      prompt: requestPrompt,
+      schema,
+      schemaName,
+      maxOutputTokens,
+      includeDocument,
+      signal: requestSignal,
+      onChunk,
+    }) => {
+      if (includeDocument && !activeFileId) throw new Error("OpenAI PDF kimliği bulunamadı.");
+      const stream = ai.responses.stream(
+        {
+          model: input.model,
+          input: includeDocument
+            ? [
+                {
+                  role: "user",
+                  content: [
+                    { type: "input_file", file_id: activeFileId!, detail: "auto" },
+                    { type: "input_text", text: requestPrompt },
+                  ],
+                },
+              ]
+            : requestPrompt,
+          max_output_tokens: maxOutputTokens,
+          reasoning: { effort: includeDocument ? "low" : "medium" },
+          text: {
+            verbosity: "low",
+            format: {
+              type: "json_schema",
+              name: schemaName,
+              strict: true,
+              schema: openAiJsonSchema(schema),
+            },
+          },
+          store: false,
+        },
+        { signal: requestSignal, timeout: MODEL_TIMEOUT_MS },
+      );
+
+      let text = "";
+      let chunks = 0;
+      for await (const event of stream) {
+        if (event.type !== "response.output_text.delta") continue;
+        text += event.delta;
+        chunks += 1;
+        onChunk(text.length, chunks);
+      }
+      const response = await stream.finalResponse();
+      if (response.status !== "completed") {
+        throw new Error(
+          response.error?.message ??
+            response.incomplete_details?.reason ??
+            "OpenAI yanıtı tamamlanamadı.",
+        );
+      }
+      return response.output_text || text;
+    },
+    cleanup: async () => {
+      if (!activeFileId) return;
+      const fileId = activeFileId;
+      activeFileId = undefined;
+      await ai.files.delete(fileId).catch(() => undefined);
+    },
+  };
 }
 
 async function loadWebSources(urls: string[]) {
@@ -201,7 +768,6 @@ async function loadWebSources(urls: string[]) {
 
 function parseInput(form: FormData): GenerationInput {
   const file = form.get("paper");
-  const apiKey = String(form.get("apiKey") ?? "").trim();
   const language = form.get("language") === "en" ? "en" : "tr";
   const audienceValue = String(form.get("audience") ?? "student");
   const audience = ["general", "student", "expert"].includes(audienceValue)
@@ -212,7 +778,42 @@ function parseInput(form: FormData): GenerationInput {
     ? (depthValue as GenerationInput["depth"])
     : "standard";
   const requestedModel = String(form.get("model") ?? "gemini-3.7-flash");
-  const model = allowedModels.has(requestedModel) ? requestedModel : "gemini-3.7-flash";
+  const inferredProvider = getProviderForModel(requestedModel)?.id ?? "gemini";
+  const requestedProvider = String(form.get("provider") ?? inferredProvider);
+  const fallbackSelection = resolveProviderModel(requestedProvider, requestedModel);
+  if (!fallbackSelection) throw new InputError("Model ve sağlayıcı seçimi geçersiz.", 400);
+
+  let assignments: ModelTeam;
+  const rawAssignments = String(form.get("assignments") ?? "");
+  try {
+    const parsed = rawAssignments ? JSON.parse(rawAssignments) as Record<string, unknown> : undefined;
+    assignments = Object.fromEntries(generationTaskRoles.map((role) => {
+      const candidate = parsed?.[role] as { provider?: unknown; model?: unknown } | undefined;
+      const selection = candidate
+        ? resolveProviderModel(String(candidate.provider ?? ""), String(candidate.model ?? ""))
+        : fallbackSelection;
+      if (!selection) throw new Error(`invalid ${role}`);
+      return [role, selection];
+    })) as ModelTeam;
+  } catch {
+    throw new InputError("Görev bazlı model dağılımı geçersiz.", 400);
+  }
+  const { provider, model } = assignments.evidence;
+
+  const apiKeys: Partial<Record<ProviderId, string>> = {};
+  try {
+    const raw = String(form.get("apiKeys") ?? "");
+    const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+    for (const assignment of Object.values(assignments)) {
+      if (apiKeys[assignment.provider]) continue;
+      const value = String(parsed[assignment.provider] ?? "").trim();
+      if (value) apiKeys[assignment.provider] = value;
+    }
+    const legacyKey = String(form.get("apiKey") ?? "").trim();
+    if (legacyKey && !apiKeys[provider]) apiKeys[provider] = legacyKey;
+  } catch {
+    throw new InputError("Provider API key dağılımı geçersiz.", 400);
+  }
 
   if (!(file instanceof File)) throw new InputError("Bir PDF dosyası yüklemelisin.", 400);
   if (file.type !== "application/pdf") {
@@ -221,7 +822,14 @@ function parseInput(form: FormData): GenerationInput {
   if (file.size > MAX_PDF_BYTES) {
     throw new InputError("PDF boyutu 35 MB sınırını aşıyor.", 413);
   }
-  if (!apiKey) throw new InputError("Gemini API key gerekli.", 401);
+  const documentAssignments = [assignments.evidence, assignments.technical];
+  if (documentAssignments.some((assignment) => assignment.provider === "anthropic") && file.size > 24 * 1024 * 1024) {
+    throw new InputError("Claude için PDF üst sınırı 24 MB; base64 kodlama toplam istek sınırını aşar.", 413);
+  }
+  const missingProvider = Object.values(assignments)
+    .map((assignment) => assignment.provider)
+    .find((providerId) => !apiKeys[providerId]);
+  if (missingProvider) throw new InputError(`${getProvider(missingProvider)!.keyLabel} gerekli.`, 401);
 
   let urls: string[] = [];
   try {
@@ -232,7 +840,17 @@ function parseInput(form: FormData): GenerationInput {
     throw new InputError("Kaynak URL listesi geçersiz.", 400);
   }
 
-  return { file, apiKey, urls, language, audience, depth, model };
+  let checkpoint: unknown;
+  const rawCheckpoint = String(form.get("checkpoint") ?? "");
+  if (rawCheckpoint && rawCheckpoint.length <= MAX_CHECKPOINT_BYTES) {
+    try {
+      checkpoint = JSON.parse(rawCheckpoint);
+    } catch {
+      checkpoint = undefined;
+    }
+  }
+
+  return { file, apiKeys, assignments, urls, language, audience, depth, provider, model, checkpoint };
 }
 
 class InputError extends Error {
@@ -241,27 +859,105 @@ class InputError extends Error {
   }
 }
 
-function publicError(error: unknown) {
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return "Üretim iptal edildi.";
-  }
+function publicError(error: unknown, callerAborted: boolean, fallbackProvider: ProviderId) {
+  if (callerAborted) return "Üretim iptal edildi.";
   const message = error instanceof Error ? error.message : String(error);
-  if (/API_KEY_INVALID|API key not valid|invalid api key|permission_denied/i.test(message)) {
-    return "Gemini API key geçersiz veya bu model için yetkili değil.";
+  const tagged = error as TaggedProviderError;
+  const provider = tagged.providerId ?? fallbackProvider;
+  const providerLabel = getProvider(provider)?.label ?? "Model sağlayıcısı";
+  const modelLabel = tagged.modelId ? ` (${tagged.modelId})` : "";
+  const taskLabel = tagged.taskRole ? ` · ${tagged.taskRole} görevi` : "";
+  if (/metin\/JSON çıktısı üretmiyor|strict structured output desteklemiyor/i.test(message)) {
+    return message;
+  }
+  if (error instanceof Error && error.name === "AbortError") {
+    return `${providerLabel}${modelLabel}${taskLabel} 120 saniyede tamamlanmadı. Tamamlanan aşamalar korundu; yeniden deneyebilirsin.`;
+  }
+  if (/API_KEY_INVALID|API key not valid|invalid api key|incorrect api key|authentication|permission_denied|401/i.test(message)) {
+    return `${providerLabel} API key geçersiz veya bu model için yetkili değil.`;
   }
   if (/RESOURCE_EXHAUSTED|quota|rate limit|429/i.test(message)) {
-    return "Gemini kullanım kotası doldu veya istek sınırına ulaşıldı. Biraz sonra yeniden dene.";
+    return `${providerLabel} kullanım kotası doldu veya istek sınırına ulaşıldı. Tamamlanan aşamalar korundu.`;
+  }
+  if (/insufficient credits|402/i.test(message)) {
+    return `${providerLabel} hesabında bu istek için yeterli kredi yok.${modelLabel}`;
   }
   if (/NOT_FOUND|model.*not found|404/i.test(message)) {
-    return "Seçilen Gemini modeli bu API key için kullanılamıyor. Başka bir model seçip yeniden dene.";
+    return `Seçilen ${providerLabel} modeli bu API key için kullanılamıyor. Başka bir model seçip yeniden dene.`;
   }
-  if (/UNAVAILABLE|503|fetch failed|ECONNRESET|ETIMEDOUT/i.test(message)) {
-    return "Gemini servisine şu anda ulaşılamıyor. İstek güvenle durduruldu; yeniden deneyebilirsin.";
+  if (/UNAVAILABLE|503|504|fetch failed|ECONNRESET|ETIMEDOUT|terminated/i.test(message)) {
+    return `${providerLabel} servisine şu anda ulaşılamıyor. Tamamlanan aşamalar korundu; yeniden deneyebilirsin.`;
+  }
+  if (/Provider returned error/i.test(message)) {
+    const diagnostic = [tagged.errorType, tagged.providerCode].filter(Boolean).join(" / ");
+    const attempted = tagged.attemptedModel && tagged.attemptedModel !== tagged.modelId
+      ? ` Uyumlu fallback ${tagged.attemptedModel} de başarısız oldu.`
+      : "";
+    return `${providerLabel}${modelLabel}${taskLabel} upstream sağlayıcıda başarısız oldu${diagnostic ? ` (${diagnostic})` : ""}.${attempted} Uyumlu model kataloğundan başka bir text-only output + structured-output modeli seç.`;
   }
   if (error instanceof z.ZodError || error instanceof Error && error.name === "IntegrityError") {
-    return "Model çıktısı iki denemede de kanıt şemasını geçemedi. Uydurma veri yayınlanmadı.";
+    return "Model çıktısı iki denemede de kanıt şemasını geçemedi. Uydurma veri yayınlanmadı; tamamlanan aşamalar korundu.";
   }
   return message || "Paper işlenirken beklenmeyen bir hata oluştu.";
+}
+
+async function inputFingerprint(input: GenerationInput) {
+  const fileHash = createHash("sha256")
+    .update(Buffer.from(await input.file.arrayBuffer()))
+    .digest("hex");
+  const technical = input.assignments.technical;
+  const evidence = input.assignments.evidence;
+  return createHash("sha256")
+    .update(fileHash)
+    .update(JSON.stringify({
+      urls: input.urls,
+      language: input.language,
+      audience: input.audience,
+      depth: input.depth,
+      provider: input.provider,
+      model: input.model,
+      ...(technical.provider !== evidence.provider || technical.model !== evidence.model
+        ? { technical }
+        : {}),
+    }))
+    .digest("hex");
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+) {
+  let cursor = 0;
+  let failure: unknown;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length && !failure) {
+      const item = items[cursor];
+      cursor += 1;
+      try {
+        await worker(item);
+      } catch (error) {
+        failure = error;
+      }
+    }
+  });
+  await Promise.all(workers);
+  if (failure) throw failure;
+}
+
+function setCheckpointPart<Key extends EvidencePassId>(
+  checkpoint: EvidenceCheckpoint,
+  passId: Key,
+  value: EvidencePassOutputs[Key],
+) {
+  const parts = checkpoint.parts as Partial<
+    Record<EvidencePassId, EvidencePassOutputs[EvidencePassId]>
+  >;
+  parts[passId] = value;
+}
+
+function completedPasses(checkpoint: EvidenceCheckpoint) {
+  return evidencePassIds.filter((passId) => Boolean(checkpoint.parts[passId]));
 }
 
 async function runPipeline(
@@ -269,133 +965,266 @@ async function runPipeline(
   signal: AbortSignal,
   emit: StreamWriter,
 ) {
-  let uploadedName: string | undefined;
-  let ai: GoogleGenAI | undefined;
+  const runtimePromises = new Map<string, Promise<ProviderRuntime>>();
+  let lastProgress: GenerationProgress | undefined;
+  let lastEmitAt = Date.now();
+  let lastProviderActivityAt = Date.now();
 
-  const progress = (value: GenerationProgress) => emit({ type: "progress", ...value });
+  const progress: ProgressWriter = (value) => {
+    const next = {
+      ...value,
+      activityAt: value.activityAt ?? new Date(lastProviderActivityAt).toISOString(),
+      heartbeat: false,
+    };
+    lastProgress = next;
+    lastEmitAt = Date.now();
+    emit({ type: "progress", ...next });
+  };
+  const markProviderActivity = () => {
+    lastProviderActivityAt = Date.now();
+  };
+  const getRuntime = (
+    taskRole: GenerationTaskRole,
+    needsDocument = taskRole === "evidence" || taskRole === "technical",
+  ) => {
+    const assignment = input.assignments[taskRole];
+    const runtimeKey = `${assignment.provider}:${assignment.model}`;
+    const existing = runtimePromises.get(runtimeKey);
+    if (existing) return existing;
+    const apiKey = input.apiKeys[assignment.provider];
+    if (!apiKey) throw new InputError(`${getProvider(assignment.provider)!.keyLabel} gerekli.`, 401);
+    const runtime = prepareProviderRuntime(
+      {
+        file: input.file,
+        apiKey,
+        ...assignment,
+        needsDocument,
+        taskRole,
+      },
+      signal,
+      progress,
+      markProviderActivity,
+    ).catch((error) => {
+      throw tagProviderError(error, assignment, taskRole);
+    });
+    runtimePromises.set(runtimeKey, runtime);
+    return runtime;
+  };
+  const cleanupRuntimes = async () => {
+    const settled = await Promise.allSettled([...runtimePromises.values()]);
+    await Promise.allSettled(settled
+      .filter((result): result is PromiseFulfilledResult<ProviderRuntime> => result.status === "fulfilled")
+      .map((result) => result.value.cleanup()));
+  };
+  const heartbeat = setInterval(() => {
+    if (!lastProgress || Date.now() - lastEmitAt < HEARTBEAT_MS) return;
+    lastEmitAt = Date.now();
+    emit({
+      type: "progress",
+      ...lastProgress,
+      heartbeat: true,
+      activityAt: new Date(lastProviderActivityAt).toISOString(),
+    });
+  }, HEARTBEAT_MS);
 
   try {
     progress({
       stage: "document",
-      progress: 10,
+      progress: 8,
       title: "Kaynaklar güvenli alanda hazırlanıyor.",
       detail: input.urls.length
         ? `PDF ile birlikte ${input.urls.length} yardımcı kaynak kontrol ediliyor.`
         : "PDF, analiz öncesi dosya doğrulamasından geçirildi.",
     });
 
-    ai = new GoogleGenAI({ apiKey: input.apiKey });
-    const [uploaded, webResult] = await Promise.all([
-      ai.files.upload({
-        file: input.file,
-        config: {
-          mimeType: "application/pdf",
-          displayName: input.file.name,
-          abortSignal: signal,
-        },
-      }),
-      loadWebSources(input.urls),
-    ]);
-    if (!uploaded.name) throw new Error("PDF yükleme kimliği alınamadı.");
-    uploadedName = uploaded.name;
-
-    progress({
-      stage: "document",
-      progress: 20,
-      title: "PDF alındı, sayfalar çözümleniyor.",
-      detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB`,
-    });
-    const activeFile = await waitUntilActive(ai, uploaded.name, signal, emit);
-    if (!activeFile.uri || !activeFile.mimeType) {
-      throw new Error("PDF model URI bilgisi eksik.");
-    }
+    const webResultPromise = loadWebSources(input.urls);
+    const fingerprintPromise = inputFingerprint(input);
+    const [webResult, fingerprint] = await Promise.all([webResultPromise, fingerprintPromise]);
 
     const { sources: webSources, warnings } = webResult;
+    const sourceIds = new Set(["paper", ...webSources.map((source) => source.id)]);
     const webContext = webSources
       .map(
         (source) =>
           `SOURCE ${source.id}\nTitle: ${source.title}\nURL: ${source.url}\nCleaned content:\n${source.text}`,
       )
       .join("\n\n---\n\n");
-    const evidencePrompt = buildEvidencePrompt({
-      language: input.language,
-      audience: input.audience,
-      depth: input.depth,
-      webContext,
+
+    const parsedCheckpoint = evidenceCheckpointSchema.safeParse(input.checkpoint);
+    const checkpoint: EvidenceCheckpoint =
+      parsedCheckpoint.success && parsedCheckpoint.data.inputFingerprint === fingerprint
+        ? structuredClone(parsedCheckpoint.data)
+        : { version: 1, inputFingerprint: fingerprint, parts: {} };
+
+    evidencePassIds.forEach((passId) => {
+      const savedPart = checkpoint.parts[passId];
+      if (!savedPart) return;
+      try {
+        validateEvidencePass(passId, savedPart, sourceIds);
+      } catch {
+        delete checkpoint.parts[passId];
+      }
     });
 
-    progress({
-      stage: "evidence",
-      progress: 34,
-      title: "Paper’ın kanıt haritası çıkarılıyor.",
-      detail: "Yöntem, bulgular, metrikler ve sınırlılıklar sayfalara bağlanıyor.",
-    });
-    const evidence = await generateValidated<PaperEvidence>({
-      stage: "Kanıt çıkarma",
-      schema: paperEvidenceSchema,
-      signal,
-      request: async (feedback) => {
-        const response = await ai!.models.generateContent({
-          model: input.model,
-          contents: [
-            {
-              role: "user",
-              parts: [
-                createPartFromUri(activeFile.uri!, activeFile.mimeType!),
-                { text: feedback ? `${evidencePrompt}\n\nVALIDATION FEEDBACK:\n${feedback}` : evidencePrompt },
-              ],
-            },
-          ],
-          config: {
-            temperature: 0.1,
-            maxOutputTokens: 32_768,
-            responseMimeType: "application/json",
-            responseJsonSchema: z.toJSONSchema(paperEvidenceSchema),
-            abortSignal: signal,
-          },
+    let completed = completedPasses(checkpoint).length;
+    let evidenceHighWater = 27 + completed * 8;
+    if (completed > 0) {
+      progress({
+        stage: "evidence",
+        progress: evidenceHighWater,
+        title: "Kaydedilmiş evidence aşamalarından devam ediliyor.",
+        detail: `${completed}/4 aşama yeniden kullanılacak; yalnızca eksikler üretilecek.`,
+      });
+      emit({ type: "checkpoint", checkpoint, completed: completedPasses(checkpoint) });
+    } else {
+      progress({
+        stage: "evidence",
+        progress: 27,
+        title: "Paper dört kanıt katmanına ayrılıyor.",
+        detail: "En fazla iki küçük model görevi aynı anda çalışacak.",
+      });
+      emit({ type: "checkpoint", checkpoint, completed: [] });
+    }
+
+    const tokenLimits: Record<EvidencePassId, number> = {
+      overview: 8_192,
+      methods: 12_288,
+      results: 12_288,
+      limitations: 8_192,
+    };
+    const lastChunkNotice = new Map<EvidencePassId, number>();
+
+    async function runEvidencePass<Key extends EvidencePassId>(passId: Key) {
+      const stageStartedAt = Date.now();
+      const taskRole: GenerationTaskRole = passId === "methods" || passId === "results"
+        ? "technical"
+        : "evidence";
+      const assignment = input.assignments[taskRole];
+      const providerRuntime = await getRuntime(taskRole);
+      const schema = evidencePassSchemas[passId];
+      const prompt = buildEvidencePassPrompt(
+        {
+          language: input.language,
+          audience: input.audience,
+          depth: input.depth,
+          webContext,
+        },
+        passId,
+      );
+
+      progress({
+        stage: "evidence",
+        progress: evidenceHighWater,
+        title: `${evidencePassLabels[passId]} çıkarılıyor.`,
+        detail: `${completed}/4 aşama tamamlandı · structured stream bekleniyor`,
+      });
+
+      try {
+        const output = await generateValidated<EvidencePassOutputs[Key]>({
+          stage: evidencePassLabels[passId],
+          schema,
+          signal,
+          request: async (feedback) =>
+            providerRuntime.generateStructured({
+              prompt: feedback ? `${prompt}\n\nVALIDATION FEEDBACK:\n${feedback}` : prompt,
+              schema,
+              schemaName: `trace_evidence_${passId}`,
+              maxOutputTokens: tokenLimits[passId],
+              includeDocument: true,
+              signal,
+              onChunk: (characters) => {
+                markProviderActivity();
+                const now = Date.now();
+                if (now - (lastChunkNotice.get(passId) ?? 0) < 900) return;
+                lastChunkNotice.set(passId, now);
+                const partial = Math.min(0.85, characters / 8_000);
+                evidenceHighWater = Math.max(
+                  evidenceHighWater,
+                  27 + ((completed + partial) / evidencePassIds.length) * 34,
+                );
+                progress({
+                  stage: "evidence",
+                  progress: evidenceHighWater,
+                  title: `${evidencePassLabels[passId]} stream ediliyor.`,
+                  detail: `${characters.toLocaleString("tr-TR")} karakter alındı · ${completed}/4 aşama tamamlandı`,
+                });
+              },
+            }),
+          validate: (value) => validateEvidencePass(passId, value, sourceIds),
+          onStructureRetry: (attempt, issues) =>
+            progress({
+              stage: "evidence",
+              progress: evidenceHighWater,
+              title: `${evidencePassLabels[passId]} yeniden denetleniyor.`,
+              detail: `${issues.length} tutarsızlık temizleniyor · yapı denemesi ${attempt}/2`,
+              attempt,
+            }),
+          onNetworkRetry: (attempt) =>
+            progress({
+              stage: "evidence",
+              progress: evidenceHighWater,
+              title: `${evidencePassLabels[passId]} bağlantısı yenileniyor.`,
+              detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+              attempt,
+            }),
         });
-        return response.text;
+
+        setCheckpointPart(checkpoint, passId, output);
+        completed += 1;
+        evidenceHighWater = Math.max(evidenceHighWater, 27 + completed * 8.5);
+        emit({ type: "checkpoint", checkpoint, completed: completedPasses(checkpoint) });
+        progress({
+          stage: "evidence",
+          progress: evidenceHighWater,
+          title: `${evidencePassLabels[passId]} doğrulandı.`,
+          detail: `${completed}/4 evidence aşaması tamamlandı ve checkpoint’e kaydedildi.`,
+        });
+        console.info("Trace generation stage", {
+          stage: `evidence:${passId}`,
+          durationMs: Date.now() - stageStartedAt,
+          provider: assignment.provider,
+          model: assignment.model,
+          status: "completed",
+        });
+      } catch (error) {
+        console.error("Trace generation stage", {
+          stage: `evidence:${passId}`,
+          durationMs: Date.now() - stageStartedAt,
+          fallbackProvider: assignment.provider,
+          fallbackModel: assignment.model,
+          outcome: "failed",
+          ...safeDiagnostic(error),
+        });
+        throw tagProviderError(error, assignment, taskRole);
+      }
+    }
+
+    const missingPasses = evidencePassIds.filter((passId) => !checkpoint.parts[passId]);
+    await runWithConcurrency(missingPasses, EVIDENCE_CONCURRENCY, runEvidencePass);
+
+    const overview = checkpoint.parts.overview;
+    if (!overview) throw new Error("Paper overview checkpoint’i bulunamadı.");
+    const sources: Source[] = [
+      {
+        id: "paper",
+        type: "paper",
+        title: overview.paper.title,
+        fileName: input.file.name,
       },
-      prepare: (parsed) => ({
-        ...parsed,
-        sources: [
-          {
-            id: "paper",
-            type: "paper" as const,
-            title: parsed.paper.title,
-            fileName: input.file.name,
-          },
-          ...webSources.map((source) => ({
-            id: source.id,
-            type: "web" as const,
-            title: source.title,
-            url: source.url,
-          })),
-        ],
-      }),
-      validate: validateEvidenceIntegrity,
-      onStructureRetry: (attempt, issues) =>
-        progress({
-          stage: "evidence",
-          progress: 48,
-          title: "Kanıt çıktısı yeniden denetleniyor.",
-          detail: `${issues.length} tutarsızlık bulundu; eksik sayfa ve bağlantılar düzeltiliyor.`,
-          attempt,
-        }),
-      onNetworkRetry: (attempt) =>
-        progress({
-          stage: "evidence",
-          progress: 38,
-          title: "Gemini bağlantısı yeniden kuruluyor.",
-          detail: `Geçici servis hatası · ağ denemesi ${attempt}/3`,
-          attempt,
-        }),
-    });
+      ...webSources.map((source) => ({
+        id: source.id,
+        type: "web" as const,
+        title: source.title,
+        url: source.url,
+      })),
+    ];
+    const evidence = mergeEvidenceParts(checkpoint.parts, sources);
+    validateEvidenceIntegrity(evidence);
 
     progress({
       stage: "evidence",
-      progress: 58,
-      title: "Kanıt haritası doğrulandı.",
+      progress: 64,
+      title: "Dört evidence katmanı birleştirildi.",
       detail: `${evidence.claims.length} claim · ${evidence.metrics.length} metrik · ${evidence.limitations.length} sınırlılık`,
     });
 
@@ -404,60 +1233,212 @@ async function runPipeline(
       audience: input.audience,
       depth: input.depth,
     });
+    const deepReportPrompt = buildDeepReportPrompt(evidence, {
+      language: input.language,
+      audience: input.audience,
+      depth: input.depth,
+    });
+    const technicalAppendixPrompt = buildTechnicalAppendixPrompt(evidence, {
+      language: input.language,
+      audience: input.audience,
+      depth: input.depth,
+    });
+    let storyHighWater = 69;
+    let lastStoryNotice = 0;
+    let reportHighWater = 69;
+    let lastReportNotice = 0;
+    let lastTechnicalNotice = 0;
+    const storyStartedAt = Date.now();
     progress({
       stage: "story",
-      progress: 66,
-      title: "Paper için görsel anlatı tasarlanıyor.",
-      detail: "Her bölüm yalnızca doğrulanmış claim ve metriklerden kuruluyor.",
+      progress: storyHighWater,
+      title: "Görsel anlatı ve derin rapor tasarlanıyor.",
+      detail: "Farklı modeller paralel, aynı modele atanmış görevler kontrollü sırayla çalışıyor.",
     });
-    const story = await generateValidated<StorySpec>({
+    const [visualRuntime, reportRuntime, technicalRuntime] = await Promise.all([
+      getRuntime("visual"),
+      getRuntime("report"),
+      getRuntime("technical", false),
+    ]);
+    const generateStory = () => generateValidated<StorySpec>({
       stage: "Story planlama",
       schema: storySpecSchema,
       signal,
-      request: async (feedback) => {
-        const response = await ai!.models.generateContent({
-          model: input.model,
-          contents: feedback
+      request: async (feedback) =>
+        visualRuntime.generateStructured({
+          prompt: feedback
             ? `${storyPrompt}\n\nVALIDATION FEEDBACK:\n${feedback}`
             : storyPrompt,
-          config: {
-            temperature: 0.4,
-            maxOutputTokens: 24_576,
-            responseMimeType: "application/json",
-            responseJsonSchema: z.toJSONSchema(storySpecSchema),
-            abortSignal: signal,
+          schema: storySpecSchema,
+          schemaName: "trace_story_spec",
+          maxOutputTokens: 16_384,
+          includeDocument: false,
+          signal,
+          onChunk: (characters) => {
+            markProviderActivity();
+            const now = Date.now();
+            if (now - lastStoryNotice < 900) return;
+            lastStoryNotice = now;
+            storyHighWater = Math.max(storyHighWater, 69 + Math.min(17, characters / 600));
+            progress({
+              stage: "story",
+              progress: storyHighWater,
+              title: "StorySpec stream ediliyor.",
+              detail: `${characters.toLocaleString("tr-TR")} karakterlik doğrulanmış anlatı alındı.`,
+            });
           },
-        });
-        return response.text;
-      },
+        }),
       validate: (value) =>
         validateStoryIntegrity(value, evidence, expectedSections(input.depth)),
       onStructureRetry: (attempt, issues) =>
         progress({
           stage: "story",
-          progress: 78,
+          progress: storyHighWater,
           title: "Story bağlantıları yeniden kuruluyor.",
-          detail: `${issues.length} anlatı tutarsızlığı bulundu; kanıt dışı öğeler temizleniyor.`,
+          detail: `${issues.length} anlatı tutarsızlığı temizleniyor · yapı denemesi ${attempt}/2`,
           attempt,
         }),
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
-          progress: 70,
-          title: "Gemini bağlantısı yeniden kuruluyor.",
-          detail: `Geçici servis hatası · ağ denemesi ${attempt}/3`,
+          progress: storyHighWater,
+          title: "Story bağlantısı yenileniyor.",
+          detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
           attempt,
         }),
+    }).catch((error) => {
+      throw tagProviderError(error, input.assignments.visual, "visual");
+    });
+    const generateReport = () => generateValidated<DeepReport>({
+      stage: "Derin rapor",
+      schema: deepReportSchema,
+      signal,
+      request: async (feedback) =>
+        reportRuntime.generateStructured({
+          prompt: feedback
+            ? `${deepReportPrompt}\n\nVALIDATION FEEDBACK:\n${feedback}`
+            : deepReportPrompt,
+          schema: deepReportSchema,
+          schemaName: "trace_deep_report",
+          maxOutputTokens: 18_432,
+          includeDocument: false,
+          signal,
+          onChunk: (characters) => {
+            markProviderActivity();
+            const now = Date.now();
+            if (now - lastReportNotice < 900) return;
+            lastReportNotice = now;
+            reportHighWater = Math.max(reportHighWater, 69 + Math.min(17, characters / 700));
+            progress({
+              stage: "story",
+              progress: Math.min(storyHighWater, reportHighWater),
+              title: "Derin rapor stream ediliyor.",
+              detail: `${characters.toLocaleString("tr-TR")} karakterlik analitik rapor alındı.`,
+            });
+          },
+        }),
+      validate: (value) =>
+        validateDeepReportIntegrity(value, evidence, expectedReportSections(input.depth)),
+      onStructureRetry: (attempt, issues) =>
+        progress({
+          stage: "story",
+          progress: Math.min(storyHighWater, reportHighWater),
+          title: "Rapor bağlantıları yeniden kuruluyor.",
+          detail: `${issues.length} rapor tutarsızlığı temizleniyor · yapı denemesi ${attempt}/2`,
+          attempt,
+        }),
+      onNetworkRetry: (attempt) =>
+        progress({
+          stage: "story",
+          progress: Math.min(storyHighWater, reportHighWater),
+          title: "Rapor bağlantısı yenileniyor.",
+          detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+          attempt,
+        }),
+    }).catch((error) => {
+      throw tagProviderError(error, input.assignments.report, "report");
+    });
+    const generateTechnical = () => generateValidated<TechnicalAppendix>({
+      stage: "Teknik appendix",
+      schema: technicalAppendixSchema,
+      signal,
+      request: async (feedback) =>
+        technicalRuntime.generateStructured({
+          prompt: feedback
+            ? `${technicalAppendixPrompt}\n\nVALIDATION FEEDBACK:\n${feedback}`
+            : technicalAppendixPrompt,
+          schema: technicalAppendixSchema,
+          schemaName: "trace_technical_appendix",
+          maxOutputTokens: 16_384,
+          includeDocument: false,
+          signal,
+          onChunk: (characters) => {
+            markProviderActivity();
+            const now = Date.now();
+            if (now - lastTechnicalNotice < 900) return;
+            lastTechnicalNotice = now;
+            progress({
+              stage: "story",
+              progress: Math.min(storyHighWater, reportHighWater),
+              title: "Teknik appendix hazırlanıyor.",
+              detail: `${characters.toLocaleString("tr-TR")} karakterlik denklem, algoritma ve kod analizi alındı.`,
+            });
+          },
+        }),
+      validate: (value) => validateTechnicalAppendixIntegrity(value, evidence),
+      onStructureRetry: (attempt, issues) => progress({
+        stage: "story",
+        progress: Math.min(storyHighWater, reportHighWater),
+        title: "Teknik bağlantılar yeniden kuruluyor.",
+        detail: `${issues.length} teknik tutarsızlık temizleniyor · yapı denemesi ${attempt}/2`,
+        attempt,
+      }),
+      onNetworkRetry: (attempt) => progress({
+        stage: "story",
+        progress: Math.min(storyHighWater, reportHighWater),
+        title: "Teknik model bağlantısı yenileniyor.",
+        detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+        attempt,
+      }),
+    }).catch((error) => {
+      throw tagProviderError(error, input.assignments.technical, "technical");
+    });
+    let story: StorySpec | undefined;
+    let deepReport: DeepReport | undefined;
+    let technicalAppendix: TechnicalAppendix | undefined;
+    const groupedTasks = new Map<ProviderRuntime, Array<() => Promise<void>>>();
+    const addPostTask = (runtime: ProviderRuntime, task: () => Promise<void>) => {
+      groupedTasks.set(runtime, [...(groupedTasks.get(runtime) ?? []), task]);
+    };
+    addPostTask(visualRuntime, async () => { story = await generateStory(); });
+    addPostTask(reportRuntime, async () => { deepReport = await generateReport(); });
+    addPostTask(technicalRuntime, async () => { technicalAppendix = await generateTechnical(); });
+    await Promise.all([...groupedTasks.values()].map(async (tasks) => {
+      for (const task of tasks) await task();
+    }));
+    if (!story || !deepReport || !technicalAppendix) {
+      throw new Error("Model ekibi gerekli çıktıların tamamını üretmedi.");
+    }
+    console.info("Trace generation stage", {
+      stage: "story",
+      durationMs: Date.now() - storyStartedAt,
+      models: {
+        visual: input.assignments.visual.model,
+        report: input.assignments.report.model,
+      },
+      status: "completed",
     });
 
     progress({
       stage: "finalize",
-      progress: 90,
+      progress: 91,
       title: "Son bütünlük denetimi yapılıyor.",
       detail: "Claim, sayfa, metrik ve görsel bağlantıları birlikte kontrol ediliyor.",
     });
     validateEvidenceIntegrity(evidence);
     validateStoryIntegrity(story, evidence, expectedSections(input.depth));
+    validateDeepReportIntegrity(deepReport, evidence, expectedReportSections(input.depth));
+    validateTechnicalAppendixIntegrity(technicalAppendix, evidence);
 
     const now = new Date().toISOString();
     const project = researchProjectSchema.parse({
@@ -470,22 +1451,32 @@ async function runPipeline(
       depth: input.depth,
       evidence,
       story,
+      deepReport,
+      technicalAppendix,
+      generation: {
+        provider: input.provider,
+        model: input.model,
+        assignments: {
+          ...input.assignments,
+          visual: { ...input.assignments.visual, model: visualRuntime.effectiveModel },
+          report: { ...input.assignments.report, model: reportRuntime.effectiveModel },
+          technical: { ...input.assignments.technical, model: technicalRuntime.effectiveModel },
+        },
+      },
     });
 
     progress({
       stage: "finalize",
       progress: 97,
       title: "Geçici dosyalar temizleniyor.",
-      detail: "PDF Gemini Files alanından siliniyor; API key saklanmıyor.",
+      detail: `${runtimePromises.size} model çalışma alanı temizleniyor; API key’ler saklanmıyor.`,
     });
-    await ai.files.delete({ name: uploadedName, config: { abortSignal: signal } }).catch(() => undefined);
-    uploadedName = undefined;
+    await cleanupRuntimes();
 
     emit({ type: "result", project, warnings });
   } finally {
-    if (ai && uploadedName) {
-      await ai.files.delete({ name: uploadedName }).catch(() => undefined);
-    }
+    clearInterval(heartbeat);
+    await cleanupRuntimes();
   }
 }
 
@@ -505,19 +1496,20 @@ export async function POST(request: Request) {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         } catch {
-          // The browser disconnected; the request signal will stop remaining work.
+          // The browser disconnected; request.signal stops the provider work.
         }
       };
 
       try {
         await runPipeline(input, request.signal, emit);
       } catch (error) {
-        const message = publicError(error);
-        console.error("Generation pipeline failed:", message);
-        emit({
-          type: "error",
-          error: message,
+        const message = publicError(error, request.signal.aborted, input.provider);
+        console.error("Trace generation pipeline failed", {
+          fallbackProvider: input.provider,
+          fallbackModel: input.model,
+          ...safeDiagnostic(error),
         });
+        emit({ type: "error", error: message });
       } finally {
         try {
           controller.close();
@@ -532,6 +1524,7 @@ export async function POST(request: Request) {
     headers: {
       "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-store, no-transform",
+      "Content-Encoding": "identity",
       "X-Accel-Buffering": "no",
     },
   });

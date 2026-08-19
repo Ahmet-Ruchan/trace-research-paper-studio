@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { sampleProject } from "./sample-project";
-import { validateEvidenceIntegrity, validateStoryIntegrity } from "./generation-validation";
+import { validateDeepReportIntegrity, validateEvidenceIntegrity, validateStoryIntegrity, validateTechnicalAppendixIntegrity } from "./generation-validation";
 
 describe("generation integrity checks", () => {
   it("accepts the evidence-linked Attention Is All You Need sample", () => {
     expect(() => validateEvidenceIntegrity(sampleProject.evidence)).not.toThrow();
     expect(() =>
       validateStoryIntegrity(sampleProject.story, sampleProject.evidence, 6),
+    ).not.toThrow();
+    expect(() =>
+      validateDeepReportIntegrity(sampleProject.deepReport!, sampleProject.evidence, 7),
+    ).not.toThrow();
+    expect(() =>
+      validateTechnicalAppendixIntegrity(sampleProject.technicalAppendix!, sampleProject.evidence),
     ).not.toThrow();
   });
 

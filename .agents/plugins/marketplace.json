@@ -1,0 +1,20 @@
+{
+  "name": "trace-research-tools",
+  "interface": {
+    "displayName": "Trace Research Tools"
+  },
+  "plugins": [
+    {
+      "name": "trace-paper-studio",
+      "source": {
+        "source": "local",
+        "path": "./plugins/trace-paper-studio"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Trace Paper Studio"
+  short_description: "Turn papers into verified interactive studies"
+  default_prompt: "Use $trace-paper-studio to analyze a paper into a validated Trace project."
