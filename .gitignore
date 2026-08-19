@@ -26,6 +26,7 @@
 
 # local research library (source PDFs stay on the workstation)
 /ML Research Papers/
+/.trace/
 
 # debug
 npm-debug.log*

@@ -1,0 +1,38 @@
+{
+  "name": "trace-paper-studio",
+  "version": "0.1.0+codex.20260819210632",
+  "description": "Analyze papers with the active agent model, export Trace JSON, and open the finished local website.",
+  "author": {
+    "name": "Ahmet Ruchan",
+    "url": "https://github.com/Ahmet-Ruchan"
+  },
+  "homepage": "https://github.com/Ahmet-Ruchan/trace-research-paper-studio",
+  "repository": "https://github.com/Ahmet-Ruchan/trace-research-paper-studio",
+  "keywords": [
+    "research",
+    "papers",
+    "evidence",
+    "visualization",
+    "agent-skills"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Trace Paper Studio",
+    "shortDescription": "Verified research papers, built by your agent.",
+    "longDescription": "Analyze PDFs with the active Codex model, produce cited reports, technical appendices, portable Trace JSON, and an automatically opened local interactive website without a separate LLM API key.",
+    "developerName": "Ahmet Ruchan",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/Ahmet-Ruchan/trace-research-paper-studio",
+    "defaultPrompt": [
+      "Take this paper and give me the output using the Trace plugin.",
+      "Analyze this PDF and open its finished interactive Trace website.",
+      "Validate and repair this Trace research project."
+    ],
+    "brandColor": "#EE5B3E"
+  }
+}

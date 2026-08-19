@@ -1,0 +1,19 @@
+{
+  "name": "trace-research-tools",
+  "owner": {
+    "name": "Ahmet Ruchan",
+    "url": "https://github.com/Ahmet-Ruchan"
+  },
+  "description": "Evidence-first research workflows for Claude Code.",
+  "plugins": [
+    {
+      "name": "trace-paper-studio",
+      "source": "./plugins/trace-paper-studio",
+      "description": "Analyze papers with the active Claude model, export Trace JSON, and open the finished local website.",
+      "version": "0.2.0",
+      "author": {
+        "name": "Ahmet Ruchan"
+      }
+    }
+  ]
+}

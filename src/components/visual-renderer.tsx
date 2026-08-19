@@ -102,10 +102,56 @@ export function VisualRenderer({ visual, accent = "#e75b37", active = true }: Vi
             <p>{visual.attribution}</p>
           </div>
         )}
+
+        {visual.type === "architecture" && (
+          <div className="architecture-visual">
+            <div className="architecture-nodes">
+              {visual.nodes.map((node) => (
+                <div className={`architecture-node group-${node.group}`} key={node.id} tabIndex={0}>
+                  <span>{node.group}</span><strong>{node.label}</strong><small>{node.detail}</small>
+                </div>
+              ))}
+            </div>
+            <div className="architecture-edges" aria-label="Mimari bağlantılar">
+              {visual.edges.map((edge, index) => {
+                const from = visual.nodes.find((node) => node.id === edge.from)?.label ?? edge.from;
+                const to = visual.nodes.find((node) => node.id === edge.to)?.label ?? edge.to;
+                return <span key={`${edge.from}-${edge.to}-${index}`}><b>{from}</b><i>→</i><em>{edge.label}</em><i>→</i><b>{to}</b></span>;
+              })}
+            </div>
+          </div>
+        )}
+
+        {visual.type === "equation" && (
+          <div className="equation-visual">
+            <div className="equation-formula">{visual.formula}</div>
+            <div className="equation-terms">{visual.terms.map((term) => <div key={term.symbol} tabIndex={0}><strong>{term.symbol}</strong><span>{term.label}</span><small>{term.detail}</small></div>)}</div>
+            <ol>{visual.steps.map((step, index) => <li key={`${step}-${index}`}><span>{index + 1}</span>{step}</li>)}</ol>
+          </div>
+        )}
+
+        {visual.type === "timeline" && (
+          <div className="timeline-visual">
+            {visual.items.map((item, index) => <div className={`tone-${item.tone}`} key={`${item.label}-${index}`} tabIndex={0}><i /><span>{String(index + 1).padStart(2, "0")}</span><strong>{item.label}</strong><small>{item.detail}</small></div>)}
+          </div>
+        )}
+
+        {visual.type === "matrix" && (
+          <div className="matrix-visual" style={{ "--matrix-columns": visual.columns.length } as React.CSSProperties}>
+            <div className="matrix-corner" />
+            {visual.columns.map((column) => <strong className="matrix-column" key={column}>{column}</strong>)}
+            {visual.rows.map((row) => <div className="matrix-row" key={row.label} style={{ gridColumn: `1 / span ${visual.columns.length + 1}` }}><strong>{row.label}</strong>{row.cells.map((cell, index) => <span className={`tone-${cell.tone}`} key={`${cell.label}-${index}`} tabIndex={0}>{cell.label}</span>)}</div>)}
+          </div>
+        )}
+
+        {visual.type === "infographic" && (
+          <div className="infographic-visual">
+            {visual.items.map((item, index) => <article key={`${item.label}-${index}`} tabIndex={0}><span>{item.badge}</span><div><strong>{item.label}</strong><small>{item.detail}</small></div></article>)}
+          </div>
+        )}
       </div>
 
       <figcaption>{visual.caption}</figcaption>
     </figure>
   );
 }
-

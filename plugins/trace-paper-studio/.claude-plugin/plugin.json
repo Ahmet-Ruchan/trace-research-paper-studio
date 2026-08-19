@@ -1,0 +1,10 @@
+{
+  "name": "trace-paper-studio",
+  "description": "Analyze papers with Claude Code's active model, export Trace JSON, and open the finished local website.",
+  "version": "0.2.0",
+  "author": {
+    "name": "Ahmet Ruchan"
+  },
+  "homepage": "https://github.com/Ahmet-Ruchan/trace-research-paper-studio",
+  "repository": "https://github.com/Ahmet-Ruchan/trace-research-paper-studio"
+}

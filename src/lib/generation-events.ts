@@ -11,8 +11,8 @@ export const generationStages = [
   },
   {
     id: "story",
-    label: "Story tasarımı",
-    description: "Doğrulanmış kanıtlardan anlatı ve görseller kuruluyor.",
+    label: "Uzman çıktıları",
+    description: "Görsel anlatı, derin rapor ve teknik ek atanmış modellerce hazırlanıyor.",
   },
   {
     id: "finalize",
