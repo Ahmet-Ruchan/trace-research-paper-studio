@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { buildStandaloneStory } from "./export-story";
-import { sampleProject } from "./sample-project";
+import { exampleProject } from "./example-fixture";
 
 describe("standalone story export", () => {
   it("exports a self-contained document with the project embedded", () => {
-    const html = buildStandaloneStory(sampleProject);
+    const html = buildStandaloneStory(exampleProject);
     expect(html).toContain("<!doctype html>");
-    expect(html).toContain(sampleProject.story.title);
+    expect(html).toContain(exampleProject.story.title);
     expect(html).toContain("IntersectionObserver");
     expect(html).toContain("prefers-reduced-motion");
   });
 
   it("leaves no unfilled placeholder", () => {
-    const html = buildStandaloneStory(sampleProject);
+    const html = buildStandaloneStory(exampleProject);
     expect(html).not.toContain("__TRACE_PROJECT_JSON__");
     expect(html).not.toContain("__TRACE_VIEW_MODE__");
     expect(html).toContain(">story<");
@@ -25,7 +25,7 @@ describe("standalone story export", () => {
    * dönüşmemeli.
    */
   it("neutralises untrusted story copy", () => {
-    const project = structuredClone(sampleProject);
+    const project = structuredClone(exampleProject);
     project.story.title = '</title><script data-attack="true">alert(1)</script>';
     const html = buildStandaloneStory(project);
 
@@ -35,7 +35,7 @@ describe("standalone story export", () => {
   });
 
   it("survives regex-special sequences in project text", () => {
-    const project = structuredClone(sampleProject);
+    const project = structuredClone(exampleProject);
     // "$&" replace() string sürümünde tüm eşleşmeyi geri koyar; fonksiyon
     // sürümü kullanmazsak proje metni burada bozulurdu.
     project.story.dek = "kazanç $& ve $` ile $' işaretleri";

@@ -7,14 +7,14 @@ import type { ResearchProject } from "./schema";
 /**
  * Amiral gemisi örneğin regresyon testi.
  *
- * `examples/attention-is-all-you-need.trace.json` hem plugin çıktısının
+ * `public/examples/attention-is-all-you-need.trace.json` hem plugin çıktısının
  * referansı hem de sözleşmenin canlı örneği. Şemaya bir kural eklenip bu
  * dosya güncellenmezse burada patlar — dokümantasyonun koddan sapmasını
  * engelleyen şey bu.
  */
 const load = (file: string) =>
   JSON.parse(
-    readFileSync(fileURLToPath(new URL(`../../examples/${file}`, import.meta.url)), "utf8"),
+    readFileSync(fileURLToPath(new URL(`../../public/examples/${file}`, import.meta.url)), "utf8"),
   ) as ResearchProject;
 
 const project = load("attention-is-all-you-need.trace.json");

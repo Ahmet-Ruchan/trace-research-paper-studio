@@ -11,7 +11,7 @@ import {
 } from "@/lib/generation-events";
 import { stringsFor } from "@/visuals";
 import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
-import { sampleProject } from "@/lib/sample-project";
+import { loadSampleProject } from "@/lib/sample-project";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { LabView } from "./lab-view";
@@ -54,11 +54,50 @@ export function AppShell() {
   const [selectedClaimId, setSelectedClaimId] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [errorTitle, setErrorTitle] = useState("Üretim tamamlanamadı");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [loadingSample, setLoadingSample] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<GenerationProgress>(initialGenerationProgress);
   const generationController = useRef<AbortController | undefined>(undefined);
   const checkpointCount = useRef(0);
+
+  /**
+   * Plugin devir teslimi: `deliver` tarayıcıyı `?import=<url>` ile açar ve proje
+   * kullanıcı hiçbir şey yapmadan kütüphaneye düşer.
+   *
+   * Adres YALNIZCA loopback olabilir. Aksi halde herhangi bir sayfadaki bir
+   * bağlantı ("trace.app/?import=https://saldirgan/x.json") kullanıcının
+   * kütüphanesine yabancı içerik yazdırabilirdi. Şema doğrulaması bu kontrolün
+   * yerine geçmez: geçerli bir Trace projesi de kötü niyetli olabilir.
+   */
+  async function adoptHandoff(rawUrl: string) {
+    window.history.replaceState(null, "", window.location.pathname);
+    let url: URL;
+    try {
+      url = new URL(rawUrl, window.location.origin);
+    } catch {
+      throw new Error("İçe aktarma adresi geçersiz.");
+    }
+    const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+    if (!loopback || !/^https?:$/.test(url.protocol)) {
+      throw new Error("İçe aktarma yalnızca bu makinedeki bir adresten yapılabilir.");
+    }
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Proje indirilemedi (HTTP ${response.status}).`);
+    const text = await response.text();
+    if (text.length > 5 * 1024 * 1024) throw new Error("Trace JSON 5 MB sınırını aşıyor.");
+    const parsed = researchProjectSchema.safeParse(JSON.parse(text));
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      throw new Error(`Trace proje şeması geçersiz: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "bilinmeyen hata"}`);
+    }
+    await saveLibraryProject(parsed.data);
+    setProjects((current) => [parsed.data, ...current.filter((item) => item.id !== parsed.data.id)]);
+    setProject(parsed.data);
+    setMode("lab");
+    setScreen("workspace");
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -70,8 +109,18 @@ export function AppShell() {
         }
         if (search.get("new") === "1") window.localStorage.removeItem(CHECKPOINT_KEY);
         if (search.get("sample") === "1") {
-          setProject(structuredClone(sampleProject));
-          setScreen("workspace");
+          const sample = await loadSampleProject().catch(() => undefined);
+          if (sample) {
+            setProject(sample);
+            setScreen("workspace");
+          }
+        }
+        const handoff = search.get("import");
+        if (handoff) {
+          await adoptHandoff(handoff).catch((caught: unknown) => {
+            setErrorTitle("İçe aktarma tamamlanamadı");
+            setError(caught instanceof Error ? caught.message : "Proje içe aktarılamadı.");
+          });
         }
         if (search.get("library") === "1") setScreen("library");
         if (search.get("team") === "1") setInitialTeam(true);
@@ -131,7 +180,7 @@ export function AppShell() {
     const savedCheckpoint = window.localStorage.getItem(CHECKPOINT_KEY);
     checkpointCount.current = checkpointPartCount(savedCheckpoint);
     setGenerationProgress(initialGenerationProgress);
-    setLoading(true); setError(undefined); setWarnings([]);
+    setLoading(true); setError(undefined); setErrorTitle("Üretim tamamlanamadı"); setWarnings([]);
     try {
       const form = new FormData();
       form.set("paper", options.file);
@@ -228,7 +277,21 @@ export function AppShell() {
     }
   }
 
-  function openSample() { window.localStorage.removeItem(CHECKPOINT_KEY); setProject(structuredClone(sampleProject)); setMode("lab"); setScreen("workspace"); setError(undefined); }
+  async function openSample() {
+    window.localStorage.removeItem(CHECKPOINT_KEY);
+    setError(undefined);
+    setLoadingSample(true);
+    try {
+      setProject(await loadSampleProject());
+      setMode("lab");
+      setScreen("workspace");
+    } catch (caught) {
+      setErrorTitle("Örnek proje açılamadı");
+      setError(caught instanceof Error ? caught.message : "Örnek proje yüklenemedi.");
+    } finally {
+      setLoadingSample(false);
+    }
+  }
   function newProject() {
     window.localStorage.removeItem(CHECKPOINT_KEY);
     setProject(undefined); setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]); setScreen("home");
@@ -278,7 +341,7 @@ export function AppShell() {
     return <LibraryView projects={projects} onOpen={openProject} onDelete={removeProject} onHome={() => setScreen("home")} onNew={newProject} onImport={importProject} />;
   }
   if (screen === "home" || !project) {
-    return <><Onboarding onGenerate={generate} onSample={openSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>Üretim tamamlanamadı</strong><p>{error}</p><button onClick={() => setError(undefined)}>Kapat</button></div>}</>;
+    return <><Onboarding onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Kapat</button></div>}</>;
   }
 
   const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);

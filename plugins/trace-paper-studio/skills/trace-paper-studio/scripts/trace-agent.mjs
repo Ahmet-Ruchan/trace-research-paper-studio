@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
@@ -17,7 +17,9 @@ function usage(exitCode = 0) {
 Usage:
   node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) [--pick <n>] [--out <directory>] [--language tr|en] [--audience general|student|expert] [--depth concise|standard|deep]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
-  node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--no-open] [--mode lab|story]
+  node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
+                              [--no-open] [--no-app] [--app <trace-repo>] [--app-url <http://...>]
+  node trace-agent.mjs stop --site <site-directory>
 
   --title   Kullanıcıda PDF yoksa: makaleyi arXiv'de arar, indirir ve hakkında
             güncel üstveri toplar (sürüm geçmişi, DOI, yayımlandığı yer, atıf).
@@ -25,7 +27,16 @@ Usage:
   --strict  Öğrenme bloklarını (ön bilgi, türetim, quiz, interaktif, uygulama
             rehberi) seçilen derinlik için ZORUNLU sayar.
 
-The bridge never calls an LLM API. The active Codex, Claude Code, or Gemini CLI model reads the prepared paper and writes the project. Deliver keeps the JSON, builds a local Trace site, and opens it in the default browser.`);
+  --no-app  Ana Trace uygulamasını başlatma/açma; yalnızca bağımsız siteyi ver.
+  --app     Trace deposunun kökü (varsayılan: otomatik bulunur, TRACE_APP_DIR).
+  --app-url Zaten çalışan bir Trace uygulamasının adresi (TRACE_APP_URL).
+
+The bridge never calls an LLM API. The active Codex, Claude Code, or Gemini CLI model reads the prepared paper and writes the project.
+
+Deliver tek komutta her şeyi ayağa kaldırır: JSON'u saklar, bağımsız yerel
+siteyi kurar, ana Trace uygulamasını (yoksa dev sunucusunu başlatarak) hazırlar,
+projeyi kütüphaneye devreder ve ikisini de tarayıcıda açar. Kullanıcının elle
+içe aktarma yapması gerekmez. Açılan sunucular "stop --site" ile kapatılır.`);
   process.exit(exitCode);
 }
 
@@ -36,7 +47,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (key === "no-open" || key === "strict") {
+    if (key === "no-open" || key === "no-app" || key === "strict") {
       args[key] = true;
       continue;
     }
@@ -264,6 +275,146 @@ function validateProject(args) {
   if (!result.ok) process.exitCode = 1;
 }
 
+const LOOPBACK_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
+const APP_HEALTH_MARKER = "trace-research-studio";
+const APP_BOOT_TIMEOUT_MS = 180_000;
+
+/**
+ * "Bu porttaki uygulama gerçekten Trace mi?" — sağlık ucu bir protokol imzası.
+ * Sadece portun açık olmasına bakmak yetmez: 3000 bambaşka bir dev sunucusu
+ * olabilir ve projeyi oraya devretmek sessizce boşa giderdi.
+ */
+async function probeTraceApp(baseUrl, timeoutMs = 1_500) {
+  try {
+    const response = await fetch(new URL("/api/health", baseUrl), {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return false;
+    const body = await response.json();
+    return body?.app === APP_HEALTH_MARKER;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Trace deposunun kökünü arar. İşaret olarak `trace:agent` betiği kullanılıyor;
+ * ada bakmak sahte eşleşme üretir, bu betik yalnızca bu projede var.
+ */
+function findAppRoot(startDirectories) {
+  for (const start of startDirectories) {
+    if (!start) continue;
+    let current = resolve(start);
+    for (let depth = 0; depth < 8; depth += 1) {
+      const manifest = join(current, "package.json");
+      if (existsSync(manifest)) {
+        try {
+          const parsed = JSON.parse(readFileSync(manifest, "utf8"));
+          if (parsed?.scripts?.["trace:agent"]) return current;
+        } catch {
+          // bozuk package.json: yukarı çıkmayı sürdür
+        }
+      }
+      const parent = dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+  return undefined;
+}
+
+async function startTraceApp(appRoot, logDirectory) {
+  if (!existsSync(join(appRoot, "node_modules", "next"))) {
+    return { ok: false, reason: `bağımlılıklar kurulu değil; önce ${appRoot} içinde "npm install" çalıştırın.` };
+  }
+  const port = await findOpenPort(3000);
+  const url = `http://127.0.0.1:${port}`;
+  const logPath = join(logDirectory, "trace-app.log");
+  const log = openSync(logPath, "a");
+  const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev", "--", "--port", String(port)], {
+    cwd: appRoot,
+    detached: true,
+    stdio: ["ignore", log, log],
+  });
+  let exited = false;
+  child.on("error", () => { exited = true; });
+  child.on("exit", () => { exited = true; });
+  child.unref();
+
+  const deadline = Date.now() + APP_BOOT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (await probeTraceApp(url, 2_000)) return { ok: true, url, port, pid: child.pid, logPath, started: true, appRoot };
+    if (exited) {
+      return { ok: false, reason: `dev sunucusu kapandı; günlük: ${logPath}`, logPath };
+    }
+    await new Promise((wait) => setTimeout(wait, 500));
+  }
+  return { ok: false, reason: `dev sunucusu ${APP_BOOT_TIMEOUT_MS / 1000} saniyede yanıt vermedi; günlük: ${logPath}`, logPath };
+}
+
+/**
+ * Ana uygulamayı hazır hale getirir: ayaktaysa onu kullanır, değilse başlatır.
+ * Başarısızlık teslimatı DÜŞÜRMEZ — bağımsız site zaten çalışıyor ve JSON
+ * diskte duruyor; ana uygulama bir ek yüzey.
+ */
+async function ensureTraceApp(args, logDirectory) {
+  if (args["no-app"]) return { ok: false, skipped: "--no-app verildi." };
+
+  const explicitUrl = args["app-url"] ?? process.env.TRACE_APP_URL;
+  if (explicitUrl) {
+    const url = explicitUrl.replace(/\/+$/, "");
+    if (await probeTraceApp(url, 4_000)) return { ok: true, url, started: false, reused: true };
+    return { ok: false, reason: `${url} adresinde Trace uygulaması yanıt vermedi.` };
+  }
+
+  for (const port of [3000, 3001, 3002]) {
+    const url = `http://127.0.0.1:${port}`;
+    if (await probeTraceApp(url)) return { ok: true, url, port, started: false, reused: true };
+  }
+
+  const appRoot = args.app ?? process.env.TRACE_APP_DIR
+    ?? findAppRoot([SKILL_DIRECTORY, process.cwd()]);
+  if (!appRoot) {
+    return { ok: false, reason: "Trace deposu bulunamadı; --app <dizin> veya TRACE_APP_DIR ile gösterin." };
+  }
+  if (!existsSync(join(resolve(appRoot), "package.json"))) {
+    return { ok: false, reason: `${appRoot} bir Node projesi değil.` };
+  }
+  return startTraceApp(resolve(appRoot), logDirectory);
+}
+
+function isAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Aynı proje ikinci kez teslim edildiğinde yeni sunucu açmaz. Aksi halde her
+ * çalıştırma bir port daha tutar ve kullanıcı hangi sekmenin güncel olduğunu
+ * bilemez.
+ */
+async function reuseViewerServer(statusPath, projectId) {
+  if (!existsSync(statusPath)) return undefined;
+  try {
+    const status = JSON.parse(readFileSync(statusPath, "utf8"));
+    if (!isAlive(status.pid)) return undefined;
+    const response = await fetch(`${status.url}/${encodeURIComponent(projectId)}.trace.json`, {
+      signal: AbortSignal.timeout(1_500),
+    });
+    if (!response.ok) return undefined;
+    const served = await response.json();
+    return served?.id === projectId ? status : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function findOpenPort(start = 4317) {
   return new Promise((resolvePort, reject) => {
     const tryPort = (port) => {
@@ -307,12 +458,21 @@ function serve(args) {
       response.writeHead(404).end("Not found");
       return;
     }
-    response.writeHead(200, {
+    const headers = {
       "Content-Type": contentType(filePath),
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
-    });
+    };
+    // Ana uygulama (localhost:3000) projeyi buradan çekip kütüphanesine alıyor.
+    // İzin YALNIZCA loopback kaynaklara ve YALNIZCA proje dosyasına veriliyor:
+    // sitenin geri kalanı hiçbir sayfaya açılmıyor.
+    const origin = request.headers.origin;
+    if (origin && LOOPBACK_ORIGIN.test(origin) && filePath.endsWith(".trace.json")) {
+      headers["Access-Control-Allow-Origin"] = origin;
+      headers["Vary"] = "Origin";
+    }
+    response.writeHead(200, headers);
     response.end(readFileSync(filePath));
   });
 
@@ -366,31 +526,88 @@ async function deliver(args) {
   const html = readFileSync(templatePath, "utf8")
     .replace("__TRACE_PROJECT_JSON__", () => serializedProject)
     .replace("__TRACE_VIEW_MODE__", () => (args.mode === "story" ? "story" : "lab"));
-  const jsonPath = join(siteDirectory, `${validation.project.id || "project"}.trace.json`);
+  const projectId = validation.project.id || "project";
+  const jsonPath = join(siteDirectory, `${projectId}.trace.json`);
   writeFileSync(join(siteDirectory, "index.html"), html, "utf8");
   writeFileSync(jsonPath, `${JSON.stringify(validation.project, null, 2)}\n`, "utf8");
 
-  const port = await findOpenPort(args.port ? Number(args.port) : 4317);
   const statusPath = join(siteDirectory, ".trace-server.json");
-  const child = spawn(process.execPath, [SCRIPT_PATH, "serve", "--site", siteDirectory, "--port", String(port), "--status", statusPath], {
-    detached: true,
-    stdio: "ignore",
-  });
-  child.unref();
-  const url = `http://127.0.0.1:${port}`;
-  await waitForServer(url);
-  const browserOpened = args["no-open"] ? false : openBrowser(url);
+  // Ana uygulamanın açılışı yavaş; bağımsız site ile paralel yürütülüyor.
+  const appPromise = ensureTraceApp(args, siteDirectory);
+
+  const existing = await reuseViewerServer(statusPath, projectId);
+  let url = existing?.url;
+  let serverPid = existing?.pid;
+  if (!existing) {
+    const port = await findOpenPort(args.port ? Number(args.port) : 4317);
+    const child = spawn(process.execPath, [SCRIPT_PATH, "serve", "--site", siteDirectory, "--port", String(port), "--status", statusPath], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+    url = `http://127.0.0.1:${port}`;
+    serverPid = child.pid;
+    await waitForServer(url);
+  }
+
+  const jsonUrl = `${url}/${encodeURIComponent(projectId)}.trace.json`;
+  const app = await appPromise;
+  // Devir teslim adresi: uygulama projeyi kendisi indirip kütüphaneye yazıyor,
+  // kullanıcıdan hiçbir içe aktarma adımı beklenmiyor.
+  const appUrl = app.ok ? `${app.url}/?import=${encodeURIComponent(jsonUrl)}` : undefined;
+  if (app.ok && app.started) {
+    writeFileSync(join(siteDirectory, ".trace-app.json"), `${JSON.stringify(app, null, 2)}\n`, "utf8");
+  }
+
+  // Bağımsız site önce, ana uygulama sonra açılır: tarayıcı son sekmeye
+  // odaklanır ve kullanıcı zengin yüzeyde başlar.
+  const opened = [];
+  if (!args["no-open"]) {
+    if (openBrowser(url)) opened.push("viewer");
+    if (appUrl && openBrowser(appUrl)) opened.push("app");
+  }
+
   console.log(JSON.stringify({
     ok: true,
     title: validation.title,
     url,
-    browserOpened,
+    appUrl,
+    appStarted: app.ok ? Boolean(app.started) : false,
+    appNote: app.ok ? undefined : (app.reason ?? app.skipped),
+    opened,
     siteDirectory,
     jsonPath,
+    jsonUrl,
     sourceProjectPath: projectPath,
-    serverPid: child.pid,
-    note: browserOpened ? "Trace yerel sitede açıldı; JSON aynı klasörde tutuluyor." : `Tarayıcı otomatik açılamadıysa bu URL'yi aç: ${url}`,
+    serverPid,
+    appPid: app.ok ? app.pid : undefined,
+    note: opened.length > 0
+      ? `Açılan sekmeler: ${opened.join(", ")}. JSON aynı klasörde tutuluyor.`
+      : `Tarayıcı açılamadı. Bağımsız site: ${url}${appUrl ? ` · Ana uygulama: ${appUrl}` : ""}`,
   }, null, 2));
+}
+
+/** Teslimat sırasında başlatılan sunucuları kapatır. */
+function stopServers(args) {
+  if (!args.site) throw new Error("--site <site-directory> gerekli.");
+  const siteDirectory = resolve(args.site);
+  const stopped = [];
+  for (const [name, file] of [["viewer", ".trace-server.json"], ["app", ".trace-app.json"]]) {
+    const statusPath = join(siteDirectory, file);
+    if (!existsSync(statusPath)) continue;
+    try {
+      const status = JSON.parse(readFileSync(statusPath, "utf8"));
+      if (isAlive(status.pid)) {
+        // Dev sunucusu alt süreçler doğuruyor; `detached` ile açıldığı için
+        // süreç grubunun tamamı negatif pid ile kapatılıyor.
+        try { process.kill(-status.pid, "SIGTERM"); } catch { process.kill(status.pid, "SIGTERM"); }
+        stopped.push({ name, pid: status.pid, url: status.url });
+      }
+    } catch {
+      // bozuk durum dosyası: atla
+    }
+  }
+  console.log(JSON.stringify({ ok: true, stopped }, null, 2));
 }
 
 try {
@@ -400,6 +617,7 @@ try {
   if (command === "prepare") await prepare(args);
   else if (command === "validate") validateProject(args);
   else if (command === "deliver") await deliver(args);
+  else if (command === "stop") stopServers(args);
   else if (command === "serve") serve(args);
   else usage(1);
 } catch (error) {

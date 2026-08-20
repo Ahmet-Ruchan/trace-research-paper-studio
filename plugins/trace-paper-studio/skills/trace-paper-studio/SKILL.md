@@ -62,14 +62,22 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    Fix every reported issue and rerun until `ok: true`. Do not weaken or bypass validation. `--strict` also requires the learning blocks the chosen depth mandates; drop it only when deliberately repairing a project authored before the learning layer existed.
 
    The validator runs the application's real schema and integrity rules, not a copy of them, so anything it accepts will import into Trace unchanged. It also proves each interactive will actually run: formulas must parse, reference only declared parameters, and produce a finite value at the paper's own configuration.
-9. Deliver the finished project immediately after validation:
+9. Deliver the finished project immediately after validation. This is a single command and it opens everything:
 
    ```bash
    node scripts/trace-agent.mjs deliver --project "<outputPath>"
    ```
 
-   This command keeps a portable `.trace.json`, builds a self-contained local Trace website, starts a loopback-only server, and opens the finished experience in the default browser. Run it automatically; do not make the user import JSON or start a web server first. If the browser cannot be opened, give the returned local URL. Also report the returned `jsonPath` so the user can import that file into Trace's Library whenever they want.
-10. Do not claim completion until `deliver` returns `ok: true`. The final response should state that the local site is open and provide both the URL and `.trace.json` path.
+   One command brings up everything. It keeps a portable `.trace.json`, builds a self-contained local Trace website on a loopback-only server, brings up the main Trace app — reusing it if it is already running, otherwise starting its dev server — hands the project over so it lands in the user's Library on its own, and opens both in the browser. **The user never has to export, import, or start a server.** Run it automatically.
+
+   Read the returned fields:
+   - `url` — the self-contained site (works with no install, shareable as a folder).
+   - `appUrl` — the main app with the project already adopted.
+   - `appNote` — present only when the main app could not be brought up. The delivery still succeeded; say what is missing and that the standalone site is live.
+   - `jsonPath` / `jsonUrl` — the portable project file.
+
+   `--no-app` skips the main app. `--app <dir>` or `TRACE_APP_DIR` points at the Trace repository when auto-detection fails; `--app-url` targets an app already running elsewhere. `stop --site <site-directory>` shuts down whatever `deliver` started.
+10. Do not claim completion until `deliver` returns `ok: true`. The final response should state which surfaces are open and give the URLs plus the `.trace.json` path.
 
 ## Quality rules
 

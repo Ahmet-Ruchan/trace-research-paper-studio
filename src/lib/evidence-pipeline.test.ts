@@ -7,10 +7,10 @@ import {
   type EvidenceCheckpoint,
 } from "./evidence-pipeline";
 import { validateEvidenceIntegrity } from "./generation-validation";
-import { sampleProject } from "./sample-project";
+import { exampleProject } from "./example-fixture";
 
 function checkpointFromSample(): EvidenceCheckpoint {
-  const evidence = sampleProject.evidence;
+  const evidence = exampleProject.evidence;
   return {
     version: 1,
     inputFingerprint: "a".repeat(64),
@@ -51,15 +51,15 @@ function checkpointFromSample(): EvidenceCheckpoint {
 describe("segmented evidence pipeline", () => {
   it("validates and merges all four passes", () => {
     const checkpoint = evidenceCheckpointSchema.parse(checkpointFromSample());
-    const sourceIds = new Set(sampleProject.evidence.sources.map((source) => source.id));
+    const sourceIds = new Set(exampleProject.evidence.sources.map((source) => source.id));
     evidencePassIds.forEach((passId) => {
       const part = checkpoint.parts[passId];
       if (!part) throw new Error(`missing ${passId} fixture`);
       validateEvidencePass(passId, part, sourceIds);
     });
-    const evidence = mergeEvidenceParts(checkpoint.parts, sampleProject.evidence.sources);
+    const evidence = mergeEvidenceParts(checkpoint.parts, exampleProject.evidence.sources);
     expect(() => validateEvidenceIntegrity(evidence)).not.toThrow();
-    expect(evidence.claims).toHaveLength(sampleProject.evidence.claims.length);
+    expect(evidence.claims).toHaveLength(exampleProject.evidence.claims.length);
   });
 
   it("rejects a checkpoint with a different fingerprint format", () => {

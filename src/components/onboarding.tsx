@@ -28,12 +28,13 @@ export type GenerationOptions = {
 type OnboardingProps = {
   onGenerate: (options: GenerationOptions) => void;
   onSample: () => void;
+  sampleBusy?: boolean;
   onLibrary: () => void;
   libraryCount: number;
   initialTeam?: boolean;
 };
 
-export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, initialTeam = false }: OnboardingProps) {
+export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, initialTeam = false, sampleBusy = false }: OnboardingProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File>();
   const [dragging, setDragging] = useState(false);
@@ -148,7 +149,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
         </a>
         <div className="landing-header-actions">
           <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> Kütüphane <span className="nav-count">{libraryCount}</span></button>
-          <button className="text-button" onClick={onSample}>Örnek projeyi aç <ArrowRight size={15} /></button>
+          <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? "Örnek yükleniyor…" : "Örnek projeyi aç"} <ArrowRight size={15} /></button>
         </div>
       </header>
 

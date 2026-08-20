@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { sampleProject } from "./sample-project";
+import { exampleProject } from "./example-fixture";
 import { validateLearningIntegrity } from "./generation-validation";
 import type { Interactive, ResearchProject } from "./schema";
 
-/** Öğrenme bloğu taşımayan taban proje — eski projeleri temsil eder. */
-const base = sampleProject;
+/**
+ * Öğrenme bloğu taşımayan taban proje. Amiral gemisi örnek artık bütün
+ * blokları taşıdığı için "öğrenme katmanından önce üretilmiş proje"yi temsil
+ * edemez; testin ölçtüğü şey tam olarak o geriye dönük uyumluluk.
+ */
+const base: ResearchProject = (() => {
+  const legacy = structuredClone(exampleProject) as Partial<ResearchProject>;
+  delete legacy.primer;
+  delete legacy.derivations;
+  delete legacy.quiz;
+  delete legacy.interactives;
+  delete legacy.applicationGuide;
+  return legacy as ResearchProject;
+})();
 
 function withBlocks(patch: Partial<ResearchProject>): ResearchProject {
   return { ...structuredClone(base), ...patch } as ResearchProject;

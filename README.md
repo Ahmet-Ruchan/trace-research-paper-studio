@@ -162,8 +162,9 @@ Explain Attention Is All You Need using the Trace plugin.
 Take this paper and give me the output using the Trace plugin: ./paper.pdf
 ```
 
-The browser opens when it is done. The same folder holds a `.trace.json` you can archive,
-share, or import into the full application.
+When it finishes, the browser is already open — both the self-contained site and the full
+application, with the project sitting in your Library. Nothing to export, nothing to import,
+no server to start. The same folder keeps a portable `.trace.json` you can archive or share.
 
 ---
 
@@ -241,9 +242,10 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Import any `.trace.json` from **Library → Trace JSON** — the
-enriched *Attention Is All You Need* project ships in `examples/` in both English and Turkish —
-or start from the built-in demo with `?sample=1`.
+Open `http://localhost:3000`. The built-in demo **is** the flagship project: press *Örnek
+projeyi aç* (or add `?sample=1`) and the fully enriched *Attention Is All You Need* loads —
+English or Turkish, chosen from your browser language. Both files also ship as plain downloads
+at `/examples/`, and any `.trace.json` imports through **Library → Trace JSON**.
 
 **Workspaces:** `Lab` inspects the evidence, `Story` edits the narrative, `Preview` is the
 reading experience.
@@ -289,8 +291,10 @@ npm run trace:agent -- deliver --project ".trace/jobs/paper/paper.trace.json"
 With `--title`, the command reports which paper it matched, the runner-up candidates and a
 `confident` flag. Re-run with `--pick <n>` or `--arxiv <id>` to switch.
 
-`deliver` keeps the JSON, builds the site, starts a loopback-only server and opens the browser.
-Pass `--no-open` for headless environments; it still returns the URL and JSON path.
+`deliver` brings up everything in one shot: the portable JSON, the self-contained site on a
+loopback-only server, and the main application — reused if already running, otherwise started —
+with the project handed straight into its Library. `--no-app` limits it to the standalone site,
+`--no-open` suits headless environments, and `stop --site <dir>` shuts down what it started.
 
 </details>
 
@@ -357,7 +361,7 @@ src/
 
 viewer/                         # Standalone viewer app (preact build target)
 scripts/                        # build-viewer · build-plugin-validator · drift check
-examples/                       # Flagship enriched project, covered by tests
+public/examples/                # Flagship project: built-in demo, download, test fixture
 plugins/trace-paper-studio/     # Codex + Claude Code plugin, skill, contract, bridge
 ```
 
@@ -397,7 +401,8 @@ Code / Gemini CLI, and generation through Gemini, OpenAI, Claude and OpenRouter.
 
 Not there yet: hosted publishing, accounts, shared persistence, local and open-weight providers.
 
-*Attention Is All You Need* ships fully enriched in `examples/`, in English and Turkish, covered
+*Attention Is All You Need* ships fully enriched in `public/examples/`, in English and Turkish,
+serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
 by tests so neither can silently fall behind the schema. Interface text follows the project's own
 `language` field, so an English project renders an English interface and a Turkish one does not.
 

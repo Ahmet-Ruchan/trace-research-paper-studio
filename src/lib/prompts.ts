@@ -76,12 +76,21 @@ export function buildEvidencePassPrompt(options: PromptOptions, passId: Evidence
   return `${base}\n\n${passInstructions[passId]}\n\nReturn only the schema-compliant object for this task. Keep the output focused; completeness inside this task matters more than repeating general context.`;
 }
 
+/**
+ * Derinliğe göre bölüm bütçeleri. Prompt bunları hedef olarak veriyor,
+ * bütünlük denetimi de aynı sayıyı üst sınır olarak uyguluyor; tek yerde
+ * durmazsa üretim kendi doğrulamasına takılır.
+ */
+export const SECTION_BUDGETS = {
+  story: { concise: 5, standard: 6, deep: 8 },
+  deepReport: { concise: 6, standard: 7, deep: 9 },
+} as const;
+
 export function buildStoryPrompt(
   evidence: PaperEvidence,
   options: Omit<PromptOptions, "webContext">,
 ) {
-  const targetSections =
-    options.depth === "concise" ? 5 : options.depth === "deep" ? 8 : 6;
+  const targetSections = SECTION_BUDGETS.story[options.depth];
 
   return `You are the narrative director and visualization planner of an evidence-first research system.
 
@@ -115,7 +124,7 @@ export function buildDeepReportPrompt(
   evidence: PaperEvidence,
   options: Omit<PromptOptions, "webContext">,
 ) {
-  const targetSections = options.depth === "concise" ? 6 : options.depth === "deep" ? 9 : 7;
+  const targetSections = SECTION_BUDGETS.deepReport[options.depth];
   return `You are the senior research analyst of an evidence-first paper studio.
 
 Create a rigorous DeepReport using ONLY the evidence JSON below. Every analytical section must cite existing claim IDs. Do not add outside knowledge, speculate beyond the evidence, or hide uncertainty.

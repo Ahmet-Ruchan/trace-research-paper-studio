@@ -17,7 +17,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const MAPS = process.env.TRACE_EN_MAPS ?? join(root, ".trace-en-maps");
 
-const source = JSON.parse(readFileSync(join(root, "examples/attention-is-all-you-need.trace.json"), "utf8"));
+const source = JSON.parse(readFileSync(join(root, "public/examples/attention-is-all-you-need.trace.json"), "utf8"));
 const ev = JSON.parse(readFileSync(join(MAPS, "en-evidence.json"), "utf8"));
 const st = JSON.parse(readFileSync(join(MAPS, "en-story.json"), "utf8"));
 const ln = JSON.parse(readFileSync(join(MAPS, "en-learning.json"), "utf8"));
@@ -290,7 +290,7 @@ const scan = (node, path) => {
 };
 scan(translated, "root");
 
-const out = join(root, "examples/attention-is-all-you-need.en.trace.json");
+const out = join(root, "public/examples/attention-is-all-you-need.en.trace.json");
 if (turkish.length) {
   console.error(JSON.stringify({ ok: false, remainingTurkish: turkish.slice(0, 20) }, null, 2));
   process.exit(1);
