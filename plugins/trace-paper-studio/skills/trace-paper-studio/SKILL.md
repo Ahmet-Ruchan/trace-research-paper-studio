@@ -9,14 +9,34 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 
 ## Workflow
 
-1. Locate the requested PDF and optional source URLs. Use Turkish, student, and deep when the user gives no options. Do not stop for configuration questions unless the paper itself cannot be resolved.
-2. Run the bundled bridge next to this skill:
+1. Resolve the paper. **The user does not need to have the PDF** — a name is enough. Use Turkish, student, and deep when the user gives no options. Do not stop for configuration questions.
+2. Run the bundled bridge next to this skill. Resolve `scripts/trace-agent.mjs` relative to this `SKILL.md`, not the user's current directory.
 
    ```bash
-   node scripts/trace-agent.mjs prepare --paper "<paper.pdf>" --language tr --audience student --depth standard
+   # The user named a paper but has no file — find it on arXiv, download it,
+   # and collect current metadata about it:
+   node scripts/trace-agent.mjs prepare --title "attention is all you need" --language tr --audience student --depth deep
+
+   # The user gave an arXiv id:
+   node scripts/trace-agent.mjs prepare --arxiv 1706.03762 --depth deep
+
+   # The user gave a local file:
+   node scripts/trace-agent.mjs prepare --paper "<paper.pdf>" --depth deep
    ```
 
-   Resolve `scripts/trace-agent.mjs` relative to this `SKILL.md`, not the user's current directory. Use the returned `jobPath`, `pageTextPath`, and `outputPath`.
+   Use the returned `jobPath`, `pageTextPath`, and `outputPath`.
+
+   With `--title`, check `resolution` in the output. When `confident` is false, or when the top `alternatives` entries are close in `matchScore`, tell the user which paper you matched and offer the alternatives before spending effort — re-run with `--pick <n>` or `--arxiv <id>` to switch. Beware near-miss titles: "Not All Attention Is All You Need" is a different paper.
+
+2b. When `resolution` is present, read `context.json` from the job directory. It holds arXiv metadata (version history, categories, DOI, journal reference) plus, when the APIs are reachable, the venue where the paper was published and its citation counts.
+
+   **This context is not the paper.** Never present it as a paper claim:
+   - Add each reachable context source to `evidence.sources` as `{ "id": "arxiv" | "semantic-scholar" | "openalex", "type": "web", "title": ..., "url": ... }`.
+   - Claims drawn from context cite that source id, with the retrieved value as the `excerpt`. No `page`.
+   - Any source with `ok: false` was unreachable. Omit it entirely — do not guess a citation count or a venue.
+   - Citation counts are a snapshot; say when they were retrieved.
+
+   Good uses: how the paper was eventually published versus the preprint, how long it kept being revised, how the field received it. These belong in the deep report's `implication` or `contribution` sections, not in claims about what the paper says.
 3. If extraction succeeded, read `paper.pages.txt` in manageable page ranges. Preserve `--- PAGE N ---` boundaries. If it did not, use the host's native PDF-reading tool and keep page numbers explicit.
 4. Read [references/project-contract.md](references/project-contract.md) completely before authoring the output. When working inside the Trace source repository, also inspect `src/lib/schema.ts` and `src/lib/generation-validation.ts`; those files are authoritative if the bundled reference differs.
 5. Build the project evidence-first:
@@ -53,6 +73,8 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 
 ## Quality rules
 
+- **Write the prose at full length.** This is the deliverable a reader actually reads. Story bodies run several paragraphs, deep report `analysis` entries are 2–5 substantial paragraphs, and `plainSummary` explains the paper to someone who has not read it. Compressed, bullet-like prose fails the task even when every field is technically populated.
+- Explain mechanisms, not just outcomes: what the authors did, why that choice and not the obvious alternative, and what it costs.
 - Prefer precise explanation over promotional language.
 - Distinguish author claims, reported measurements, and your own interpretation.
 - Include the strongest limitations and reproduction risks, not only favorable results.

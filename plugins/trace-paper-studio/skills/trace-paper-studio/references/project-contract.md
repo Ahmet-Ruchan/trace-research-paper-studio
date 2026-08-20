@@ -251,3 +251,42 @@ Answers are visible in the JSON. That is deliberate: the project must stay porta
 `hyperparameters` entries are `{ name, paperValue, range, guidance, claimIds }`. `paperValue` and `range` must come from the paper; if a parameter was never ablated, say so in `guidance` rather than inventing a recommended range.
 
 `whenNotToUse` should cite the paper's own limitation claims. A guide that only says when the method works is advocacy, not teaching.
+
+---
+
+# Context sources
+
+When `prepare` resolved the paper from a name (`--title` / `--arxiv`), the job directory also holds `context.json`: arXiv metadata, and — when reachable — the venue the paper was published in and its citation counts.
+
+This is background *about* the paper. It is not the paper, and it must never be presented as one.
+
+Register each reachable source alongside the PDF:
+
+```json
+{ "id": "arxiv", "type": "web", "title": "arXiv:1706.03762v7",
+  "url": "https://arxiv.org/abs/1706.03762" }
+{ "id": "semantic-scholar", "type": "web", "title": "Semantic Scholar kaydı",
+  "url": "https://api.semanticscholar.org/graph/v1/paper/arXiv:1706.03762" }
+```
+
+Claims drawn from context cite that source id and carry the retrieved value as the excerpt. They take no `page` — only `sourceId: "paper"` requires one.
+
+```json
+{
+  "id": "claim-reception-01",
+  "statement": "Makale NeurIPS 2017'de yayımlandı ve 20 Ağustos 2026 itibarıyla 189.343 atıf aldı.",
+  "kind": "background",
+  "confidence": "verified",
+  "sourceRefs": [{ "sourceId": "semantic-scholar",
+                   "excerpt": "venue: Neural Information Processing Systems · citationCount: 189343",
+                   "locator": "2026-08-20 tarihinde alındı" }]
+}
+```
+
+Rules:
+
+- A source with `ok: false` was unreachable or was skipped as unreliable. **Omit it.** Never guess a citation count, a venue, or a publication date.
+- Citation counts are a snapshot. State when they were retrieved, in the statement or the locator.
+- Context belongs in the deep report's `contribution` or `implication` sections, and in `plainSummary` framing. It does not belong in claims about what the paper argues.
+- Version history is genuinely useful: `published` versus `updated` shows how long a preprint kept moving, and `journalRef` shows where it landed. Both are worth a sentence when they say something.
+- Do not let context crowd out the paper. It is framing, not findings.

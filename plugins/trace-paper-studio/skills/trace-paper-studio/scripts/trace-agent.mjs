@@ -15,10 +15,13 @@ function usage(exitCode = 0) {
   console.log(`Trace native-agent bridge
 
 Usage:
-  node trace-agent.mjs prepare --paper <paper.pdf> [--out <directory>] [--language tr|en] [--audience general|student|expert] [--depth concise|standard|deep]
+  node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) [--pick <n>] [--out <directory>] [--language tr|en] [--audience general|student|expert] [--depth concise|standard|deep]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--no-open] [--mode lab|story]
 
+  --title   Kullanıcıda PDF yoksa: makaleyi arXiv'de arar, indirir ve hakkında
+            güncel üstveri toplar (sürüm geçmişi, DOI, yayımlandığı yer, atıf).
+            Eşleşme kesin değilse alternatifler raporlanır; --pick ile seçin.
   --strict  Öğrenme bloklarını (ön bilgi, türetim, quiz, interaktif, uygulama
             rehberi) seçilen derinlik için ZORUNLU sayar.
 
@@ -59,9 +62,69 @@ function assertChoice(value, choices, label) {
   return value;
 }
 
-function prepare(args) {
-  if (!args.paper) throw new Error("--paper <paper.pdf> gerekli.");
-  const paperPath = resolve(args.paper);
+/**
+ * Kullanıcının elinde PDF olmayabilir. `--title` veya `--arxiv` verildiğinde
+ * makale arXiv'de bulunur, indirilir ve hakkındaki güncel/resmi üstveri
+ * toplanır. Sonuç job dizinine yazılır; agent bunu anlatıyı zenginleştirmek
+ * için kullanır.
+ */
+async function resolvePaper(args) {
+  if (args.paper) return { paperPath: resolve(args.paper), resolution: null };
+
+  const query = args.title ?? args.arxiv;
+  if (!query) throw new Error("--paper <dosya.pdf>, --title \"<makale adı>\" veya --arxiv <id> gerekli.");
+
+  const { searchArxiv, fetchArxivById, rankByTitle, downloadPdf, collectContext } = await import(
+    "./lib/paper-source.mjs"
+  );
+
+  let chosen;
+  let candidates = [];
+  if (args.arxiv) {
+    chosen = await fetchArxivById(args.arxiv);
+  } else {
+    const results = await searchArxiv(args.title, 8);
+    if (!results.length) throw new Error(`arXiv'de sonuç bulunamadı: "${args.title}"`);
+    candidates = rankByTitle(results, args.title);
+    const index = args.pick ? Number(args.pick) - 1 : 0;
+    chosen = candidates[index];
+    if (!chosen) throw new Error(`--pick ${args.pick} aralık dışında (${candidates.length} aday).`);
+  }
+
+  const directory = resolve(args.out ?? `.trace/jobs/${slugify(chosen.title ?? chosen.arxivId)}`);
+  mkdirSync(directory, { recursive: true });
+  const paperPath = join(directory, `${slugify(chosen.title ?? chosen.arxivId)}.pdf`);
+
+  const download = await downloadPdf(chosen.pdfUrl, paperPath);
+  const context = await collectContext(chosen);
+  writeFileSync(join(directory, "context.json"), `${JSON.stringify(context, null, 2)}\n`, "utf8");
+
+  return {
+    paperPath,
+    jobDirectoryOverride: directory,
+    resolution: {
+      matchedBy: args.arxiv ? "arxiv-id" : "title-search",
+      arxivId: chosen.arxivId,
+      title: chosen.title,
+      matchScore: chosen.matchScore,
+      pdfUrl: download.url,
+      sizeBytes: download.sizeBytes,
+      contextPath: join(directory, "context.json"),
+      // Eşleşme kesin değilse agent kullanıcıya doğrulatabilsin diye
+      // alternatifler her zaman raporlanır.
+      alternatives: candidates.slice(0, 5).map((entry, index) => ({
+        pick: index + 1,
+        arxivId: entry.arxivId,
+        title: entry.title,
+        matchScore: entry.matchScore,
+      })),
+      confident: args.arxiv ? true : (chosen.matchScore ?? 0) >= 0.85,
+    },
+  };
+}
+
+async function prepare(args) {
+  const { paperPath, jobDirectoryOverride, resolution } = await resolvePaper(args);
   if (!existsSync(paperPath)) throw new Error(`PDF bulunamadı: ${paperPath}`);
   if (extname(paperPath).toLowerCase() !== ".pdf") throw new Error("Girdi .pdf uzantılı olmalı.");
   const size = statSync(paperPath).size;
@@ -72,7 +135,9 @@ function prepare(args) {
   const language = assertChoice(args.language ?? "tr", ["tr", "en"], "--language");
   const audience = assertChoice(args.audience ?? "student", ["general", "student", "expert"], "--audience");
   const depth = assertChoice(args.depth ?? "standard", ["concise", "standard", "deep"], "--depth");
-  const jobDirectory = resolve(args.out ?? `.trace/jobs/${slugify(basename(paperPath, extname(paperPath)))}`);
+  const jobDirectory =
+    jobDirectoryOverride ??
+    resolve(args.out ?? `.trace/jobs/${slugify(basename(paperPath, extname(paperPath)))}`);
   mkdirSync(jobDirectory, { recursive: true });
 
   const rawTextPath = resolve(jobDirectory, "paper.raw.txt");
@@ -106,10 +171,24 @@ function prepare(args) {
       storySections: depth === "concise" ? 5 : depth === "deep" ? 8 : 6,
       reportSections: depth === "concise" ? 6 : depth === "deep" ? 9 : 7,
     },
+    resolution: resolution ?? undefined,
   };
   const jobPath = resolve(jobDirectory, "job.json");
   writeFileSync(jobPath, `${JSON.stringify(job, null, 2)}\n`, "utf8");
-  console.log(JSON.stringify({ ok: true, jobPath, outputPath, pageTextPath: extractedText ? pageTextPath : null, extractionNote }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        jobPath,
+        outputPath,
+        pageTextPath: extractedText ? pageTextPath : null,
+        extractionNote,
+        resolution: resolution ?? undefined,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 /**
@@ -311,7 +390,7 @@ try {
   const [command, ...rest] = process.argv.slice(2);
   if (!command || command === "help" || command === "--help" || command === "-h") usage();
   const args = parseArgs(rest);
-  if (command === "prepare") prepare(args);
+  if (command === "prepare") await prepare(args);
   else if (command === "validate") validateProject(args);
   else if (command === "deliver") await deliver(args);
   else if (command === "serve") serve(args);
