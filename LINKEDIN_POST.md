@@ -1,44 +1,33 @@
-# LinkedIn paylaşım taslağı
+# LinkedIn paylaşımı
 
-Araştırma makalelerini kanıtlarıyla inceleyen, görselleştiren ve etkileşimli bir çalışma alanına dönüştüren Trace Research Paper Studio’yu geliştirdim.
+Bir makaleyi özetlemek saniyeler sürüyor. O özetin doğru olduğundan emin olmak saatler.
 
-Çözmek istediğim problem şuydu: Bir paper’ı özetlemek kolay, fakat önemli ifadelerin hangi sayfa ve alıntıya dayandığını görmek çoğu zaman mümkün değil.
+Son dönemde bu boşluğu kapatmak için çalıştığım projeyi açık kaynak olarak paylaşıyorum: Trace — Research Paper Studio.
 
-Trace’i bu nedenle evidence-first tasarladım. Sistem PDF’den araştırma sorusunu, yöntemleri, bulguları, metrikleri, sınırlılıkları ve kavramları çıkarıyor. Her önemli iddiayı paper’daki sayfa ve kısa alıntıyla ilişkilendiriyor. Bütün aşamalar yapılandırılmış şemalar ve anlamsal kontrollerle doğrulanıyor.
+Çıkış noktam şuydu: bir dil modeline makale verip özet istediğinizde elinize akıcı ama doğrulanamaz bir metin geçiyor. Hangi cümle hangi sayfaya dayanıyor? Bu, yazarların ölçtüğü bir sonuç mu, yoksa yorumu mu? Bunu anlamak için makaleye geri dönmek zorunda kalıyorsunuz. Yani özet aslında zaman kazandırmıyor, sadece erteliyor.
 
-Her paper için tek bir özet yerine şunlar üretiliyor:
+Trace bu ilişkiyi tersine çeviriyor. Üretilen her iddia, makaledeki sayfaya ve birebir alıntıya bağlı. Ölçülmüş sonuç, yazar yorumu ve arka plan bilgisi ayrı ayrı etiketleniyor. Alıntının doğrudan desteklemediği hiçbir ifade "doğrulanmış" sayılmıyor.
 
-- Sayfa ve kaynak bağlantılı evidence map
-- Katkı, mekanizma, deney, eleştiri ve yeniden üretimi ele alan derin analiz raporu
-- Denklemler, algoritma adımları, karmaşıklık notları ve açıklayıcı kod taslakları içeren teknik ek
-- Mimari şemalar, akışlar, karşılaştırmalar, zaman çizelgeleri, matrisler ve infografikler
-- İnteraktif scrollytelling deneyimi
-- Düzenlenebilir Lab, Story ve Preview çalışma alanları
-- Geçmiş çalışmalar için aranabilir yerel Library
-- İçe aktarılabilir `.trace.json` ve bağımsız HTML çıktısı
+Asıl ayrıştığı nokta ise okumak değil, denemek.
 
-Trace; Gemini, OpenAI, Claude ve OpenRouter ile çalışıyor. Kullanıcı tek model kullanabiliyor veya model team modunda evidence, matematik ve kod, rapor ve görsel anlatı görevlerine farklı modeller atayabiliyor.
+Attention Is All You Need makalesi için sistemin ürettiği çıktıda bir kaydırma çubuğu var: anahtar boyutu d_k. Makale, iç çarpımların √d_k ile bölünmesi gerektiğini savunuyor ama bunun grafiğini hiç çizmiyor. Kaydırıcıyı hareket ettirdiğinizde ölçeklenmemiş dikkat ağırlığının 1'e yapıştığını, ölçeklenmiş olanın sabit kaldığını kendi gözünüzle görüyorsunuz. Kaydırıcı makalenin kullandığı değerde başlıyor, o nokta işaretli, ve o bölgeden ayrıldığınızda sistem sizi uyarıyor: burası makalenin doğruladığı alan değil.
 
-Uzun üretimlerde streaming, heartbeat, retry, checkpoint ve kaldığı yerden devam etme mekanizmaları çalışmayı koruyor. API anahtarları proje çıktılarına kaydedilmiyor.
+Aynı çıktıda makalenin varsaydığı ama hiç açıklamadığı ön bilgiler, adım adım türetimler, mekanizma simülasyonları, kanıta bağlı bir anlama testi ve "bunu ne zaman kullanmamalısınız" bölümü içeren bir uygulama rehberi bulunuyor.
 
-Native agent plugin’i Codex, Claude Code ve Gemini CLI ile çalışıyor. Ayrıca API anahtarı gerekmiyor; analiz kullanıcının aktif agent modeliyle yapılıyor.
+Kullanımı tek cümle. Elinizde PDF olması da gerekmiyor:
 
-Plugin kurulduktan sonra yalnızca şu tür bir istek yeterli:
+"Bana Attention Is All You Need makalesini Trace ile anlat."
 
-> Şu paper’ı al ve Trace plugin kullanarak çıktıyı ver: `./paper.pdf`
+Sistem makaleyi arXiv'de buluyor, indiriyor, sayfa sayfa okuyor, yayımlandığı yer ve atıf verisi gibi güncel bilgileri topluyor ve tarayıcınızda yerel bir site açıyor. Codex, Claude Code ve Gemini CLI ile çalışıyor; zaten kullandığınız modeli kullandığı için ayrı bir API anahtarı istemiyor.
 
-Agent paper’ı okuyup bütün çıktıları hazırlıyor, `.trace.json` dosyasını doğruluyor ve tamamlanmış Trace deneyimini local web sitesi olarak tarayıcıda açıyor.
+Mühendislik tarafında en çok önemsediğim karar, yanlış veriyi göstermektense hiç göstermemek oldu. Geliştirme sırasında bir üstveri kaynağının LoRA makalesi için başka bir çalışmanın atıf sayısını döndürdüğünü fark ettim. O kaynağı düzeltmek yerine, güvenilir sonuç veremediği durumlarda tamamen devre dışı bıraktım. Benzer şekilde, aradığınız makaleyle ismi benzeşen farklı bir makale bulunduğunda sistem bunu kesin kabul etmiyor, size soruyor. Otoriter görünen yanlış bilgi, eksik bilgiden çok daha maliyetli.
 
-Taşınabilir JSON; Library’ye aktarılabiliyor, arşivlenebiliyor veya başka bir cihazda açılabiliyor. Local site yalnızca `127.0.0.1` üzerinde çalışıyor; paper otomatik olarak yayınlanmıyor.
+Aynı ilke kod tarafında da geçerli: içe aktarılan proje dosyaları güvenilmeyen girdi kabul ediliyor, interaktif içeriklerdeki matematik hiçbir zaman çalıştırılabilir kod olarak değerlendirilmiyor. Doğrulama katmanı, bir etkileşimin gerçekten çalışacağını daha üretim anında kanıtlıyor.
 
-MVP’ye API anahtarı olmadan incelenebilen Attention Is All You Need örneğini de ekledim.
-
-Amacım klasik bir AI özet ekranı değil; sade bir arayüz içinde araştırmayı okumayı, doğrulamayı, öğrenmeyi, anlatmayı ve yeniden üretmeyi kolaylaştıran güvenilir bir ortam oluşturmaktı.
-
-Proje açık kaynak:
+Proje açık kaynak. Kod, kurulum adımları ve Attention Is All You Need için hazırlanmış tam örnek çıktı burada:
 
 https://github.com/Ahmet-Ruchan/trace-research-paper-studio
 
-Geri bildirimlere ve geliştirme fikirlerine açığım.
+Makale okumaya vakit ayıran herkesin geri bildirimine açığım. Özellikle şunu merak ediyorum: kendi alanınızda bir makaleyi gerçekten anladığınızı nasıl test ediyorsunuz?
 
-#ArtificialIntelligence #ResearchTools #OpenSource #LLM #MachineLearning #DeveloperTools
+#AçıkKaynak #YapayZeka #AraştırmaAraçları #MakineÖğrenmesi #GeliştiriciAraçları

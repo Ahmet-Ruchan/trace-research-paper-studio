@@ -1,534 +1,431 @@
+<div align="center">
+
 # Trace — Research Paper Studio
 
-> Read the paper. Trace the evidence. See the idea.
+**Name a paper. Get an interactive site where every claim points back to a page and a quote.**
 
-Trace is an AI-powered, evidence-first studio that turns research papers into
-source-linked workspaces and interactive, exportable web stories.
+Trace turns a research paper into something you can verify, learn from and experiment with —
+running on the coding agent you already use, with no second API key.
 
-Upload a PDF, optionally add supporting sources, and choose how deeply the paper
-should be explained. Trace extracts its research question, methods, findings,
-metrics, limitations, and terminology; connects every important claim back to its
-source; and builds a visual scrollytelling experience from the verified evidence.
+[![Stars](https://img.shields.io/github/stars/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=E75B37&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/stargazers)
+[![Forks](https://img.shields.io/github/forks/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/network/members)
+[![Issues](https://img.shields.io/github/issues/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=A36A1E&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/issues)
+[![License](https://img.shields.io/github/license/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=191B18&labelColor=191B18)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=71766F&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/commits/main)
 
-## Why “Trace”?
+**Works with the agent you already have**
 
-Research summaries are easy to generate but difficult to trust. Trace is designed
-around a stricter principle: every claim should be traceable to the paper page or
-supporting source that justifies it.
+[![Claude Code](https://img.shields.io/badge/Claude_Code-D97757?style=for-the-badge&logo=claude&logoColor=fff)](#claude-code)
+[![Codex](https://img.shields.io/badge/Codex-412991?style=for-the-badge&logo=openai&logoColor=fff)](#codex)
+[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=fff)](#gemini-cli)
 
-This makes the generated experience useful for more than presentation. It becomes
-a workspace for reading, checking, editing, teaching, and publishing research.
+**Built with**
 
-## The shortest path: install, ask, read
+![Next.js](https://img.shields.io/badge/Next.js_16-000?style=flat-square&logo=nextdotjs&logoColor=fff)
+![React](https://img.shields.io/badge/React_19-149ECA?style=flat-square&logo=react&logoColor=fff)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=fff)
+![Zod](https://img.shields.io/badge/Zod-3E67B1?style=flat-square&logo=zod&logoColor=fff)
+![arXiv](https://img.shields.io/badge/arXiv-B31B1B?style=flat-square&logo=arxiv&logoColor=fff)
 
-Trace also works as a native plugin for **Codex, Claude Code, and Gemini CLI**.
-The plugin uses the model already active in your agent—there is no second LLM API
-key and no model configuration inside Trace.
+</div>
 
-After installation, one sentence is enough — **you do not need the PDF**:
+---
+
+## The problem
+
+Summarising a paper takes seconds. Trusting the summary takes hours.
+
+Ask any model to summarise a paper and you get fluent prose you cannot check. Which sentence
+came from which page? Is this something the authors measured, or something they suggested?
+To find out you have to go back to the paper — so the summary saved you nothing.
+
+**Trace inverts that.** Every claim carries the page and the exact quote it rests on. Measured
+results, author interpretation and background are labelled separately. Anything the excerpt does
+not directly support is never marked verified.
+
+---
+
+## One sentence is the whole interface
+
+You do not need the PDF.
 
 ```text
 Explain Attention Is All You Need using the Trace plugin.
 ```
 
-Trace finds the paper on arXiv, downloads it, and gathers what is publicly known
-about it (version history, DOI, the venue it was published in, citation counts).
-If you already have the file, hand it over instead:
+```mermaid
+flowchart LR
+    A["Paper name<br/>or PDF"] --> B["Find on arXiv<br/>+ published context"]
+    B --> C["Read page by page<br/>evidence + quotes"]
+    C --> D["Report · appendix<br/>visual story"]
+    D --> E["Primer · derivations<br/>playgrounds · quiz"]
+    E --> F["Validate"]
+    F --> G["Local site opens"]
+    F --> H["Portable<br/>.trace.json"]
 
-```text
-Take this paper and give me the output using the Trace plugin: ./paper.pdf
+    style A fill:#f2efe7,stroke:#beb9af,color:#191b18
+    style F fill:#191b18,stroke:#191b18,color:#ffffff
+    style G fill:#e75b37,stroke:#e75b37,color:#ffffff
+    style H fill:#2e7254,stroke:#2e7254,color:#ffffff
 ```
 
-The agent then completes the entire workflow in the background:
+Trace finds the paper on arXiv, downloads it, gathers what is publicly known about it (version
+history, DOI, the venue it was published in, citation counts), reads it page by page, and opens
+a finished local site in your browser.
 
-```text
-name or PDF → arXiv resolution + published context
-            → page-aware evidence → deep report → technical appendix
-            → interactive visual story
-            → primer · derivations · playgrounds · quiz · application guide
-            → validation → local website opens
-                             └──────→ portable .trace.json
-```
+---
 
-When it finishes, your default browser opens the completed local Trace website.
-The same job folder contains a `.trace.json` file that can be archived, shared,
-or imported from **Library → Trace JSON** in the full application.
+## What you actually get
 
-### Global install from GitHub
+### Run the paper's own equations
 
-No clone and no local filesystem path are required. Run the command for your
-agent from any directory:
+The paper argues that dot products must be divided by `√d_k`. It never plots it. Drag the
+slider and watch the unscaled attention weight collapse onto 1.0 while the scaled one holds
+steady. The slider **starts at the paper's value, marks it on the track and the chart, and
+warns you the moment you leave the region the paper actually verified**.
 
-**Codex**
+![Interactive playground](docs/images/playground.jpg)
+
+### Learn what the paper assumes and never explains
+
+Prerequisites ordered so that nothing depends on something you have not read yet. Each one says
+why *this* paper needs it — not a generic definition. LaTeX renders as native MathML.
+
+![Primer](docs/images/primer.jpg)
+
+### Check whether you actually understood it
+
+Every question is linked to evidence. Get one wrong and it shows you the page and the original
+quote behind the right answer.
+
+![Evidence-linked quiz](docs/images/quiz.jpg)
+
+### Read it as a narrative, with the source one click away
+
+![Visual story](docs/images/story.jpg)
+
+---
+
+## Install in under a minute
+
+<details open>
+<summary><b id="claude-code">Claude Code</b></summary>
 
 ```bash
-codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main && codex plugin add trace-paper-studio@trace-research-tools
+claude plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --scope user
+claude plugin install trace-paper-studio@trace-research-tools --scope user
 ```
 
-**Claude Code**
+Restart Claude Code. That is it.
 
-```bash
-claude plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --scope user && claude plugin install trace-paper-studio@trace-research-tools --scope user
-```
+</details>
 
-**Gemini CLI**
-
-```bash
-gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
-```
-
-Restart the agent or open a new session after installation. The plugin is then
-available globally across projects for that user.
-
-## What Trace does
-
-- Finds a paper on arXiv from its name alone, downloads it, and reports the
-  runner-up candidates so a near-miss title can be caught before any work
-- Gathers published context — version history, DOI, venue, citation counts —
-  and cites it as a web source, never as something the paper itself claims
-- Accepts research papers as PDF files up to 35 MB
-- Adds up to three optional public web sources
-- Extracts a structured evidence map with page-level references
-- Splits evidence extraction into four bounded, independently validated passes
-- Separates reported results, methods, background, interpretation, and limitations
-- Builds an editable visual narrative from verified claims
-- Streams partial structured output, live model activity, and 10-second heartbeats
-- Automatically retries transient provider and structured-output failures
-- Checkpoints completed evidence passes and resumes them after a failed request
-- Runs the same evidence contracts through Gemini, OpenAI, Claude, or OpenRouter
-- Supports single-model generation or a four-role model team with independent keys
-- Assigns Evidence, Technical, Report, and Visual work to different provider/models
-- Rejects stories with broken claim, page, metric, or evidence links
-- Provides dedicated **Lab**, **Story**, and **Preview** workspaces
-- Produces a claim-linked DeepReport with contribution, mechanism, experiments,
-  critique, reproduction guidance, implications, and open questions
-- Produces a Technical Appendix with equations, evidence-linked algorithm steps,
-  safe pseudocode sketches, complexity notes, and implementation constraints
-- Renders eleven reusable visual grammars, including architecture maps, equations,
-  timelines, qualitative matrices, and infographics
-- Teaches the background the paper assumes with a prerequisite-ordered primer
-- Walks derivations step by step, each step carrying its reasoning and shapes,
-  opened directly under the equation it derives
-- Renders LaTeX as native MathML — no font payload, identical in both hosts
-- Runs the paper's own equations live: sliders start at the paper's value, mark
-  it on the track and the chart, and warn when you leave the verified region
-- Steps through mechanisms frame by frame and makes result tables sortable
-- Checks understanding with an evidence-linked quiz that shows the page behind
-  every answer, and closes with an application guide including when *not* to
-  use the method, grounded in the paper's own limitations
-- Evaluates interactive formulas on a restricted grammar and a pure AST — never
-  `eval`, because a `.trace.json` is untrusted input
-- Exports the project as JSON or a self-contained HTML story
-- Saves complete projects into a searchable, card-based local Library (IndexedDB)
-- Imports validated `.trace.json` projects produced by Codex, Claude Code, or Gemini CLI
-- Ships a native-agent plugin that uses the active CLI model without another LLM API key
-- Supports responsive layouts and reduced-motion preferences
-- Includes an API-free example based on *Attention Is All You Need*
-
-## Evidence-first architecture
-
-Trace does not ask a language model to generate and execute an arbitrary React
-application. Instead, it uses a constrained pipeline:
-
-```text
-PDF + optional sources
-          ↓
- Segmented evidence extraction
- overview · methods · results · limits
-          ↓
- Validated PaperEvidence
-          ↓
- Role-aware orchestration
- Evidence · Technical · Report · Visual
-          ↓
- StorySpec + DeepReport + TechnicalAppendix
-          ↓
- Trusted React renderers
-          ↓
- Lab · Story · Preview · HTML export
-```
-
-The pipeline has four canonical data contracts:
-
-1. `PaperEvidence` contains the paper metadata, claims, excerpts, page references,
-   metrics, methods, findings, limitations, and glossary.
-2. `StorySpec` contains the narrative structure and visual instructions, but only
-   references claims that already exist in `PaperEvidence`.
-3. `DeepReport` contains rigorous analytical sections and unresolved questions;
-   every section also points back to existing evidence claims.
-4. `TechnicalAppendix` contains non-executed explanatory code, equations,
-   complexity analysis, and implementation guidance anchored to evidence claims.
-
-This keeps research claims inspectable, visual output consistent, and exported
-stories independent from the AI provider after generation.
-
-## Model providers
-
-Trace keeps provider-specific document and streaming behavior behind one generation
-contract. Every provider therefore produces the same validated evidence graph,
-DeepReport, and StorySpec; the workspace does not depend on the selected provider.
-
-In **Model team** mode the fixed pipeline roles can be assigned independently:
-
-| Role | Responsibility | Suggested strength |
-| --- | --- | --- |
-| Evidence | PDF reading, claims, sources, limitations | Long context and document understanding |
-| Technical | Methods, mathematics, experiments, pseudocode | Reasoning and coding |
-| Report | Deep explanation, critique, synthesis | Writing and analytical synthesis |
-| Visual | StorySpec, canvas, architecture and infographic planning | Design judgment and structured output |
-
-Tasks assigned to the same provider/model are run sequentially to reduce upstream
-rate pressure. Different models may work in parallel. PDFs are sent only to models
-that have an active document-reading task.
-
-| Provider | Status |
-| --- | --- |
-| Google Gemini | Available |
-| OpenAI Responses API | Available |
-| Anthropic Claude Messages API | Available |
-| OpenRouter (dynamic model catalog) | Available |
-| Local/open-weight models | Planned |
-
-Provider-specific credentials will remain request-scoped and will not be embedded
-in projects or exported stories.
-
-## Getting started
-
-### Requirements
-
-- Node.js 20 or newer
-- npm
-- A supported provider API key for real paper generation
-
-### Installation
-
-```bash
-git clone <your-repository-url>
-cd trace-paper-studio
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-Use [http://localhost:3000?new=1](http://localhost:3000?new=1) to discard an
-unfinished generation checkpoint and start with a new paper. Existing Library
-items are preserved. The built-in example can be opened without an API key.
-
-### Generate a research workspace
-
-1. Select a research paper PDF.
-2. Add supporting URLs if the paper needs external context.
-3. Choose the audience, depth, language, provider, and model.
-4. Enter the provider API key in the session-only field.
-5. Select **Paper’ı incele** and follow the live evidence pipeline.
-6. Inspect claims and the DeepReport in Lab, edit the narrative in Story, and
-   review the result in Preview.
-7. Return to Library to reopen any saved project, or export it as JSON/HTML.
-
-For OpenRouter, enter a `provider/model` identifier directly or load the filtered
-model catalog after entering the API key. The catalog requires text output and
-strict structured-output support. PDF parsing uses OpenRouter's file parser, so a
-text model does not need native file input. Image-output generation models are not
-valid StorySpec workers even when they can also return text: Trace visuals are
-strict JSON rendered by trusted React/canvas components. The catalog therefore
-shows text-output-only models with structured output support. If an image-output
-model is entered manually, Trace routes the structured task to a compatible
-OpenRouter text model. Retryable upstream endpoint failures receive one compatible
-model fallback.
-
-## Native plugin: Codex, Claude Code, Gemini CLI
-
-### Requirements
-
-- Node.js 20 or newer
-- Codex, Claude Code, or Gemini CLI already signed in and working
-- A local research-paper PDF
-- Optional but recommended: `pdftotext` from Poppler for page-preserving extraction
-
-The plugin itself has no npm install step and does not need a provider API key.
-The local result is served only on `127.0.0.1`; paper content is not published.
-
-### Codex installation
-
-For a global user installation, copy and run this single terminal command:
-
-```bash
-codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main && codex plugin add trace-paper-studio@trace-research-tools
-```
-
-The equivalent two-step form is:
+<details>
+<summary><b id="codex">Codex</b></summary>
 
 ```bash
 codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main
 codex plugin add trace-paper-studio@trace-research-tools
 ```
 
-Start a new Codex session and ask:
-
-   ```text
-   Take ./papers/attention-is-all-you-need.pdf and give me the output using the Trace plugin.
-   ```
-
-Codex uses the active Codex model to read, reason, write the complete project, and
-open the result. You can also invoke the skill explicitly with
+Restart Codex or open a new session. You can also invoke the skill explicitly with
 `$trace-paper-studio`.
 
-### Claude Code installation
+</details>
 
-For a global user installation, copy and run this single terminal command:
-
-```bash
-claude plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --scope user && claude plugin install trace-paper-studio@trace-research-tools --scope user
-```
-
-The same setup can be run interactively inside Claude Code:
-
-```text
-/plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio
-/plugin install trace-paper-studio@trace-research-tools
-```
-
-Run `/reload-plugins` or start a new session, then ask:
-
-   ```text
-   Take ./papers/attention-is-all-you-need.pdf and give me the output using the Trace plugin.
-   ```
-
-Claude Code uses its currently selected Claude model. Explicit invocation is also
-available as `/trace-paper-studio:trace-paper-studio <paper.pdf>`.
-
-For plugin development from a local checkout, use:
-
-```bash
-claude --plugin-dir ./plugins/trace-paper-studio
-```
-
-### Gemini CLI installation
-
-Install globally from GitHub with one command:
+<details>
+<summary><b id="gemini-cli">Gemini CLI</b></summary>
 
 ```bash
 gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
 ```
 
-Restart Gemini CLI.
+Restart the CLI or open a new session.
 
-Ask normally, or use the bundled command:
+</details>
 
-   ```text
-   Take ./papers/attention-is-all-you-need.pdf and give me the output using the Trace plugin.
-   ```
-
-   ```text
-   /trace:analyze ./papers/attention-is-all-you-need.pdf
-   ```
-
-Gemini CLI uses its active `--model`; Trace does not select or bill a second model.
-
-### What you receive
-
-Each run creates an isolated `.trace/jobs/<paper>/` directory containing:
-
-| Output | Purpose |
-| --- | --- |
-| `<paper>.trace.json` | Validated, portable project for Library import or archival |
-| `trace-site/index.html` | Self-contained visual Trace experience |
-| `trace-site/<project-id>.trace.json` | Download/import copy exposed by the local site |
-| `job.json` and `paper.pages.txt` | Reproducible job settings and page-aware source text |
-
-The browser opens only after the evidence graph, report, technical appendix, and
-visual story pass validation. Use the **Trace JSON ↓** button in the local site to
-download the importable project at any time.
-
-### Manual bridge commands
-
-Agents run these commands automatically; they are documented for debugging:
+**Requirements:** Node.js 20+, and `pdftotext` (from Poppler) for page-accurate extraction.
+Without it the agent falls back to its own PDF reader.
 
 ```bash
-# Resolve the paper from its name on arXiv, download it, collect context
+brew install poppler        # macOS
+sudo apt install poppler-utils   # Debian / Ubuntu
+```
+
+### Then ask
+
+```text
+Explain Attention Is All You Need using the Trace plugin.
+```
+
+```text
+Take this paper and give me the output using the Trace plugin: ./paper.pdf
+```
+
+The browser opens when it is done. The same folder holds a `.trace.json` you can archive,
+share, or import into the full application.
+
+---
+
+## Why it is different
+
+| | Typical AI summary | Trace |
+| --- | --- | --- |
+| Provenance | Prose you have to trust | Page + exact quote per claim |
+| Claim types | Blended together | Measured result / interpretation / background, labelled |
+| Uncertainty | Hidden | Unsupported statements stay `needs-review` |
+| Your role | Read | Read, run the equations, test yourself |
+| Missing data | Plausible guess | Source dropped rather than guessed |
+| Cost | Another API key | The model your agent already runs |
+
+Three decisions do most of the work:
+
+**Wrong data is worse than no data.** While building this, a metadata source returned another
+paper's citation count for LoRA — 2,516 instead of 22,087. Rather than patch around it, that
+lookup path is disabled entirely. If a source cannot answer reliably, it is omitted.
+
+**Near misses get flagged, not guessed.** Ask for "denoising diffusion probabilistic models"
+and arXiv will happily hand you *Improved* Denoising Diffusion Probabilistic Models. Resolution
+searches the title field first, then requires a near-exact match with a clear margin over the
+runner-up — otherwise it reports the candidates and asks.
+
+**Imported projects are untrusted input.** A `.trace.json` can come from anywhere, so the
+interactive maths is declarative: parsed by a restricted grammar and evaluated on a pure AST
+with length, node and depth limits. Never `eval`, never `new Function`.
+
+---
+
+## The evidence chain
+
+```mermaid
+flowchart TD
+    PDF["PDF · page-aware text"] --> EV["Evidence graph"]
+    WEB["arXiv · publication data"] --> EV
+    EV --> C["Claims<br/>page + exact quote"]
+    EV --> M["Metrics<br/>value + context"]
+    C --> R["Deep report"]
+    C --> T["Technical appendix"]
+    C --> S["Visual story"]
+    C --> L["Learning layer"]
+    M --> S
+    M --> L
+    R --> V{"Validation"}
+    T --> V
+    S --> V
+    L --> V
+    V -->|"fails"| X["Rejected · regenerate"]
+    V -->|"passes"| OUT["Site + .trace.json"]
+
+    style EV fill:#191b18,stroke:#191b18,color:#ffffff
+    style V fill:#a36a1e,stroke:#a36a1e,color:#ffffff
+    style X fill:#e75b37,stroke:#e75b37,color:#ffffff
+    style OUT fill:#2e7254,stroke:#2e7254,color:#ffffff
+```
+
+Validation is not advisory. A story cannot cite a claim that does not exist, a comparison chart
+cannot show a number absent from the evidence, and a playground cannot ship unless its formula
+parses, references only declared parameters, and returns a finite value at the paper's own
+configuration.
+
+---
+
+## The full application
+
+The plugin is one way in. The web app adds generation with your own provider keys, an editable
+narrative, and a local library.
+
+```bash
+git clone https://github.com/Ahmet-Ruchan/trace-research-paper-studio.git
+cd trace-research-paper-studio
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`. Import any `.trace.json` from **Library → Trace JSON**, or start
+from the built-in example with `?sample=1`.
+
+**Workspaces:** `Lab` inspects the evidence, `Story` edits the narrative, `Preview` is the
+reading experience.
+
+<details>
+<summary><b>Model providers</b></summary>
+
+<br>
+
+![Google](https://img.shields.io/badge/Gemini-8E75B2?style=flat-square&logo=googlegemini&logoColor=fff)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=fff)
+![Anthropic](https://img.shields.io/badge/Anthropic-191B18?style=flat-square&logo=anthropic&logoColor=fff)
+![OpenRouter](https://img.shields.io/badge/OpenRouter-6566F1?style=flat-square&logo=openrouter&logoColor=fff)
+
+Run everything on one model, or split the work across four roles — Evidence, Technical, Report
+and Visual — each with its own provider and key. Keys are used for the active request only;
+they are never written to local storage or included in exports.
+
+The plugin path needs none of this: it uses whatever model your agent is already running.
+
+</details>
+
+<details>
+<summary><b>Manual bridge commands</b></summary>
+
+<br>
+
+Agents run these automatically; they are documented for debugging.
+
+```bash
+# Resolve from a name, download, collect published context
 npm run trace:agent -- prepare --title "attention is all you need" --depth deep
 
 # Or by arXiv id, or from a local file
 npm run trace:agent -- prepare --arxiv 1706.03762 --depth deep
 npm run trace:agent -- prepare --paper "paper.pdf" --depth deep
 
-# --strict also requires the learning blocks the chosen depth mandates
+# --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"
 npm run trace:agent -- deliver --project ".trace/jobs/paper/paper.trace.json"
 ```
 
-With `--title`, the command reports which paper it matched plus the runner-up
-candidates and a `confident` flag — near-miss titles are common ("Not All
-Attention Is All You Need" is a different paper). Re-run with `--pick <n>` or
-`--arxiv <id>` to switch.
+With `--title`, the command reports which paper it matched, the runner-up candidates and a
+`confident` flag. Re-run with `--pick <n>` or `--arxiv <id>` to switch.
 
-Network access is deliberately narrow: HTTPS only, a host allowlist, redirects
-verified against that allowlist, a streaming size cap, and a `%PDF-` signature
-check. Downloaded files are never executed. Context sources that cannot be
-reached are omitted rather than guessed.
+`deliver` keeps the JSON, builds the site, starts a loopback-only server and opens the browser.
+Pass `--no-open` for headless environments; it still returns the URL and JSON path.
 
-`deliver` preserves JSON, builds the site, starts a loopback-only Node server, and
-opens the default browser. Pass `--no-open` only for headless environments; the
-command will still return the local URL and JSON path.
+</details>
+
+---
 
 ## Development
 
 ```bash
-# Development server
-npm run dev
-
-# Lint
-npm run lint
-
-# Unit tests
-npm run test
-
-# Production build
-npm run build
-
-# Rebuild the committed artifacts (standalone viewer + plugin validator)
-npm run build:artifacts
-
-# Run every verification step
-npm run check
+npm run dev              # development server
+npm run lint             # eslint
+npm run test             # vitest
+npm run build            # production build
+npm run build:artifacts  # regenerate the committed viewer + validator
+npm run check            # everything above, in order
 ```
 
-### Generated artifacts
+<details>
+<summary><b>Architecture notes worth knowing before contributing</b></summary>
 
-Two files are build output but are committed, because the plugin has to stay
-dependency-free at run time:
+<br>
+
+**One render source, two runtimes.** The visual grammars and interactive components live in
+`src/visuals/` and are compiled twice — as real React for the app, and through preact for the
+standalone viewer. A grammar is written once instead of three times. `src/visuals/**` is an
+eslint-restricted zone: no `next/*`, no `lucide-react`, no `node:*`.
+
+**The plugin validator is the schema, not a copy of it.** `plugins/.../scripts/generated/validator.mjs`
+is a bundle of the application's actual Zod schema and integrity rules. A rule cannot pass one
+side and fail the other.
+
+**Two files are generated but committed**, because the plugin must stay dependency-free at run
+time:
 
 | Artifact | Source | Rebuild |
 | --- | --- | --- |
 | `plugins/.../assets/viewer.html` | `viewer/` + `src/visuals/` | `npm run build:viewer` |
 | `plugins/.../scripts/generated/validator.mjs` | `src/lib/schema.ts` + integrity rules | `npm run build:validator` |
 
-Never edit them by hand. `npm run check` runs `scripts/check-artifacts.mjs`,
-which rebuilds both and fails if the committed copies drifted.
+Never edit them by hand. `npm run check` rebuilds both and fails if the committed copies drifted.
 
-The visual and interactive components live in `src/visuals/` and are compiled
-twice — as real React for the app, and through preact for the standalone
-viewer — so a grammar is written once rather than three times. The plugin
-validator is the application's actual schema, bundled, rather than a copy of
-it; a rule cannot pass one and fail the other.
+</details>
 
-## Security and trust model
+<details>
+<summary><b>Project structure</b></summary>
 
-- API keys are sent only to the backend generation route for the active request.
-- API keys are not written to local storage or included in exports.
-- Uploaded PDFs are removed from the provider file service after generation.
-- Aborted requests also perform best-effort remote file cleanup.
-- Supplementary URLs are restricted by protocol, DNS/IP range, redirect count,
-  response type, timeout, and payload size to reduce SSRF risk.
-- PDF and web contents are treated as untrusted source material, not instructions.
-- Generated output must satisfy Zod schemas and additional semantic integrity checks.
-- Model calls have explicit per-attempt deadlines and bounded retry policies.
-- At most two evidence passes run concurrently to avoid uncontrolled rate pressure.
-- Completed passes are checkpointed locally without storing the API key.
-- Provider keys and role assignments are validated before paid generation begins.
-- OpenRouter mid-stream typed errors are preserved in user-facing diagnostics.
-- Verified paper claims require an excerpt and a visible PDF page number.
-- Comparison visuals may only use numeric values already recorded in evidence.
-- The renderer uses trusted components instead of executing model-generated code.
-- Interactive formulas are declarative. They are parsed by a restricted grammar
-  and evaluated on a pure AST with length, node-count and depth limits — never
-  `eval` or `new Function`, because an imported `.trace.json` is untrusted input.
-- Validation proves an interactive will actually run before it ships: the formula
-  must parse, reference only declared parameters, and produce a finite value at
-  the paper's own configuration.
-- Paper resolution reaches only an allowlisted set of hosts over HTTPS, verifies
-  every redirect against that allowlist, caps the download while streaming, and
-  checks the `%PDF-` signature. Downloaded files are never executed.
-- A context source that returns an unreliable record is dropped rather than
-  trusted. OpenAlex is queried only with a real publisher DOI, because its
-  arXiv-DOI form resolves to a different paper.
-- LaTeX is rendered to MathML and passed through a tag/attribute allowlist.
-
-No automated extraction system is a substitute for checking the original paper.
-Trace makes that verification faster and more visible; it does not remove the need
-for it.
-
-## Project structure
+<br>
 
 ```text
 src/
-├── app/
-│   ├── api/generate/route.ts      # Streaming generation pipeline
-│   ├── api/models/openrouter/     # Request-scoped OpenRouter catalog proxy
-│   ├── globals.css                # Product design system
-│   └── page.tsx                   # Application entry
-├── components/
-│   ├── app-shell.tsx              # Workspace state and generation stream
-│   ├── onboarding.tsx             # PDF, source, model, and key inputs
-│   ├── library-view.tsx            # Searchable local project collection
-│   ├── lab-view.tsx               # Evidence inspection workspace
-│   ├── story-editor.tsx           # Narrative editor
-│   ├── story-view.tsx             # Scrollytelling experience
-│   ├── visual-renderer.tsx        # Re-export shim -> src/visuals
-│   └── evidence-drawer.tsx        # Claim-to-source inspection
-├── visuals/                       # SHARED render layer — compiled for both hosts
-│   ├── visual-renderer.tsx        # The eleven visual grammars
-│   ├── interactive/               # Playground, simulation, data explorer
-│   ├── teaching/                  # Primer, derivations, quiz, application guide
-│   ├── math.tsx                   # LaTeX -> MathML with an output allowlist
-│   ├── chart.ts                   # Dependency-free SVG scales and paths
-│   └── *.css                      # Tokens, grammars, learning layer
+├── app/                        # Next.js app router, generation API, design system
+├── components/                 # Workspace shell, Lab, Story editor, Preview, Library
+├── visuals/                    # SHARED render layer — compiled for both hosts
+│   ├── visual-renderer.tsx     #   eleven visual grammars
+│   ├── interactive/            #   playground · simulation · data explorer
+│   ├── teaching/               #   primer · derivations · quiz · application guide
+│   ├── math.tsx                #   LaTeX → MathML with an output allowlist
+│   └── chart.ts                #   dependency-free SVG scales and paths
 └── lib/
-    ├── schema.ts                  # Evidence, DeepReport, StorySpec, learning layer
-    ├── formula.ts                 # Restricted-grammar parser + pure AST evaluator
-    ├── project-library.ts         # IndexedDB persistence
-    ├── prompts.ts                 # Evidence and narrative instructions
-    ├── model-providers.ts         # Provider and model catalog
-    ├── openai-structured.ts       # Strict OpenAI schema compatibility
-    ├── generation-validation.ts   # Cross-contract integrity checks
-    ├── plugin-validator-entry.ts  # Bundled into the plugin — no mirrored rules
-    ├── safe-fetch.ts              # Protected supplementary source fetcher
-    ├── export-story.ts            # Standalone HTML exporter
-    └── sample-project.ts          # API-free Transformer example
+    ├── schema.ts               # Evidence, report, story and learning contracts
+    ├── formula.ts              # Restricted grammar + pure AST evaluator
+    ├── generation-validation.ts# Cross-contract integrity checks
+    ├── plugin-validator-entry.ts# Bundled into the plugin — no mirrored rules
+    └── ...
 
-viewer/                            # Standalone viewer app (preact build target)
-scripts/                           # build-viewer, build-plugin-validator, drift check
-examples/                          # Flagship enriched project, covered by tests
-
-plugins/trace-paper-studio/        # Shared Codex + Claude Code plugin
-├── .codex-plugin/plugin.json
-├── .claude-plugin/plugin.json
-└── skills/trace-paper-studio/     # Canonical Agent Skill, contract, bridge
-    ├── scripts/lib/paper-source.mjs   # arXiv resolution + published context
-    ├── scripts/generated/             # Bundled validator (generated)
-    └── assets/viewer.html             # Standalone site template (generated)
-
-gemini-extension.json              # GitHub-installable Gemini CLI extension
-.agents/skills/                    # Direct Codex repository discovery
-.claude/skills/                    # Direct Claude Code repository discovery
-skills/                            # Gemini extension skill discovery
+viewer/                         # Standalone viewer app (preact build target)
+scripts/                        # build-viewer · build-plugin-validator · drift check
+examples/                       # Flagship enriched project, covered by tests
+plugins/trace-paper-studio/     # Codex + Claude Code plugin, skill, contract, bridge
 ```
 
-Local research libraries can be kept under `ML Research Papers/`; this directory is
-ignored by Git so source PDFs are not accidentally committed.
+Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
+
+</details>
+
+---
+
+## Security and trust model
+
+- Imported `.trace.json` files are untrusted input. Interactive maths is declarative and
+  evaluated on a restricted AST — never `eval` or `new Function`.
+- Paper resolution reaches an allowlisted set of hosts over HTTPS only, verifies every redirect
+  against that allowlist, caps the download while streaming, and checks the `%PDF-` signature.
+  Downloaded files are never executed.
+- A context source that returns an unreliable record is dropped rather than trusted.
+- LaTeX is rendered to MathML and passed through a tag and attribute allowlist.
+- Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,
+  timeout and payload size.
+- PDF and web content are treated as source material, never as instructions.
+- Provider keys are used only for the active request and never appear in exports.
+- Verified paper claims require an excerpt and a visible page number.
+- Comparison visuals may only use numeric values already recorded in evidence.
+
+> No extraction system replaces reading the original paper. Trace makes checking it faster and
+> more visible; it does not remove the need for it.
+
+---
+
+## Status
+
+Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
+learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), arXiv
+resolution from a paper's name, local library, exports, the native plugin for Codex / Claude
+Code / Gemini CLI, and generation through Gemini, OpenAI, Claude and OpenRouter.
+
+Not there yet: hosted publishing, accounts, shared persistence, local and open-weight providers.
+
+*Attention Is All You Need* ships fully enriched in `examples/`, covered by tests so it cannot
+silently fall behind the schema.
 
 ## Roadmap
 
-- Local/open-weight provider adapters
-- Section-level regeneration with evidence locking
-- Side-by-side paper comparison
-- Project revisions and reusable narrative templates
-- Database-backed workspaces and user accounts
-- Shareable hosted stories with publication controls
-- Team review, annotations, and claim approval workflows
+- [ ] Local and open-weight provider adapters
+- [ ] Section-level regeneration with evidence locking
+- [ ] Side-by-side paper comparison
+- [ ] Project revisions and reusable narrative templates
+- [ ] Shareable hosted stories with publication controls
+- [ ] Team review, annotations and claim approval
 
-## Current status
+---
 
-Trace is an early MVP focused on validating the core experience and trust model.
-Working today: the evidence contracts, DeepReport, technical appendix, eleven
-visual renderers, the learning layer (primer, derivations, interactive
-playgrounds, quiz, application guide), arXiv resolution from a paper's name,
-the local Library, exports, the native plugin for Codex/Claude Code/Gemini CLI,
-and the Gemini/OpenAI/Claude/OpenRouter generation pipelines.
+## Star history
 
-Not there yet: hosted publishing, accounts, shared database persistence, and
-local/open-weight model providers.
+<a href="https://star-history.com/#Ahmet-Ruchan/trace-research-paper-studio&Date">
+  <img src="https://api.star-history.com/svg?repos=Ahmet-Ruchan/trace-research-paper-studio&type=Date" alt="Star history chart" width="640">
+</a>
 
-*Attention Is All You Need* ships as a fully enriched reference project in
-`examples/`, covered by tests so it cannot silently fall behind the schema.
+## Contributing
+
+Issues and pull requests are welcome. Run `npm run check` before opening a PR — it rebuilds the
+generated artifacts, lints, tests and builds, and will tell you if a committed artifact drifted.
+
+## License
+
+[MIT](LICENSE) © Ahmet Ruçhan Avcı
+
+<div align="center">
+<br>
+<sub>If Trace saved you an afternoon of cross-checking, a star helps other people find it.</sub>
+</div>
