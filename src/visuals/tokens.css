@@ -1,0 +1,22 @@
+/**
+ * Trace tasarım jetonları — TEK KAYNAK.
+ *
+ * Hem Next uygulaması (globals.css üzerinden) hem de plugin'in bağımsız
+ * viewer paketi bu dosyayı kullanır. Tailwind'e özgü `@theme inline` köprüsü
+ * globals.css içinde kalır; burası saf CSS olmak zorundadır çünkü viewer
+ * paketinde Tailwind yoktur.
+ */
+:root {
+  --paper: #f2efe7;
+  --surface: #fbfaf6;
+  --surface-2: #f7f5ef;
+  --ink: #191b18;
+  --ink-soft: #454a44;
+  --muted: #71766f;
+  --line: #d8d3c9;
+  --line-dark: #beb9af;
+  --accent: #e75b37;
+  --green: #2e7254;
+  --amber: #a36a1e;
+  --shadow: 0 28px 90px rgba(48, 43, 31, 0.08);
+}

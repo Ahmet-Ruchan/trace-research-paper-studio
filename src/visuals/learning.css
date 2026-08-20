@@ -1,0 +1,205 @@
+/**
+ * Öğrenme katmanı stilleri — TEK KAYNAK.
+ * Tailwind sınıfı kullanılmaz; viewer paketinde Tailwind yoktur.
+ */
+
+/* --- Matematik ---------------------------------------------------- */
+.math { font-size: 1.05em; }
+.math.is-display { display: block; margin: 14px 0; text-align: center; font-size: 1.25em; }
+.math math { font-family: Georgia, "Times New Roman", serif; }
+.math-plain { padding: 2px 6px; border-radius: 5px; background: var(--surface-2); color: var(--ink-soft); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; overflow-wrap: anywhere; }
+.math-plain.is-display { display: block; margin: 14px 0; padding: 14px; text-align: center; font-size: 1.05em; }
+
+/* --- Ortak interaktif iskeleti ------------------------------------ */
+.interactive { margin: 22px 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
+.interactive-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+.interactive-kind { display: block; margin-bottom: 8px; color: var(--accent); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+.interactive-head h4 { margin: 0; font: 19px/1.25 Georgia, serif; }
+.interactive-head p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; max-width: 62ch; }
+.interactive-reset { flex: 0 0 auto; padding: 8px 13px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: 10px; cursor: pointer; transition: 160ms ease; }
+.interactive-reset:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.interactive-reset:disabled { opacity: .35; cursor: default; }
+.interactive-foot { padding: 14px 22px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.anchor-note { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.anchor-note:not(.is-anchored) { color: var(--amber); }
+
+/* --- Oyun alanı ---------------------------------------------------- */
+.playground-controls { display: grid; gap: 20px; padding: 22px; }
+.playground-param { display: block; }
+.param-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.param-label { font-size: 11px; font-weight: 600; }
+.param-value { color: var(--ink); font: 17px Georgia, serif; }
+.param-value.is-off-paper { color: var(--amber); }
+.param-track { display: block; position: relative; }
+.param-track input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.param-paper-tick { position: absolute; top: 50%; width: 2px; height: 16px; margin-left: -1px; transform: translateY(-50%); background: var(--ink); opacity: .45; pointer-events: none; }
+.param-scale { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font-size: 8px; }
+.param-paper-note { color: var(--ink-soft); }
+
+.playground-outputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); border-top: 1px solid var(--line); }
+.playground-output { padding: 18px 20px; border-left: 1px solid var(--line); }
+.playground-output:first-child { border-left: 0; }
+.playground-output strong { display: block; color: var(--accent); font: 30px/1 Georgia, serif; letter-spacing: -.03em; }
+.playground-output span { display: block; margin-top: 10px; font-size: 10px; }
+.playground-output small { display: block; margin-top: 4px; color: var(--muted); font-size: 8px; }
+.output-undefined { display: block; margin-top: 6px; color: var(--amber); font-size: 8px; font-style: normal; }
+
+.playground-chart { margin: 0; padding: 18px 22px 8px; border-top: 1px solid var(--line); }
+.playground-chart svg { width: 100%; height: auto; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-tick { fill: var(--muted); font-size: 8px; }
+.chart-paper-line { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 4; opacity: .45; }
+.chart-cursor { stroke: var(--accent); stroke-width: 1.5; opacity: .8; }
+.chart-series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-series.series-0 { stroke: var(--accent); }
+.chart-series.series-1 { stroke: var(--ink); }
+.chart-series.series-2 { stroke: var(--green); }
+.chart-series.series-3 { stroke: var(--amber); }
+.playground-chart figcaption { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--muted); font-size: 9px; }
+.chart-key { display: inline-flex; align-items: center; gap: 6px; }
+.chart-key:before { content: ""; width: 14px; height: 2px; border-radius: 2px; background: currentColor; }
+.chart-key.series-0 { color: var(--accent); }
+.chart-key.series-1 { color: var(--ink); }
+.chart-key.series-2 { color: var(--green); }
+.chart-key.series-3 { color: var(--amber); }
+.chart-key.is-paper { color: var(--ink-soft); }
+.chart-key.is-paper:before { background: repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 7px); }
+
+/* --- Simülasyon ---------------------------------------------------- */
+.sim-stage { display: flex; flex-wrap: wrap; gap: 8px; padding: 22px; }
+.sim-node { flex: 1 1 130px; min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); transition: 220ms ease; }
+.sim-node.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); transform: translateY(-2px); box-shadow: 0 10px 24px rgba(35,31,24,.07); }
+.sim-node strong { display: block; font-size: 11px; }
+.sim-node small { display: block; margin-top: 5px; color: var(--muted); font-size: 8px; line-height: 1.45; }
+
+.sim-grid { --sim-columns: 4; display: grid; grid-template-columns: minmax(58px,.7fr) repeat(var(--sim-columns), 1fr); margin: 0 22px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.sim-grid-corner, .sim-grid-column { padding: 8px; border-bottom: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 8px; text-align: center; }
+.sim-grid-row { display: grid; grid-template-columns: minmax(58px,.7fr) repeat(var(--sim-columns), 1fr); grid-column: 1 / -1; }
+.sim-grid-rowlabel { display: grid; place-items: center; padding: 8px; border-bottom: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 8px; }
+.sim-grid-cell { --sim-weight: 0; display: grid; place-items: center; padding: 10px 6px; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); font-size: 9px; background: color-mix(in srgb, var(--accent) calc(var(--sim-weight) * 70%), var(--surface)); color: color-mix(in srgb, white calc(var(--sim-weight) * 100%), var(--ink)); transition: background 300ms ease; }
+
+.sim-narration { padding: 20px 22px 6px; }
+.sim-step-index { color: var(--accent); font: italic 11px Georgia, serif; }
+.sim-narration strong { display: block; margin-top: 8px; font-size: 12px; }
+.sim-narration p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.sim-controls { display: flex; align-items: center; gap: 8px; padding: 14px 22px 20px; }
+.sim-controls button { padding: 8px 13px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: 10px; cursor: pointer; }
+.sim-controls button:disabled { opacity: .35; cursor: default; }
+.sim-controls .sim-play { border-color: var(--ink); background: var(--ink); color: white; }
+.sim-track { display: flex; gap: 4px; margin-left: auto; }
+.sim-track i { width: 16px; height: 3px; border-radius: 2px; background: var(--line-dark); transition: background 200ms; }
+.sim-track i.is-done { background: var(--accent); }
+
+/* --- Veri keşfi ---------------------------------------------------- */
+.explorer-search { min-width: 150px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-2); font-size: 10px; }
+.explorer-scroll { overflow-x: auto; }
+.explorer-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.explorer-table th, .explorer-table td { padding: 10px 14px; border-bottom: 1px solid var(--line); text-align: left; }
+.explorer-table th { background: var(--surface-2); }
+.explorer-table th button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0; color: var(--ink); font-size: 9px; font-weight: 650; cursor: pointer; }
+.explorer-table th button i { color: var(--muted); font-style: normal; font-size: 7px; }
+.explorer-table th small { color: var(--muted); font-weight: 400; }
+.explorer-table .is-number { text-align: right; font-variant-numeric: tabular-nums; }
+.explorer-table tbody tr:hover { background: var(--surface-2); }
+.explorer-table tr.is-highlight { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.explorer-empty { color: var(--muted); text-align: center; }
+
+/* --- Kanıt açılırı -------------------------------------------------- */
+.evidence-note { margin: 0; }
+.evidence-note summary { color: var(--accent); font-size: 9px; cursor: pointer; }
+.evidence-note p { margin: 9px 0 0; font-size: 10px; line-height: 1.6; }
+.evidence-note blockquote { margin: 8px 0 0; padding-left: 11px; border-left: 2px solid var(--line-dark); color: var(--muted); font: italic 10px/1.6 Georgia, serif; }
+
+/* --- Ön bilgi ------------------------------------------------------ */
+.primer-head h3 { margin: 0; font: 24px/1.2 Georgia, serif; }
+.primer-head p { margin: 10px 0 22px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; max-width: 68ch; }
+.primer-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.primer-item { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--surface); }
+.primer-item.is-open { border-color: var(--accent); }
+.primer-item > button { width: 100%; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; padding: 15px 17px; border: 0; background: none; text-align: left; cursor: pointer; }
+.primer-index { color: var(--accent); font: italic 12px Georgia, serif; }
+.primer-term { font-size: 12px; font-weight: 600; }
+.primer-level { padding: 4px 9px; border-radius: 20px; font-size: 8px; text-transform: uppercase; letter-spacing: .1em; }
+.primer-level.level-temel { background: color-mix(in srgb, var(--green) 14%, white); color: var(--green); }
+.primer-level.level-orta { background: color-mix(in srgb, var(--amber) 16%, white); color: var(--amber); }
+.primer-level.level-ileri { background: color-mix(in srgb, var(--accent) 14%, white); color: var(--accent); }
+.primer-body { padding: 0 17px 18px 63px; }
+.primer-intuition { margin: 0; font-size: 12px; line-height: 1.75; }
+.primer-formal { margin: 14px 0; padding: 12px; border-radius: 8px; background: var(--surface-2); }
+.primer-why { margin: 12px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.7; }
+.primer-prereq { margin: 9px 0 0; color: var(--muted); font-size: 9px; }
+
+/* --- Türetim ------------------------------------------------------- */
+.derivation { margin: 20px 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.derivation-head h4 { margin: 0; font: 18px/1.25 Georgia, serif; }
+.derivation-goal { margin: 9px 0 20px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.derivation-steps { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.derivation-step { display: grid; grid-template-columns: 28px 1fr; gap: 14px; }
+.derivation-step-index { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: white; font-size: 9px; }
+.derivation-step-body { min-width: 0; }
+.derivation-rationale { margin: 8px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.7; }
+.derivation-shapes { display: inline-block; margin-top: 8px; padding: 4px 8px; border-radius: 5px; background: var(--surface-2); color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+.derivation-more { margin-top: 18px; padding: 9px 15px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: 10px; cursor: pointer; }
+.derivation-more:hover { border-color: var(--accent); color: var(--accent); }
+.derivation-example { margin-top: 22px; padding: 17px; border-radius: 10px; background: var(--surface-2); }
+.derivation-example h5 { margin: 0 0 10px; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.example-setup { margin: 0; font-size: 11px; line-height: 1.7; }
+.example-walkthrough { margin: 10px 0; padding-left: 18px; color: var(--ink-soft); font-size: 11px; line-height: 1.8; }
+.example-result { margin: 0; font-size: 11px; }
+
+/* --- Quiz ---------------------------------------------------------- */
+.quiz-head h3 { margin: 0; font: 24px/1.2 Georgia, serif; }
+.quiz-head p { margin: 10px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.quiz-score { margin: 12px 0 0 !important; color: var(--accent) !important; font-size: 11px !important; font-weight: 650; }
+.quiz-list { display: grid; gap: 14px; margin: 22px 0 0; padding: 0; list-style: none; }
+.quiz-question { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.quiz-prompt { display: grid; grid-template-columns: 30px 1fr; gap: 10px; margin: 0 0 14px; font-size: 12px; line-height: 1.6; }
+.quiz-index { color: var(--accent); font: italic 12px Georgia, serif; }
+.quiz-options { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.quiz-option { padding: 11px 13px; border: 1px solid var(--line); border-radius: 8px; transition: 160ms ease; }
+.quiz-option label { display: flex; align-items: flex-start; gap: 10px; font-size: 11px; line-height: 1.55; cursor: pointer; }
+.quiz-option input { margin-top: 2px; accent-color: var(--accent); }
+.quiz-option.is-correct { border-color: var(--green); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.quiz-option.is-wrong { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.quiz-explanation { display: block; margin: 8px 0 0 26px; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.quiz-check { margin-top: 14px; padding: 9px 16px; border: 0; border-radius: 20px; background: var(--ink); color: white; font-size: 10px; cursor: pointer; }
+.quiz-check:disabled { opacity: .35; cursor: default; }
+.quiz-verdict { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
+.quiz-verdict strong { display: block; margin-bottom: 8px; font-size: 11px; }
+.quiz-verdict.is-correct strong { color: var(--green); }
+.quiz-verdict.is-wrong strong { color: var(--accent); }
+
+/* --- Uygulama rehberi ---------------------------------------------- */
+.app-guide-head h3 { margin: 0; font: 24px/1.2 Georgia, serif; }
+.app-guide-head p { margin: 10px 0 22px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; max-width: 68ch; }
+.guide-recipe { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.guide-recipe > li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; }
+.guide-step-index { color: var(--accent); font: italic 12px Georgia, serif; }
+.guide-recipe strong { font-size: 12px; }
+.guide-recipe p { margin: 6px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.7; }
+.guide-code { margin: 11px 0 0; padding: 15px; overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.guide-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; line-height: 1.7; white-space: pre; }
+.guide-block { margin-top: 28px; }
+.guide-block h4 { margin: 0 0 12px; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.guide-scroll { overflow-x: auto; }
+.guide-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.guide-table th, .guide-table td { padding: 10px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.guide-table thead th { background: var(--surface-2); color: var(--muted); font-size: 9px; }
+.guide-table tbody th code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+.guide-pitfalls { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.guide-pitfalls > li { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; }
+.pitfall-symptom { display: block; font-size: 11px; }
+.pitfall-cause, .pitfall-fix { margin: 7px 0 0; color: var(--ink-soft); font-size: 10px; line-height: 1.65; }
+.pitfall-cause em, .pitfall-fix em { color: var(--muted); font-style: normal; font-weight: 650; }
+.guide-warning ul { display: grid; gap: 8px; margin: 0; padding: 15px 17px 15px 33px; border-left: 2px solid var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--ink-soft); font-size: 11px; line-height: 1.65; }
+
+@media (max-width: 760px) {
+  .interactive-head { flex-direction: column; }
+  .playground-outputs { grid-template-columns: 1fr 1fr; }
+  .playground-output { border-left: 0; border-top: 1px solid var(--line); }
+  .primer-body { padding-left: 17px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sim-node, .sim-grid-cell, .sim-track i { transition: none !important; }
+}

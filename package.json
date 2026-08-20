@@ -9,7 +9,11 @@
     "lint": "eslint",
     "test": "vitest run",
     "trace:agent": "node plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs",
-    "check": "npm run lint && npm run test && npm run build"
+    "check": "npm run build:artifacts && node scripts/check-artifacts.mjs && npm run lint && npm run test && npm run build",
+    "build:viewer": "node scripts/build-viewer.mjs",
+    "check:artifacts": "node scripts/check-artifacts.mjs",
+    "build:validator": "node scripts/build-plugin-validator.mjs",
+    "build:artifacts": "npm run build:viewer && npm run build:validator"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.118.0",
@@ -19,6 +23,7 @@
     "openai": "^7.5.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "temml": "^0.13.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -28,6 +33,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "preact": "10.29.1",
+    "rolldown": "1.2.4",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.11"

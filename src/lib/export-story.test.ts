@@ -3,7 +3,7 @@ import { buildStandaloneStory } from "./export-story";
 import { sampleProject } from "./sample-project";
 
 describe("standalone story export", () => {
-  it("exports a self-contained scrollytelling document", () => {
+  it("exports a self-contained document with the project embedded", () => {
     const html = buildStandaloneStory(sampleProject);
     expect(html).toContain("<!doctype html>");
     expect(html).toContain(sampleProject.story.title);
@@ -11,12 +11,35 @@ describe("standalone story export", () => {
     expect(html).toContain("prefers-reduced-motion");
   });
 
-  it("escapes untrusted story copy", () => {
+  it("leaves no unfilled placeholder", () => {
+    const html = buildStandaloneStory(sampleProject);
+    expect(html).not.toContain("__TRACE_PROJECT_JSON__");
+    expect(html).not.toContain("__TRACE_VIEW_MODE__");
+    expect(html).toContain(">story<");
+  });
+
+  /**
+   * Kaçış artık HTML varlıklarıyla değil JSON + < ile yapılıyor: proje
+   * bir veri bloğunda taşınıyor, HTML'e yazılmıyor. Test mekanizmayı değil
+   * GÜVENLİK ÖZELLİĞİNİ doğrular — düşman metin çalıştırılabilir HTML'e
+   * dönüşmemeli.
+   */
+  it("neutralises untrusted story copy", () => {
     const project = structuredClone(sampleProject);
     project.story.title = '</title><script data-attack="true">alert(1)</script>';
     const html = buildStandaloneStory(project);
+
     expect(html).not.toContain('<script data-attack="true">');
-    expect(html).toContain("&lt;script data-attack=&quot;true&quot;&gt;");
+    expect(html).not.toContain("</script><script");
+    expect(html).toContain("\\u003cscript data-attack=");
+  });
+
+  it("survives regex-special sequences in project text", () => {
+    const project = structuredClone(sampleProject);
+    // "$&" replace() string sürümünde tüm eşleşmeyi geri koyar; fonksiyon
+    // sürümü kullanmazsak proje metni burada bozulurdu.
+    project.story.dek = "kazanç $& ve $` ile $' işaretleri";
+    const html = buildStandaloneStory(project);
+    expect(html).toContain("kazan\\u00e7 $& ve $` ile $' i\\u015faretleri".replace(/\\u00e7/, "ç").replace(/\\u015f/, "ş"));
   });
 });
-

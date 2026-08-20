@@ -273,6 +273,227 @@ export const technicalAppendixSchema = z.object({
   implementationNotes: z.array(z.string()).min(2).max(10),
 });
 
+/* ------------------------------------------------------------------ *
+ * Öğrenme katmanı
+ *
+ * Aşağıdaki blokların hepsi Zod düzeyinde opsiyoneldir; böylece bu
+ * katmandan önce üretilmiş projeler içe aktarılmaya devam eder. Hangi
+ * bloğun hangi `depth` değerinde ZORUNLU olduğu anlamsal bir kural
+ * olduğu için generation-validation.ts içinde denetlenir.
+ * ------------------------------------------------------------------ */
+
+/** Makalenin varsaydığı ama açıklamadığı ön bilgi. */
+export const primerConceptSchema = z.object({
+  id: z.string(),
+  term: z.string(),
+  level: z.enum(["temel", "orta", "ileri"]),
+  intuition: z.string(),
+  formal: z.string().optional(),
+  whyItMatters: z.string(),
+  prerequisiteIds: z.array(z.string()).max(4),
+  claimIds: z.array(z.string()).max(6),
+});
+
+export const primerSchema = z.object({
+  title: z.string(),
+  overview: z.string(),
+  concepts: z.array(primerConceptSchema).min(3).max(12),
+});
+
+/** Adım adım matematiksel türetim. */
+export const derivationStepSchema = z.object({
+  id: z.string(),
+  latex: z.string(),
+  plain: z.string(),
+  rationale: z.string(),
+  shapes: z.string().optional(),
+});
+
+export const derivationSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  goal: z.string(),
+  steps: z.array(derivationStepSchema).min(2).max(10),
+  numericExample: z
+    .object({
+      setup: z.string(),
+      walkthrough: z.array(z.string()).min(1).max(6),
+      result: z.string(),
+    })
+    .optional(),
+  claimIds: z.array(z.string()).min(1),
+});
+
+/** Kanıta bağlı anlama kontrolü. */
+export const quizOptionSchema = z.object({
+  label: z.string(),
+  correct: z.boolean(),
+  explanation: z.string(),
+});
+
+export const quizQuestionSchema = z.object({
+  id: z.string(),
+  prompt: z.string(),
+  kind: z.enum(["single", "multi", "true-false"]),
+  options: z.array(quizOptionSchema).min(2).max(5),
+  claimIds: z.array(z.string()).min(1),
+  page: z.number().int().positive().optional(),
+});
+
+export const quizSchema = z.object({
+  title: z.string(),
+  intro: z.string(),
+  questions: z.array(quizQuestionSchema).min(3).max(12),
+});
+
+/* --- İnteraktifler ---------------------------------------------------
+ * Bunlar BİLDİRİMSELDİR. Hiçbir alan çalıştırılabilir JS taşımaz; `formula`
+ * alanları formula.ts içindeki kısıtlı dilbilgisiyle ayrıştırılıp saf bir AST
+ * üzerinde yürütülür. Bu, güvenilmeyen bir .trace.json'un içe aktarılmasının
+ * kod çalıştırmaya dönüşmesini engeller.
+ * ------------------------------------------------------------------ */
+
+/** Kullanıcının oynattığı bir değişken. `paperValue` makalenin kendi değeri. */
+export const interactiveParameterSchema = z.object({
+  name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Parametre adı formül tanımlayıcısı olmalı"),
+  label: z.string(),
+  min: z.number(),
+  max: z.number(),
+  step: z.number().positive(),
+  paperValue: z.number(),
+  unit: z.string().optional(),
+});
+
+export const interactiveOutputSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  formula: z.string(),
+  unit: z.string().optional(),
+  precision: z.number().int().min(0).max(6).optional(),
+});
+
+export const interactiveSchema = z.discriminatedUnion("kind", [
+  /** Makalenin denklemini canlı çalıştıran kaydırma çubukları. */
+  z.object({
+    kind: z.literal("formula-playground"),
+    id: z.string(),
+    title: z.string(),
+    description: z.string(),
+    parameters: z.array(interactiveParameterSchema).min(1).max(4),
+    outputs: z.array(interactiveOutputSchema).min(1).max(4),
+    chart: z
+      .object({
+        xParam: z.string(),
+        series: z.array(z.object({ outputId: z.string(), label: z.string() })).min(1).max(4),
+        samples: z.number().int().min(8).max(200),
+        yScale: z.enum(["linear", "log"]),
+      })
+      .optional(),
+    paperAnchor: z.string(),
+    claimIds: z.array(z.string()).min(1),
+  }),
+
+  /** Mekanizmayı kare kare ilerleten simülasyon. */
+  z.object({
+    kind: z.literal("mechanism-simulation"),
+    id: z.string(),
+    title: z.string(),
+    description: z.string(),
+    stageNodes: z
+      .array(z.object({ id: z.string(), label: z.string(), detail: z.string() }))
+      .min(2)
+      .max(10),
+    frames: z
+      .array(
+        z.object({
+          label: z.string(),
+          caption: z.string(),
+          activeNodeIds: z.array(z.string()).min(1).max(10),
+          grid: z
+            .object({
+              rowLabels: z.array(z.string()).min(1).max(8),
+              columnLabels: z.array(z.string()).min(1).max(8),
+              values: z.array(z.array(z.number())).min(1).max(8),
+            })
+            .optional(),
+        }),
+      )
+      .min(2)
+      .max(12),
+    claimIds: z.array(z.string()).min(1),
+  }),
+
+  /** Makaledeki tablonun sıralanabilir/filtrelenebilir hali. */
+  z.object({
+    kind: z.literal("dataset-explorer"),
+    id: z.string(),
+    title: z.string(),
+    description: z.string(),
+    columns: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          type: z.enum(["text", "number"]),
+          unit: z.string().optional(),
+        }),
+      )
+      .min(2)
+      .max(8),
+    rows: z
+      .array(
+        z.object({
+          cells: z.array(z.union([z.string(), z.number()])).min(2).max(8),
+          highlight: z.boolean().optional(),
+        }),
+      )
+      .min(2)
+      .max(40),
+    defaultSort: z.object({ columnId: z.string(), direction: z.enum(["asc", "desc"]) }).optional(),
+    sourceRef: sourceReferenceSchema,
+    claimIds: z.array(z.string()).min(1),
+  }),
+]);
+
+/** "Bunu kendi projemde nasıl kullanırım." */
+export const applicationGuideSchema = z.object({
+  title: z.string(),
+  overview: z.string(),
+  recipe: z
+    .array(
+      z.object({
+        step: z.string(),
+        detail: z.string(),
+        code: z.object({ language: z.string(), source: z.string() }).optional(),
+        claimIds: z.array(z.string()).min(1),
+      }),
+    )
+    .min(2)
+    .max(8),
+  hyperparameters: z
+    .array(
+      z.object({
+        name: z.string(),
+        paperValue: z.string(),
+        range: z.string(),
+        guidance: z.string(),
+        claimIds: z.array(z.string()).min(1),
+      }),
+    )
+    .max(8),
+  pitfalls: z
+    .array(
+      z.object({
+        symptom: z.string(),
+        cause: z.string(),
+        fix: z.string(),
+        claimIds: z.array(z.string()).min(1),
+      }),
+    )
+    .max(6),
+  whenNotToUse: z.array(z.string()).min(1).max(5),
+});
+
 export const generationResultSchema = z.object({
   evidence: paperEvidenceSchema,
   story: storySpecSchema,
@@ -288,6 +509,11 @@ export const researchProjectSchema = generationResultSchema.extend({
   depth: z.enum(["concise", "standard", "deep"]),
   deepReport: deepReportSchema.optional(),
   technicalAppendix: technicalAppendixSchema.optional(),
+  primer: primerSchema.optional(),
+  derivations: z.array(derivationSchema).max(6).optional(),
+  quiz: quizSchema.optional(),
+  interactives: z.array(interactiveSchema).max(8).optional(),
+  applicationGuide: applicationGuideSchema.optional(),
   generation: z.object({
     provider: z.string(),
     model: z.string(),
@@ -310,4 +536,19 @@ export type StorySpec = z.infer<typeof storySpecSchema>;
 export type DeepReport = z.infer<typeof deepReportSchema>;
 export type DeepReportSection = z.infer<typeof deepReportSectionSchema>;
 export type TechnicalAppendix = z.infer<typeof technicalAppendixSchema>;
+export type Primer = z.infer<typeof primerSchema>;
+export type PrimerConcept = z.infer<typeof primerConceptSchema>;
+export type Derivation = z.infer<typeof derivationSchema>;
+export type Quiz = z.infer<typeof quizSchema>;
+export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
+export type Interactive = z.infer<typeof interactiveSchema>;
+export type InteractiveParameter = z.infer<typeof interactiveParameterSchema>;
+export type ApplicationGuide = z.infer<typeof applicationGuideSchema>;
 export type ResearchProject = z.infer<typeof researchProjectSchema>;
+
+/** `depth` başına hangi öğrenme bloklarının zorunlu olduğu. */
+export const LEARNING_REQUIREMENTS = {
+  concise: ["primer"],
+  standard: ["primer", "derivations", "quiz"],
+  deep: ["primer", "derivations", "quiz", "interactives", "applicationGuide"],
+} as const satisfies Record<ResearchProject["depth"], readonly string[]>;
