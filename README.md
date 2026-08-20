@@ -112,7 +112,7 @@ Pick your agent. Two commands, then restart — the plugin is the same on all th
 
 <a id="claude-code"></a>
 
-### <img src="https://cdn.simpleicons.org/anthropic/E75B37" height="18" align="top"> &nbsp;Claude Code
+### Claude Code
 
 ```bash
 claude plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --scope user
@@ -123,7 +123,7 @@ Restart Claude Code. That is it.
 
 <a id="codex"></a>
 
-### <img src="https://cdn.simpleicons.org/openai/191B18" height="18" align="top"> &nbsp;Codex
+### Codex
 
 ```bash
 codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main
@@ -135,7 +135,7 @@ Restart Codex or open a new session. You can also invoke the skill explicitly wi
 
 <a id="gemini-cli"></a>
 
-### <img src="https://cdn.simpleicons.org/googlegemini/2E7254" height="18" align="top"> &nbsp;Gemini CLI
+### Gemini CLI
 
 ```bash
 gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
