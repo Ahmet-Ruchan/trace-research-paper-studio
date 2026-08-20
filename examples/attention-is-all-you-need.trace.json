@@ -1,0 +1,3058 @@
+{
+  "version": 1,
+  "id": "attention-is-all-you-need",
+  "createdAt": "2026-08-20T00:00:00.000Z",
+  "updatedAt": "2026-08-20T07:01:25.633Z",
+  "language": "tr",
+  "audience": "student",
+  "depth": "deep",
+  "generation": {
+    "provider": "native-agent",
+    "model": "claude-code/claude-opus-5[1m]"
+  },
+  "evidence": {
+    "paper": {
+      "title": "Attention Is All You Need",
+      "authors": [
+        "Ashish Vaswani",
+        "Noam Shazeer",
+        "Niki Parmar",
+        "Jakob Uszkoreit",
+        "Llion Jones",
+        "Aidan N. Gomez",
+        "Łukasz Kaiser",
+        "Illia Polosukhin"
+      ],
+      "year": "2017",
+      "venue": "31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA"
+    },
+    "sources": [
+      {
+        "id": "paper",
+        "type": "paper",
+        "title": "Attention Is All You Need (arXiv:1706.03762v7)",
+        "fileName": "Attention Is All You Need.pdf"
+      }
+    ],
+    "thesis": "Dizi dönüştürme (sequence transduction) için tekrarlama ve evrişim gerekli değildir: yalnızca dikkat mekanizmasına dayanan Transformer, iki makine çevirisi görevinde daha yüksek BLEU değerine, çok daha fazla paralelleştirilebilirliğe ve belirgin biçimde daha düşük eğitim maliyetine ulaşır.",
+    "plainSummary": "2017'ye kadar makine çevirisinin standardı, kelimeleri sırayla işleyen tekrarlayan sinir ağlarıydı; bu sıralılık eğitimi paralelleştirmeyi engelliyordu. Bu makale, tekrarlamayı ve evrişimi tamamen kaldırıp yerine yalnızca dikkat (attention) koyan Transformer mimarisini öneriyor. Her katmanda tüm pozisyonlar birbirini doğrudan görüyor; sıra bilgisi ise girdilere eklenen sinüzoidal pozisyon kodlamalarıyla veriliyor. Sonuç: WMT 2014 İngilizce-Almanca'da 28.4 BLEU ile önceki en iyi sonuçları (topluluk modelleri dahil) 2 BLEU'dan fazla geçiyor ve bunu literatürdeki en iyi modellerin eğitim maliyetinin küçük bir kısmıyla yapıyor. Makale ayrıca modelin İngilizce ayrıştırma (constituency parsing) görevine de görev-özel ayar yapılmadan iyi genellediğini gösteriyor. Ana takas ise açık: kendine dikkat katmanının maliyeti dizi uzunluğunun karesiyle büyüyor.",
+    "researchQuestion": "Dizi dönüştürme modellerinde tekrarlayan ve evrişimli katmanlar tamamen kaldırılıp yerine yalnızca dikkat mekanizması konulduğunda çeviri kalitesi, paralelleştirilebilirlik ve eğitim maliyeti nasıl değişir?",
+    "methods": [
+      "Kodlayıcı ve kod çözücünün her biri 6 özdeş katmandan oluşan yığınlar hâlinde kuruldu; her alt katman artık bağlantı (residual) ve katman normalizasyonu ile sarmalandı.",
+      "Dikkat işlevi olarak Scaled Dot-Product Attention kullanıldı: sorgu-anahtar iç çarpımları √d_k ile ölçeklenip softmax'tan geçirildi.",
+      "Tek bir dikkat yerine h = 8 paralel başlık (multi-head attention) kullanıldı; her başlık d_k = d_v = 64 boyutunda çalıştı.",
+      "Kod çözücüde maskeleme ile i pozisyonunun yalnızca kendinden önceki çıktıları görmesi sağlanarak öz-bağlanımlı (auto-regressive) özellik korundu.",
+      "Sıra bilgisi, öğrenilen gömme vektörlerine eklenen farklı frekanslardaki sinüs ve kosinüs fonksiyonlarıyla (pozisyon kodlaması) verildi.",
+      "Her katmana pozisyon bazlı, ReLU ara katmanlı iki lineer dönüşümden oluşan ileri beslemeli ağ (d_model = 512, d_ff = 2048) eklendi.",
+      "Eğitim, 8 NVIDIA P100 GPU'lu tek makinede Adam optimizasyonu ve 4000 adımlık ısınma (warmup) içeren özel öğrenme oranı takvimiyle yapıldı.",
+      "Düzenlileştirme olarak artık bağlantı dropout'u (P_drop = 0.1) ve 0.1 değerinde etiket yumuşatma uygulandı.",
+      "WMT 2014 İngilizce-Almanca (yaklaşık 4.5 milyon cümle çifti) ve İngilizce-Fransızca (36M cümle) veri kümelerinde eğitildi; çıkarımda ışın (beam) araması kullanıldı.",
+      "Bileşenlerin katkısı, temel model üzerinde newstest2013 geliştirme kümesinde yapılan ablasyon çalışmalarıyla (başlık sayısı, d_k, model boyutu, dropout, pozisyon kodlaması) ölçüldü.",
+      "Genelleme, Penn Treebank WSJ üzerinde İngilizce constituency parsing görevine 4 katmanlı bir Transformer eğitilerek sınandı."
+    ],
+    "findings": [
+      "Transformer (big), WMT 2014 İngilizce-Almanca'da 28.4 BLEU ile önceki en iyi sonuçları — topluluk modelleri dahil — 2 BLEU'dan fazla geçti.",
+      "Tablo 2'de İngilizce-Fransızca için raporlanan tek model BLEU değeri 41.8; bu sonuç 8 GPU'da 3.5 günlük eğitimle elde edildi.",
+      "Temel model bile daha önce yayımlanmış tüm modelleri ve toplulukları, rakip modellerin eğitim maliyetinin küçük bir kesriyle (3.3 · 10^18 FLOP) geçti.",
+      "Kendine dikkat katmanı tüm pozisyonları sabit sayıda sıralı işlemle (O(1)) bağlarken, tekrarlayan katman O(n) sıralı işlem gerektiriyor.",
+      "Tek başlıklı dikkat, en iyi ayara göre 0.9 BLEU daha kötü; ancak başlık sayısı fazla artırıldığında kalite yine düşüyor.",
+      "Öğrenilen pozisyon gömmeleri, sinüzoidal kodlamayla neredeyse aynı sonucu veriyor; sinüzoidal sürüm eğitimde görülenden uzun dizilere genelleme umuduyla tercih edilmiş.",
+      "4 katmanlı Transformer, görev-özel ayar yapılmadan WSJ Section 23'te yarı denetimli ayarda 92.7 F1 elde ederek Recurrent Neural Network Grammar dışındaki tüm önceki modelleri geçti."
+    ],
+    "limitations": [
+      "Kendine dikkatin katman başına maliyeti O(n² · d); makale bunun tekrarlayan katmandan yalnızca dizi uzunluğu n, temsil boyutu d'den küçükken hızlı olduğunu kabul ediyor.",
+      "Uzun diziler için önerilen kısıtlı (restricted) kendine dikkat çözümü makalede ölçülmedi; açıkça gelecek çalışmaya bırakıldı.",
+      "Metindeki İngilizce-Fransızca sonucu (41.0 BLEU) ile özet ve Tablo 2'deki değer (41.8 BLEU) birbirini tutmuyor.",
+      "Dikkat ağırlıklı pozisyonların ortalanması etkin çözünürlüğü düşürüyor; makale bunu çok başlıklı dikkatle telafi ettiğini öne sürüyor ancak bu telafi ayrı bir ölçümle nicelenmiyor.",
+      "Yorumlanabilirlik iddiası niteliksel: dikkat dağılımları için 'olabilir' ve 'görünüyor' dili kullanılıyor, sayısal bir yorumlanabilirlik ölçütü verilmiyor.",
+      "Değerlendirme iki çeviri yönü ve tek bir ayrıştırma görevi ile sınırlı; ayrıştırma deneylerinde yalnızca az sayıda hiperparametre denemesi yapıldığı belirtiliyor.",
+      "Eğitim maliyeti FLOP sayıları doğrudan ölçülmedi; GPU sayısı, süre ve GPU başına varsayılan sürdürülebilir hesap kapasitesi çarpılarak tahmin edildi."
+    ],
+    "claims": [
+      {
+        "id": "claim-background-01",
+        "statement": "Tekrarlayan modellerin doğası gereği sıralı hesaplaması, eğitim örneği içinde paralelleştirmeyi engeller ve bu kısıt uzun dizilerde kritik hâle gelir.",
+        "kind": "background",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 2,
+            "excerpt": "This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples.",
+            "locator": "Bölüm 1 Introduction"
+          }
+        ]
+      },
+      {
+        "id": "claim-background-02",
+        "statement": "Evrişim tabanlı alternatiflerde iki uzak pozisyonu ilişkilendirmek için gereken işlem sayısı mesafeyle birlikte büyür: ConvS2S'te doğrusal, ByteNet'te logaritmik.",
+        "kind": "background",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 2,
+            "excerpt": "the number of operations required to relate signals from two arbitrary input or output positions grows in the distance between positions, linearly for ConvS2S and logarithmically for ByteNet",
+            "locator": "Bölüm 2 Background"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-01",
+        "statement": "Transformer, tekrarlama ve evrişimi tamamen bırakarak yalnızca dikkat mekanizmalarına dayanan bir ağ mimarisidir.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 1,
+            "excerpt": "We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.",
+            "locator": "Abstract"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-02",
+        "statement": "Kodlayıcı 6 özdeş katmandan oluşur; her katmanda çok başlıklı kendine dikkat ve pozisyon bazlı ileri beslemeli ağ, artık bağlantı ve katman normalizasyonuyla sarmalanır.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 3,
+            "excerpt": "The encoder is composed of a stack of N = 6 identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network.",
+            "locator": "Bölüm 3.1 Encoder and Decoder Stacks"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-03",
+        "statement": "Kod çözücü, kodlayıcı yığınının çıktısı üzerinde çok başlıklı dikkat uygulayan üçüncü bir alt katman içerir.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 3,
+            "excerpt": "the decoder inserts a third sub-layer, which performs multi-head attention over the output of the encoder stack",
+            "locator": "Bölüm 3.1 Decoder"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-04",
+        "statement": "Kod çözücüdeki maskeleme ve çıktı gömmelerinin bir pozisyon kaydırılması, i pozisyonundaki tahminin yalnızca i'den küçük pozisyonlardaki bilinen çıktılara bağlı olmasını garanti eder.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 3,
+            "excerpt": "This masking, combined with fact that the output embeddings are offset by one position, ensures that the predictions for position i can depend only on the known outputs at positions less than i.",
+            "locator": "Bölüm 3.1 Decoder"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-05",
+        "statement": "Dikkat işlevi Scaled Dot-Product Attention'dır: sorgu-anahtar iç çarpımları √d_k ile bölünür, softmax uygulanır ve değerler ağırlıklı toplanır.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 4,
+            "excerpt": "We compute the dot products of the query with all keys, divide each by dk , and apply a softmax function to obtain the weights on the values.",
+            "locator": "Bölüm 3.2.1, Denklem (1)"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-06",
+        "statement": "Model 8 paralel dikkat başlığı kullanır ve her başlıkta d_k = d_v = d_model / h = 64 alınır; böylece toplam hesap maliyeti tam boyutlu tek başlıklı dikkatle benzer kalır.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 5,
+            "excerpt": "In this work we employ h = 8 parallel attention layers, or heads. For each of these we use dk = dv = dmodel /h = 64. Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality.",
+            "locator": "Bölüm 3.2.2 Multi-Head Attention"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-07",
+        "statement": "Her katmandaki pozisyon bazlı ileri beslemeli ağın giriş-çıkış boyutu d_model = 512, iç katman boyutu d_ff = 2048'dir.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 5,
+            "excerpt": "The dimensionality of input and output is dmodel = 512, and the inner-layer has dimensionality df f = 2048.",
+            "locator": "Bölüm 3.3, Denklem (2)"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-08",
+        "statement": "Model tekrarlama ve evrişim içermediği için sıra bilgisi, gömmelerle aynı boyutta olup onlara eklenen farklı frekanslardaki sinüs ve kosinüs fonksiyonlarıyla enjekte edilir.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 6,
+            "excerpt": "Since our model contains no recurrence and no convolution, in order for the model to make use of the order of the sequence, we must inject some information about the relative or absolute position of the tokens in the sequence.",
+            "locator": "Bölüm 3.5 Positional Encoding"
+          },
+          {
+            "sourceId": "paper",
+            "page": 6,
+            "excerpt": "In this work, we use sine and cosine functions of different frequencies",
+            "locator": "Bölüm 3.5"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-09",
+        "statement": "Eğitim 8 NVIDIA P100 GPU'lu tek makinede yapıldı; temel model 100.000 adım (12 saat), büyük model 300.000 adım (3.5 gün) eğitildi.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds. We trained the base models for a total of 100,000 steps or 12 hours.",
+            "locator": "Bölüm 5.2 Hardware and Schedule"
+          },
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "The big models were trained for 300,000 steps (3.5 days).",
+            "locator": "Bölüm 5.2"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-10",
+        "statement": "Öğrenme oranı, ilk 4000 adımda doğrusal artan ve sonrasında adım sayısının kareköküyle ters orantılı azalan bir takvimle Adam optimizasyonunda kullanıldı.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "This corresponds to increasing the learning rate linearly for the first warmup_steps training steps, and decreasing it thereafter proportionally to the inverse square root of the step number. We used warmup_steps = 4000.",
+            "locator": "Bölüm 5.3 Optimizer, Denklem (3)"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-11",
+        "statement": "Düzenlileştirme olarak alt katman çıktılarına P_drop = 0.1 oranında dropout ve 0.1 değerinde etiket yumuşatma uygulandı; etiket yumuşatma perplexity'yi kötüleştirirken doğruluğu ve BLEU'yu iyileştirdi.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "For the base model, we use a rate of Pdrop = 0.1.",
+            "locator": "Bölüm 5.4 Residual Dropout"
+          },
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "During training, we employed label smoothing of value ϵls = 0.1 [36]. This hurts perplexity, as the model learns to be more unsure, but improves accuracy and BLEU score.",
+            "locator": "Bölüm 5.4 Label Smoothing"
+          }
+        ]
+      },
+      {
+        "id": "claim-method-12",
+        "statement": "Eğitim verisi olarak yaklaşık 4.5 milyon cümle çiftinden oluşan WMT 2014 İngilizce-Almanca kümesi, yaklaşık 37000 tokenlık paylaşılan byte-pair sözlükle kullanıldı.",
+        "kind": "method",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs. Sentences were encoded using byte-pair encoding [3], which has a shared source-target vocabulary of about 37000 tokens.",
+            "locator": "Bölüm 5.1 Training Data and Batching"
+          }
+        ]
+      },
+      {
+        "id": "claim-result-01",
+        "statement": "Transformer (big), WMT 2014 İngilizce-Almanca görevinde 28.4 BLEU ile önceki en iyi raporlanmış modelleri — topluluklar dahil — 2.0 BLEU'dan fazla geçerek yeni durum-değerlendirmesi kurdu.",
+        "kind": "reported-result",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "the big transformer model (Transformer (big) in Table 2) outperforms the best previously reported models (including ensembles) by more than 2.0 BLEU, establishing a new state-of-the-art BLEU score of 28.4.",
+            "locator": "Bölüm 6.1 Machine Translation"
+          }
+        ]
+      },
+      {
+        "id": "claim-result-02",
+        "statement": "Tablo 2'de büyük modelin İngilizce-Fransızca BLEU değeri 41.8 olarak listelenmiştir ve özet bu sonucun 8 GPU'da 3.5 günlük eğitimle elde edildiğini belirtir.",
+        "kind": "reported-result",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 1,
+            "excerpt": "our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature.",
+            "locator": "Abstract"
+          },
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "Transformer (big) 28.4 41.8 2.3 · 10^19",
+            "locator": "Tablo 2"
+          }
+        ]
+      },
+      {
+        "id": "claim-result-03",
+        "statement": "Temel model 3.3 · 10^18 FLOP tahmini eğitim maliyetiyle 27.3 (EN-DE) ve 38.1 (EN-FR) BLEU üreterek daha önce yayımlanmış tüm modelleri ve toplulukları maliyetin küçük bir kesriyle geçti.",
+        "kind": "reported-result",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "Even our base model surpasses all previously published models and ensembles, at a fraction of the training cost of any of the competitive models.",
+            "locator": "Bölüm 6.1"
+          },
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "Transformer (base model) 27.3 38.1 3.3 · 10^18",
+            "locator": "Tablo 2"
+          }
+        ]
+      },
+      {
+        "id": "claim-result-04",
+        "statement": "Kendine dikkat katmanı tüm pozisyonları sabit sayıda sıralı işlemle bağlarken tekrarlayan katman O(n) sıralı işlem gerektirir; Tablo 1'de kendine dikkatin katman maliyeti O(n² · d), maksimum yol uzunluğu O(1) olarak verilir.",
+        "kind": "reported-result",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 6,
+            "excerpt": "a self-attention layer connects all positions with a constant number of sequentially executed operations, whereas a recurrent layer requires O(n) sequential operations",
+            "locator": "Bölüm 4 Why Self-Attention"
+          },
+          {
+            "sourceId": "paper",
+            "page": 6,
+            "excerpt": "Self-Attention O(n2 · d) O(1) O(1)",
+            "locator": "Tablo 1"
+          }
+        ]
+      },
+      {
+        "id": "claim-result-05",
+        "statement": "Ablasyonlarda tek başlıklı dikkat en iyi ayardan 0.9 BLEU daha kötüdür; ancak başlık sayısı çok artırıldığında kalite yeniden düşer.",
+        "kind": "reported-result",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 9,
+            "excerpt": "While single-head attention is 0.9 BLEU worse than the best setting, quality also drops off with too many heads.",
+            "locator": "Bölüm 6.2, Tablo 3 satır (A)"
+          }
+        ]
+      },
+      {
+        "id": "claim-result-06",
+        "statement": "Sinüzoidal pozisyon kodlaması, öğrenilen pozisyon gömmeleriyle değiştirildiğinde temel modele neredeyse özdeş sonuç alınır.",
+        "kind": "reported-result",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 9,
+            "excerpt": "In row (E) we replace our sinusoidal positional encoding with learned positional embeddings [9], and observe nearly identical results to the base model.",
+            "locator": "Bölüm 6.2, Tablo 3 satır (E)"
+          }
+        ]
+      },
+      {
+        "id": "claim-result-07",
+        "statement": "4 katmanlı Transformer, İngilizce constituency parsing görevinde WSJ Section 23'te yalnızca WSJ ile 91.3, yarı denetimli ayarda 92.7 F1 elde etti ve Recurrent Neural Network Grammar dışındaki önceki tüm raporlanan modelleri geçti.",
+        "kind": "reported-result",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 10,
+            "excerpt": "Transformer (4 layers) semi-supervised 92.7",
+            "locator": "Tablo 4"
+          },
+          {
+            "sourceId": "paper",
+            "page": 10,
+            "excerpt": "our model performs surprisingly well, yielding better results than all previously reported models with the exception of the Recurrent Neural Network Grammar [8]",
+            "locator": "Bölüm 6.3"
+          }
+        ]
+      },
+      {
+        "id": "claim-interpretation-01",
+        "statement": "Yazarlar, büyük d_k değerlerinde iç çarpımların büyüyerek softmax'ı çok küçük gradyanlı bölgelere ittiğini düşündüklerini belirtir; √d_k ölçeklemesi bu varsayıma dayanan bir önlemdir.",
+        "kind": "author-interpretation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 4,
+            "excerpt": "We suspect that for large values of dk , the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients",
+            "locator": "Bölüm 3.2.1"
+          }
+        ]
+      },
+      {
+        "id": "claim-interpretation-02",
+        "statement": "Yazarlar sinüzoidal kodlamayı, modelin eğitimde görülenden daha uzun dizilere genelleyebilmesine olanak tanıyabileceği gerekçesiyle tercih ettiklerini belirtir; bu bir hipotezdir, ölçülmüş bir sonuç değildir.",
+        "kind": "author-interpretation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 6,
+            "excerpt": "We chose the sinusoidal version because it may allow the model to extrapolate to sequence lengths longer than the ones encountered during training.",
+            "locator": "Bölüm 3.5"
+          }
+        ]
+      },
+      {
+        "id": "claim-interpretation-03",
+        "statement": "Yorumlanabilirlik, ölçülmüş bir sonuç değil bir yan fayda olarak sunulur: dikkat başlıklarının sözdizimsel ve anlamsal yapıyla ilişkili davranış sergiliyor 'göründüğü' belirtilir.",
+        "kind": "author-interpretation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "As side benefit, self-attention could yield more interpretable models.",
+            "locator": "Bölüm 4"
+          },
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "many appear to exhibit behavior related to the syntactic and semantic structure of the sentences",
+            "locator": "Bölüm 4"
+          }
+        ]
+      },
+      {
+        "id": "claim-limitation-01",
+        "statement": "Kendine dikkat, tekrarlayan katmandan yalnızca dizi uzunluğu n temsil boyutu d'den küçük olduğunda daha hızlıdır; maliyeti n ile karesel büyüdüğü için uzun dizilerde bu avantaj kaybolur.",
+        "kind": "limitation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 6,
+            "excerpt": "In terms of computational complexity, self-attention layers are faster than recurrent layers when the sequence",
+            "locator": "Bölüm 4 (sayfa 6 sonu)"
+          },
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "length n is smaller than the representation dimensionality d, which is most often the case with sentence representations used by state-of-the-art models in machine translations",
+            "locator": "Bölüm 4 (sayfa 7 devamı)"
+          }
+        ]
+      },
+      {
+        "id": "claim-limitation-02",
+        "statement": "Çok uzun dizilerde maliyeti düşürmek için önerilen r komşuluğuyla kısıtlı kendine dikkat bu makalede denenmedi; açıkça gelecek çalışmaya bırakıldı.",
+        "kind": "limitation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 7,
+            "excerpt": "To improve computational performance for tasks involving very long sequences, self-attention could be restricted to considering only a neighborhood of size r in the input sequence centered around the respective output position. This would increase the maximum path length to O(n/r). We plan to investigate this approach further in future work.",
+            "locator": "Bölüm 4"
+          }
+        ]
+      },
+      {
+        "id": "claim-limitation-03",
+        "statement": "İngilizce-Fransızca sonucu makale içinde tutarsız raporlanmıştır: Bölüm 6.1 metni 41.0 BLEU derken özet ve Tablo 2 aynı model için 41.8 BLEU vermektedir.",
+        "kind": "limitation",
+        "confidence": "needs-review",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "On the WMT 2014 English-to-French translation task, our big model achieves a BLEU score of 41.0, outperforming all of the previously published single models, at less than 1/4 the training cost of the previous state-of-the-art model.",
+            "locator": "Bölüm 6.1"
+          },
+          {
+            "sourceId": "paper",
+            "page": 1,
+            "excerpt": "our model establishes a new single-model state-of-the-art BLEU score of 41.8",
+            "locator": "Abstract"
+          }
+        ]
+      },
+      {
+        "id": "claim-limitation-04",
+        "statement": "Dikkat ağırlıklı pozisyonların ortalanması etkin çözünürlüğü düşürür; makale bunu çok başlıklı dikkatle telafi ettiğini belirtir ancak telafinin derecesini ayrı bir ölçümle nicelemez.",
+        "kind": "limitation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 2,
+            "excerpt": "albeit at the cost of reduced effective resolution due to averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as described in section 3.2.",
+            "locator": "Bölüm 2 Background"
+          }
+        ]
+      },
+      {
+        "id": "claim-limitation-05",
+        "statement": "Ayrıştırma deneylerinde yalnızca az sayıda hiperparametre denemesi yapıldığı belirtilir; bu görevdeki sonuçlar sistematik bir arama sonucu değildir.",
+        "kind": "limitation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 9,
+            "excerpt": "We performed only a small number of experiments to select the dropout, both attention and residual (section 5.4), learning rates and beam size on the Section 22 development set, all other parameters remained unchanged from the English-to-German base translation model.",
+            "locator": "Bölüm 6.3"
+          }
+        ]
+      },
+      {
+        "id": "claim-limitation-06",
+        "statement": "Tablo 2'deki eğitim maliyeti FLOP değerleri doğrudan ölçüm değil tahmindir: eğitim süresi, GPU sayısı ve GPU başına varsayılan sürdürülebilir tek duyarlıklı hesap kapasitesi çarpılarak elde edilmiştir.",
+        "kind": "limitation",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 8,
+            "excerpt": "We estimate the number of floating point operations used to train a model by multiplying the training time, the number of GPUs used, and an estimate of the sustained single-precision floating-point capacity of each GPU",
+            "locator": "Bölüm 6.1"
+          }
+        ]
+      },
+      {
+        "id": "claim-repro-01",
+        "statement": "Yazarlar, modelleri eğitmek ve değerlendirmek için kullandıkları kodun tensor2tensor deposunda erişilebilir olduğunu belirtir.",
+        "kind": "background",
+        "confidence": "verified",
+        "sourceRefs": [
+          {
+            "sourceId": "paper",
+            "page": 10,
+            "excerpt": "The code we used to train and evaluate our models is available at https://github.com/tensorflow/tensor2tensor.",
+            "locator": "Bölüm 7 Conclusion"
+          }
+        ]
+      }
+    ],
+    "metrics": [
+      {
+        "id": "metric-bleu-ende-big",
+        "label": "BLEU (EN-DE, Transformer big)",
+        "value": 28.4,
+        "displayValue": "28.4",
+        "unit": "BLEU",
+        "context": "WMT 2014 İngilizce-Almanca newstest2014; önceki en iyi sonuçların 2.0 BLEU üzerinde",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "establishing a new state-of-the-art BLEU score of 28.4",
+          "locator": "Bölüm 6.1 / Tablo 2"
+        }
+      },
+      {
+        "id": "metric-bleu-enfr-big",
+        "label": "BLEU (EN-FR, Transformer big, Tablo 2)",
+        "value": 41.8,
+        "displayValue": "41.8",
+        "unit": "BLEU",
+        "context": "WMT 2014 İngilizce-Fransızca newstest2014; Bölüm 6.1 metni aynı model için 41.0 der",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 1,
+          "excerpt": "our model establishes a new single-model state-of-the-art BLEU score of 41.8",
+          "locator": "Abstract / Tablo 2"
+        }
+      },
+      {
+        "id": "metric-bleu-ende-base",
+        "label": "BLEU (EN-DE, Transformer base)",
+        "value": 27.3,
+        "displayValue": "27.3",
+        "unit": "BLEU",
+        "context": "Temel model, WMT 2014 İngilizce-Almanca newstest2014",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "Transformer (base model) 27.3 38.1 3.3 · 10^18",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-bleu-ende-gnmt-ensemble",
+        "label": "BLEU (EN-DE, GNMT + RL Ensemble)",
+        "value": 26.3,
+        "displayValue": "26.30",
+        "unit": "BLEU",
+        "context": "Karşılaştırma temeli: önceki durum-değerlendirmesi topluluk modeli",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "GNMT + RL Ensemble [38] 26.30 41.16",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-bleu-ende-convs2s-ensemble",
+        "label": "BLEU (EN-DE, ConvS2S Ensemble)",
+        "value": 26.36,
+        "displayValue": "26.36",
+        "unit": "BLEU",
+        "context": "Karşılaştırma temeli: evrişim tabanlı topluluk modeli",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "ConvS2S Ensemble [9] 26.36 41.29",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-flops-big",
+        "label": "Tahmini eğitim maliyeti (Transformer big)",
+        "value": 23000000000000000000,
+        "displayValue": "2.3 · 10^19 FLOP",
+        "unit": "FLOP",
+        "context": "Süre × GPU sayısı × GPU başına varsayılan kapasite ile tahmin edildi",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "Transformer (big) 28.4 41.8 2.3 · 10^19",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-flops-base",
+        "label": "Tahmini eğitim maliyeti (Transformer base)",
+        "value": 3300000000000000000,
+        "displayValue": "3.3 · 10^18 FLOP",
+        "unit": "FLOP",
+        "context": "Rakip modellerin maliyetinin küçük bir kesri",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "Transformer (base model) 27.3 38.1 3.3 · 10^18",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-train-days-big",
+        "label": "Büyük model eğitim süresi",
+        "value": 3.5,
+        "displayValue": "3.5 gün",
+        "unit": "gün",
+        "context": "8 NVIDIA P100 GPU'lu tek makinede 300.000 adım",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 7,
+          "excerpt": "The big models were trained for 300,000 steps (3.5 days).",
+          "locator": "Bölüm 5.2"
+        }
+      },
+      {
+        "id": "metric-train-hours-base",
+        "label": "Temel model eğitim süresi",
+        "value": 12,
+        "displayValue": "12 saat",
+        "unit": "saat",
+        "context": "8 P100 GPU'da 100.000 adım, adım başına ~0.4 saniye",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 7,
+          "excerpt": "We trained the base models for a total of 100,000 steps or 12 hours.",
+          "locator": "Bölüm 5.2"
+        }
+      },
+      {
+        "id": "metric-dmodel",
+        "label": "Model boyutu d_model",
+        "value": 512,
+        "displayValue": "512",
+        "unit": "boyut",
+        "context": "Tüm alt katmanların ve gömme katmanlarının çıktı boyutu",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 3,
+          "excerpt": "all sub-layers in the model, as well as the embedding layers, produce outputs of dimension dmodel = 512",
+          "locator": "Bölüm 3.1"
+        }
+      },
+      {
+        "id": "metric-heads",
+        "label": "Dikkat başlığı sayısı h",
+        "value": 8,
+        "displayValue": "8",
+        "unit": "başlık",
+        "context": "Temel modelde paralel dikkat katmanı sayısı",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 5,
+          "excerpt": "In this work we employ h = 8 parallel attention layers, or heads.",
+          "locator": "Bölüm 3.2.2"
+        }
+      },
+      {
+        "id": "metric-dk",
+        "label": "Başlık başına anahtar/değer boyutu d_k = d_v",
+        "value": 64,
+        "displayValue": "64",
+        "unit": "boyut",
+        "context": "d_model / h = 512 / 8",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 5,
+          "excerpt": "For each of these we use dk = dv = dmodel /h = 64.",
+          "locator": "Bölüm 3.2.2"
+        }
+      },
+      {
+        "id": "metric-dff",
+        "label": "İleri beslemeli iç katman boyutu d_ff",
+        "value": 2048,
+        "displayValue": "2048",
+        "unit": "boyut",
+        "context": "Pozisyon bazlı ileri beslemeli ağın gizli katmanı",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 5,
+          "excerpt": "the inner-layer has dimensionality df f = 2048",
+          "locator": "Bölüm 3.3"
+        }
+      },
+      {
+        "id": "metric-warmup",
+        "label": "Isınma adımı sayısı",
+        "value": 4000,
+        "displayValue": "4000",
+        "unit": "adım",
+        "context": "Öğrenme oranının doğrusal arttığı ilk aşama",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 7,
+          "excerpt": "We used warmup_steps = 4000.",
+          "locator": "Bölüm 5.3"
+        }
+      },
+      {
+        "id": "metric-params-big",
+        "label": "Parametre sayısı (Transformer big)",
+        "value": 213,
+        "displayValue": "213 × 10^6",
+        "unit": "milyon parametre",
+        "context": "Tablo 3 son satırındaki büyük model yapılandırması",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 9,
+          "excerpt": "big 6 1024 4096 16 0.3 300K 4.33 26.4 213",
+          "locator": "Tablo 3"
+        }
+      },
+      {
+        "id": "metric-ppl-big",
+        "label": "Geliştirme kümesi perplexity (big)",
+        "value": 4.33,
+        "displayValue": "4.33",
+        "unit": "PPL (word-piece başına)",
+        "context": "newstest2013 geliştirme kümesi; word-piece başına, kelime başına değerlerle karşılaştırılmamalı",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 9,
+          "excerpt": "big 6 1024 4096 16 0.3 300K 4.33 26.4 213",
+          "locator": "Tablo 3"
+        }
+      },
+      {
+        "id": "metric-parsing-f1-semi",
+        "label": "WSJ 23 F1 (yarı denetimli)",
+        "value": 92.7,
+        "displayValue": "92.7",
+        "unit": "F1",
+        "context": "4 katmanlı Transformer, İngilizce constituency parsing",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 10,
+          "excerpt": "Transformer (4 layers) semi-supervised 92.7",
+          "locator": "Tablo 4"
+        }
+      },
+      {
+        "id": "metric-parsing-f1-wsj",
+        "label": "WSJ 23 F1 (yalnızca WSJ)",
+        "value": 91.3,
+        "displayValue": "91.3",
+        "unit": "F1",
+        "context": "40K cümlelik WSJ eğitim kümesi, ayrımcı ayar",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 10,
+          "excerpt": "Transformer (4 layers) WSJ only, discriminative 91.3",
+          "locator": "Tablo 4"
+        }
+      }
+    ],
+    "glossary": [
+      {
+        "term": "Dizi dönüştürme (sequence transduction)",
+        "definition": "Bir sembol dizisini başka bir sembol dizisine çeviren modelleme problemi; makine çevirisi bunun tipik örneğidir.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 1,
+          "excerpt": "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder.",
+          "locator": "Abstract"
+        }
+      },
+      {
+        "term": "Dikkat (attention)",
+        "definition": "Bir sorguyu (query) ve anahtar-değer çiftleri kümesini alıp çıktıyı değerlerin ağırlıklı toplamı olarak hesaplayan işlev; her ağırlık, sorgunun ilgili anahtarla uyumundan gelir.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 3,
+          "excerpt": "An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors.",
+          "locator": "Bölüm 3.2"
+        }
+      },
+      {
+        "term": "Kendine dikkat (self-attention)",
+        "definition": "Bir dizinin temsili hesaplanırken aynı dizinin farklı pozisyonlarını birbiriyle ilişkilendiren dikkat mekanizması; intra-attention olarak da anılır.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 2,
+          "excerpt": "Self-attention, sometimes called intra-attention is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence.",
+          "locator": "Bölüm 2"
+        }
+      },
+      {
+        "term": "Çok başlıklı dikkat (multi-head attention)",
+        "definition": "Sorgu, anahtar ve değerleri h farklı öğrenilmiş doğrusal izdüşümle daha düşük boyuta indirip dikkati paralel çalıştıran, sonuçları birleştirip yeniden izdüşüren yapı.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 5,
+          "excerpt": "Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions. With a single attention head, averaging inhibits this.",
+          "locator": "Bölüm 3.2.2"
+        }
+      },
+      {
+        "term": "Pozisyon kodlaması (positional encoding)",
+        "definition": "Tekrarlama içermeyen bir modele sıra bilgisini vermek için gömmelerle toplanan, aynı boyutta sinüs/kosinüs tabanlı vektörler.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 6,
+          "excerpt": "we add \"positional encodings\" to the input embeddings at the bottoms of the encoder and decoder stacks",
+          "locator": "Bölüm 3.5"
+        }
+      },
+      {
+        "term": "Maksimum yol uzunluğu (maximum path length)",
+        "definition": "Ağda herhangi iki giriş/çıkış pozisyonu arasında ileri ve geri sinyalin kat etmesi gereken en uzun mesafe; kısa olması uzun menzilli bağımlılık öğrenmeyi kolaylaştırır.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 6,
+          "excerpt": "The shorter these paths between any combination of positions in the input and output sequences, the easier it is to learn long-range dependencies",
+          "locator": "Bölüm 4"
+        }
+      },
+      {
+        "term": "Etiket yumuşatma (label smoothing)",
+        "definition": "Hedef dağılımı tek noktaya yığmak yerine bir miktar belirsizlik bırakan düzenlileştirme; burada perplexity'yi kötüleştirip BLEU'yu iyileştirmiştir.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "This hurts perplexity, as the model learns to be more unsure, but improves accuracy and BLEU score.",
+          "locator": "Bölüm 5.4"
+        }
+      },
+      {
+        "term": "Öz-bağlanımlı (auto-regressive)",
+        "definition": "Her adımda daha önce üretilmiş sembolleri ek girdi olarak tüketerek bir sonraki sembolü üreten üretim biçimi.",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 2,
+          "excerpt": "At each step the model is auto-regressive [10], consuming the previously generated symbols as additional input when generating the next.",
+          "locator": "Bölüm 3"
+        }
+      }
+    ]
+  },
+  "story": {
+    "title": "Dikkat Yeterlidir: Sıralılığı Bırakan Mimari",
+    "dek": "Transformer'ın tekrarlamayı nasıl kaldırdığını, bunun karşılığında neyi ödediğini ve makalenin gerçekte hangi sayıları kanıtladığını sayfa sayfa kanıta bağlayarak izleyen bir anlatı.",
+    "readingTime": "14 dk",
+    "accent": "#3B5BDB",
+    "sections": [
+      {
+        "id": "story-problem",
+        "indexLabel": "01",
+        "kicker": "Problem",
+        "title": "Sıralılık, ölçeklemenin önündeki duvardı",
+        "body": "2017'de dizi modellemenin standardı tekrarlayan ağlardı ve bu ağların temel kısıtı mimari değil zamansaldı: h_t gizli durumu h_{t-1}'e bağlı olduğu için hesap, dizinin pozisyonları boyunca sıraya girmek zorundaydı. Makale bunu açıkça bir paralelleştirme engeli olarak tanımlıyor ve uzun dizilerde bellek kısıtlarının örnekler arası yığınlamayı da sınırladığını, dolayısıyla sorunun kritikleştiğini söylüyor.\n\nEvrişimli alternatifler (ByteNet, ConvS2S) paralelliği getiriyordu ama başka bir bedelle: iki uzak pozisyonu ilişkilendirmek için gereken işlem sayısı mesafeyle büyüyordu — ConvS2S'te doğrusal, ByteNet'te logaritmik. Yani ya sıralılığı ya da uzak bağımlılıkların ucuzluğunu feda etmek gerekiyordu.\n\nTransformer'ın iddiası tam da bu ikilemi ortadan kaldırmak: her iki pozisyonu sabit sayıda işlemle bağlamak.",
+        "claimIds": [
+          "claim-background-01",
+          "claim-background-02",
+          "claim-result-04"
+        ],
+        "visual": {
+          "type": "concept",
+          "eyebrow": "Tasarım baskısı",
+          "caption": "Makalenin Bölüm 1 ve 2'de tarif ettiği üç kısıt ve bunların Transformer'a dayattığı tercih.",
+          "center": "Uzun menzilli bağımlılığı ucuza öğren",
+          "items": [
+            {
+              "label": "Sıralı hesap",
+              "detail": "Tekrarlayan modellerde h_t, h_{t-1}'e bağlı; eğitim örneği içinde paralelleştirme mümkün değil (s. 2)."
+            },
+            {
+              "label": "Mesafeyle büyüyen maliyet",
+              "detail": "Evrişimli modellerde iki pozisyonu ilişkilendirme maliyeti ConvS2S'te doğrusal, ByteNet'te logaritmik büyüyor (s. 2)."
+            },
+            {
+              "label": "Yol uzunluğu",
+              "detail": "Sinyalin kat ettiği yol kısaldıkça uzak bağımlılığı öğrenmek kolaylaşıyor; bu, mimari seçimin ana ölçütü (s. 6)."
+            },
+            {
+              "label": "Sabit yol vaadi",
+              "detail": "Kendine dikkat tüm pozisyonları O(1) sıralı işlemle bağlıyor; Tablo 1'deki maksimum yol uzunluğu O(1) (s. 6)."
+            }
+          ]
+        }
+      },
+      {
+        "id": "story-architecture",
+        "indexLabel": "02",
+        "kicker": "Mimari",
+        "title": "Altı katman, üç dikkat kullanımı, sıfır tekrarlama",
+        "body": "Transformer klasik kodlayıcı-kod çözücü iskeletini koruyor ama içini boşaltıp yeniden dolduruyor. Kodlayıcı 6 özdeş katmandan oluşuyor; her katmanda iki alt katman var: çok başlıklı kendine dikkat ve pozisyon bazlı tam bağlı ileri beslemeli ağ. Her alt katmanın etrafında artık bağlantı ve ardından katman normalizasyonu bulunuyor; bu yüzden tüm alt katmanlar ve gömme katmanları d_model = 512 boyutunda çıktı üretmek zorunda.\n\nKod çözücü de 6 katman, ancak araya üçüncü bir alt katman giriyor: kodlayıcı yığınının çıktısı üzerinde çok başlıklı dikkat. Bu, klasik seq2seq'teki kodlayıcı-kod çözücü dikkatinin karşılığı.\n\nKritik ayrıntı maskeleme: kod çözücünün kendine dikkat alt katmanında sonraki pozisyonlara bakmak engelleniyor. Çıktı gömmelerinin bir pozisyon kaydırılmasıyla birleşince, i pozisyonundaki tahminin yalnızca i'den küçük pozisyonlardaki bilinen çıktılara bağlı olması garanti ediliyor. Öz-bağlanımlı üretim böyle korunuyor.",
+        "claimIds": [
+          "claim-method-01",
+          "claim-method-02",
+          "claim-method-03",
+          "claim-method-04",
+          "claim-method-07"
+        ],
+        "visual": {
+          "type": "architecture",
+          "eyebrow": "Bölüm 3.1–3.3",
+          "caption": "Kodlayıcı ve kod çözücü yığınlarının kanıta bağlı akışı; her düğüm makalede açıkça tarif edilen bir bileşen.",
+          "nodes": [
+            {
+              "id": "input",
+              "label": "Girdi gömme + pozisyon kodlaması",
+              "detail": "Öğrenilen gömmeler d_model = 512; sıra bilgisi sinüzoidal kodlamayla toplanır (s. 5–6).",
+              "group": "input"
+            },
+            {
+              "id": "enc-self",
+              "label": "Kodlayıcı kendine dikkat",
+              "detail": "Her pozisyon önceki kodlayıcı katmanının tüm pozisyonlarına bakabilir (s. 5).",
+              "group": "core"
+            },
+            {
+              "id": "enc-ffn",
+              "label": "Kodlayıcı ileri beslemeli ağ",
+              "detail": "Pozisyon bazlı iki lineer dönüşüm, arada ReLU; d_ff = 2048 (s. 5).",
+              "group": "core"
+            },
+            {
+              "id": "dec-masked",
+              "label": "Maskeli kod çözücü kendine dikkat",
+              "detail": "Sonraki pozisyonlara bakış -∞ ile maskelenir; öz-bağlanım korunur (s. 3, s. 5).",
+              "group": "core"
+            },
+            {
+              "id": "dec-cross",
+              "label": "Kodlayıcı-kod çözücü dikkati",
+              "detail": "Sorgular kod çözücüden, anahtar ve değerler kodlayıcı çıktısından gelir (s. 3, s. 5).",
+              "group": "core"
+            },
+            {
+              "id": "dec-ffn",
+              "label": "Kod çözücü ileri beslemeli ağ",
+              "detail": "Kodlayıcıdakiyle aynı biçimde her pozisyona ayrı ayrı uygulanır (s. 5).",
+              "group": "core"
+            },
+            {
+              "id": "output",
+              "label": "Lineer + softmax",
+              "detail": "Gömme matrisi ile paylaşılan ağırlıklar üzerinden sonraki token olasılıkları (s. 5).",
+              "group": "output"
+            },
+            {
+              "id": "residual",
+              "label": "Artık bağlantı + LayerNorm",
+              "detail": "Her alt katmanın çıktısı LayerNorm(x + Sublayer(x)) biçimindedir (s. 3).",
+              "group": "evidence"
+            }
+          ],
+          "edges": [
+            {
+              "from": "input",
+              "to": "enc-self",
+              "label": "6 katmanlık yığın"
+            },
+            {
+              "from": "enc-self",
+              "to": "enc-ffn",
+              "label": "alt katman 2"
+            },
+            {
+              "from": "enc-ffn",
+              "to": "dec-cross",
+              "label": "bellek: anahtar ve değer"
+            },
+            {
+              "from": "input",
+              "to": "dec-masked",
+              "label": "kaydırılmış çıktı gömmeleri"
+            },
+            {
+              "from": "dec-masked",
+              "to": "dec-cross",
+              "label": "sorgular"
+            },
+            {
+              "from": "dec-cross",
+              "to": "dec-ffn",
+              "label": "alt katman 3"
+            },
+            {
+              "from": "dec-ffn",
+              "to": "output",
+              "label": "token olasılıkları"
+            },
+            {
+              "from": "residual",
+              "to": "enc-self",
+              "label": "her alt katmanı sarar"
+            },
+            {
+              "from": "residual",
+              "to": "dec-masked",
+              "label": "her alt katmanı sarar"
+            }
+          ]
+        }
+      },
+      {
+        "id": "story-attention",
+        "indexLabel": "03",
+        "kicker": "Mekanizma",
+        "title": "Ölçekleme neden gerekliydi",
+        "body": "Dikkatin kendisi yeni değil; makalenin katkısı onu tek taşıyıcı hâline getirmek ve pratikte çalışır kılan bir düzeltme eklemek. Scaled Dot-Product Attention'da sorgu ile tüm anahtarların iç çarpımı alınıyor, her biri √d_k'ye bölünüyor, softmax ile ağırlıklara dönüşüyor ve değerler bu ağırlıklarla toplanıyor.\n\nBölme işlemi kozmetik değil. Toplamsal dikkat, ölçeklenmemiş iç çarpım dikkatini büyük d_k değerlerinde geçiyor. Yazarların açıklaması bir hipotez olarak sunuluyor: büyük d_k'de iç çarpımlar büyüyerek softmax'ı gradyanların aşırı küçüldüğü bölgelere itiyor olabilir. Dipnotta bunun neden beklendiği de gösteriliyor — bileşenler bağımsız, ortalaması 0 ve varyansı 1 ise iç çarpımın varyansı d_k oluyor.\n\nİç çarpımın tercih edilme nedeni ise mühendislik: teorik karmaşıklık benzer olsa da iç çarpım dikkati, yüksek düzeyde optimize edilmiş matris çarpımı koduyla uygulanabildiği için pratikte çok daha hızlı ve bellek açısından verimli.",
+        "claimIds": [
+          "claim-method-05",
+          "claim-interpretation-01"
+        ],
+        "visual": {
+          "type": "equation",
+          "eyebrow": "Denklem (1), sayfa 4",
+          "caption": "Scaled Dot-Product Attention: makalede verilen tanımın terim terim açılımı.",
+          "formula": "Attention(Q, K, V) = softmax(QKᵀ / √d_k) · V",
+          "terms": [
+            {
+              "symbol": "Q",
+              "label": "Sorgu matrisi",
+              "detail": "Aynı anda hesaplanabilmesi için tüm sorgular bir matriste paketlenir (s. 4)."
+            },
+            {
+              "symbol": "K",
+              "label": "Anahtar matrisi",
+              "detail": "Sorgunun her pozisyonla uyumunu belirleyen d_k boyutlu vektörler (s. 4)."
+            },
+            {
+              "symbol": "V",
+              "label": "Değer matrisi",
+              "detail": "Ağırlıklı toplamı alınacak d_v boyutlu içerik vektörleri (s. 4)."
+            },
+            {
+              "symbol": "√d_k",
+              "label": "Ölçekleme katsayısı",
+              "detail": "Büyük d_k'de iç çarpımların büyüyüp softmax'ı küçük gradyan bölgesine itmesine karşı önlem (s. 4)."
+            },
+            {
+              "symbol": "softmax",
+              "label": "Ağırlık normalizasyonu",
+              "detail": "Uyum skorlarını toplamı 1 olan ağırlıklara çevirir; maskelenen bağlantılar -∞ yapılır (s. 4–5)."
+            }
+          ],
+          "steps": [
+            "Sorgu ile tüm anahtarların iç çarpımını hesapla.",
+            "Her skoru √d_k ile böl; büyük d_k'de gradyan çöküşünü engellemek için.",
+            "Yasak bağlantıları (kod çözücüde ileriye bakış) softmax girişinde -∞ yaparak maskele.",
+            "Softmax ile ağırlıkları elde et.",
+            "Değerleri bu ağırlıklarla topla ve çıktıyı üret."
+          ]
+        }
+      },
+      {
+        "id": "story-tradeoff",
+        "indexLabel": "04",
+        "kicker": "Takas",
+        "title": "Tablo 1: kazanılan ve ödenen",
+        "body": "Makalenin en dürüst tablosu Tablo 1. Üç ölçüt üzerinden karşılaştırma yapıyor: katman başına hesap karmaşıklığı, gereken minimum sıralı işlem sayısı ve maksimum yol uzunluğu.\n\nKendine dikkat sıralı işlem ve yol uzunluğunda O(1) ile açık ara kazanıyor — tekrarlayan katman her ikisinde de O(n). Ama karmaşıklık sütununda tablo tersine dönüyor: kendine dikkat O(n² · d), tekrarlayan katman O(n · d²). Makale bu takası saklamıyor; kendine dikkatin tekrarlayan katmandan hızlı olmasının koşulunu açıkça yazıyor: dizi uzunluğu n, temsil boyutu d'den küçük olmalı.\n\n2017'nin cümle düzeyi çeviri bağlamında bu koşul çoğunlukla sağlanıyordu. Koşul sağlanmadığında ne yapılacağı ise ölçülmemiş bir öneri olarak bırakılıyor: r büyüklüğünde bir komşulukla kısıtlı kendine dikkat, yol uzunluğunu O(n/r)'ye çıkarma pahasına. Yazarların ifadesi net — bunu gelecek çalışmada incelemeyi planlıyorlar.",
+        "claimIds": [
+          "claim-result-04",
+          "claim-limitation-01",
+          "claim-limitation-02"
+        ],
+        "visual": {
+          "type": "matrix",
+          "eyebrow": "Tablo 1, sayfa 6",
+          "caption": "Katman tiplerinin üç ölçütte karşılaştırması; renk tonu kendine dikkat açısından avantajı (yüksek) veya dezavantajı (düşük) gösterir.",
+          "columns": [
+            "Katman başına karmaşıklık",
+            "Sıralı işlem",
+            "Maksimum yol uzunluğu"
+          ],
+          "rows": [
+            {
+              "label": "Kendine dikkat",
+              "cells": [
+                {
+                  "label": "O(n² · d)",
+                  "tone": "low"
+                },
+                {
+                  "label": "O(1)",
+                  "tone": "high"
+                },
+                {
+                  "label": "O(1)",
+                  "tone": "high"
+                }
+              ]
+            },
+            {
+              "label": "Tekrarlayan",
+              "cells": [
+                {
+                  "label": "O(n · d²)",
+                  "tone": "high"
+                },
+                {
+                  "label": "O(n)",
+                  "tone": "low"
+                },
+                {
+                  "label": "O(n)",
+                  "tone": "low"
+                }
+              ]
+            },
+            {
+              "label": "Evrişimli",
+              "cells": [
+                {
+                  "label": "O(k · n · d²)",
+                  "tone": "medium"
+                },
+                {
+                  "label": "O(1)",
+                  "tone": "high"
+                },
+                {
+                  "label": "O(log_k n)",
+                  "tone": "medium"
+                }
+              ]
+            },
+            {
+              "label": "Kısıtlı kendine dikkat",
+              "cells": [
+                {
+                  "label": "O(r · n · d)",
+                  "tone": "high"
+                },
+                {
+                  "label": "O(1)",
+                  "tone": "high"
+                },
+                {
+                  "label": "O(n/r)",
+                  "tone": "medium"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "story-results",
+        "indexLabel": "05",
+        "kicker": "Sonuçlar",
+        "title": "İki BLEU puanı ve bir maliyet farkı",
+        "body": "WMT 2014 İngilizce-Almanca'da Transformer (big) 28.4 BLEU alıyor ve önceki en iyi raporlanmış modelleri — topluluklar dahil — 2.0 BLEU'dan fazla geçiyor. Bu, tek bir modelin topluluk modellerini geçmesi anlamına geldiği için sonucun en güçlü kısmı.\n\nAsıl çarpıcı olan ikinci eksen: maliyet. Temel model bile daha önce yayımlanmış tüm modelleri ve toplulukları geçiyor ve bunu tahmini 3.3 · 10^18 FLOP ile yapıyor — Tablo 2'deki rakiplerin çoğu 10^19–10^21 aralığında.\n\nBir uyarı gerekiyor: bu FLOP değerleri ölçülmedi. Makale bunları eğitim süresi × GPU sayısı × GPU başına varsayılan sürdürülebilir kapasite çarpımıyla tahmin ettiğini söylüyor. Yani maliyet karşılaştırması doğru büyüklük mertebesini verse de kesin bir ölçüm olarak okunmamalı.",
+        "claimIds": [
+          "claim-result-01",
+          "claim-result-03",
+          "claim-limitation-06"
+        ],
+        "visual": {
+          "type": "comparison",
+          "eyebrow": "Tablo 2, sayfa 8",
+          "caption": "WMT 2014 İngilizce-Almanca newstest2014 BLEU değerleri; tüm sayılar evidence metriklerinden gelir.",
+          "items": [
+            {
+              "label": "GNMT + RL Ensemble",
+              "value": 26.3,
+              "displayValue": "26.30",
+              "highlight": false
+            },
+            {
+              "label": "ConvS2S Ensemble",
+              "value": 26.36,
+              "displayValue": "26.36",
+              "highlight": false
+            },
+            {
+              "label": "Transformer (base)",
+              "value": 27.3,
+              "displayValue": "27.3",
+              "highlight": false
+            },
+            {
+              "label": "Transformer (big)",
+              "value": 28.4,
+              "displayValue": "28.4",
+              "highlight": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "story-training",
+        "indexLabel": "06",
+        "kicker": "Eğitim rejimi",
+        "title": "12 saatten 3.5 güne uzanan reçete",
+        "body": "Sonuçların tekrarlanabilirliği için eğitim rejimi ayrıntılarının çoğu makalede açıkça verilmiş. Veri tarafında WMT 2014 İngilizce-Almanca için yaklaşık 4.5 milyon cümle çifti ve yaklaşık 37000 tokenlık paylaşılan byte-pair sözlük kullanılmış; yığınlar yaklaşık 25000 kaynak ve 25000 hedef token içerecek şekilde oluşturulmuş.\n\nDonanım tek makine ve 8 NVIDIA P100 GPU. Temel model 100.000 adım, yani yaklaşık 12 saat; büyük model 300.000 adım, yani 3.5 gün eğitilmiş.\n\nOptimizasyonda Adam, ısınmalı bir öğrenme oranı takviminde kullanılmış: ilk 4000 adımda doğrusal artış, sonrasında adım sayısının kareköküyle ters orantılı azalış. Düzenlileştirme iki parçalı — alt katman çıktılarına ve gömme+pozisyon kodlaması toplamına P_drop = 0.1 dropout, ayrıca 0.1 değerinde etiket yumuşatma. Makale burada da dürüst bir gözlem paylaşıyor: etiket yumuşatma perplexity'yi kötüleştiriyor ama doğruluğu ve BLEU'yu artırıyor.",
+        "claimIds": [
+          "claim-method-09",
+          "claim-method-10",
+          "claim-method-11",
+          "claim-method-12"
+        ],
+        "visual": {
+          "type": "timeline",
+          "eyebrow": "Bölüm 5, sayfalar 7–8",
+          "caption": "Makalede tarif edilen eğitim boru hattının sırası; her adım doğrudan Bölüm 5'ten alınmıştır.",
+          "items": [
+            {
+              "label": "Veri ve tokenizasyon",
+              "detail": "~4.5M cümle çifti (EN-DE), ~37000 tokenlık paylaşılan byte-pair sözlük; EN-FR için 36M cümle ve 32000 word-piece.",
+              "tone": "paper"
+            },
+            {
+              "label": "Yığınlama",
+              "detail": "Cümle çiftleri yaklaşık uzunluğa göre gruplanır; yığın başına ~25000 kaynak ve ~25000 hedef token.",
+              "tone": "paper"
+            },
+            {
+              "label": "Isınma (4000 adım)",
+              "detail": "Öğrenme oranı doğrusal olarak artırılır; Adam β1 = 0.9, β2 = 0.98, ϵ = 10⁻⁹.",
+              "tone": "accent"
+            },
+            {
+              "label": "Ana eğitim",
+              "detail": "Temel model 100.000 adım / 12 saat; büyük model 300.000 adım / 3.5 gün, 8 P100 GPU.",
+              "tone": "accent"
+            },
+            {
+              "label": "Düzenlileştirme",
+              "detail": "Residual dropout P_drop = 0.1 ve etiket yumuşatma ϵ_ls = 0.1; ikincisi perplexity'yi kötüleştirip BLEU'yu iyileştirir.",
+              "tone": "ink"
+            },
+            {
+              "label": "Çıkarım",
+              "detail": "Temel modelde son 5, büyük modelde son 20 kontrol noktasının ortalaması; ışın boyutu 4, uzunluk cezası α = 0.6.",
+              "tone": "ink"
+            }
+          ]
+        }
+      },
+      {
+        "id": "story-ablation",
+        "indexLabel": "07",
+        "kicker": "Ablasyon",
+        "title": "Hangi parça gerçekten gerekliydi",
+        "body": "Tablo 3, mimarinin hangi bileşeninin ne kadar taşıdığını newstest2013 geliştirme kümesinde ölçüyor. Dört bulgu öne çıkıyor.\n\nBirincisi, çok başlıklılık gerçekten işe yarıyor ama tek yönlü değil: tek başlıklı dikkat en iyi ayardan 0.9 BLEU daha kötü, ancak başlık sayısı aşırı artırıldığında kalite yeniden düşüyor. Yani h bir hiperparametre, monoton bir kazanç kaynağı değil.\n\nİkincisi, d_k küçültüldüğünde kalite bozuluyor. Makale bundan, uyumu belirlemenin kolay bir iş olmadığı ve iç çarpımdan daha gelişmiş bir uyum fonksiyonunun faydalı olabileceği yorumunu çıkarıyor.\n\nÜçüncüsü beklenen yönde: büyük modeller daha iyi ve dropout aşırı uyumu önlemede çok yardımcı.\n\nDördüncüsü en ilginci — sinüzoidal pozisyon kodlaması öğrenilen pozisyon gömmeleriyle değiştirildiğinde sonuçlar neredeyse özdeş. Yani makalenin en ikonik tasarım ayrıntılarından biri, ölçülen performans açısından gerekli değil; tercih edilme gerekçesi ölçülmemiş bir genelleme umudu.",
+        "claimIds": [
+          "claim-result-05",
+          "claim-result-06",
+          "claim-method-06",
+          "claim-interpretation-02"
+        ],
+        "visual": {
+          "type": "infographic",
+          "eyebrow": "Tablo 3, sayfa 9",
+          "caption": "Ablasyonların dört mesajı; her biri geliştirme kümesi ölçümlerine dayanıyor.",
+          "items": [
+            {
+              "label": "Başlık sayısı iki uçlu",
+              "detail": "Tek başlık en iyi ayardan 0.9 BLEU kötü; çok fazla başlıkta kalite yeniden düşüyor.",
+              "badge": "h = 8"
+            },
+            {
+              "label": "d_k küçültmek zararlı",
+              "detail": "Anahtar boyutunu düşürmek kaliteyi bozuyor; uyum belirleme sanıldığı kadar kolay değil.",
+              "badge": "d_k = 64"
+            },
+            {
+              "label": "Büyüklük ve dropout",
+              "detail": "Daha büyük modeller daha iyi; dropout aşırı uyuma karşı belirgin fayda sağlıyor.",
+              "badge": "213M"
+            },
+            {
+              "label": "Sinüzoid ≈ öğrenilen",
+              "detail": "Pozisyon gömmeleri sinüzoidal kodlamayla neredeyse özdeş sonuç veriyor; tercih ölçülmüş bir üstünlüğe değil ekstrapolasyon umuduna dayanıyor.",
+              "badge": "satır (E)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "story-limits",
+        "indexLabel": "08",
+        "kicker": "Sınırlar",
+        "title": "Makalenin kendi kabul ettikleri ve bir tutarsızlık",
+        "body": "Transformer'ın etkisi tartışmasız, ama bu makale okunurken üç ayrı düzeyde temkin gerekiyor.\n\nİlki kabul edilmiş bir sınır: karesel maliyet. Kendine dikkat, ancak n < d iken tekrarlayan katmandan hızlı. Uzun dizi çözümü olarak önerilen kısıtlı dikkat bu makalede hiç denenmedi.\n\nİkincisi kanıt düzeyi farkı. Yorumlanabilirlik bir sonuç değil, 'olabilir' ve 'görünüyor' diliyle sunulan bir yan fayda. Aynı şekilde √d_k ölçeklemesinin gerekçesi de bir hipotez ('We suspect'), ölçülmüş bir mekanizma açıklaması değil. Ortalama alma nedeniyle etkin çözünürlüğün düştüğü kabul ediliyor ve çok başlıklı dikkatin bunu telafi ettiği öne sürülüyor, ancak telafinin derecesi nicelenmiyor.\n\nÜçüncüsü doğrudan bir tutarsızlık: İngilizce-Fransızca sonucu Bölüm 6.1 metninde 41.0 BLEU, özet ve Tablo 2'de 41.8 BLEU olarak geçiyor. Aynı model için iki farklı sayı. Bu makaleyi alıntılarken hangi değerin kullanıldığı açıkça belirtilmeli; bu proje her iki değeri de kanıtıyla birlikte saklıyor ve ilgili iddiayı 'incelenmeli' olarak işaretliyor.",
+        "claimIds": [
+          "claim-limitation-01",
+          "claim-limitation-02",
+          "claim-limitation-03",
+          "claim-limitation-04",
+          "claim-limitation-05",
+          "claim-interpretation-03"
+        ],
+        "visual": {
+          "type": "layers",
+          "eyebrow": "Kanıt güveni",
+          "caption": "Makaledeki iddiaların kanıt gücüne göre katmanlanması; en üstteki katman en zayıf desteğe sahip.",
+          "items": [
+            {
+              "label": "Doğrudan ölçülmüş",
+              "detail": "BLEU 28.4 (EN-DE), temel model 27.3, ayrıştırma F1 92.7, ablasyon farkları — hepsi test veya geliştirme kümesi ölçümü.",
+              "tone": "ink"
+            },
+            {
+              "label": "Tahmin edilmiş",
+              "detail": "Tablo 2'deki FLOP maliyetleri; süre × GPU sayısı × varsayılan kapasite çarpımıyla türetilmiş.",
+              "tone": "accent"
+            },
+            {
+              "label": "Hipotez düzeyinde",
+              "detail": "√d_k gerekçesi ('We suspect'), sinüzoidal kodlamanın ekstrapolasyon avantajı ('may allow') — ölçülmemiş.",
+              "tone": "paper"
+            },
+            {
+              "label": "Tutarsız raporlanmış",
+              "detail": "EN-FR BLEU: metinde 41.0, özet ve Tablo 2'de 41.8. Aynı model, iki farklı sayı.",
+              "tone": "paper"
+            }
+          ]
+        }
+      }
+    ],
+    "closing": {
+      "title": "Neden hâlâ okunuyor",
+      "body": "Bu makale bir mimari önerisinden çok bir kısıt kaldırma hamlesi: sıralı hesabı zorunluluk olmaktan çıkarınca, ölçeklemenin önündeki engel donanımdan mimariye kaymış oldu. Bugünden bakınca en öngörülü kısım sonuç bölümündeki plan — girdi ve çıktının metin dışı modalitelere genişletilmesi ve büyük girdiler için yerel, kısıtlı dikkat mekanizmalarının araştırılması. Bu iki cümle, sonraki on yılın araştırma gündeminin büyük bölümünü tarif ediyor. Buna karşılık makalenin kendi ölçtüğü alan dar: iki çeviri yönü ve bir ayrıştırma görevi. Transformer'ın genelliği bu makalede kanıtlanmadı; sonraki literatürde kanıtlandı."
+    }
+  },
+  "deepReport": {
+    "title": "Attention Is All You Need — Derin İnceleme",
+    "dek": "Katkının konumlandırılması, mekanizmanın ayrıntısı, deneysel kanıtın gücü, tutarsızlıklar ve yeniden üretim riskleri üzerine kanıta bağlı dokuz bölümlük analiz.",
+    "readingTime": "24 dk",
+    "sections": [
+      {
+        "id": "report-contribution",
+        "kind": "contribution",
+        "title": "Katkı ne, ne değil",
+        "summary": "Makalenin katkısı dikkat mekanizmasını icat etmek değil, onu tek taşıyıcı hâline getirip tekrarlamayı tamamen kaldırmak ve bunun çalıştığını iki çeviri görevinde göstermektir.",
+        "analysis": [
+          "Dikkat mekanizması makaleden önce de kullanılıyordu; makale bunu Bölüm 2'de açıkça kabul ediyor ve birkaç istisna dışında dikkatin tekrarlayan bir ağla birlikte kullanıldığını belirtiyor. Katkının çekirdeği bu birlikteliğin koparılması: 'dispensing with recurrence and convolutions entirely'.",
+          "İkinci katkı katmanı ölçülebilir olanı: aynı anda hem kaliteyi artırmak hem de maliyeti düşürmek. Bu iki eksenin birlikte iyileşmesi, mimari değişikliğin bir takas değil bir kazanç olduğu izlenimini güçlendiriyor — ancak Tablo 1'in gösterdiği gibi takas ortadan kalkmıyor, yalnızca yer değiştiriyor (sıralı işlemden karesel belleğe).",
+          "Üçüncü katkı, yazarların kendilerinin en az vurguladığı ama en kalıcı olanı: mimarinin bileşen listesi (çok başlıklı dikkat, pozisyon kodlaması, artık bağlantı + LayerNorm, ısınmalı öğrenme oranı) sonraki modeller için bir standart hâline geldi. Makale bunu bir standart olarak sunmuyor; yalnızca çalışan bir yapılandırma olarak raporluyor.",
+          "Katkının kapsamı konusunda dikkatli olmak gerekiyor: makale Transformer'ın genel amaçlı bir temsil öğrenici olduğunu iddia etmiyor. İddia dizi dönüştürme ile sınırlı ve genelleme kanıtı tek bir ek görevden (constituency parsing) ibaret."
+        ],
+        "claimIds": [
+          "claim-method-01",
+          "claim-result-01",
+          "claim-result-03",
+          "claim-result-07"
+        ]
+      },
+      {
+        "id": "report-mechanism-attention",
+        "kind": "mechanism",
+        "title": "Ölçeklenmiş iç çarpım dikkati: neden bu biçim",
+        "summary": "İç çarpım dikkati hız için, √d_k ölçeklemesi ise gradyan sağlığı için seçildi; ikinci seçimin gerekçesi makalede açıkça bir hipotez olarak sunuluyor.",
+        "analysis": [
+          "İki yaygın dikkat işlevi var: toplamsal (additive) ve iç çarpım (dot-product). Makale teorik karmaşıklıklarının benzer olduğunu, ancak iç çarpımın pratikte çok daha hızlı ve bellek açısından verimli olduğunu belirtiyor; gerekçe yüksek düzeyde optimize edilmiş matris çarpımı kodu. Bu, bir modelleme tercihi değil bir uygulama tercihi.",
+          "Ölçekleme ise modelleme tarafında. Ölçeklenmemiş iç çarpım, büyük d_k değerlerinde toplamsal dikkatin gerisinde kalıyor. Yazarların açıklaması: iç çarpımlar büyüyerek softmax'ı gradyanların aşırı küçüldüğü bölgeye itiyor olabilir. Dilin kipi önemli — 'We suspect' deniyor, kanıtlanmış bir mekanizma olarak sunulmuyor.",
+          "Dipnottaki argüman bu hipotezi olasılıksal olarak makul kılıyor: q ve k bileşenleri bağımsız, ortalaması 0 ve varyansı 1 ise iç çarpımın varyansı d_k olur, dolayısıyla √d_k ile bölmek varyansı birim mertebeye çeker. Bu bir türetim değil bir motivasyon; makale ölçekleme ile ölçeklemesiz sürümün doğrudan karşılaştırmasını kendi deneylerinde raporlamıyor, başka bir çalışmaya atıfla gerekçelendiriyor.",
+          "Pratik sonuç: √d_k bugün tartışmasız bir standart, ama bu makalede standardın ampirik dayanağı dolaylı. Uygulamada d_k değiştiğinde ölçeklemenin de değişmesi gerektiği bu türetimden çıkar."
+        ],
+        "claimIds": [
+          "claim-method-05",
+          "claim-interpretation-01"
+        ]
+      },
+      {
+        "id": "report-mechanism-structure",
+        "kind": "mechanism",
+        "title": "Çok başlıklılık, maskeleme ve pozisyon bilgisi",
+        "summary": "Üç yapısal karar — h başlığa bölme, kod çözücüde maskeleme ve sinüzoidal pozisyon kodlaması — mimarinin tekrarlama olmadan çalışmasını mümkün kılıyor; üçünün kanıt gücü birbirinden farklı.",
+        "analysis": [
+          "Çok başlıklılık bir kapasite artışı değil bir yeniden bölüştürme. d_model = 512 sekiz başlığa bölündüğü için her başlık d_k = d_v = 64 ile çalışıyor ve makale toplam hesap maliyetinin tam boyutlu tek başlıklı dikkatle benzer kaldığını belirtiyor. Kazanç, farklı temsil alt uzaylarındaki bilgiye aynı anda bakabilmek; makale tek başlıkta ortalamanın bunu engellediğini söylüyor. Bu iddianın ampirik desteği Tablo 3 satır (A)'daki 0.9 BLEU farkı.",
+          "Maskeleme, öz-bağlanımlı üretimin doğruluk garantisi. Uygulama ayrıntısı önemli: yasak bağlantılar softmax girişinde -∞ yapılıyor, yani maskeleme dikkat işlevinin içine gömülü. Çıktı gömmelerinin bir pozisyon kaydırılmasıyla birlikte, i pozisyonundaki tahminin yalnızca i'den küçük pozisyonlara bağlı olması garanti ediliyor. Bu bir performans iddiası değil bir doğruluk koşulu.",
+          "Pozisyon kodlaması ise mimarinin en kırılgan gerekçeli parçası. Sinüzoidal kodlamanın seçilme nedeni ölçülmüş bir üstünlük değil: Tablo 3 satır (E) öğrenilen gömmelerin neredeyse özdeş sonuç verdiğini gösteriyor. Tercih, eğitimde görülenden uzun dizilere ekstrapolasyon umuduna dayanıyor ve makale bu umudu test etmiyor.",
+          "Üçünü birlikte okuduğumuzda mimarinin iskeleti ortaya çıkıyor: dikkat 'ne'yi, maskeleme 'ne zaman'ı, pozisyon kodlaması 'nerede'yi taşıyor. Tekrarlamanın kaldırılması ancak bu üçüncü parça sayesinde mümkün — sıra bilgisi başka türlü modele hiç ulaşmıyor."
+        ],
+        "claimIds": [
+          "claim-method-04",
+          "claim-method-06",
+          "claim-method-08",
+          "claim-result-05",
+          "claim-result-06",
+          "claim-interpretation-02"
+        ]
+      },
+      {
+        "id": "report-experiment-translation",
+        "kind": "experiment",
+        "title": "Çeviri deneylerinin kanıt gücü",
+        "summary": "Ana sonuçlar iki WMT 2014 görevinde raporlanıyor; kalite iddiası güçlü, maliyet iddiası ise tahmine dayalı olduğu için daha zayıf.",
+        "analysis": [
+          "İngilizce-Almanca sonucu makalenin en sağlam kanıtı: Transformer (big) 28.4 BLEU ile önceki en iyi raporlanmış modelleri, topluluklar dahil, 2.0 BLEU'dan fazla geçiyor. Tek modelin toplulukları geçmesi anlamlı bir eşik, çünkü topluluklar genellikle tek modellere göre yapay bir avantaja sahip.",
+          "Temel modelin performansı ayrı bir argüman taşıyor: 27.3 BLEU ile daha önce yayımlanmış tüm modelleri ve toplulukları, rakiplerin maliyetinin küçük bir kesriyle geçiyor. Bu, sonucun yalnızca ölçek büyütmekten gelmediğini gösteriyor — mimari değişikliğin kendisi katkı sağlıyor.",
+          "Maliyet iddiası ise farklı bir kanıt sınıfında. Tablo 2'deki FLOP değerleri ölçülmedi; eğitim süresi, GPU sayısı ve GPU başına varsayılan sürdürülebilir tek duyarlıklı kapasite çarpılarak tahmin edildi. Kullanılan kapasite değerleri (P100 için 9.5 TFLOPS gibi) dipnotta veriliyor. Bu yöntem mertebe karşılaştırması için yeterli ama iki model arasındaki küçük farkları desteklemez.",
+          "Değerlendirme protokolünde de dikkat edilecek noktalar var: temel modelde son 5, büyük modelde son 20 kontrol noktasının ortalaması alınıyor, ışın araması boyutu 4 ve uzunluk cezası α = 0.6 geliştirme kümesinde seçiliyor. Bunlar standart uygulamalar, ancak karşılaştırılan modellerin aynı protokolü kullanıp kullanmadığı makaleden anlaşılmıyor."
+        ],
+        "claimIds": [
+          "claim-result-01",
+          "claim-result-02",
+          "claim-result-03",
+          "claim-limitation-06"
+        ]
+      },
+      {
+        "id": "report-experiment-ablation",
+        "kind": "experiment",
+        "title": "Ablasyonlar ne kanıtlıyor",
+        "summary": "Tablo 3, bileşen düzeyinde nedensellik iddiasını destekleyen tek kanıt kaynağı; sonuçlar geliştirme kümesinde ve kontrol noktası ortalaması olmadan alındığı için ana tablodan ayrı okunmalı.",
+        "analysis": [
+          "Ablasyon protokolü ana sonuçlardan iki noktada ayrılıyor: ölçümler newstest2013 geliştirme kümesinde yapılıyor ve kontrol noktası ortalaması kullanılmıyor. Bu, Tablo 3'teki BLEU değerlerinin Tablo 2 ile doğrudan karşılaştırılamayacağı anlamına geliyor. Makale ayrıca perplexity'lerin word-piece başına olduğunu ve kelime başına değerlerle karşılaştırılmaması gerektiğini açıkça uyarıyor.",
+          "Satır (A) çok başlıklılık için nedensel destek sağlıyor: hesap sabit tutularak yalnızca başlık sayısı ve d_k, d_v değiştiriliyor. Tek başlık 0.9 BLEU kaybettiriyor, 32 başlık ise yine düşüşe yol açıyor. Bu, h'nin optimize edilmesi gereken bir hiperparametre olduğunu gösteriyor.",
+          "Satır (B) daha ilginç bir gözlem sunuyor: d_k küçültüldüğünde kalite bozuluyor ve makale bundan uyum belirlemenin kolay olmadığı, iç çarpımdan daha gelişmiş bir uyum fonksiyonunun faydalı olabileceği sonucunu çıkarıyor. Bu, makalenin kendi tasarım tercihine yönelttiği en açık özeleştiri.",
+          "Satır (E) mimarinin bir parçasının gereksizliğini gösteriyor: öğrenilen pozisyon gömmeleri sinüzoidal kodlamayla neredeyse özdeş. Bu bulgu, sinüzoidal kodlamayı Transformer'ın zorunlu bir bileşeni olarak sunan sonraki anlatımlara karşı doğrudan kanıt oluşturuyor.",
+          "Ablasyonların kapsamadığı önemli bir eksen var: artık bağlantı ve katman normalizasyonunun katkısı ölçülmüyor. Bu bileşenler mimarinin derinliğe ölçeklenmesi için kritik olsa da makalede ablasyona tabi tutulmuyor."
+        ],
+        "claimIds": [
+          "claim-result-05",
+          "claim-result-06",
+          "claim-method-02",
+          "claim-method-11"
+        ]
+      },
+      {
+        "id": "report-critique",
+        "kind": "critique",
+        "title": "Tutarsızlıklar ve kanıt boşlukları",
+        "summary": "Makalede bir sayısal tutarsızlık, birkaç hipotez düzeyinde gerekçe ve ölçülmemiş bir telafi iddiası bulunuyor; hiçbiri ana sonucu geçersizleştirmiyor ama alıntılama biçimini etkiliyor.",
+        "analysis": [
+          "En somut sorun İngilizce-Fransızca BLEU değerinde. Bölüm 6.1 metni büyük modelin 41.0 BLEU aldığını söylerken, özet ve Tablo 2 aynı model için 41.8 veriyor. arXiv'in yedinci sürümünde hâlâ mevcut olan bu tutarsızlık, makaleyi alıntılayan çalışmaların hangi değeri kullandığını belirtmesini gerektiriyor. Bu proje ilgili iddiayı 'incelenmeli' olarak işaretliyor ve her iki kaynağı da saklıyor.",
+          "İkinci boşluk kanıt düzeyi karışıklığı. √d_k ölçeklemesinin gerekçesi ('We suspect'), sinüzoidal kodlamanın ekstrapolasyon avantajı ('may allow') ve yorumlanabilirlik ('could yield', 'appear to exhibit') hipotez kipinde yazılmış. Sonraki literatürde bu ifadeler sık sık kanıtlanmış bulgular gibi aktarıldı; makale metni bunu desteklemiyor.",
+          "Üçüncüsü telafi iddiası. Bölüm 2, dikkat ağırlıklı pozisyonların ortalanmasının etkin çözünürlüğü düşürdüğünü kabul ediyor ve bunun çok başlıklı dikkatle karşılandığını söylüyor. Ancak bu telafinin ne kadarını kapattığını ölçen bir deney yok; Tablo 3 satır (A) yalnızca başlık sayısının BLEU etkisini gösteriyor, çözünürlük kaybını doğrudan ölçmüyor.",
+          "Dördüncüsü kapsam. Ayrıştırma deneylerinde yalnızca az sayıda hiperparametre denemesi yapıldığı açıkça belirtiliyor. Bu dürüst bir açıklama, ancak o bölümdeki sonuçların sistematik bir arama sonucu olmadığı anlamına da geliyor; genelleme iddiası buna göre ölçülü okunmalı."
+        ],
+        "claimIds": [
+          "claim-limitation-03",
+          "claim-limitation-04",
+          "claim-limitation-05",
+          "claim-interpretation-01",
+          "claim-interpretation-02",
+          "claim-interpretation-03"
+        ]
+      },
+      {
+        "id": "report-reproduction",
+        "kind": "reproduction",
+        "title": "Yeniden üretim: verilenler ve verilmeyenler",
+        "summary": "Hiperparametrelerin ve eğitim rejiminin çoğu açıkça raporlanmış ve kod tensor2tensor deposunda erişilebilir; yine de birkaç ayrıntı makaleden çıkarılamıyor.",
+        "analysis": [
+          "Verilen ayrıntılar bir yeniden üretim için oldukça kapsamlı: veri kümeleri ve boyutları (EN-DE ~4.5M cümle çifti, ~37000 tokenlık paylaşılan BPE sözlük; EN-FR 36M cümle, 32000 word-piece), yığın büyüklüğü (~25000 kaynak + ~25000 hedef token), donanım (8 P100, tek makine), adım sayıları ve süreler, optimizasyon (Adam β1 = 0.9, β2 = 0.98, ϵ = 10⁻⁹, warmup 4000), düzenlileştirme (P_drop = 0.1, ϵ_ls = 0.1) ve çıkarım ayarları (ışın 4, α = 0.6, kontrol noktası ortalaması).",
+          "Kod erişilebilirliği ayrı bir güvence sağlıyor: makale eğitim ve değerlendirme kodunun tensor2tensor deposunda bulunduğunu belirtiyor. Bu, makaledeki tarifle kod arasındaki farkların denetlenebilmesi anlamına geliyor — ancak makale hangi sürümün hangi sonucu ürettiğini belirtmiyor.",
+          "Verilmeyenler de var. Rastgele tohum ve tekrar sayısı raporlanmıyor; dolayısıyla Tablo 3'teki 0.9 BLEU gibi farkların çalışmalar arası varyansa göre ne kadar anlamlı olduğu değerlendirilemiyor. Büyük EN-FR modelinin dropout oranının 0.3 yerine 0.1 kullanıldığı belirtiliyor ama bu istisnanın gerekçesi verilmiyor.",
+          "Pratik bir risk daha var: FLOP tahmininin dayandığı GPU kapasite varsayımları (K80, K40, M40, P100 için sırasıyla 2.8, 3.7, 6.0 ve 9.5 TFLOPS) modern donanımda geçerli değil. Maliyet karşılaştırmasını bugünkü donanımda tekrarlamak, yöntemin kendisini yeniden tanımlamayı gerektirir.",
+          "Sonuç olarak çeviri sonuçlarının yeniden üretimi makul ölçüde mümkün; ablasyon farklarının istatistiksel olarak doğrulanması ise makalede verilen bilgiyle mümkün değil."
+        ],
+        "claimIds": [
+          "claim-method-09",
+          "claim-method-10",
+          "claim-method-11",
+          "claim-method-12",
+          "claim-repro-01",
+          "claim-limitation-06"
+        ]
+      },
+      {
+        "id": "report-implication-complexity",
+        "kind": "implication",
+        "title": "Karesel maliyetin bıraktığı açık kapı",
+        "summary": "Makale kendi çözümünün uzun dizilerde çalışmayacağını kabul ediyor ve çözümü gelecek çalışmaya bırakıyor; bu, sonraki on yılın en verimli araştırma damarlarından biri oldu.",
+        "analysis": [
+          "Tablo 1'in en çok atıf alan satırı kendine dikkatin O(n² · d) maliyeti. Makale bunu bir kusur olarak değil bir koşul olarak sunuyor: kendine dikkat, n < d olduğunda tekrarlayan katmandan hızlı. 2017'nin cümle düzeyi çeviri bağlamında d = 512 ve tipik cümle uzunlukları düşünüldüğünde bu koşul çoğunlukla sağlanıyordu.",
+          "Koşul sağlanmadığında ne olacağı makalede bir öneri olarak duruyor: r büyüklüğünde bir komşulukla kısıtlı kendine dikkat, katman maliyetini O(r · n · d)'ye indiriyor ama maksimum yol uzunluğunu O(n/r)'ye çıkarıyor. Yazarlar bunu incelemeyi planladıklarını yazıyor — yani bu makalede ölçülmüş bir sonuç yok.",
+          "Bu açık kapı önemli çünkü modern kullanımın çoğu tam da makalenin koşulunu ihlal ediyor: uzun bağlam pencereleri n'yi d'nin çok üzerine çıkarıyor. Makalenin kendi analizi, bu rejimde kendine dikkatin tekrarlayan katmana göre avantajının kalmadığını öngörüyor.",
+          "Sonuç bölümündeki plan bu çıkarımı doğruluyor: yazarlar görüntü, ses ve video gibi büyük girdi ve çıktıları verimli işlemek için yerel ve kısıtlı dikkat mekanizmalarını araştırmayı ve üretimi daha az sıralı hâle getirmeyi hedeflediklerini yazıyor."
+        ],
+        "claimIds": [
+          "claim-result-04",
+          "claim-limitation-01",
+          "claim-limitation-02",
+          "claim-limitation-04"
+        ]
+      },
+      {
+        "id": "report-implication-generalization",
+        "kind": "implication",
+        "title": "Genelleme kanıtı ve sınırları",
+        "summary": "Ayrıştırma deneyi, mimarinin çeviriye özgü olmadığına dair tek doğrudan kanıt; güçlü ama tek başına genel amaçlılık iddiasını taşıyamaz.",
+        "analysis": [
+          "İngilizce constituency parsing zorlu bir sınama seçimi: çıktı güçlü yapısal kısıtlara tabi ve girdiden belirgin biçimde uzun. Ayrıca makale, tekrarlayan seq2seq modellerinin küçük veri rejimlerinde durum-değerlendirmesi sonuçlarına ulaşamadığını belirtiyor — yani bu görev, tekrarlamasız bir modelin doğal olarak avantajlı olduğu bir alan değil.",
+          "Sonuçlar iyi: 4 katmanlı Transformer yalnızca 40K cümlelik WSJ kümesiyle 91.3 F1, yarı denetimli ayarda 92.7 F1 alıyor ve Recurrent Neural Network Grammar dışındaki önceki tüm raporlanan modelleri geçiyor. Makale ayrıca yalnızca WSJ ile eğitildiğinde bile BerkeleyParser'ı geçtiğini vurguluyor.",
+          "Kanıtın sınırı da net. Bu tek bir ek görev ve makale burada yalnızca az sayıda hiperparametre denemesi yaptığını açıkça söylüyor; diğer tüm parametreler EN-DE temel çeviri modelinden değiştirilmeden alınmış. Bu, sonucun sağlamlığı lehine bir argüman (ayar yapılmadan iyi çalışıyor) ama kapsam genişliği lehine değil.",
+          "Dolayısıyla makalenin dürüst okuması şu: Transformer'ın dizi dönüştürme içinde çeviri dışına genellediği gösterildi. Genel amaçlı temsil öğrenimi iddiası bu makalede yer almıyor ve buradaki kanıtla desteklenmiyor; o iddia sonraki literatüre ait."
+        ],
+        "claimIds": [
+          "claim-result-07",
+          "claim-limitation-05",
+          "claim-method-01"
+        ]
+      }
+    ],
+    "openQuestions": [
+      "Metindeki 41.0 ile Tablo 2 ve özetteki 41.8 BLEU değerinden hangisi İngilizce-Fransızca için doğru sonuçtur; fark hangi değerlendirme farkından kaynaklanmaktadır?",
+      "Kısıtlı (r komşuluklu) kendine dikkat gerçekten uygulandığında kalite kaybı ne olur ve O(n/r) yol uzunluğu artışı hangi n değerlerinden sonra pratikte sorun yaratır?",
+      "Çok başlıklı dikkatin, ortalama almadan kaynaklanan etkin çözünürlük kaybını ne ölçüde telafi ettiği doğrudan nasıl ölçülebilir?",
+      "Tablo 3'teki 0.9 BLEU gibi farklar, rastgele tohum kaynaklı varyansa göre istatistiksel olarak anlamlı mıdır; makale tekrar sayısı raporlamadığı için bu değerlendirilebilir mi?",
+      "Sinüzoidal pozisyon kodlamasının eğitimde görülenden uzun dizilere ekstrapolasyon avantajı, öğrenilen gömmelere karşı doğrudan bir deneyle doğrulanabilir mi?",
+      "Artık bağlantı ve katman normalizasyonu ablasyona tabi tutulsaydı, mimarinin derinliğe ölçeklenmesindeki payları ne çıkardı?"
+    ]
+  },
+  "technicalAppendix": {
+    "title": "Teknik Ek: Denklemler, Algoritma ve Karmaşıklık",
+    "overview": "Bu ek yalnızca makalede açıkça yazılmış denklemleri, tarif edilmiş algoritma adımlarını ve Tablo 1'de verilen karmaşıklık değerlerini içerir. Kod taslakları açıklayıcı sözde koddur; makale eşdeğer kod yayımlamadığı için uygulama ayrıntıları değil, tarif edilen akış temsil edilmiştir.",
+    "equations": [
+      {
+        "id": "eq-scaled-dot-product",
+        "label": "Scaled Dot-Product Attention (Denklem 1)",
+        "expression": "Attention(Q, K, V) = softmax(QKᵀ / √d_k) V",
+        "explanation": "Sorgu-anahtar iç çarpımları √d_k ile ölçeklenir, softmax ile ağırlığa çevrilir ve değerler bu ağırlıklarla toplanır. Ölçekleme, büyük d_k'de softmax'ın küçük gradyanlı bölgeye kaymasına karşı alınan önlemdir.",
+        "variables": [
+          {
+            "symbol": "Q",
+            "meaning": "Paketlenmiş sorgu matrisi"
+          },
+          {
+            "symbol": "K",
+            "meaning": "Paketlenmiş anahtar matrisi (d_k boyutlu)"
+          },
+          {
+            "symbol": "V",
+            "meaning": "Paketlenmiş değer matrisi (d_v boyutlu)"
+          },
+          {
+            "symbol": "d_k",
+            "meaning": "Anahtar/sorgu boyutu; temel modelde 64"
+          }
+        ],
+        "claimIds": [
+          "claim-method-05",
+          "claim-interpretation-01"
+        ]
+      },
+      {
+        "id": "eq-multi-head",
+        "label": "Multi-Head Attention",
+        "expression": "MultiHead(Q, K, V) = Concat(head₁, ..., head_h) Wᴼ,  head_i = Attention(Q Wᵢᑫ, K Wᵢᴷ, V Wᵢⱽ)",
+        "explanation": "Sorgu, anahtar ve değerler h kez farklı öğrenilmiş doğrusal izdüşümlerle d_k, d_k ve d_v boyutlarına indirilir; dikkat paralel çalıştırılır, çıktılar birleştirilip tekrar izdüşürülür. Başlık boyutu düşürüldüğü için toplam maliyet tam boyutlu tek başlıkla benzer kalır.",
+        "variables": [
+          {
+            "symbol": "h",
+            "meaning": "Paralel başlık sayısı; bu çalışmada 8"
+          },
+          {
+            "symbol": "Wᵢᑫ, Wᵢᴷ",
+            "meaning": "R^(d_model × d_k) boyutlu izdüşüm matrisleri"
+          },
+          {
+            "symbol": "Wᵢⱽ",
+            "meaning": "R^(d_model × d_v) boyutlu izdüşüm matrisi"
+          },
+          {
+            "symbol": "Wᴼ",
+            "meaning": "R^(h·d_v × d_model) boyutlu çıkış izdüşümü"
+          }
+        ],
+        "claimIds": [
+          "claim-method-06",
+          "claim-result-05"
+        ]
+      },
+      {
+        "id": "eq-ffn",
+        "label": "Pozisyon bazlı ileri beslemeli ağ (Denklem 2)",
+        "expression": "FFN(x) = max(0, x W₁ + b₁) W₂ + b₂",
+        "explanation": "Her pozisyona ayrı ayrı ve özdeş biçimde uygulanan, arada ReLU bulunan iki lineer dönüşüm. Makale bunu kernel boyutu 1 olan iki evrişim olarak da tarif eder. Parametreler pozisyonlar arasında paylaşılır ama katmandan katmana farklıdır.",
+        "variables": [
+          {
+            "symbol": "x",
+            "meaning": "Tek bir pozisyonun d_model boyutlu temsili"
+          },
+          {
+            "symbol": "W₁, b₁",
+            "meaning": "d_model → d_ff genişleten ilk dönüşüm"
+          },
+          {
+            "symbol": "W₂, b₂",
+            "meaning": "d_ff → d_model daraltan ikinci dönüşüm"
+          },
+          {
+            "symbol": "d_ff",
+            "meaning": "İç katman boyutu; 2048"
+          }
+        ],
+        "claimIds": [
+          "claim-method-07"
+        ]
+      },
+      {
+        "id": "eq-positional-encoding",
+        "label": "Sinüzoidal pozisyon kodlaması",
+        "expression": "PE(pos, 2i) = sin(pos / 10000^(2i/d_model)),  PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))",
+        "explanation": "Her boyut bir sinüzoide karşılık gelir; dalga boyları 2π'den 10000·2π'ye geometrik dizi oluşturur. Seçim gerekçesi, sabit bir k kaydırması için PE(pos+k)'nin PE(pos)'un doğrusal fonksiyonu olarak temsil edilebilmesi ve bunun göreli pozisyona göre dikkat öğrenmeyi kolaylaştırabileceği varsayımıdır.",
+        "variables": [
+          {
+            "symbol": "pos",
+            "meaning": "Dizideki pozisyon indeksi"
+          },
+          {
+            "symbol": "i",
+            "meaning": "Kodlama vektöründeki boyut indeksi"
+          },
+          {
+            "symbol": "d_model",
+            "meaning": "Gömme boyutu; 512"
+          }
+        ],
+        "claimIds": [
+          "claim-method-08",
+          "claim-interpretation-02",
+          "claim-result-06"
+        ]
+      },
+      {
+        "id": "eq-lrate",
+        "label": "Isınmalı öğrenme oranı takvimi (Denklem 3)",
+        "expression": "lrate = d_model^(-0.5) · min(step_num^(-0.5), step_num · warmup_steps^(-1.5))",
+        "explanation": "İlk warmup_steps adımda öğrenme oranı doğrusal artar, sonrasında adım sayısının kareköküyle ters orantılı azalır. Bu çalışmada warmup_steps = 4000 kullanılmıştır.",
+        "variables": [
+          {
+            "symbol": "step_num",
+            "meaning": "Geçerli eğitim adımı numarası"
+          },
+          {
+            "symbol": "warmup_steps",
+            "meaning": "Isınma adım sayısı; 4000"
+          },
+          {
+            "symbol": "d_model",
+            "meaning": "Model boyutu; ölçek katsayısı olarak kullanılır"
+          }
+        ],
+        "claimIds": [
+          "claim-method-10"
+        ]
+      }
+    ],
+    "algorithmSteps": [
+      {
+        "label": "1. Gömme ve pozisyon bilgisini birleştir",
+        "detail": "Girdi ve çıktı tokenlarını d_model = 512 boyutlu öğrenilen gömmelere çevir; gömme ağırlıkları √d_model ile çarpılır. Kodlayıcı ve kod çözücü yığınlarının tabanında sinüzoidal pozisyon kodlamalarını gömmelere ekle.",
+        "claimIds": [
+          "claim-method-08"
+        ]
+      },
+      {
+        "label": "2. Kodlayıcı katmanını uygula (×6)",
+        "detail": "Çok başlıklı kendine dikkat çalıştır, ardından pozisyon bazlı ileri beslemeli ağı uygula. Her alt katmanın çıktısı LayerNorm(x + Sublayer(x)) biçiminde artık bağlantıyla toplanıp normalize edilir.",
+        "claimIds": [
+          "claim-method-02"
+        ]
+      },
+      {
+        "label": "3. Başlıklara böl ve paralel dikkat hesapla",
+        "detail": "Q, K, V'yi h = 8 farklı öğrenilmiş izdüşümle d_k = d_v = 64 boyutuna indir, her başlıkta ölçeklenmiş iç çarpım dikkatini paralel hesapla, çıktıları birleştirip Wᴼ ile yeniden izdüşür.",
+        "claimIds": [
+          "claim-method-06"
+        ]
+      },
+      {
+        "label": "4. Kod çözücüde ileriye bakışı maskele",
+        "detail": "Kod çözücünün kendine dikkat alt katmanında yasak bağlantılara karşılık gelen softmax girişlerini -∞ yap. Çıktı gömmelerinin bir pozisyon kaydırılmasıyla birlikte i pozisyonu yalnızca i'den küçük pozisyonlara bağlı kalır.",
+        "claimIds": [
+          "claim-method-04"
+        ]
+      },
+      {
+        "label": "5. Kodlayıcı-kod çözücü dikkatini çalıştır",
+        "detail": "Sorguları önceki kod çözücü katmanından, anahtar ve değerleri kodlayıcı yığınının çıktısından al. Böylece kod çözücünün her pozisyonu girdi dizisinin tüm pozisyonlarına bakabilir.",
+        "claimIds": [
+          "claim-method-03"
+        ]
+      },
+      {
+        "label": "6. Çıktı olasılıklarını üret",
+        "detail": "Kod çözücü çıktısını lineer dönüşüm ve softmax ile sonraki token olasılıklarına çevir; bu ağırlık matrisi iki gömme katmanıyla paylaşılır.",
+        "claimIds": [
+          "claim-method-02"
+        ]
+      },
+      {
+        "label": "7. Isınmalı takvimle eğit",
+        "detail": "Adam optimizasyonunu β1 = 0.9, β2 = 0.98, ϵ = 10⁻⁹ ile çalıştır; öğrenme oranını ilk 4000 adımda doğrusal artır, sonra adım sayısının kareköküyle ters orantılı azalt.",
+        "claimIds": [
+          "claim-method-10"
+        ]
+      },
+      {
+        "label": "8. Düzenlileştirmeyi uygula",
+        "detail": "Her alt katmanın çıktısına, artık toplama ve normalizasyondan önce dropout uygula; ayrıca gömme + pozisyon kodlaması toplamına da dropout uygula (P_drop = 0.1). Eğitimde 0.1 değerinde etiket yumuşatma kullan.",
+        "claimIds": [
+          "claim-method-11"
+        ]
+      }
+    ],
+    "codeSketches": [
+      {
+        "title": "Ölçeklenmiş iç çarpım dikkati (açıklayıcı sözde kod)",
+        "language": "python",
+        "code": "def scaled_dot_product_attention(Q, K, V, mask=None):\n    # Q: (n_q, d_k), K: (n_k, d_k), V: (n_k, d_v)\n    scores = Q @ K.T                 # uyum skorlari\n    scores = scores / sqrt(d_k)      # Denklem (1): olcekleme\n    if mask is not None:\n        # yasak baglantilar softmax girisinde -inf yapilir\n        scores = where(mask, scores, -inf)\n    weights = softmax(scores, axis=-1)\n    return weights @ V               # degerlerin agirlikli toplami",
+        "explanation": "Makalenin Bölüm 3.2.1'de tarif ettiği akışın birebir karşılığı. Maskeleme, Bölüm 3.2.3'te belirtildiği gibi dikkat işlevinin içinde, softmax girişinde -∞ atanarak uygulanır. Bu sözde kod açıklayıcıdır; makale eşdeğer kod yayımlamamıştır.",
+        "claimIds": [
+          "claim-method-05",
+          "claim-method-04"
+        ]
+      },
+      {
+        "title": "Çok başlıklı dikkat (açıklayıcı sözde kod)",
+        "language": "python",
+        "code": "def multi_head_attention(Q, K, V, h=8, d_model=512, mask=None):\n    d_k = d_v = d_model // h         # 512 / 8 = 64\n    heads = []\n    for i in range(h):\n        q_i = Q @ W_Q[i]             # (d_model, d_k)\n        k_i = K @ W_K[i]             # (d_model, d_k)\n        v_i = V @ W_V[i]             # (d_model, d_v)\n        heads.append(scaled_dot_product_attention(q_i, k_i, v_i, mask))\n    return concat(heads, axis=-1) @ W_O   # (h * d_v, d_model)",
+        "explanation": "Bölüm 3.2.2'deki tanımın açık hâli. Başlık boyutu d_model / h olarak seçildiği için toplam hesap maliyeti tam boyutlu tek başlıklı dikkatle benzer kalır; makalenin bu iddiası doğrudan bu boyut seçiminden gelir.",
+        "claimIds": [
+          "claim-method-06"
+        ]
+      }
+    ],
+    "complexity": [
+      {
+        "operation": "Kendine dikkat katmanı",
+        "cost": "O(n² · d) hesap, O(1) sıralı işlem, O(1) maksimum yol",
+        "context": "Tablo 1. Tüm pozisyonlar sabit sayıda sıralı işlemle bağlanır; maliyet dizi uzunluğunun karesiyle büyür.",
+        "claimIds": [
+          "claim-result-04"
+        ]
+      },
+      {
+        "operation": "Tekrarlayan katman",
+        "cost": "O(n · d²) hesap, O(n) sıralı işlem, O(n) maksimum yol",
+        "context": "Tablo 1. Hesap maliyeti n'de doğrusaldır ancak sıralılık paralelleştirmeyi engeller.",
+        "claimIds": [
+          "claim-result-04",
+          "claim-background-01"
+        ]
+      },
+      {
+        "operation": "Evrişimli katman",
+        "cost": "O(k · n · d²) hesap, O(1) sıralı işlem, O(log_k n) maksimum yol",
+        "context": "Tablo 1. Genişliği k < n olan tek bir evrişim tüm pozisyon çiftlerini bağlamaz; bunun için O(n/k) veya genişletilmiş evrişimle O(log_k n) katman gerekir.",
+        "claimIds": [
+          "claim-result-04",
+          "claim-background-02"
+        ]
+      },
+      {
+        "operation": "Kısıtlı kendine dikkat",
+        "cost": "O(r · n · d) hesap, O(1) sıralı işlem, O(n/r) maksimum yol",
+        "context": "Tablo 1 ve Bölüm 4. Çok uzun diziler için önerilen seçenek; bu makalede uygulanmamış ve ölçülmemiştir.",
+        "claimIds": [
+          "claim-limitation-02",
+          "claim-limitation-01"
+        ]
+      }
+    ],
+    "implementationNotes": [
+      "Tüm alt katmanlar ve gömme katmanları d_model = 512 boyutunda çıktı üretmelidir; artık bağlantılar bu boyut eşitliğini zorunlu kılar.",
+      "Maskeleme ayrı bir adım değil, dikkat işlevinin içinde softmax girişine -∞ atanarak uygulanır.",
+      "Gömme ağırlıkları iki gömme katmanı ile softmax öncesi lineer dönüşüm arasında paylaşılır ve gömme katmanlarında √d_model ile çarpılır.",
+      "d_k = d_v = d_model / h seçimi maliyeti sabit tutar; h değiştirilirken bu ilişki korunmazsa Tablo 3 satır (A) ile karşılaştırma geçersiz olur.",
+      "Dropout iki yerde uygulanır: her alt katmanın çıktısına (artık toplamadan önce) ve gömme + pozisyon kodlaması toplamına.",
+      "Etiket yumuşatmanın perplexity'yi kötüleştirmesi beklenen bir davranıştır; model seçimi perplexity yerine BLEU üzerinden yapılmalıdır.",
+      "Çıkarımda kontrol noktası ortalaması kullanılır (temel modelde son 5, büyük modelde son 20); Tablo 3'teki ablasyon sonuçları bu ortalamayı kullanmaz ve Tablo 2 ile doğrudan karşılaştırılamaz.",
+      "Tablo 3'teki perplexity değerleri word-piece başınadır ve kelime başına perplexity değerleriyle karşılaştırılmamalıdır."
+    ]
+  },
+  "primer": {
+    "title": "Bu makaleyi okumadan önce",
+    "overview": "Makale altı kavramı bildiğinizi varsayar ve hiçbirini açıklamaz. Aşağıdaki sıra ön koşullara göre dizilmiştir: her kavram, kendisine dayanan kavramdan önce gelir. Her maddede önce sezgi, sonra biçimsel tanım, sonra da bu makalede tam olarak neden gerektiği yazıyor.",
+    "concepts": [
+      {
+        "id": "dot-product",
+        "term": "İç çarpım (dot product)",
+        "level": "temel",
+        "intuition": "İki vektörü eleman eleman çarpıp toplarsınız. Sonuç, iki vektörün ne kadar aynı yöne baktığını ölçer: aynı yöne bakıyorlarsa büyük pozitif, dikse sıfıra yakın, zıtsa negatif çıkar. Yani bir \"benzerlik puanı\"dır.",
+        "formal": "q \\cdot k = \\sum_{i=1}^{d_k} q_i k_i",
+        "whyItMatters": "Dikkat mekanizmasının tamamı buna dayanır. Bir sorgunun (query) hangi anahtara (key) ne kadar bakacağı, aralarındaki iç çarpımla belirlenir. Makalenin dikkat işlevini \"Scaled Dot-Product Attention\" diye adlandırmasının nedeni budur.",
+        "prerequisiteIds": [],
+        "claimIds": [
+          "claim-method-05"
+        ]
+      },
+      {
+        "id": "softmax",
+        "term": "Softmax",
+        "level": "temel",
+        "intuition": "Elinizde herhangi bir sayı listesi var; bunları toplamı 1 olan pozitif ağırlıklara çevirmek istiyorsunuz. Softmax her sayının üstelini alıp toplama böler. Büyük sayılar orantısız biçimde büyük pay alır — yani \"yumuşak bir maksimum\" gibi davranır.",
+        "formal": "\\operatorname{softmax}(x)_i = \\frac{e^{x_i}}{\\sum_j e^{x_j}}",
+        "whyItMatters": "İç çarpım puanları ham sayılardır; softmax onları \"her pozisyona ne kadar bakayım\" ağırlıklarına çevirir. Kritik davranışı şu: girdiler büyüdükçe çıktı tek bir pozisyona yığılır ve gradyanlar neredeyse sıfırlanır. Makalenin √d_k ile bölme gerekçesi tam olarak bu.",
+        "prerequisiteIds": [
+          "dot-product"
+        ],
+        "claimIds": [
+          "claim-method-05",
+          "claim-interpretation-01"
+        ]
+      },
+      {
+        "id": "variance",
+        "term": "Varyans ve ölçek",
+        "level": "orta",
+        "intuition": "Varyans, bir rastgele değerin ortalamasından ne kadar yayıldığını ölçer. Bağımsız değerleri toplarsanız varyanslar toplanır: d_k tane bağımsız, varyansı 1 olan terimi toplarsanız toplamın varyansı d_k, standart sapması √d_k olur.",
+        "formal": "\\operatorname{Var}\\!\\left(\\sum_{i=1}^{d_k} q_i k_i\\right) = d_k \\quad\\Rightarrow\\quad \\sigma = \\sqrt{d_k}",
+        "whyItMatters": "Makalenin dipnotundaki argümanın tamamı bu. d_k büyüdükçe iç çarpımlar tipik olarak √d_k ölçeğinde büyür, softmax doyuma gider. √d_k'ye bölmek yayılımı birim ölçeğe geri çeker. Ölçekleme kozmetik değil, bu hesabın doğrudan sonucudur.",
+        "prerequisiteIds": [
+          "dot-product",
+          "softmax"
+        ],
+        "claimIds": [
+          "claim-interpretation-01"
+        ]
+      },
+      {
+        "id": "embedding",
+        "term": "Gömme vektörü (embedding)",
+        "level": "temel",
+        "intuition": "Model kelimelerle değil sayılarla çalışır. Her token, öğrenilen sabit uzunlukta bir vektörle temsil edilir. Eğitim sırasında bu vektörler benzer anlamlı tokenlar birbirine yakın düşecek şekilde ayarlanır.",
+        "formal": "x_t \\in \\mathbb{R}^{d_{\\text{model}}}, \\quad d_{\\text{model}} = 512",
+        "whyItMatters": "Transformer'da her alt katman ve gömme katmanı aynı boyutta (512) çıktı üretmek zorundadır — artık bağlantıların toplanabilmesi için. Bu kısıt mimarinin her yerinde karşınıza çıkar.",
+        "prerequisiteIds": [],
+        "claimIds": [
+          "claim-method-02"
+        ]
+      },
+      {
+        "id": "rnn-bottleneck",
+        "term": "Sıralı hesap darboğazı",
+        "level": "temel",
+        "intuition": "Tekrarlayan ağda t pozisyonunun gizli durumu t−1'e bağlıdır. Yani 500. kelimeyi işlemek için önce 499'unu bitirmiş olmanız gerekir. Bu, hesabın doğası gereği sıraya girmesi demektir — kaç GPU'nuz olduğu fark etmez.",
+        "whyItMatters": "Makalenin var oluş nedeni. Transformer bu bağımlılığı kırdığı için eğitim örneği içinde paralelleşebiliyor ve 8 GPU'da 12 saatte durum-değerlendirmesine ulaşabiliyor.",
+        "prerequisiteIds": [],
+        "claimIds": [
+          "claim-background-01"
+        ]
+      },
+      {
+        "id": "residual-layernorm",
+        "term": "Artık bağlantı + katman normalizasyonu",
+        "level": "orta",
+        "intuition": "Artık bağlantı, bir alt katmanın çıktısını girdisiyle toplar: LayerNorm(x + Sublayer(x)). Böylece katman \"sıfırdan bir temsil üretmek\" yerine \"mevcut temsile ne eklemeliyim\" sorusunu çözer. Normalizasyon ise değerleri sabit bir ölçeğe çekerek derin yığınların eğitilebilir kalmasını sağlar.",
+        "formal": "\\operatorname{LayerNorm}(x + \\operatorname{Sublayer}(x))",
+        "whyItMatters": "6 katmanlık yığınların eğitilebilmesinin nedeni. Makale bu iki bileşeni ablasyona sokmaz, dolayısıyla katkıları ölçülmemiştir — ama onlarsız bu derinliğe çıkmak pratikte mümkün değildir.",
+        "prerequisiteIds": [
+          "embedding"
+        ],
+        "claimIds": [
+          "claim-method-02"
+        ]
+      },
+      {
+        "id": "encoder-decoder",
+        "term": "Kodlayıcı–kod çözücü ve öz-bağlanım",
+        "level": "orta",
+        "intuition": "Kodlayıcı girdi dizisini bir temsil dizisine çevirir. Kod çözücü bu temsile bakarak çıktıyı token token üretir ve her adımda kendi ürettiği önceki tokenları da girdi olarak kullanır — buna öz-bağlanımlı (auto-regressive) üretim denir.",
+        "whyItMatters": "Kod çözücüde maskelemenin neden zorunlu olduğunu anlamak için gerekli: model eğitim sırasında geleceği görürse, çıkarım sırasında elinde olmayan bilgiye bel bağlamış olur. Maskeleme bir hız optimizasyonu değil, doğruluk koşuludur.",
+        "prerequisiteIds": [
+          "embedding",
+          "rnn-bottleneck"
+        ],
+        "claimIds": [
+          "claim-method-03",
+          "claim-method-04"
+        ]
+      }
+    ]
+  },
+  "derivations": [
+    {
+      "id": "deriv-scaling",
+      "title": "√d_k ile bölmek nereden geliyor",
+      "goal": "Makalenin tek cümleyle geçtiği ölçekleme gerekçesini, dipnottaki olasılık argümanından adım adım çıkarmak.",
+      "steps": [
+        {
+          "id": "s1",
+          "latex": "q \\cdot k = \\sum_{i=1}^{d_k} q_i k_i",
+          "plain": "q · k = Σ(i=1..d_k) q_i k_i",
+          "rationale": "Başlangıç noktası: bir sorgu ile bir anahtarın uyum puanı, d_k terimli bir toplamdır.",
+          "shapes": "q: (d_k,) · k: (d_k,) → skaler"
+        },
+        {
+          "id": "s2",
+          "latex": "\\mathbb{E}[q_i k_i] = 0, \\quad \\operatorname{Var}(q_i k_i) = 1",
+          "plain": "E[q_i k_i] = 0, Var(q_i k_i) = 1",
+          "rationale": "Makalenin dipnottaki varsayımı: bileşenler bağımsız, ortalaması 0 ve varyansı 1 olan rastgele değişkenler. Bu bir varsayımdır, kanıt değil — eğitilmiş bir modelde tam olarak sağlanmaz."
+        },
+        {
+          "id": "s3",
+          "latex": "\\operatorname{Var}(q \\cdot k) = \\sum_{i=1}^{d_k} \\operatorname{Var}(q_i k_i) = d_k",
+          "plain": "Var(q · k) = Σ Var(q_i k_i) = d_k",
+          "rationale": "Bağımsız değişkenlerin toplamında varyanslar toplanır. Terim sayısı d_k olduğu için toplam varyans doğrudan d_k çıkar."
+        },
+        {
+          "id": "s4",
+          "latex": "\\sigma(q \\cdot k) = \\sqrt{d_k}",
+          "plain": "σ(q · k) = √d_k",
+          "rationale": "Standart sapma varyansın karekökü. Yani puanların tipik büyüklüğü d_k ile değil √d_k ile büyür — bu ölçekleme katsayısının kaynağı."
+        },
+        {
+          "id": "s5",
+          "latex": "\\operatorname{softmax}(x)_i = \\frac{e^{x_i}}{\\sum_j e^{x_j}} \\;\\xrightarrow[\\;|x| \\to \\infty\\;]{}\\; \\text{tek noktaya yığılma}",
+          "plain": "|x| büyüdükçe softmax tek bir pozisyona yığılır",
+          "rationale": "Girdiler büyüdükçe üstel fonksiyon en büyük terimi ezici biçimde öne çıkarır. Çıktı neredeyse tek-sıcak (one-hot) hâle gelir ve bu bölgede softmax'ın gradyanı neredeyse sıfırdır — makalenin 'extremely small gradients' dediği durum."
+        },
+        {
+          "id": "s6",
+          "latex": "\\frac{q \\cdot k}{\\sqrt{d_k}} \\;\\Rightarrow\\; \\operatorname{Var} = \\frac{d_k}{d_k} = 1",
+          "plain": "(q · k)/√d_k → Var = 1",
+          "rationale": "√d_k'ye bölmek varyansı d_k'den bağımsız olarak 1'e sabitler. Böylece d_k ne olursa olsun softmax aynı ölçekte girdi görür ve doyuma gitmez.",
+          "shapes": "QKᵀ: (n, n) → /√d_k → (n, n)"
+        }
+      ],
+      "numericExample": {
+        "setup": "Makalenin yapılandırması: d_k = 64. İki anahtarın puanları arasındaki tipik fark, standart sapma mertebesinde yani √64 = 8 olsun.",
+        "walkthrough": [
+          "Ölçeklemeden: puan farkı 8 → softmax ağırlığı ≈ 1/(1+e⁻⁸) ≈ 0.9997",
+          "Yani model neredeyse tek bir pozisyona bakıyor; diğerlerinin gradyanı yok denecek kadar küçük.",
+          "Ölçekleyerek: fark 8/√64 = 1 → softmax ağırlığı ≈ 1/(1+e⁻¹) ≈ 0.731",
+          "Bu, kararlı gradyan üreten sağlıklı bir dağılım."
+        ],
+        "result": "d_k = 64'te ölçekleme, tek bir ağırlığı 0.9997'den 0.731'e çeker. d_k büyüdükçe ölçeklenmemiş sürüm 1'e yapışır; ölçeklenmiş sürüm sabit kalır. Bunu 'Ölçekleme neden gerekli' oyun alanında kendiniz kaydırabilirsiniz."
+      },
+      "claimIds": [
+        "claim-method-05",
+        "claim-interpretation-01"
+      ]
+    },
+    {
+      "id": "deriv-multihead",
+      "title": "Çok başlıklı dikkatte boyutlar nasıl korunuyor",
+      "goal": "h başlığa bölmenin neden toplam maliyeti değiştirmediğini boyut takibiyle göstermek.",
+      "steps": [
+        {
+          "id": "m1",
+          "latex": "X \\in \\mathbb{R}^{n \\times d_{\\text{model}}}",
+          "plain": "X: (n, d_model)",
+          "rationale": "Girdi: n pozisyon, her biri d_model = 512 boyutlu.",
+          "shapes": "(n, 512)"
+        },
+        {
+          "id": "m2",
+          "latex": "W_i^Q, W_i^K \\in \\mathbb{R}^{d_{\\text{model}} \\times d_k}, \\quad W_i^V \\in \\mathbb{R}^{d_{\\text{model}} \\times d_v}",
+          "plain": "W_i^Q, W_i^K: (d_model, d_k) · W_i^V: (d_model, d_v)",
+          "rationale": "Her başlık kendi izdüşüm matrislerine sahip. d_k = d_v = d_model/h = 512/8 = 64 seçilir.",
+          "shapes": "(512, 64)"
+        },
+        {
+          "id": "m3",
+          "latex": "\\operatorname{head}_i = \\operatorname{Attention}(XW_i^Q, XW_i^K, XW_i^V) \\in \\mathbb{R}^{n \\times d_v}",
+          "plain": "head_i: (n, d_v) = (n, 64)",
+          "rationale": "Her başlık tam boyut yerine 64 boyutlu bir altuzayda dikkat hesaplar. Maliyet başlık başına 8 kat düşer.",
+          "shapes": "(n, 64)"
+        },
+        {
+          "id": "m4",
+          "latex": "\\operatorname{Concat}(\\operatorname{head}_1,\\dots,\\operatorname{head}_h) \\in \\mathbb{R}^{n \\times h d_v} = \\mathbb{R}^{n \\times d_{\\text{model}}}",
+          "plain": "Concat: (n, h·d_v) = (n, 8·64) = (n, 512)",
+          "rationale": "Kritik nokta: h·d_v = 8·64 = 512 = d_model. Başlıkları birleştirmek bizi tam olarak başladığımız boyuta geri getirir.",
+          "shapes": "(n, 512)"
+        },
+        {
+          "id": "m5",
+          "latex": "\\operatorname{MultiHead}(X) = \\operatorname{Concat}(\\dots)W^O, \\quad W^O \\in \\mathbb{R}^{d_{\\text{model}} \\times d_{\\text{model}}}",
+          "plain": "MultiHead(X) = Concat(...) W^O · W^O: (512, 512)",
+          "rationale": "Son izdüşüm başlıkların bulgularını karıştırır. Boyut değişmediği için artık bağlantı doğrudan toplanabilir — mimarinin geri kalanı hiçbir şey fark etmez.",
+          "shapes": "(n, 512)"
+        }
+      ],
+      "numericExample": {
+        "setup": "h = 8, d_model = 512, dolayısıyla d_k = d_v = 64.",
+        "walkthrough": [
+          "Tek başlıklı tam boyut: 512 boyutlu Q, K, V ile bir dikkat hesabı.",
+          "Çok başlıklı: 8 tane 64 boyutlu dikkat hesabı.",
+          "Dikkat maliyeti boyutla doğrusal ölçeklendiği için 8 × 64 = 512: toplam aynı."
+        ],
+        "result": "Çok başlıklılık ek kapasite değil, aynı bütçenin yeniden bölüştürülmesidir. Kazanç, farklı temsil altuzaylarına aynı anda bakabilmekten gelir — Tablo 3 satır (A)'da 0.9 BLEU olarak ölçülmüştür."
+      },
+      "claimIds": [
+        "claim-method-06",
+        "claim-result-05"
+      ]
+    },
+    {
+      "id": "deriv-lrate",
+      "title": "Isınmalı öğrenme oranı takvimi",
+      "goal": "Denklem (3)'ün neden önce artıp sonra azaldığını ve kırılma noktasının tam olarak nerede olduğunu göstermek.",
+      "steps": [
+        {
+          "id": "l1",
+          "latex": "\\text{lrate} = d_{\\text{model}}^{-0.5} \\cdot \\min\\!\\left(\\text{step}^{-0.5},\\; \\text{step} \\cdot \\text{warmup}^{-1.5}\\right)",
+          "plain": "lrate = d_model^-0.5 · min(step^-0.5, step · warmup^-1.5)",
+          "rationale": "Makaledeki Denklem (3). İki kolu olan bir min ifadesi: hangisi küçükse o geçerli."
+        },
+        {
+          "id": "l2",
+          "latex": "\\text{step} \\ll \\text{warmup} \\;\\Rightarrow\\; \\text{step} \\cdot \\text{warmup}^{-1.5} \\text{ küçüktür}",
+          "plain": "step << warmup iken ikinci kol küçüktür",
+          "rationale": "Eğitimin başında ikinci kol seçilir ve step ile DOĞRUSAL artar. Model rastgele başlangıçtayken büyük adımlar atmasını engelleyen kısım bu."
+        },
+        {
+          "id": "l3",
+          "latex": "\\text{step} = \\text{warmup} \\;\\Rightarrow\\; \\text{step}^{-0.5} = \\text{step} \\cdot \\text{warmup}^{-1.5}",
+          "plain": "step = warmup noktasında iki kol eşitlenir",
+          "rationale": "Kırılma noktası tam olarak step = warmup'tır. Bu çalışmada 4000. adım. İki kol burada eşit olduğu için takvim süreklidir — ani sıçrama yoktur."
+        },
+        {
+          "id": "l4",
+          "latex": "\\text{step} \\gg \\text{warmup} \\;\\Rightarrow\\; \\text{lrate} \\propto \\text{step}^{-0.5}",
+          "plain": "step >> warmup iken lrate ∝ step^-0.5",
+          "rationale": "Sonrasında birinci kol devreye girer ve öğrenme oranı adım sayısının kareköküyle ters orantılı azalır — klasik yakınsama davranışı."
+        }
+      ],
+      "claimIds": [
+        "claim-method-10"
+      ]
+    }
+  ],
+  "interactives": [
+    {
+      "kind": "formula-playground",
+      "id": "play-scaling",
+      "title": "Ölçekleme neden gerekli",
+      "description": "d_k'yi kaydırın. Ölçeklenmemiş sürümde tek bir dikkat ağırlığı hızla 1'e yapışır — bu, gradyanların kaybolduğu bölgedir. √d_k ile bölünmüş sürüm d_k'den bağımsız olarak sabit kalır. Karşılaştırma, iki anahtar arasındaki puan farkının tipik yayılım (√d_k) kadar olduğu durumu gösterir.",
+      "parameters": [
+        {
+          "name": "d_k",
+          "label": "Anahtar boyutu d_k",
+          "min": 1,
+          "max": 512,
+          "step": 1,
+          "paperValue": 64
+        }
+      ],
+      "outputs": [
+        {
+          "id": "sigma",
+          "label": "Puanların standart sapması √d_k",
+          "formula": "sqrt(d_k)",
+          "precision": 2
+        },
+        {
+          "id": "scale",
+          "label": "Ölçekleme katsayısı 1/√d_k",
+          "formula": "1 / sqrt(d_k)",
+          "precision": 4
+        },
+        {
+          "id": "p_unscaled",
+          "label": "Ölçeklemesiz en büyük ağırlık",
+          "formula": "sigmoid(sqrt(d_k))",
+          "precision": 4
+        },
+        {
+          "id": "p_scaled",
+          "label": "Ölçeklemeli en büyük ağırlık",
+          "formula": "sigmoid(sqrt(d_k) / sqrt(d_k))",
+          "precision": 4
+        }
+      ],
+      "chart": {
+        "xParam": "d_k",
+        "series": [
+          {
+            "outputId": "p_unscaled",
+            "label": "ölçeklemesiz"
+          },
+          {
+            "outputId": "p_scaled",
+            "label": "ölçeklemeli"
+          }
+        ],
+        "samples": 120,
+        "yScale": "linear"
+      },
+      "paperAnchor": "Makale d_k = 64 kullanır (d_model = 512, h = 8). Ölçekleme gerekçesi makalede bir HİPOTEZ olarak sunulur ('We suspect'), ölçülmüş bir sonuç değildir.",
+      "claimIds": [
+        "claim-method-05",
+        "claim-method-06",
+        "claim-interpretation-01"
+      ]
+    },
+    {
+      "kind": "formula-playground",
+      "id": "play-complexity",
+      "title": "Kendine dikkat ne zaman pahalılaşır",
+      "description": "Tablo 1'in iki satırını yan yana çalıştırın. Kendine dikkat O(n²·d), tekrarlayan katman O(n·d²). n < d iken kendine dikkat ucuz; n, d'yi geçtiğinde eğriler kesişir ve avantaj tersine döner. Y ekseni logaritmiktir.",
+      "parameters": [
+        {
+          "name": "n",
+          "label": "Dizi uzunluğu n",
+          "min": 8,
+          "max": 4096,
+          "step": 8,
+          "paperValue": 512,
+          "unit": "token"
+        },
+        {
+          "name": "d",
+          "label": "Temsil boyutu d",
+          "min": 64,
+          "max": 1024,
+          "step": 64,
+          "paperValue": 512
+        }
+      ],
+      "outputs": [
+        {
+          "id": "self_attn",
+          "label": "Kendine dikkat O(n²·d)",
+          "formula": "n^2 * d"
+        },
+        {
+          "id": "recurrent",
+          "label": "Tekrarlayan O(n·d²)",
+          "formula": "n * d^2"
+        },
+        {
+          "id": "ratio",
+          "label": "Oran (kendine dikkat / tekrarlayan)",
+          "formula": "n / d",
+          "precision": 3
+        }
+      ],
+      "chart": {
+        "xParam": "n",
+        "series": [
+          {
+            "outputId": "self_attn",
+            "label": "kendine dikkat O(n²·d)"
+          },
+          {
+            "outputId": "recurrent",
+            "label": "tekrarlayan O(n·d²)"
+          }
+        ],
+        "samples": 120,
+        "yScale": "log"
+      },
+      "paperAnchor": "Makale d_model = 512 kullanır ve kendine dikkatin ancak n < d iken tekrarlayan katmandan hızlı olduğunu açıkça yazar. n = d noktası bu eşiğin kendisidir; oran 1'i geçtiğinde makalenin koşulu ihlal edilir.",
+      "claimIds": [
+        "claim-result-04",
+        "claim-limitation-01",
+        "claim-limitation-02"
+      ]
+    },
+    {
+      "kind": "mechanism-simulation",
+      "id": "sim-attention",
+      "title": "Dikkat ağırlıkları adım adım",
+      "description": "Scaled Dot-Product Attention'ın altı adımı. Izgara, dört tokenlık bir cümlede her sorgunun her anahtara verdiği ağırlığı gösterir; koyulaştıkça ağırlık artar. Sayılar AÇIKLAYICIDIR — makale örnek bir dikkat matrisi yayımlamamıştır; gösterilen mekanizma makaleye, değerler ise açıklama amacına aittir.",
+      "stageNodes": [
+        {
+          "id": "qkv",
+          "label": "Q, K, V",
+          "detail": "Girdi üç ayrı izdüşümden geçer"
+        },
+        {
+          "id": "scores",
+          "label": "QKᵀ",
+          "detail": "Her sorgu–anahtar çifti için ham uyum puanı"
+        },
+        {
+          "id": "scale",
+          "label": "÷ √d_k",
+          "detail": "Varyansı birim ölçeğe çeker"
+        },
+        {
+          "id": "mask",
+          "label": "Maskele",
+          "detail": "Kod çözücüde ileriye bakış −∞ yapılır"
+        },
+        {
+          "id": "softmax",
+          "label": "Softmax",
+          "detail": "Puanlar toplamı 1 olan ağırlıklara döner"
+        },
+        {
+          "id": "out",
+          "label": "× V",
+          "detail": "Değerlerin ağırlıklı toplamı"
+        }
+      ],
+      "frames": [
+        {
+          "label": "Girdiyi üçe ayır",
+          "caption": "Aynı girdi üç farklı öğrenilmiş izdüşümden geçirilir: sorgu (ne arıyorum), anahtar (bende ne var), değer (bulunursam ne veririm).",
+          "activeNodeIds": [
+            "qkv"
+          ]
+        },
+        {
+          "label": "Ham puanları hesapla",
+          "caption": "Her sorgu her anahtarla iç çarpıma girer. Değerler serbestçe büyüyebilir — burada tipik yayılım √d_k mertebesindedir.",
+          "activeNodeIds": [
+            "qkv",
+            "scores"
+          ],
+          "grid": {
+            "rowLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "columnLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "values": [
+              [
+                8.1,
+                2.3,
+                4,
+                0.4
+              ],
+              [
+                2.1,
+                7.9,
+                5.2,
+                0.6
+              ],
+              [
+                5.4,
+                6.1,
+                8.4,
+                1.1
+              ],
+              [
+                0.5,
+                0.7,
+                1.4,
+                6.2
+              ]
+            ]
+          }
+        },
+        {
+          "label": "√d_k ile ölçekle",
+          "caption": "Tüm puanlar √64 = 8'e bölünür. Aralık daralır; softmax artık doygun bölgede çalışmaz.",
+          "activeNodeIds": [
+            "scores",
+            "scale"
+          ],
+          "grid": {
+            "rowLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "columnLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "values": [
+              [
+                1.01,
+                0.29,
+                0.5,
+                0.05
+              ],
+              [
+                0.26,
+                0.99,
+                0.65,
+                0.08
+              ],
+              [
+                0.68,
+                0.76,
+                1.05,
+                0.14
+              ],
+              [
+                0.06,
+                0.09,
+                0.18,
+                0.78
+              ]
+            ]
+          }
+        },
+        {
+          "label": "İleriye bakışı maskele",
+          "caption": "Kod çözücüde i pozisyonu yalnızca i'den küçük pozisyonları görebilir. Yasak hücreler softmax girişinde −∞ yapılır; burada 0 olarak gösteriliyor.",
+          "activeNodeIds": [
+            "scale",
+            "mask"
+          ],
+          "grid": {
+            "rowLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "columnLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "values": [
+              [
+                1.01,
+                0,
+                0,
+                0
+              ],
+              [
+                0.26,
+                0.99,
+                0,
+                0
+              ],
+              [
+                0.68,
+                0.76,
+                1.05,
+                0
+              ],
+              [
+                0.06,
+                0.09,
+                0.18,
+                0.78
+              ]
+            ]
+          }
+        },
+        {
+          "label": "Softmax uygula",
+          "caption": "Her satır toplamı 1 olan bir ağırlık dağılımına döner. Alt üçgen yapı korunur: hiçbir pozisyon geleceğe ağırlık veremiyor.",
+          "activeNodeIds": [
+            "mask",
+            "softmax"
+          ],
+          "grid": {
+            "rowLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "columnLabels": [
+              "kedi",
+              "mindere",
+              "oturdu",
+              "."
+            ],
+            "values": [
+              [
+                1,
+                0,
+                0,
+                0
+              ],
+              [
+                0.325,
+                0.675,
+                0,
+                0
+              ],
+              [
+                0.264,
+                0.286,
+                0.45,
+                0
+              ],
+              [
+                0.157,
+                0.162,
+                0.177,
+                0.504
+              ]
+            ]
+          }
+        },
+        {
+          "label": "Değerleri ağırlıkla topla",
+          "caption": "Son adım: her pozisyonun çıktısı, ağırlıklarla ölçeklenmiş değer vektörlerinin toplamıdır. Tüm bu işlem tek bir matris çarpımı olarak, tüm pozisyonlar için aynı anda yapılır — sıralılık yok.",
+          "activeNodeIds": [
+            "softmax",
+            "out"
+          ]
+        }
+      ],
+      "claimIds": [
+        "claim-method-05",
+        "claim-method-04",
+        "claim-result-04"
+      ]
+    },
+    {
+      "kind": "mechanism-simulation",
+      "id": "sim-encoder-decoder",
+      "title": "Kodlayıcıdan kod çözücüye bilgi akışı",
+      "description": "Dikkatin üç farklı kullanımı ve bunların yığın içindeki yeri. Her adımda hangi bileşenin etkin olduğunu izleyin.",
+      "stageNodes": [
+        {
+          "id": "enc-in",
+          "label": "Girdi + pozisyon",
+          "detail": "Gömme ve sinüzoidal kodlama toplanır"
+        },
+        {
+          "id": "enc-self",
+          "label": "Kodlayıcı kendine dikkat",
+          "detail": "Her pozisyon tüm girdi pozisyonlarına bakabilir"
+        },
+        {
+          "id": "enc-ffn",
+          "label": "Kodlayıcı FFN",
+          "detail": "Pozisyon bazlı iki lineer dönüşüm, arada ReLU"
+        },
+        {
+          "id": "dec-masked",
+          "label": "Maskeli kod çözücü dikkati",
+          "detail": "Yalnızca üretilmiş pozisyonlara bakılır"
+        },
+        {
+          "id": "dec-cross",
+          "label": "Kodlayıcı–kod çözücü dikkati",
+          "detail": "Sorgular kod çözücüden, anahtar/değer kodlayıcıdan"
+        },
+        {
+          "id": "dec-out",
+          "label": "Lineer + softmax",
+          "detail": "Sonraki token olasılıkları"
+        }
+      ],
+      "frames": [
+        {
+          "label": "Girdi hazırlanır",
+          "caption": "Tekrarlama olmadığı için sıra bilgisi ayrıca enjekte edilmeli: sinüzoidal pozisyon kodlamaları gömmelerle TOPLANIR (birleştirilmez).",
+          "activeNodeIds": [
+            "enc-in"
+          ]
+        },
+        {
+          "label": "Kodlayıcı yığını çalışır (×6)",
+          "caption": "Kendine dikkat ve ileri beslemeli ağ, her biri artık bağlantı ve katman normalizasyonuyla sarılı olarak altı kez tekrarlanır. Tüm pozisyonlar paralel işlenir.",
+          "activeNodeIds": [
+            "enc-self",
+            "enc-ffn"
+          ]
+        },
+        {
+          "label": "Kod çözücü kendi geçmişine bakar",
+          "caption": "Maskeli kendine dikkat: i pozisyonu yalnızca i'den küçük pozisyonlardaki bilinen çıktılara bağlı olabilir. Öz-bağlanım böyle korunur.",
+          "activeNodeIds": [
+            "dec-masked"
+          ]
+        },
+        {
+          "label": "Kod çözücü girdiye bakar",
+          "caption": "Üçüncü alt katman: sorgular önceki kod çözücü katmanından, anahtar ve değerler kodlayıcı yığınının çıktısından gelir. Klasik seq2seq dikkatinin karşılığı budur.",
+          "activeNodeIds": [
+            "enc-ffn",
+            "dec-cross"
+          ]
+        },
+        {
+          "label": "Token üretilir",
+          "caption": "Çıktı, gömme matrisiyle paylaşılan ağırlıklar üzerinden olasılıklara çevrilir. Sonra üretilen token geri beslenir ve döngü devam eder.",
+          "activeNodeIds": [
+            "dec-cross",
+            "dec-out"
+          ]
+        }
+      ],
+      "claimIds": [
+        "claim-method-02",
+        "claim-method-03",
+        "claim-method-04",
+        "claim-method-08"
+      ]
+    },
+    {
+      "kind": "dataset-explorer",
+      "id": "data-table2",
+      "title": "Tablo 2: kalite ve eğitim maliyeti",
+      "description": "Makalenin WMT 2014 İngilizce-Almanca sonuçları. Sütun başlıklarına tıklayarak sıralayın. FLOPs sütununa göre sıraladığınızda Transformer'ın asıl iddiası görünür hâle gelir: temel model en düşük maliyetle en yüksek ikinci BLEU'yu alıyor.",
+      "columns": [
+        {
+          "id": "model",
+          "label": "Model",
+          "type": "text"
+        },
+        {
+          "id": "bleu",
+          "label": "BLEU (EN-DE)",
+          "type": "number",
+          "unit": "BLEU"
+        },
+        {
+          "id": "flops",
+          "label": "Eğitim maliyeti",
+          "type": "number",
+          "unit": "FLOP"
+        }
+      ],
+      "rows": [
+        {
+          "cells": [
+            "GNMT + RL",
+            24.6,
+            23000000000000000000
+          ]
+        },
+        {
+          "cells": [
+            "ConvS2S",
+            25.16,
+            9600000000000000000
+          ]
+        },
+        {
+          "cells": [
+            "MoE",
+            26.03,
+            20000000000000000000
+          ]
+        },
+        {
+          "cells": [
+            "GNMT + RL Ensemble",
+            26.3,
+            180000000000000000000
+          ]
+        },
+        {
+          "cells": [
+            "ConvS2S Ensemble",
+            26.36,
+            77000000000000000000
+          ]
+        },
+        {
+          "cells": [
+            "Transformer (base)",
+            27.3,
+            3300000000000000000
+          ],
+          "highlight": true
+        },
+        {
+          "cells": [
+            "Transformer (big)",
+            28.4,
+            23000000000000000000
+          ],
+          "highlight": true
+        }
+      ],
+      "defaultSort": {
+        "columnId": "bleu",
+        "direction": "desc"
+      },
+      "sourceRef": {
+        "sourceId": "paper",
+        "page": 8,
+        "excerpt": "The Transformer achieves better BLEU scores than previous state-of-the-art models on the English-to-German and English-to-French newstest2014 tests at a fraction of the training cost.",
+        "locator": "Tablo 2"
+      },
+      "claimIds": [
+        "claim-result-01",
+        "claim-result-03",
+        "claim-limitation-06"
+      ]
+    }
+  ],
+  "quiz": {
+    "title": "Anlama kontrolü",
+    "intro": "On soru. Her yanıtın ardından hangi iddiaya ve hangi sayfaya dayandığını görebilirsiniz. Doğru yanıtlar JSON içinde açıkça durur — bu bir sınav değil, kendinizi test etme aracı.",
+    "questions": [
+      {
+        "id": "q-core",
+        "prompt": "Transformer'ın makaledeki temel iddiası nedir?",
+        "kind": "single",
+        "options": [
+          {
+            "label": "Tekrarlama ve evrişimi tamamen bırakıp yalnızca dikkate dayanmak",
+            "correct": true,
+            "explanation": "Özetin birebir ifadesi: 'dispensing with recurrence and convolutions entirely'."
+          },
+          {
+            "label": "Dikkat mekanizmasını ilk kez icat etmek",
+            "correct": false,
+            "explanation": "Dikkat makaleden önce de vardı; makale Bölüm 2'de bunu açıkça kabul eder. Yenilik, dikkati tek taşıyıcı yapmaktır."
+          },
+          {
+            "label": "Daha büyük modeller eğitmenin mümkün olduğunu göstermek",
+            "correct": false,
+            "explanation": "Makalenin vurgusu ölçek değil mimari; temel model bile rakiplerini maliyetin küçük bir kesriyle geçiyor."
+          }
+        ],
+        "claimIds": [
+          "claim-method-01"
+        ],
+        "page": 1
+      },
+      {
+        "id": "q-complexity",
+        "prompt": "Tablo 1'e göre kendine dikkat katmanının katman başına hesap karmaşıklığı nedir?",
+        "kind": "single",
+        "options": [
+          {
+            "label": "O(n² · d)",
+            "correct": true,
+            "explanation": "Tablo 1, sayfa 6. Dizi uzunluğunun KARESİYLE büyür — makalenin kabul ettiği ana takas."
+          },
+          {
+            "label": "O(n · d²)",
+            "correct": false,
+            "explanation": "Bu tekrarlayan katmanın maliyeti."
+          },
+          {
+            "label": "O(n log n)",
+            "correct": false,
+            "explanation": "Makalede böyle bir satır yok."
+          }
+        ],
+        "claimIds": [
+          "claim-result-04"
+        ],
+        "page": 6
+      },
+      {
+        "id": "q-when-faster",
+        "prompt": "Kendine dikkat tekrarlayan katmandan ne zaman daha hızlıdır?",
+        "kind": "single",
+        "options": [
+          {
+            "label": "Dizi uzunluğu n, temsil boyutu d'den küçük olduğunda",
+            "correct": true,
+            "explanation": "Makale bu koşulu açıkça yazar (s. 6–7). Uzun bağlamlarda koşul ihlal edilir ve avantaj kaybolur."
+          },
+          {
+            "label": "Her zaman",
+            "correct": false,
+            "explanation": "Makale böyle bir iddiada bulunmaz; koşulu kendisi belirtir."
+          },
+          {
+            "label": "Yalnızca GPU kullanıldığında",
+            "correct": false,
+            "explanation": "Karşılaştırma donanımdan bağımsız, asimptotik karmaşıklık üzerinden yapılır."
+          }
+        ],
+        "claimIds": [
+          "claim-limitation-01"
+        ],
+        "page": 7
+      },
+      {
+        "id": "q-scaling",
+        "prompt": "İç çarpımların √d_k'ye bölünmesinin makaledeki gerekçesi hangi kanıt düzeyindedir?",
+        "kind": "single",
+        "options": [
+          {
+            "label": "Hipotez — makale 'We suspect' der, ölçüm sunmaz",
+            "correct": true,
+            "explanation": "Sayfa 4. Dipnotta olasılıksal bir motivasyon var ama ölçekleme ile ölçeklemesizin doğrudan karşılaştırması bu makalede raporlanmaz."
+          },
+          {
+            "label": "Ablasyonla ölçülmüş sonuç",
+            "correct": false,
+            "explanation": "Tablo 3 başlık sayısı, d_k, model boyutu ve pozisyon kodlamasını ablasyona sokar; ölçekleme katsayısını değil."
+          },
+          {
+            "label": "Matematiksel teorem",
+            "correct": false,
+            "explanation": "Dipnottaki varyans argümanı bir motivasyondur, türetim veya kanıt değil."
+          }
+        ],
+        "claimIds": [
+          "claim-interpretation-01"
+        ],
+        "page": 4
+      },
+      {
+        "id": "q-heads",
+        "prompt": "Çok başlıklı dikkat hakkında hangileri doğrudur?",
+        "kind": "multi",
+        "options": [
+          {
+            "label": "h = 8 başlık kullanılır ve d_k = d_v = 64'tür",
+            "correct": true,
+            "explanation": "Sayfa 5: d_k = d_v = d_model/h = 512/8 = 64."
+          },
+          {
+            "label": "Toplam hesap maliyeti tam boyutlu tek başlıkla benzer kalır",
+            "correct": true,
+            "explanation": "Başlık boyutu h'ye bölündüğü için toplam sabit kalır — makale bunu açıkça belirtir."
+          },
+          {
+            "label": "Başlık sayısını artırmak kaliteyi monoton olarak artırır",
+            "correct": false,
+            "explanation": "Tablo 3 satır (A): çok fazla başlıkta kalite yeniden DÜŞER. h optimize edilmesi gereken bir hiperparametredir."
+          },
+          {
+            "label": "Tek başlıklı dikkat en iyi ayardan 0.9 BLEU daha kötüdür",
+            "correct": true,
+            "explanation": "Tablo 3 satır (A), sayfa 9."
+          }
+        ],
+        "claimIds": [
+          "claim-method-06",
+          "claim-result-05"
+        ],
+        "page": 9
+      },
+      {
+        "id": "q-positional",
+        "prompt": "Sinüzoidal pozisyon kodlaması, öğrenilen pozisyon gömmelerinden ölçülebilir biçimde daha iyidir.",
+        "kind": "true-false",
+        "options": [
+          {
+            "label": "Yanlış",
+            "correct": true,
+            "explanation": "Tablo 3 satır (E): iki sürüm neredeyse ÖZDEŞ sonuç verir. Sinüzoidal sürüm, eğitimde görülenden uzun dizilere genelleme UMUDUYLA tercih edilmiştir — bu umut test edilmemiştir."
+          },
+          {
+            "label": "Doğru",
+            "correct": false,
+            "explanation": "Makale bunu göstermiyor; aksine neredeyse özdeş sonuç raporluyor."
+          }
+        ],
+        "claimIds": [
+          "claim-result-06",
+          "claim-interpretation-02"
+        ],
+        "page": 9
+      },
+      {
+        "id": "q-masking",
+        "prompt": "Kod çözücüde maskeleme ne işe yarar?",
+        "kind": "single",
+        "options": [
+          {
+            "label": "i pozisyonundaki tahminin yalnızca i'den küçük pozisyonlara bağlı olmasını garanti eder",
+            "correct": true,
+            "explanation": "Sayfa 3. Bu bir hız optimizasyonu değil, öz-bağlanımlı üretimin DOĞRULUK koşuludur."
+          },
+          {
+            "label": "Belleği azaltır",
+            "correct": false,
+            "explanation": "Maskeleme softmax girişinde −∞ atamaktır; bellek kazancı amaç değildir."
+          },
+          {
+            "label": "Eğitimi hızlandırır",
+            "correct": false,
+            "explanation": "Amaç hız değil, geleceği görmeyi engellemektir."
+          }
+        ],
+        "claimIds": [
+          "claim-method-04"
+        ],
+        "page": 3
+      },
+      {
+        "id": "q-cost",
+        "prompt": "Tablo 2'deki eğitim maliyeti (FLOPs) değerleri nasıl elde edilmiştir?",
+        "kind": "single",
+        "options": [
+          {
+            "label": "Tahmin: süre × GPU sayısı × GPU başına varsayılan kapasite",
+            "correct": true,
+            "explanation": "Sayfa 8. Ölçüm değil tahmindir; mertebe karşılaştırması için yeterli ama küçük farkları desteklemez."
+          },
+          {
+            "label": "Profilleyici ile doğrudan ölçüm",
+            "correct": false,
+            "explanation": "Makale böyle bir ölçüm yapmaz."
+          },
+          {
+            "label": "Donanım üreticisinin raporundan alınmıştır",
+            "correct": false,
+            "explanation": "Kapasite değerleri varsayım olarak dipnotta verilir, maliyetler yazarlarca hesaplanır."
+          }
+        ],
+        "claimIds": [
+          "claim-limitation-06"
+        ],
+        "page": 8
+      },
+      {
+        "id": "q-restricted",
+        "prompt": "Uzun diziler için önerilen kısıtlı (restricted) kendine dikkat bu makalede ölçülmüştür.",
+        "kind": "true-false",
+        "options": [
+          {
+            "label": "Yanlış",
+            "correct": true,
+            "explanation": "Sayfa 7: 'We plan to investigate this approach further in future work.' Öneri var, ölçüm yok."
+          },
+          {
+            "label": "Doğru",
+            "correct": false,
+            "explanation": "Tablo 1'de satırı bulunur ama deneysel sonuç raporlanmaz."
+          }
+        ],
+        "claimIds": [
+          "claim-limitation-02"
+        ],
+        "page": 7
+      },
+      {
+        "id": "q-generalization",
+        "prompt": "Makalenin çeviri dışındaki genelleme kanıtı nedir?",
+        "kind": "single",
+        "options": [
+          {
+            "label": "İngilizce constituency parsing: 4 katmanlı model, yarı denetimli ayarda 92.7 F1",
+            "correct": true,
+            "explanation": "Tablo 4, sayfa 10. Görev-özel ayar yapılmadan elde edilmiştir; tek ek görevdir."
+          },
+          {
+            "label": "Görüntü sınıflandırma",
+            "correct": false,
+            "explanation": "Bu makalede görüntü deneyi yoktur; sonuç bölümünde yalnızca gelecek planı olarak geçer."
+          },
+          {
+            "label": "Dil modelleme",
+            "correct": false,
+            "explanation": "Makale dil modelleme sonucu raporlamaz."
+          }
+        ],
+        "claimIds": [
+          "claim-result-07",
+          "claim-limitation-05"
+        ],
+        "page": 10
+      }
+    ]
+  },
+  "applicationGuide": {
+    "title": "Kendi projende kullanmak",
+    "overview": "Transformer'ı bugün sıfırdan yazmanız gerekmiyor; ama makalenin hangi kararının neden alındığını bilmek, kendi yapılandırmanızı seçerken fark yaratır. Aşağıdaki değerlerin tamamı makaleden gelir — uydurma varsayılan yoktur. Kod taslakları AÇIKLAYICIDIR, çalıştırılabilir kütüphane kodu değildir.",
+    "recipe": [
+      {
+        "step": "Boyut bütçesini belirleyin",
+        "detail": "Önce d_model'i seçin, sonra h'yi ona bölünecek şekilde. d_k = d_v = d_model/h ilişkisini koruyun; bozarsanız toplam hesap maliyeti sabit kalmaz ve makaledeki ablasyonlarla karşılaştırma geçersizleşir.",
+        "code": {
+          "language": "python",
+          "source": "d_model = 512      # makale: temel model\nh = 8              # makale: paralel baslik sayisi\nassert d_model % h == 0\nd_k = d_v = d_model // h   # = 64\nd_ff = 4 * d_model         # makale: 2048"
+        },
+        "claimIds": [
+          "claim-method-06",
+          "claim-method-07"
+        ]
+      },
+      {
+        "step": "Ölçeklemeyi d_k'ye bağlayın, sabit yazmayın",
+        "detail": "1/√d_k katsayısı d_k'ye bağlıdır. Başlık boyutunu değiştirdiğinizde ölçekleme de değişmeli; sabit kodlanmış bir 0.125 (yani 1/√64) sessiz bir hataya dönüşür.",
+        "code": {
+          "language": "python",
+          "source": "scores = (Q @ K.transpose(-2, -1)) / math.sqrt(d_k)\n# DOGRU: d_k'ye bagli\n# YANLIS: scores * 0.125  -> d_k degisince bozulur"
+        },
+        "claimIds": [
+          "claim-method-05"
+        ]
+      },
+      {
+        "step": "Maskeyi dikkat işlevinin İÇİNE koyun",
+        "detail": "Maskeleme softmax'tan SONRA sıfırlama değildir. Yasak bağlantılar softmax GİRİŞİNDE −∞ yapılmalı; sonradan sıfırlarsanız satır toplamı 1 olmaz ve ağırlıklar bozulur.",
+        "code": {
+          "language": "python",
+          "source": "scores = scores.masked_fill(causal_mask == 0, float('-inf'))\nweights = scores.softmax(dim=-1)   # satir toplami = 1\n# YANLIS: weights = scores.softmax(-1) * causal_mask"
+        },
+        "claimIds": [
+          "claim-method-04"
+        ]
+      },
+      {
+        "step": "Isınmalı öğrenme oranı takvimini uygulayın",
+        "detail": "Transformer'ı sabit öğrenme oranıyla eğitmek klasik bir başarısızlık nedenidir. Denklem (3) ilk warmup_steps adımda doğrusal artar, sonra step^-0.5 ile azalır; kırılma noktası tam olarak step = warmup'tır.",
+        "code": {
+          "language": "python",
+          "source": "def lrate(step, d_model=512, warmup=4000):\n    step = max(step, 1)\n    return d_model ** -0.5 * min(step ** -0.5, step * warmup ** -1.5)"
+        },
+        "claimIds": [
+          "claim-method-10"
+        ]
+      },
+      {
+        "step": "Model seçimini BLEU üzerinden yapın, perplexity üzerinden değil",
+        "detail": "Etiket yumuşatma perplexity'yi bilerek kötüleştirir. Makale bunu açıkça söyler: 'This hurts perplexity ... but improves accuracy and BLEU score.' Doğrulama perplexity'sine bakarak en iyi kontrol noktasını seçerseniz yanlış modeli seçersiniz.",
+        "claimIds": [
+          "claim-method-11"
+        ]
+      }
+    ],
+    "hyperparameters": [
+      {
+        "name": "d_model",
+        "paperValue": "512 (temel), 1024 (big)",
+        "range": "256–1024 ablasyonda denendi",
+        "guidance": "Tablo 3 satır (C): 256'ya düşürmek BLEU'yu 25.8'den 24.5'e indiriyor, 1024'e çıkarmak 26.0'a taşıyor. Büyütmek işe yarıyor ama getiri azalıyor.",
+        "claimIds": [
+          "claim-method-02"
+        ]
+      },
+      {
+        "name": "h (başlık sayısı)",
+        "paperValue": "8",
+        "range": "1–32 ablasyonda denendi",
+        "guidance": "Tek başlık 0.9 BLEU kaybettiriyor; 32 başlık da düşüşe yol açıyor. 8 ile 16 arası bant en iyi sonucu veriyor. Monoton değil — optimize edin.",
+        "claimIds": [
+          "claim-result-05"
+        ]
+      },
+      {
+        "name": "d_ff",
+        "paperValue": "2048",
+        "range": "1024–4096 ablasyonda denendi",
+        "guidance": "Genellikle 4·d_model alınır. 4096'ya çıkarmak BLEU'yu 26.2'ye taşıyor ama parametre sayısını da 90M'ye çıkarıyor.",
+        "claimIds": [
+          "claim-method-07"
+        ]
+      },
+      {
+        "name": "warmup_steps",
+        "paperValue": "4000",
+        "range": "makalede ablasyona sokulmadı",
+        "guidance": "Bu değer makalede tek bir ayar olarak verilir, taranmaz. Toplam adım sayınız 100K'dan çok farklıysa orantılı ölçeklemeyi düşünün — ama bunun makalede dayanağı yok, kendi doğrulama kümenizde ölçün.",
+        "claimIds": [
+          "claim-method-10"
+        ]
+      },
+      {
+        "name": "P_drop",
+        "paperValue": "0.1 (EN-DE), 0.1 (EN-FR big)",
+        "range": "0.0–0.2 ablasyonda denendi",
+        "guidance": "Tablo 3 satır (D): dropout'u kapatmak BLEU'yu 25.8'den 24.6'ya düşürüyor. Küçük veri kümelerinde daha yüksek değer gerekebilir.",
+        "claimIds": [
+          "claim-method-11"
+        ]
+      }
+    ],
+    "pitfalls": [
+      {
+        "symptom": "Eğitim ilk birkaç bin adımda ıraksıyor veya kayıp NaN oluyor",
+        "cause": "Isınma olmadan sabit öğrenme oranı. Model rastgele başlangıçtayken büyük adımlar atıyor.",
+        "fix": "Denklem (3)'teki ısınmalı takvimi uygulayın; ilk 4000 adımda öğrenme oranı doğrusal artmalı.",
+        "claimIds": [
+          "claim-method-10"
+        ]
+      },
+      {
+        "symptom": "Dikkat ağırlıkları neredeyse tek-sıcak; model öğrenmiyor",
+        "cause": "√d_k ölçeklemesi eksik veya yanlış boyuta bağlanmış. Puanlar √d_k mertebesinde büyüyüp softmax'ı doygun bölgeye itiyor.",
+        "fix": "Ölçeklemeyi d_k'ye bağlayın. 'Ölçekleme neden gerekli' oyun alanında d_k'yi kaydırarak etkiyi görebilirsiniz.",
+        "claimIds": [
+          "claim-method-05",
+          "claim-interpretation-01"
+        ]
+      },
+      {
+        "symptom": "Doğrulama perplexity'si iyileşiyor ama BLEU düşüyor",
+        "cause": "Etiket yumuşatma perplexity'yi tasarım gereği kötüleştirir; iki metrik aynı yöne gitmez.",
+        "fix": "Kontrol noktası seçimini BLEU ile yapın. Makale de böyle yapar.",
+        "claimIds": [
+          "claim-method-11"
+        ]
+      },
+      {
+        "symptom": "Uzun belgelerde bellek patlıyor",
+        "cause": "Kendine dikkatin maliyeti O(n²·d). Makalenin avantaj koşulu (n < d) uzun bağlamda ihlal ediliyor.",
+        "fix": "Makale bu durum için kısıtlı dikkat önerir ama ölçmez. Pratikte parçalama, seyrek dikkat veya bu makaleden sonra geliştirilen verimli dikkat varyantlarına bakın.",
+        "claimIds": [
+          "claim-limitation-01",
+          "claim-limitation-02"
+        ]
+      },
+      {
+        "symptom": "Ablasyon sonuçlarım makaleyle uyuşmuyor",
+        "cause": "Tablo 3 geliştirme kümesinde (newstest2013) ve kontrol noktası ortalaması OLMADAN ölçülmüştür; Tablo 2 ise test kümesinde ve ortalamayla.",
+        "fix": "Hangi tabloyla karşılaştırdığınıza dikkat edin. İkisi doğrudan kıyaslanamaz; makale bunu açıkça uyarır.",
+        "claimIds": [
+          "claim-method-11"
+        ]
+      }
+    ],
+    "whenNotToUse": [
+      "Dizi uzunluğu temsil boyutunu belirgin biçimde aşıyorsa: makalenin kendi analizi bu rejimde kendine dikkatin tekrarlayan katmana göre avantajının kalmadığını söyler.",
+      "Çok küçük veri kümelerinde görev-özel ayar yapmadan: makalenin ayrıştırma deneylerinde bile yalnızca az sayıda hiperparametre denemesi yapıldığı belirtilir.",
+      "Sıralı üretim gecikmesi kritikse: Transformer eğitimde paralel, ama çıkarımda hâlâ token token üretir — makale 'making generation less sequential' hedefini gelecek çalışmaya bırakır.",
+      "Makalenin sayılarını başka bir model ailesine taşırken: tüm sonuçlar 2017 donanımı ve bu veri kümeleri içindir; FLOPs tahminleri bugünkü donanımda geçerli değildir."
+    ]
+  }
+}

@@ -8,12 +8,22 @@ import {
   Code2,
   FlaskConical,
   Gauge,
+  GraduationCap,
   Lightbulb,
   ListChecks,
   Quote,
+  Sigma,
+  SlidersHorizontal,
   TriangleAlert,
 } from "lucide-react";
 import type { Claim, ResearchProject } from "@/lib/schema";
+import {
+  ApplicationGuideView,
+  DerivationView,
+  InteractiveRenderer,
+  PrimerView,
+  QuizView,
+} from "@/visuals";
 import { EvidenceDrawer } from "./evidence-drawer";
 
 type LabViewProps = {
@@ -47,8 +57,17 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
     [project.evidence.claims, selectedClaimId],
   );
 
+  const hasPractice = Boolean(
+    project.derivations?.length ||
+      project.interactives?.length ||
+      project.quiz ||
+      project.applicationGuide,
+  );
+
   const nav = [
     { id: "overview", label: "Overview", icon: Lightbulb },
+    ...(project.primer ? [{ id: "primer", label: "Ön bilgi", icon: GraduationCap }] : []),
+    ...(hasPractice ? [{ id: "practice", label: "Öğren & Dene", icon: SlidersHorizontal }] : []),
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
     { id: "claims", label: "Claims", icon: Quote },
     { id: "method", label: "Method", icon: FlaskConical },
@@ -282,6 +301,40 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
                 </article>
               ))}
             </div>
+          </section>
+        )}
+
+        {section === "primer" && project.primer && (
+          <section className="lab-block">
+            <PrimerView primer={project.primer} />
+          </section>
+        )}
+
+        {section === "practice" && (
+          <section className="lab-block">
+            {project.derivations?.length ? (
+              <>
+                <div className="block-title"><Sigma size={16} /> Adım adım türetimler</div>
+                {project.derivations.map((derivation) => (
+                  <DerivationView derivation={derivation} key={derivation.id} />
+                ))}
+              </>
+            ) : null}
+
+            {project.interactives?.length ? (
+              <>
+                <div className="block-title"><SlidersHorizontal size={16} /> İnteraktif deneme</div>
+                {project.interactives.map((interactive) => (
+                  <InteractiveRenderer interactive={interactive} key={interactive.id} />
+                ))}
+              </>
+            ) : null}
+
+            {project.quiz ? <QuizView quiz={project.quiz} claims={project.evidence.claims} /> : null}
+
+            {project.applicationGuide ? (
+              <ApplicationGuideView guide={project.applicationGuide} />
+            ) : null}
           </section>
         )}
       </main>
