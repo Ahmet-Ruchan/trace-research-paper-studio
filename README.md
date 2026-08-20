@@ -17,7 +17,7 @@ running on the coding agent you already use, with no second API key.
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-D97757?style=for-the-badge&logo=claude&logoColor=fff)](#claude-code)
 [![Codex](https://img.shields.io/badge/Codex-412991?style=for-the-badge&logo=openai&logoColor=fff)](#codex)
-[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=fff)](#gemini-cli)
+[![Antigravity CLI](https://img.shields.io/badge/Antigravity_CLI-4285F4?style=for-the-badge&logo=google&logoColor=fff)](#antigravity-cli)
 
 **Built with**
 
@@ -133,15 +133,19 @@ codex plugin add trace-paper-studio@trace-research-tools
 Restart Codex or open a new session. You can also invoke the skill explicitly with
 `$trace-paper-studio`.
 
-<a id="gemini-cli"></a>
+<a id="antigravity-cli"></a>
 
-### Gemini CLI
+### Antigravity CLI
+
+Antigravity installs plugins from a directory, so clone first:
 
 ```bash
-gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
+git clone https://github.com/Ahmet-Ruchan/trace-research-paper-studio.git
+agy plugin install trace-research-paper-studio/plugins/trace-paper-studio
 ```
 
-Restart the CLI or open a new session.
+Confirm with `agy plugin list`, then restart the CLI or open a new session.
+Do not have the CLI yet? `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 
 **Requirements:** Node.js 20+, and `pdftotext` (from Poppler) for page-accurate extraction.
 Without it the agent falls back to its own PDF reader.
@@ -368,7 +372,7 @@ src/
 viewer/                         # Standalone viewer app (preact build target)
 scripts/                        # build-viewer · build-plugin-validator · drift check
 public/examples/                # Flagship project: built-in demo, download, test fixture
-plugins/trace-paper-studio/     # Codex + Claude Code plugin, skill, contract, bridge
+plugins/trace-paper-studio/     # Plugin for all three agents: skill, contract, bridge
 ```
 
 Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
@@ -403,7 +407,7 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), arXiv
 resolution from a paper's name, local library, exports, the native plugin for Codex / Claude
-Code / Gemini CLI, and generation through Gemini, OpenAI, Claude and OpenRouter.
+Code / Antigravity CLI, and generation through Gemini, OpenAI, Claude and OpenRouter.
 
 Not there yet: hosted publishing, accounts, shared persistence, local and open-weight providers.
 

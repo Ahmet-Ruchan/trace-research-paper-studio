@@ -115,7 +115,7 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
         <section className="library-empty">
           <BookOpen size={30} />
           <h2>{projects.length ? "No paper matches your search." : "Your library is waiting for its first paper."}</h2>
-          <p>Add a PDF, or import a Trace JSON produced by Codex, Claude Code or Gemini CLI.</p>
+          <p>Add a PDF, or import a Trace JSON produced by Codex, Claude Code or Antigravity CLI.</p>
           <button onClick={onNew}>Paper ekle <ArrowRight size={16} /></button>
         </section>
       )}

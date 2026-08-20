@@ -35,7 +35,7 @@ Usage:
   --app     Trace deposunun kökü (varsayılan: otomatik bulunur, TRACE_APP_DIR).
   --app-url Zaten çalışan bir Trace uygulamasının adresi (TRACE_APP_URL).
 
-The bridge never calls an LLM API. The active Codex, Claude Code, or Gemini CLI model reads the prepared paper and writes the project.
+The bridge never calls an LLM API. The active Codex, Claude Code, or Antigravity CLI model reads the prepared paper and writes the project.
 
 Deliver tek komutta her şeyi ayağa kaldırır: JSON'u saklar, bağımsız yerel
 siteyi kurar, ana Trace uygulamasını (yoksa dev sunucusunu başlatarak) hazırlar,
