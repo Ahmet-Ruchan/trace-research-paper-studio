@@ -118,7 +118,14 @@ async function resolvePaper(args) {
         title: entry.title,
         matchScore: entry.matchScore,
       })),
-      confident: args.arxiv ? true : (chosen.matchScore ?? 0) >= 0.85,
+      // Güven, yakın eşleşmeyle YETİNMEZ. "denoising diffusion probabilistic
+      // models" aramasında üç türev makale 0.889'da berabere kalıp orijinali
+      // hiç listeye girmiyordu; 0.85 eşiği bunu "kesin" sayıyordu. Artık hem
+      // neredeyse birebir başlık hem de ikinciye açık fark aranıyor.
+      confident: args.arxiv
+        ? true
+        : (chosen.matchScore ?? 0) >= 0.95 &&
+          (chosen.matchScore ?? 0) - (candidates[1]?.matchScore ?? 0) >= 0.05,
     },
   };
 }

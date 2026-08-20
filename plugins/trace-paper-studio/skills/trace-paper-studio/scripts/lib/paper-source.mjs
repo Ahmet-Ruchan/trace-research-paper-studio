@@ -159,12 +159,11 @@ function parseEntries(xml) {
 
 /* --- Genel API ----------------------------------------------------- */
 
-/** Serbest metin başlıkla arXiv'de arar, en iyi eşleşmeleri döner. */
-export async function searchArxiv(query, limit = 5) {
+async function queryArxiv(searchQuery, limit) {
   const url =
     "https://export.arxiv.org/api/query?" +
     new URLSearchParams({
-      search_query: `all:"${query.replace(/"/g, "")}"`,
+      search_query: searchQuery,
       start: "0",
       max_results: String(limit),
       sortBy: "relevance",
@@ -172,6 +171,27 @@ export async function searchArxiv(query, limit = 5) {
     });
   const response = await request(url, { accept: "application/atom+xml" });
   return parseEntries(await response.text());
+}
+
+/**
+ * Başlıkla arXiv'de arar.
+ *
+ * ÖNCE başlık alanında (`ti:`) arar, SONRA tam metinde (`all:`). Sıra önemli:
+ * `all:` araması popüler türev makaleleri öne çıkarıp aslını hiç döndürmeyebiliyor.
+ * Ölçüldü — "denoising diffusion probabilistic models" için `all:` orijinal
+ * makaleyi (2006.11239) ilk altıda hiç getirmezken `ti:` birinci sıraya koyuyor.
+ */
+export async function searchArxiv(query, limit = 5) {
+  const clean = query.replace(/"/g, "");
+  const byTitle = await queryArxiv(`ti:"${clean}"`, limit);
+  const byAll = await queryArxiv(`all:"${clean}"`, limit).catch(() => []);
+
+  const seen = new Set();
+  return [...byTitle, ...byAll].filter((entry) => {
+    if (!entry.arxivId || seen.has(entry.arxivId)) return false;
+    seen.add(entry.arxivId);
+    return true;
+  });
 }
 
 /** arXiv kimliğiyle doğrudan tek kayıt getirir. */
