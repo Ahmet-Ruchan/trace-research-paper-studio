@@ -1,6 +1,6 @@
 {
   "name": "trace-paper-studio",
-  "description": "Analyze papers with Claude Code's active model, export Trace JSON, and open the finished local website.",
+  "description": "Name a paper or hand over a PDF: Trace finds it on arXiv, grounds every claim in a page and quote, and builds a local interactive site with primers, step-by-step derivations, live equation playgrounds and an evidence-linked quiz.",
   "version": "0.4.1",
   "author": {
     "name": "Ahmet Ruchan"

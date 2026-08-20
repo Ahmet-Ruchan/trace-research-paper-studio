@@ -25,7 +25,15 @@ Trace also works as a native plugin for **Codex, Claude Code, and Gemini CLI**.
 The plugin uses the model already active in your agent—there is no second LLM API
 key and no model configuration inside Trace.
 
-After installation, give the agent a PDF path with one sentence:
+After installation, one sentence is enough — **you do not need the PDF**:
+
+```text
+Explain Attention Is All You Need using the Trace plugin.
+```
+
+Trace finds the paper on arXiv, downloads it, and gathers what is publicly known
+about it (version history, DOI, the venue it was published in, citation counts).
+If you already have the file, hand it over instead:
 
 ```text
 Take this paper and give me the output using the Trace plugin: ./paper.pdf
@@ -34,9 +42,12 @@ Take this paper and give me the output using the Trace plugin: ./paper.pdf
 The agent then completes the entire workflow in the background:
 
 ```text
-PDF → page-aware evidence → deep report → technical appendix
-    → interactive visual story → validation → local website opens
-                                    └──────→ portable .trace.json
+name or PDF → arXiv resolution + published context
+            → page-aware evidence → deep report → technical appendix
+            → interactive visual story
+            → primer · derivations · playgrounds · quiz · application guide
+            → validation → local website opens
+                             └──────→ portable .trace.json
 ```
 
 When it finishes, your default browser opens the completed local Trace website.
@@ -71,6 +82,10 @@ available globally across projects for that user.
 
 ## What Trace does
 
+- Finds a paper on arXiv from its name alone, downloads it, and reports the
+  runner-up candidates so a near-miss title can be caught before any work
+- Gathers published context — version history, DOI, venue, citation counts —
+  and cites it as a web source, never as something the paper itself claims
 - Accepts research papers as PDF files up to 35 MB
 - Adds up to three optional public web sources
 - Extracts a structured evidence map with page-level references
@@ -91,6 +106,18 @@ available globally across projects for that user.
   safe pseudocode sketches, complexity notes, and implementation constraints
 - Renders eleven reusable visual grammars, including architecture maps, equations,
   timelines, qualitative matrices, and infographics
+- Teaches the background the paper assumes with a prerequisite-ordered primer
+- Walks derivations step by step, each step carrying its reasoning and shapes,
+  opened directly under the equation it derives
+- Renders LaTeX as native MathML — no font payload, identical in both hosts
+- Runs the paper's own equations live: sliders start at the paper's value, mark
+  it on the track and the chart, and warn when you leave the verified region
+- Steps through mechanisms frame by frame and makes result tables sortable
+- Checks understanding with an evidence-linked quiz that shows the page behind
+  every answer, and closes with an application guide including when *not* to
+  use the method, grounded in the paper's own limitations
+- Evaluates interactive formulas on a restricted grammar and a pure AST — never
+  `eval`, because a `.trace.json` is untrusted input
 - Exports the project as JSON or a self-contained HTML story
 - Saves complete projects into a searchable, card-based local Library (IndexedDB)
 - Imports validated `.trace.json` projects produced by Codex, Claude Code, or Gemini CLI
@@ -319,10 +346,27 @@ download the importable project at any time.
 Agents run these commands automatically; they are documented for debugging:
 
 ```bash
+# Resolve the paper from its name on arXiv, download it, collect context
+npm run trace:agent -- prepare --title "attention is all you need" --depth deep
+
+# Or by arXiv id, or from a local file
+npm run trace:agent -- prepare --arxiv 1706.03762 --depth deep
 npm run trace:agent -- prepare --paper "paper.pdf" --depth deep
-npm run trace:agent -- validate --project ".trace/jobs/paper/paper.trace.json"
+
+# --strict also requires the learning blocks the chosen depth mandates
+npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"
 npm run trace:agent -- deliver --project ".trace/jobs/paper/paper.trace.json"
 ```
+
+With `--title`, the command reports which paper it matched plus the runner-up
+candidates and a `confident` flag — near-miss titles are common ("Not All
+Attention Is All You Need" is a different paper). Re-run with `--pick <n>` or
+`--arxiv <id>` to switch.
+
+Network access is deliberately narrow: HTTPS only, a host allowlist, redirects
+verified against that allowlist, a streaming size cap, and a `%PDF-` signature
+check. Downloaded files are never executed. Context sources that cannot be
+reached are omitted rather than guessed.
 
 `deliver` preserves JSON, builds the site, starts a loopback-only Node server, and
 opens the default browser. Pass `--no-open` only for headless environments; the
@@ -343,9 +387,31 @@ npm run test
 # Production build
 npm run build
 
+# Rebuild the committed artifacts (standalone viewer + plugin validator)
+npm run build:artifacts
+
 # Run every verification step
 npm run check
 ```
+
+### Generated artifacts
+
+Two files are build output but are committed, because the plugin has to stay
+dependency-free at run time:
+
+| Artifact | Source | Rebuild |
+| --- | --- | --- |
+| `plugins/.../assets/viewer.html` | `viewer/` + `src/visuals/` | `npm run build:viewer` |
+| `plugins/.../scripts/generated/validator.mjs` | `src/lib/schema.ts` + integrity rules | `npm run build:validator` |
+
+Never edit them by hand. `npm run check` runs `scripts/check-artifacts.mjs`,
+which rebuilds both and fails if the committed copies drifted.
+
+The visual and interactive components live in `src/visuals/` and are compiled
+twice — as real React for the app, and through preact for the standalone
+viewer — so a grammar is written once rather than three times. The plugin
+validator is the application's actual schema, bundled, rather than a copy of
+it; a rule cannot pass one and fail the other.
 
 ## Security and trust model
 
@@ -365,6 +431,19 @@ npm run check
 - Verified paper claims require an excerpt and a visible PDF page number.
 - Comparison visuals may only use numeric values already recorded in evidence.
 - The renderer uses trusted components instead of executing model-generated code.
+- Interactive formulas are declarative. They are parsed by a restricted grammar
+  and evaluated on a pure AST with length, node-count and depth limits — never
+  `eval` or `new Function`, because an imported `.trace.json` is untrusted input.
+- Validation proves an interactive will actually run before it ships: the formula
+  must parse, reference only declared parameters, and produce a finite value at
+  the paper's own configuration.
+- Paper resolution reaches only an allowlisted set of hosts over HTTPS, verifies
+  every redirect against that allowlist, caps the download while streaming, and
+  checks the `%PDF-` signature. Downloaded files are never executed.
+- A context source that returns an unreliable record is dropped rather than
+  trusted. OpenAlex is queried only with a real publisher DOI, because its
+  arXiv-DOI form resolves to a different paper.
+- LaTeX is rendered to MathML and passed through a tag/attribute allowlist.
 
 No automated extraction system is a substitute for checking the original paper.
 Trace makes that verification faster and more visible; it does not remove the need
@@ -386,23 +465,39 @@ src/
 │   ├── lab-view.tsx               # Evidence inspection workspace
 │   ├── story-editor.tsx           # Narrative editor
 │   ├── story-view.tsx             # Scrollytelling experience
-│   ├── visual-renderer.tsx        # Trusted visual grammars
+│   ├── visual-renderer.tsx        # Re-export shim -> src/visuals
 │   └── evidence-drawer.tsx        # Claim-to-source inspection
+├── visuals/                       # SHARED render layer — compiled for both hosts
+│   ├── visual-renderer.tsx        # The eleven visual grammars
+│   ├── interactive/               # Playground, simulation, data explorer
+│   ├── teaching/                  # Primer, derivations, quiz, application guide
+│   ├── math.tsx                   # LaTeX -> MathML with an output allowlist
+│   ├── chart.ts                   # Dependency-free SVG scales and paths
+│   └── *.css                      # Tokens, grammars, learning layer
 └── lib/
-    ├── schema.ts                  # Evidence, DeepReport, and StorySpec contracts
+    ├── schema.ts                  # Evidence, DeepReport, StorySpec, learning layer
+    ├── formula.ts                 # Restricted-grammar parser + pure AST evaluator
     ├── project-library.ts         # IndexedDB persistence
     ├── prompts.ts                 # Evidence and narrative instructions
     ├── model-providers.ts         # Provider and model catalog
     ├── openai-structured.ts       # Strict OpenAI schema compatibility
     ├── generation-validation.ts   # Cross-contract integrity checks
+    ├── plugin-validator-entry.ts  # Bundled into the plugin — no mirrored rules
     ├── safe-fetch.ts              # Protected supplementary source fetcher
     ├── export-story.ts            # Standalone HTML exporter
     └── sample-project.ts          # API-free Transformer example
+
+viewer/                            # Standalone viewer app (preact build target)
+scripts/                           # build-viewer, build-plugin-validator, drift check
+examples/                          # Flagship enriched project, covered by tests
 
 plugins/trace-paper-studio/        # Shared Codex + Claude Code plugin
 ├── .codex-plugin/plugin.json
 ├── .claude-plugin/plugin.json
 └── skills/trace-paper-studio/     # Canonical Agent Skill, contract, bridge
+    ├── scripts/lib/paper-source.mjs   # arXiv resolution + published context
+    ├── scripts/generated/             # Bundled validator (generated)
+    └── assets/viewer.html             # Standalone site template (generated)
 
 gemini-extension.json              # GitHub-installable Gemini CLI extension
 .agents/skills/                    # Direct Codex repository discovery
@@ -426,7 +521,14 @@ ignored by Git so source PDFs are not accidentally committed.
 ## Current status
 
 Trace is an early MVP focused on validating the core experience and trust model.
-The interface, evidence contracts, DeepReport, eleven visual renderers, local
-Library, exports, and Gemini/OpenAI/Claude/OpenRouter generation pipelines are
-functional. Hosted publishing, accounts, shared database persistence, and local
-model providers are the next major phases.
+Working today: the evidence contracts, DeepReport, technical appendix, eleven
+visual renderers, the learning layer (primer, derivations, interactive
+playgrounds, quiz, application guide), arXiv resolution from a paper's name,
+the local Library, exports, the native plugin for Codex/Claude Code/Gemini CLI,
+and the Gemini/OpenAI/Claude/OpenRouter generation pipelines.
+
+Not there yet: hosted publishing, accounts, shared database persistence, and
+local/open-weight model providers.
+
+*Attention Is All You Need* ships as a fully enriched reference project in
+`examples/`, covered by tests so it cannot silently fall behind the schema.

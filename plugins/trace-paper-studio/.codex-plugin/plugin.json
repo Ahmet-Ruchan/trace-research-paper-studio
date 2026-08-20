@@ -1,7 +1,7 @@
 {
   "name": "trace-paper-studio",
-  "version": "0.2.0+codex.20260819212352",
-  "description": "Analyze papers with the active agent model, export Trace JSON, and open the finished local website.",
+  "version": "0.4.1",
+  "description": "Name a paper or hand over a PDF: Trace finds it on arXiv, grounds every claim in a page and quote, and builds a local interactive site with primers, step-by-step derivations, live equation playgrounds and an evidence-linked quiz.",
   "author": {
     "name": "Ahmet Ruchan",
     "url": "https://github.com/Ahmet-Ruchan"
@@ -18,8 +18,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Trace Paper Studio",
-    "shortDescription": "Verified research papers, built by your agent.",
-    "longDescription": "Analyze PDFs with the active Codex model, produce cited reports, technical appendices, portable Trace JSON, and an automatically opened local interactive website without a separate LLM API key.",
+    "shortDescription": "Papers you can read, verify and play with.",
+    "longDescription": "Name a paper or hand over a PDF. Trace resolves it on arXiv, reads it page by page, and grounds every claim in an exact quote. The result is a portable .trace.json and a local interactive site: prerequisite primers, step-by-step derivations, live playgrounds that run the paper's own equations, a mechanism simulation, sortable result tables, an evidence-linked quiz and an application guide. Uses the active Codex model — no separate LLM API key.",
     "developerName": "Ahmet Ruchan",
     "category": "Productivity",
     "capabilities": [
@@ -29,8 +29,8 @@
     ],
     "websiteURL": "https://github.com/Ahmet-Ruchan/trace-research-paper-studio",
     "defaultPrompt": [
-      "Take this paper and give me the output using the Trace plugin.",
-      "Analyze this PDF and open its finished interactive Trace website.",
+      "Explain Attention Is All You Need using the Trace plugin.",
+      "Take this PDF and open its finished interactive Trace website.",
       "Validate and repair this Trace research project."
     ],
     "brandColor": "#EE5B3E"
