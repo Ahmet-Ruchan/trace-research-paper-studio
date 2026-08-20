@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useStrings } from "../language-context";
 import type { Interactive } from "@/lib/schema";
 import { formatNumber } from "../chart";
 
 type Simulation = Extract<Interactive, { kind: "mechanism-simulation" }>;
 
 export function SimulationView({ simulation }: { simulation: Simulation }) {
+  const t = useStrings();
   const [frameIndex, setFrameIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const frame = simulation.frames[frameIndex];
@@ -30,7 +32,7 @@ export function SimulationView({ simulation }: { simulation: Simulation }) {
     <section className="interactive simulation" aria-label={simulation.title}>
       <header className="interactive-head">
         <div>
-          <span className="interactive-kind">Simülasyon</span>
+          <span className="interactive-kind">{t.simulationKind}</span>
           <h4>{simulation.title}</h4>
           <p>{simulation.description}</p>
         </div>
@@ -64,7 +66,7 @@ export function SimulationView({ simulation }: { simulation: Simulation }) {
           }}
           disabled={frameIndex === 0}
         >
-          ‹ Geri
+          {t.back}
         </button>
         <button
           type="button"
@@ -74,7 +76,7 @@ export function SimulationView({ simulation }: { simulation: Simulation }) {
             setPlaying((value) => !value);
           }}
         >
-          {playing ? "Duraklat" : frameIndex >= last ? "Baştan oynat" : "Oynat"}
+          {playing ? t.pause : frameIndex >= last ? t.replay : t.play}
         </button>
         <button
           type="button"
@@ -84,7 +86,7 @@ export function SimulationView({ simulation }: { simulation: Simulation }) {
           }}
           disabled={frameIndex === last}
         >
-          İleri ›
+          {t.forward}
         </button>
         <span className="sim-track" aria-hidden="true">
           {simulation.frames.map((item, index) => (

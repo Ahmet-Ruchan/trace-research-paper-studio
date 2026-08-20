@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
+import { useStrings } from "../language-context";
 import type { Interactive } from "@/lib/schema";
 import { formatNumber } from "../chart";
 
 type Explorer = Extract<Interactive, { kind: "dataset-explorer" }>;
 
 export function DataExplorerView({ explorer }: { explorer: Explorer }) {
+  const t = useStrings();
   const [sort, setSort] = useState(
     explorer.defaultSort ?? { columnId: explorer.columns[0].id, direction: "asc" as const },
   );
@@ -13,10 +15,10 @@ export function DataExplorerView({ explorer }: { explorer: Explorer }) {
   const sortIndex = explorer.columns.findIndex((column) => column.id === sort.columnId);
 
   const rows = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase("tr");
+    const needle = query.trim().toLocaleLowerCase(t.locale);
     const filtered = needle
       ? explorer.rows.filter((row) =>
-          row.cells.some((cell) => String(cell).toLocaleLowerCase("tr").includes(needle)),
+          row.cells.some((cell) => String(cell).toLocaleLowerCase(t.locale).includes(needle)),
         )
       : explorer.rows;
 
@@ -26,25 +28,25 @@ export function DataExplorerView({ explorer }: { explorer: Explorer }) {
       const left = a.cells[sortIndex];
       const right = b.cells[sortIndex];
       if (typeof left === "number" && typeof right === "number") return (left - right) * direction;
-      return String(left).localeCompare(String(right), "tr") * direction;
+      return String(left).localeCompare(String(right), t.locale) * direction;
     });
-  }, [explorer.rows, query, sort, sortIndex]);
+  }, [explorer.rows, query, sort, sortIndex, t.locale]);
 
   return (
     <section className="interactive explorer" aria-label={explorer.title}>
       <header className="interactive-head">
         <div>
-          <span className="interactive-kind">Veri keşfi</span>
+          <span className="interactive-kind">{t.explorerKind}</span>
           <h4>{explorer.title}</h4>
           <p>{explorer.description}</p>
         </div>
         <input
           type="search"
           className="explorer-search"
-          placeholder="Filtrele…"
+          placeholder={t.filterPlaceholder}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          aria-label="Tabloyu filtrele"
+          aria-label={t.filterAria}
         />
       </header>
 
@@ -96,7 +98,7 @@ export function DataExplorerView({ explorer }: { explorer: Explorer }) {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={explorer.columns.length} className="explorer-empty">
-                  Filtreye uyan satır yok.
+                  {t.emptyRows}
                 </td>
               </tr>
             ) : null}
@@ -107,8 +109,8 @@ export function DataExplorerView({ explorer }: { explorer: Explorer }) {
       <footer className="interactive-foot">
         <details className="evidence-note">
           <summary>
-            Kaynağı gör
-            {explorer.sourceRef.page ? ` · s. ${explorer.sourceRef.page}` : ""}
+            {t.sourceLabel}
+            {explorer.sourceRef.page ? ` · ${t.page(explorer.sourceRef.page)}` : ""}
           </summary>
           <blockquote>{explorer.sourceRef.excerpt}</blockquote>
         </details>

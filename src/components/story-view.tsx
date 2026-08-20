@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, BookOpen, ExternalLink } from "lucide-react";
 import type { ResearchProject } from "@/lib/schema";
-import { InteractiveRenderer, VisualRenderer } from "@/visuals";
+import { InteractiveRenderer, LanguageProvider, VisualRenderer, stringsFor } from "@/visuals";
 
 type StoryViewProps = {
   project: ResearchProject;
@@ -40,6 +40,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
   );
 
   return (
+    <LanguageProvider language={project.language}>
     <article
       className={`story-page ${embedded ? "is-embedded" : ""}`}
       style={{ "--story-accent": project.story.accent } as React.CSSProperties}
@@ -126,8 +127,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
 
       {project.interactives?.length ? (
         <section className="story-practice">
-          <p className="story-overline">Şimdi kendin dene</p>
-          <h2>Makaleyi oynatarak anla</h2>
+          <p className="story-overline">{stringsFor(project.language).tryItHeading}</p>
           {project.interactives.map((interactive) => (
             <InteractiveRenderer interactive={interactive} key={interactive.id} />
           ))}
@@ -155,6 +155,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
         </div>
       </footer>
     </article>
+    </LanguageProvider>
   );
 }
 

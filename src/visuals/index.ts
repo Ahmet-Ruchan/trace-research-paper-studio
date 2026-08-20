@@ -9,6 +9,8 @@
  * `react-dom/server` KULLANILAMAZ. Kural eslint ile zorlanır.
  */
 export { VisualRenderer } from "./visual-renderer";
+export { LanguageProvider, useStrings } from "./language-context";
+export { stringsFor, type Language, type Strings } from "./i18n";
 export { InteractiveRenderer } from "./interactive-renderer";
 export { MathText, sanitizeMathML } from "./math";
 export { PrimerView } from "./teaching/primer";

@@ -241,8 +241,9 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Import any `.trace.json` from **Library → Trace JSON**, or start
-from the built-in example with `?sample=1`.
+Open `http://localhost:3000`. Import any `.trace.json` from **Library → Trace JSON** — the
+enriched *Attention Is All You Need* project ships in `examples/` in both English and Turkish —
+or start from the built-in demo with `?sample=1`.
 
 **Workspaces:** `Lab` inspects the evidence, `Story` edits the narrative, `Preview` is the
 reading experience.
@@ -396,8 +397,9 @@ Code / Gemini CLI, and generation through Gemini, OpenAI, Claude and OpenRouter.
 
 Not there yet: hosted publishing, accounts, shared persistence, local and open-weight providers.
 
-*Attention Is All You Need* ships fully enriched in `examples/`, covered by tests so it cannot
-silently fall behind the schema.
+*Attention Is All You Need* ships fully enriched in `examples/`, in English and Turkish, covered
+by tests so neither can silently fall behind the schema. Interface text follows the project's own
+`language` field, so an English project renders an English interface and a Turkish one does not.
 
 ## Roadmap
 

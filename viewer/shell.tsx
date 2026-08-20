@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Claim, ResearchProject } from "@/lib/schema";
 import {
   ApplicationGuideView,
+  LanguageProvider,
+  stringsFor,
+  useStrings,
   DerivationView,
   InteractiveRenderer,
   MathText,
@@ -12,14 +15,16 @@ import {
 
 type Tab = "lab" | "story" | "practice" | "technical";
 
-const tabLabels: Record<Tab, string> = {
-  lab: "Lab",
-  story: "Hikâye",
-  practice: "Öğren & Dene",
-  technical: "Teknik",
-};
+
 
 export function ViewerShell({ project, initialTab }: { project: ResearchProject; initialTab: Tab }) {
+  const t = stringsFor(project.language);
+  const tabLabels: Record<Tab, string> = {
+    lab: t.tabLab,
+    story: t.tabStory,
+    practice: t.tabPractice,
+    technical: t.tabTechnical,
+  };
   const hasPractice = Boolean(
     project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.applicationGuide,
   );
@@ -34,13 +39,14 @@ export function ViewerShell({ project, initialTab }: { project: ResearchProject;
   }, [project]);
 
   return (
+    <LanguageProvider language={project.language}>
     <div className="viewer-shell">
       <nav className="viewer-topbar">
         <div className="viewer-brand">
           <i />
           Trace
         </div>
-        <span className="viewer-local">Yerel makale stüdyosu</span>
+        <span className="viewer-local">{t.localStudio}</span>
         <div className="viewer-tabs">
           {tabs.map((item) => (
             <button
@@ -65,10 +71,12 @@ export function ViewerShell({ project, initialTab }: { project: ResearchProject;
         {tab === "technical" ? <TechnicalTab project={project} /> : null}
       </main>
     </div>
+    </LanguageProvider>
   );
 }
 
 function ClaimRefs({ ids, claims }: { ids: readonly string[]; claims: Claim[] }) {
+  const t = useStrings();
   const linked = ids.map((id) => claims.find((claim) => claim.id === id)).filter((claim): claim is Claim => Boolean(claim));
   if (!linked.length) return null;
   return (
@@ -77,7 +85,7 @@ function ClaimRefs({ ids, claims }: { ids: readonly string[]; claims: Claim[] })
         const ref = claim.sourceRefs[0];
         return (
           <details className="evidence-note" key={claim.id}>
-            <summary>Kaynağı gör · {ref?.page ? `s. ${ref.page}` : ref?.locator ?? "kaynak"}</summary>
+            <summary>{t.sourceLabel} · {ref?.page ? t.page(ref.page) : ref?.locator ?? t.sourceFallback}</summary>
             <p>{claim.statement}</p>
             <blockquote>{ref?.excerpt}</blockquote>
           </details>
@@ -88,6 +96,7 @@ function ClaimRefs({ ids, claims }: { ids: readonly string[]; claims: Claim[] })
 }
 
 function LabTab({ project }: { project: ResearchProject }) {
+  const t = useStrings();
   const { evidence } = project;
   return (
     <div className="viewer-page">
@@ -99,27 +108,27 @@ function LabTab({ project }: { project: ResearchProject }) {
       </header>
 
       <section className="viewer-block">
-        <h2>Tez</h2>
+        <h2>{t.thesis}</h2>
         <p className="viewer-lead">{evidence.thesis}</p>
-        <h2>Sade özet</h2>
+        <h2>{t.plainSummary}</h2>
         <p>{evidence.plainSummary}</p>
-        <h2>Araştırma sorusu</h2>
+        <h2>{t.researchQuestion}</h2>
         <p>{evidence.researchQuestion}</p>
       </section>
 
       <section className="viewer-block">
-        <h2>Yöntem, bulgular, sınırlılıklar</h2>
+        <h2>{t.methodsFindingsLimits}</h2>
         <div className="viewer-tri">
           <article>
-            <span className="viewer-eyebrow">Yöntem</span>
+            <span className="viewer-eyebrow">{t.methods}</span>
             <ul>{evidence.methods.map((item, index) => <li key={index}>{item}</li>)}</ul>
           </article>
           <article>
-            <span className="viewer-eyebrow">Bulgular</span>
+            <span className="viewer-eyebrow">{t.findings}</span>
             <ul>{evidence.findings.map((item, index) => <li key={index}>{item}</li>)}</ul>
           </article>
           <article>
-            <span className="viewer-eyebrow">Sınırlılıklar</span>
+            <span className="viewer-eyebrow">{t.limitations}</span>
             <ul>{evidence.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul>
           </article>
         </div>
@@ -127,7 +136,7 @@ function LabTab({ project }: { project: ResearchProject }) {
 
       {evidence.metrics.length ? (
         <section className="viewer-block">
-          <h2>Metrikler</h2>
+          <h2>{t.metrics}</h2>
           <div className="viewer-metrics">
             {evidence.metrics.map((metric) => (
               <article key={metric.id}>
@@ -135,7 +144,7 @@ function LabTab({ project }: { project: ResearchProject }) {
                 <span>{metric.label}</span>
                 <small>{metric.context}</small>
                 <details className="evidence-note">
-                  <summary>Kaynağı gör{metric.sourceRef.page ? ` · s. ${metric.sourceRef.page}` : ""}</summary>
+                  <summary>{t.sourceLabel}{metric.sourceRef.page ? ` · ${t.page(metric.sourceRef.page)}` : ""}</summary>
                   <blockquote>{metric.sourceRef.excerpt}</blockquote>
                 </details>
               </article>
@@ -145,7 +154,7 @@ function LabTab({ project }: { project: ResearchProject }) {
       ) : null}
 
       <section className="viewer-block">
-        <h2>İddialar</h2>
+        <h2>{t.claims}</h2>
         <div className="viewer-claims">
           {evidence.claims.map((claim) => (
             <article key={claim.id} className={claim.confidence === "needs-review" ? "is-review" : ""}>
@@ -153,7 +162,7 @@ function LabTab({ project }: { project: ResearchProject }) {
               <p>{claim.statement}</p>
               {claim.sourceRefs.map((ref, index) => (
                 <details className="evidence-note" key={index}>
-                  <summary>Kaynağı gör{ref.page ? ` · s. ${ref.page}` : ""}</summary>
+                  <summary>{t.sourceLabel}{ref.page ? ` · ${t.page(ref.page)}` : ""}</summary>
                   <blockquote>{ref.excerpt}</blockquote>
                 </details>
               ))}
@@ -175,7 +184,7 @@ function LabTab({ project }: { project: ResearchProject }) {
               <ClaimRefs ids={section.claimIds} claims={evidence.claims} />
             </article>
           ))}
-          <h3>Açık sorular</h3>
+          <h3>{t.openQuestions}</h3>
           <ol className="viewer-questions">
             {project.deepReport.openQuestions.map((question, index) => <li key={index}>{question}</li>)}
           </ol>
@@ -184,7 +193,7 @@ function LabTab({ project }: { project: ResearchProject }) {
 
       {evidence.glossary.length ? (
         <section className="viewer-block">
-          <h2>Sözlük</h2>
+          <h2>{t.glossary}</h2>
           <dl className="viewer-glossary">
             {evidence.glossary.map((item) => (
               <div key={item.term}>
@@ -200,6 +209,7 @@ function LabTab({ project }: { project: ResearchProject }) {
 }
 
 function StoryTab({ project }: { project: ResearchProject }) {
+  const t = useStrings();
   const { story, evidence } = project;
   const [activeId, setActiveId] = useState(story.sections[0]?.id);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -254,7 +264,7 @@ function StoryTab({ project }: { project: ResearchProject }) {
 
       {interactives.length ? (
         <section className="viewer-block">
-          <h2>Şimdi kendin dene</h2>
+          <h2>{t.tryItHeading}</h2>
           {interactives.map((interactive) => (
             <InteractiveRenderer interactive={interactive} key={interactive.id} />
           ))}
@@ -270,6 +280,7 @@ function StoryTab({ project }: { project: ResearchProject }) {
 }
 
 function PracticeTab({ project }: { project: ResearchProject }) {
+  const t = useStrings();
   return (
     <div className="viewer-page">
       {project.primer ? (
@@ -280,7 +291,7 @@ function PracticeTab({ project }: { project: ResearchProject }) {
 
       {project.derivations?.length ? (
         <section className="viewer-block">
-          <h2>Adım adım türetimler</h2>
+          <h2>{t.derivationsHeading}</h2>
           {project.derivations.map((derivation) => (
             <DerivationView derivation={derivation} key={derivation.id} />
           ))}
@@ -289,7 +300,7 @@ function PracticeTab({ project }: { project: ResearchProject }) {
 
       {project.interactives?.length ? (
         <section className="viewer-block">
-          <h2>İnteraktif deneme</h2>
+          <h2>{t.interactivesHeading}</h2>
           {project.interactives.map((interactive) => (
             <InteractiveRenderer interactive={interactive} key={interactive.id} />
           ))}
@@ -312,6 +323,7 @@ function PracticeTab({ project }: { project: ResearchProject }) {
 }
 
 function TechnicalTab({ project }: { project: ResearchProject }) {
+  const t = useStrings();
   const appendix = project.technicalAppendix;
   const derivationByEquation = useMemo(
     () =>
@@ -333,7 +345,7 @@ function TechnicalTab({ project }: { project: ResearchProject }) {
 
       {appendix.equations.length ? (
         <section className="viewer-block">
-          <h2>Denklemler</h2>
+          <h2>{t.equations}</h2>
           {appendix.equations.map((equation) => (
             <article className="viewer-equation" key={equation.id}>
               <h3>{equation.label}</h3>
@@ -357,7 +369,7 @@ function TechnicalTab({ project }: { project: ResearchProject }) {
       ) : null}
 
       <section className="viewer-block">
-        <h2>Algoritma adımları</h2>
+        <h2>{t.algorithmSteps}</h2>
         <ol className="viewer-algorithm">
           {appendix.algorithmSteps.map((step, index) => (
             <li key={index}>
@@ -370,7 +382,7 @@ function TechnicalTab({ project }: { project: ResearchProject }) {
 
       {appendix.codeSketches.length ? (
         <section className="viewer-block">
-          <h2>Kod taslakları</h2>
+          <h2>{t.codeSketches}</h2>
           {appendix.codeSketches.map((sketch, index) => (
             <article key={index}>
               <h3>{sketch.title}</h3>
@@ -385,14 +397,14 @@ function TechnicalTab({ project }: { project: ResearchProject }) {
 
       {appendix.complexity.length ? (
         <section className="viewer-block">
-          <h2>Karmaşıklık</h2>
+          <h2>{t.complexity}</h2>
           <div className="guide-scroll">
             <table className="guide-table">
               <thead>
                 <tr>
-                  <th scope="col">İşlem</th>
-                  <th scope="col">Maliyet</th>
-                  <th scope="col">Bağlam</th>
+                  <th scope="col">{t.operation}</th>
+                  <th scope="col">{t.cost}</th>
+                  <th scope="col">{t.context}</th>
                 </tr>
               </thead>
               <tbody>
@@ -410,7 +422,7 @@ function TechnicalTab({ project }: { project: ResearchProject }) {
       ) : null}
 
       <section className="viewer-block">
-        <h2>Uygulama notları</h2>
+        <h2>{t.implementationNotes}</h2>
         <ul className="viewer-notes">
           {appendix.implementationNotes.map((note, index) => <li key={index}>{note}</li>)}
         </ul>

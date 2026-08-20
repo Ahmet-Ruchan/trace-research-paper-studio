@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useStrings } from "../language-context";
 import type { Claim, Quiz } from "@/lib/schema";
 
 type Answers = Record<string, number[]>;
@@ -12,6 +13,7 @@ type Answers = Record<string, number[]>;
  * öğrenme aracıdır.
  */
 export function QuizView({ quiz, claims }: { quiz: Quiz; claims: Claim[] }) {
+  const t = useStrings();
   const [answers, setAnswers] = useState<Answers>({});
   const [checked, setChecked] = useState<Record<string, boolean>>({});
 
@@ -25,7 +27,7 @@ export function QuizView({ quiz, claims }: { quiz: Quiz; claims: Claim[] }) {
         <p>{quiz.intro}</p>
         {scored.length ? (
           <p className="quiz-score">
-            {correctCount} / {scored.length} doğru
+            {t.score(correctCount, scored.length)}
           </p>
         ) : null}
       </header>
@@ -88,11 +90,11 @@ export function QuizView({ quiz, claims }: { quiz: Quiz; claims: Claim[] }) {
                   disabled={selected.length === 0}
                   onClick={() => setChecked((previous) => ({ ...previous, [question.id]: true }))}
                 >
-                  Yanıtı kontrol et
+                  {t.checkAnswer}
                 </button>
               ) : (
                 <div className={correct ? "quiz-verdict is-correct" : "quiz-verdict is-wrong"}>
-                  <strong>{correct ? "Doğru" : "Yanlış"}</strong>
+                  <strong>{correct ? t.correct : t.wrong}</strong>
                   <QuizEvidence question={question} claims={claims} />
                 </div>
               )}
@@ -105,6 +107,7 @@ export function QuizView({ quiz, claims }: { quiz: Quiz; claims: Claim[] }) {
 }
 
 function QuizEvidence({ question, claims }: { question: Quiz["questions"][number]; claims: Claim[] }) {
+  const t = useStrings();
   const linked = question.claimIds
     .map((id) => claims.find((claim) => claim.id === id))
     .filter((claim): claim is Claim => Boolean(claim));
@@ -114,8 +117,8 @@ function QuizEvidence({ question, claims }: { question: Quiz["questions"][number
   return (
     <details className="evidence-note">
       <summary>
-        Kanıtı gör
-        {question.page ? ` · s. ${question.page}` : ""}
+        {t.evidenceLabel}
+        {question.page ? ` · ${t.page(question.page)}` : ""}
       </summary>
       {linked.map((claim) => (
         <div key={claim.id}>

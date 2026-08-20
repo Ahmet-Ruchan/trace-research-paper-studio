@@ -2,6 +2,7 @@
 
 import { Check, ExternalLink, FileText, X } from "lucide-react";
 import type { Claim, PaperEvidence } from "@/lib/schema";
+import { useStrings } from "@/visuals";
 
 type EvidenceDrawerProps = {
   claim?: Claim;
@@ -20,12 +21,13 @@ const kindLabels: Record<Claim["kind"], string> = {
 };
 
 export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent = false }: EvidenceDrawerProps) {
+  const t = useStrings();
   return (
     <aside className={`evidence-drawer ${persistent ? "is-persistent" : ""}`} aria-label="Kanıt ayrıntısı">
       <div className="drawer-header">
         <div>
           <span>Evidence</span>
-          <strong>{claim ? kindLabels[claim.kind] : "Bir claim seç"}</strong>
+          <strong>{claim ? kindLabels[claim.kind] : t.pickAClaim}</strong>
         </div>
         {onClose && (
           <button className="icon-button" onClick={onClose} aria-label="Kanıt panelini kapat">
@@ -37,7 +39,7 @@ export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent =
       {!claim ? (
         <div className="drawer-empty">
           <FileText size={22} />
-          <p>Kaynağını görmek için bir bulgu veya story içindeki kaynak etiketine tıkla.</p>
+          <p>{t.pickAClaimHint}</p>
         </div>
       ) : (
         <div className="drawer-content">

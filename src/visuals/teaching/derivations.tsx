@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useStrings } from "../language-context";
 import type { Derivation } from "@/lib/schema";
 import { MathText } from "../math";
 
@@ -7,6 +8,7 @@ import { MathText } from "../math";
  * görmeden önce kendi türetmeyi deneyebilir.
  */
 export function DerivationView({ derivation }: { derivation: Derivation }) {
+  const t = useStrings();
   const [revealed, setRevealed] = useState(1);
   const total = derivation.steps.length;
   const allShown = revealed >= total;
@@ -16,7 +18,7 @@ export function DerivationView({ derivation }: { derivation: Derivation }) {
       <header className="derivation-head">
         <h4>{derivation.title}</h4>
         <p className="derivation-goal">
-          <strong>Hedef:</strong> {derivation.goal}
+          <strong>{t.goal}</strong> {derivation.goal}
         </p>
       </header>
 
@@ -35,13 +37,13 @@ export function DerivationView({ derivation }: { derivation: Derivation }) {
 
       {!allShown ? (
         <button type="button" className="derivation-more" onClick={() => setRevealed((value) => value + 1)}>
-          Sonraki adımı göster ({revealed}/{total})
+          {t.nextStep(revealed, total)}
         </button>
       ) : null}
 
       {allShown && derivation.numericExample ? (
         <div className="derivation-example">
-          <h5>Sayısal örnek</h5>
+          <h5>{t.numericExample}</h5>
           <p className="example-setup">{derivation.numericExample.setup}</p>
           <ol className="example-walkthrough">
             {derivation.numericExample.walkthrough.map((line, index) => (
@@ -49,7 +51,7 @@ export function DerivationView({ derivation }: { derivation: Derivation }) {
             ))}
           </ol>
           <p className="example-result">
-            <strong>Sonuç:</strong> {derivation.numericExample.result}
+            <strong>{t.result}</strong> {derivation.numericExample.result}
           </p>
         </div>
       ) : null}

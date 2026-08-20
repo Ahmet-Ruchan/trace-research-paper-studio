@@ -1,0 +1,567 @@
+{
+ "primer": {
+  "title": "Before you read this paper",
+  "overview": "The paper assumes six concepts and explains none of them. The order below follows the prerequisite chain: every concept comes before the one that depends on it. Each entry gives the intuition first, then the formal definition, then exactly why this paper needs it.",
+  "concepts": {
+   "dot-product": {
+    "term": "Dot product",
+    "intuition": "You multiply two vectors element by element and add the results. The number you get measures how much the two point in the same direction: large and positive when aligned, near zero when perpendicular, negative when opposed. It is a similarity score.",
+    "whyItMatters": "The whole of attention rests on this. How much a query attends to a key is decided by the dot product between them. That is why the paper calls its attention function \"Scaled Dot-Product Attention\"."
+   },
+   "softmax": {
+    "term": "Softmax",
+    "intuition": "You have a list of arbitrary numbers and want to turn them into positive weights that sum to one. Softmax exponentiates each and divides by the total. Large numbers take a disproportionately large share — it behaves like a soft maximum.",
+    "whyItMatters": "Dot-product scores are raw numbers; softmax turns them into \"how much should I look at each position\" weights. Its critical behaviour is this: as the inputs grow, the output piles onto a single position and the gradients nearly vanish. That is exactly the reason the paper divides by √d_k."
+   },
+   "variance": {
+    "term": "Variance and scale",
+    "intuition": "Variance measures how far a random value spreads from its mean. Add independent values and the variances add: sum d_k independent terms each of variance 1 and the total has variance d_k, so a standard deviation of √d_k.",
+    "whyItMatters": "This is the entire argument in the paper's footnote. As d_k grows the dot products typically grow on the scale of √d_k and softmax saturates. Dividing by √d_k pulls the spread back to unit scale. The scaling is not cosmetic; it follows directly from this calculation."
+   },
+   "embedding": {
+    "term": "Embedding vector",
+    "intuition": "The model works with numbers, not words. Each token is represented by a learned vector of fixed length, tuned during training so that tokens with similar meaning land near one another.",
+    "whyItMatters": "In the Transformer every sub-layer and every embedding layer must output the same dimension (512), so that residual connections can be added. This constraint shows up everywhere in the architecture."
+   },
+   "rnn-bottleneck": {
+    "term": "The sequential computation bottleneck",
+    "intuition": "In a recurrent network the hidden state at position t depends on t−1. To process word 500 you must first have finished 499. The computation is inherently queued — however many GPUs you have.",
+    "whyItMatters": "This is why the paper exists. Because the Transformer breaks that dependency it can parallelise within a training example and reach state of the art in twelve hours on eight GPUs."
+   },
+   "residual-layernorm": {
+    "term": "Residual connections and layer normalisation",
+    "intuition": "A residual connection adds a sub-layer's output back to its input: LayerNorm(x + Sublayer(x)). The layer then answers \"what should I add to the current representation\" rather than \"produce a representation from scratch\". Normalisation keeps values on a fixed scale so deep stacks stay trainable.",
+    "whyItMatters": "This is why six-layer stacks train at all. The paper does not ablate either component, so their contribution is unmeasured — but without them this depth is not practical."
+   },
+   "encoder-decoder": {
+    "term": "Encoder-decoder and auto-regression",
+    "intuition": "The encoder turns the input sequence into a sequence of representations. The decoder consults those and produces the output one token at a time, feeding each token it has generated back in as input. That is auto-regressive generation.",
+    "whyItMatters": "You need this to see why masking in the decoder is mandatory: if the model can see the future during training, it comes to rely on information it will not have at inference. Masking is a correctness condition, not a speed optimisation."
+   }
+  }
+ },
+ "derivations": {
+  "deriv-scaling": {
+   "title": "Where dividing by √d_k comes from",
+   "goal": "Derive, step by step, the scaling rationale the paper gives in a single sentence, starting from the probabilistic argument in its footnote.",
+   "steps": {
+    "s1": [
+     "The starting point: the compatibility score between a query and a key is a sum of d_k terms.",
+     "q: (d_k,) · k: (d_k,) → scalar"
+    ],
+    "s2": [
+     "The paper's footnote assumption: the components are independent random variables with mean 0 and variance 1. This is an assumption, not a proof — it does not hold exactly in a trained model.",
+     null
+    ],
+    "s3": [
+     "Variances add for independent variables. With d_k terms the total variance is exactly d_k.",
+     null
+    ],
+    "s4": [
+     "Standard deviation is the square root of variance. So the typical magnitude of the scores grows with √d_k, not d_k — this is the source of the scaling factor.",
+     null
+    ],
+    "s5": [
+     "As the inputs grow, the exponential overwhelmingly favours the largest term. The output becomes almost one-hot, and in that region softmax has almost no gradient — what the paper calls 'extremely small gradients'.",
+     null
+    ],
+    "s6": [
+     "Dividing by √d_k fixes the variance at 1 regardless of d_k. Softmax then sees inputs at the same scale whatever d_k is, and does not saturate.",
+     "QKᵀ: (n, n) → /√d_k → (n, n)"
+    ]
+   },
+   "numericExample": {
+    "setup": "The paper's configuration: d_k = 64. Suppose the typical gap between two keys' scores is on the order of a standard deviation, that is √64 = 8.",
+    "walkthrough": [
+     "Without scaling: a score gap of 8 → softmax weight ≈ 1/(1+e⁻⁸) ≈ 0.9997",
+     "The model is looking at essentially one position; the gradients for the others are vanishingly small.",
+     "With scaling: the gap becomes 8/√64 = 1 → softmax weight ≈ 1/(1+e⁻¹) ≈ 0.731",
+     "That is a healthy distribution producing stable gradients."
+    ],
+    "result": "At d_k = 64 the scaling pulls a single weight from 0.9997 down to 0.731. As d_k grows the unscaled version sticks to 1 while the scaled one stays constant. You can slide through this yourself in the \"Why the scaling is necessary\" playground."
+   }
+  },
+  "deriv-multihead": {
+   "title": "How multi-head attention preserves the dimensions",
+   "goal": "Show through shape tracking why splitting into h heads does not change the total cost.",
+   "steps": {
+    "m1": [
+     "The input: n positions, each of dimension d_model = 512.",
+     "(n, 512)"
+    ],
+    "m2": [
+     "Every head has its own projection matrices. We choose d_k = d_v = d_model/h = 512/8 = 64.",
+     "(512, 64)"
+    ],
+    "m3": [
+     "Each head computes attention in a 64-dimensional subspace instead of the full dimension. Cost per head drops by a factor of 8.",
+     "(n, 64)"
+    ],
+    "m4": [
+     "The critical point: h·d_v = 8·64 = 512 = d_model. Concatenating the heads brings us back to exactly the dimension we started from.",
+     "(n, 512)"
+    ],
+    "m5": [
+     "The final projection mixes what the heads found. Since the dimension is unchanged, the residual connection can be added directly — the rest of the architecture notices nothing.",
+     "(n, 512)"
+    ]
+   },
+   "numericExample": {
+    "setup": "h = 8, d_model = 512, therefore d_k = d_v = 64.",
+    "walkthrough": [
+     "Single head at full dimension: one attention computation over 512-dimensional Q, K, V.",
+     "Multi-head: eight attention computations at 64 dimensions.",
+     "Attention cost scales linearly with dimension, so 8 × 64 = 512: the total is the same."
+    ],
+    "result": "Multi-head is not added capacity but a redistribution of the same budget. The gain comes from being able to attend to different representation subspaces at once — measured in Table 3 row (A) as 0.9 BLEU."
+   }
+  },
+  "deriv-lrate": {
+   "title": "The warmup learning rate schedule",
+   "goal": "Show why Equation (3) first rises and then falls, and exactly where the breakpoint sits.",
+   "steps": {
+    "l1": [
+     "Equation (3) from the paper. A min of two branches: whichever is smaller applies.",
+     null
+    ],
+    "l2": [
+     "Early in training the second branch is selected and grows LINEARLY with step. This is what stops the model taking large steps while it is still randomly initialised.",
+     null
+    ],
+    "l3": [
+     "The breakpoint is exactly step = warmup — step 4000 in this work. Because the two branches are equal there, the schedule is continuous; there is no jump.",
+     null
+    ],
+    "l4": [
+     "After that the first branch takes over and the learning rate decays with the inverse square root of the step number — classic convergence behaviour.",
+     null
+    ]
+   }
+  }
+ },
+ "interactives": {
+  "play-scaling": {
+   "title": "Why the scaling is necessary",
+   "description": "Slide d_k. In the unscaled version a single attention weight rushes to 1 — the region where gradients vanish. Divided by √d_k it stays constant regardless of d_k. The comparison shows the case where the score gap between two keys equals the typical spread (√d_k).",
+   "parameters": {
+    "d_k": "Key dimension d_k"
+   },
+   "outputs": {
+    "sigma": "Standard deviation of the scores √d_k",
+    "scale": "Scaling factor 1/√d_k",
+    "p_unscaled": "Largest weight, unscaled",
+    "p_scaled": "Largest weight, scaled"
+   },
+   "series": {
+    "p_unscaled": "unscaled",
+    "p_scaled": "scaled"
+   },
+   "paperAnchor": "The paper uses d_k = 64 (d_model = 512, h = 8). The scaling rationale is presented as a HYPOTHESIS ('We suspect'), not a measured result."
+  },
+  "play-complexity": {
+   "title": "When self-attention becomes expensive",
+   "description": "Run the two rows of Table 1 side by side. Self-attention is O(n²·d), a recurrent layer O(n·d²). While n < d self-attention is cheap; once n passes d the curves cross and the advantage reverses. The y-axis is logarithmic.",
+   "parameters": {
+    "n": "Sequence length n",
+    "d": "Representation dimension d"
+   },
+   "outputs": {
+    "self_attn": "Self-attention O(n²·d)",
+    "recurrent": "Recurrent O(n·d²)",
+    "ratio": "Ratio (self-attention / recurrent)"
+   },
+   "series": {
+    "self_attn": "self-attention O(n²·d)",
+    "recurrent": "recurrent O(n·d²)"
+   },
+   "paperAnchor": "The paper uses d_model = 512 and states explicitly that self-attention is faster than a recurrent layer only while n < d. The point n = d is that threshold; once the ratio passes 1 the paper's condition is violated.",
+   "unit": "tokens"
+  },
+  "sim-attention": {
+   "title": "Attention weights, step by step",
+   "description": "The six steps of Scaled Dot-Product Attention. The grid shows the weight each query gives each key in a four-token sentence; darker means heavier. The numbers are ILLUSTRATIVE — the paper publishes no example attention matrix; the mechanism shown belongs to the paper, the values serve the explanation.",
+   "stageNodes": {
+    "qkv": [
+     "Q, K, V",
+     "The input passes through three separate projections"
+    ],
+    "scores": [
+     "QKᵀ",
+     "A raw compatibility score for every query-key pair"
+    ],
+    "scale": [
+     "÷ √d_k",
+     "Pulls the variance back to unit scale"
+    ],
+    "mask": [
+     "Mask",
+     "In the decoder, looking ahead is set to −∞"
+    ],
+    "softmax": [
+     "Softmax",
+     "Scores become weights summing to 1"
+    ],
+    "out": [
+     "× V",
+     "A weighted sum of the values"
+    ]
+   },
+   "frames": [
+    [
+     "Split the input three ways",
+     "The same input goes through three different learned projections: query (what am I looking for), key (what do I have), value (what do I give if found)."
+    ],
+    [
+     "Compute the raw scores",
+     "Every query is dotted with every key. The values can grow freely — the typical spread here is on the order of √d_k."
+    ],
+    [
+     "Scale by √d_k",
+     "All scores are divided by √64 = 8. The range narrows and softmax no longer works in its saturated region."
+    ],
+    [
+     "Mask the future",
+     "In the decoder position i may only see positions before i. Forbidden cells are set to −∞ at the softmax input; shown here as 0."
+    ],
+    [
+     "Apply softmax",
+     "Each row becomes a weight distribution summing to 1. The lower-triangular structure holds: no position gives weight to the future."
+    ],
+    [
+     "Sum the values by weight",
+     "The final step: each position's output is the sum of the value vectors scaled by the weights. All of this happens for every position at once, as a single matrix multiplication — no sequentiality."
+    ]
+   ],
+   "gridLabels": [
+    "the",
+    "cat",
+    "sat",
+    "."
+   ]
+  },
+  "sim-encoder-decoder": {
+   "title": "How information flows from encoder to decoder",
+   "description": "The three uses of attention and where each sits in the stack. Watch which component is active at each step.",
+   "stageNodes": {
+    "enc-in": [
+     "Input + position",
+     "Embedding and sinusoidal encoding are summed"
+    ],
+    "enc-self": [
+     "Encoder self-attention",
+     "Every position may attend to all input positions"
+    ],
+    "enc-ffn": [
+     "Encoder FFN",
+     "Two position-wise linear transformations with ReLU in between"
+    ],
+    "dec-masked": [
+     "Masked decoder attention",
+     "Only already-generated positions are visible"
+    ],
+    "dec-cross": [
+     "Encoder-decoder attention",
+     "Queries from the decoder, keys and values from the encoder"
+    ],
+    "dec-out": [
+     "Linear + softmax",
+     "Next-token probabilities"
+    ]
+   },
+   "frames": [
+    [
+     "The input is prepared",
+     "Because there is no recurrence, order must be injected separately: sinusoidal position encodings are ADDED to the embeddings, not concatenated."
+    ],
+    [
+     "The encoder stack runs (×6)",
+     "Self-attention and the feed-forward network, each wrapped in a residual connection and layer normalisation, repeated six times. All positions are processed in parallel."
+    ],
+    [
+     "The decoder looks at its own past",
+     "Masked self-attention: position i may depend only on known outputs at positions before i. This is how auto-regression is preserved."
+    ],
+    [
+     "The decoder looks at the input",
+     "The third sub-layer: queries come from the previous decoder layer, keys and values from the encoder stack's output. This is the counterpart of classic seq2seq attention."
+    ],
+    [
+     "A token is produced",
+     "The output is turned into probabilities through weights shared with the embedding matrix. The generated token is then fed back and the loop continues."
+    ]
+   ]
+  },
+  "data-table2": {
+   "title": "Table 2: quality and training cost",
+   "description": "The paper's WMT 2014 English-German results. Click a column header to sort. Sorting by FLOPs makes the Transformer's real claim visible: the base model takes the second-highest BLEU at the lowest cost.",
+   "columns": {
+    "model": "Model",
+    "bleu": "BLEU (EN-DE)",
+    "flops": "Training cost"
+   }
+  }
+ },
+ "quiz": {
+  "title": "Check your understanding",
+  "intro": "Ten questions. After each answer you can see which claim and which page it rests on. The correct answers sit openly in the JSON — this is a self-check, not an exam.",
+  "questions": {
+   "q-core": {
+    "prompt": "What is the paper's central claim about the Transformer?",
+    "options": [
+     [
+      "Dispensing with recurrence and convolution entirely and relying only on attention",
+      "The abstract's own words: 'dispensing with recurrence and convolutions entirely'."
+     ],
+     [
+      "Inventing the attention mechanism",
+      "Attention predates the paper, as Section 2 acknowledges. The novelty is making attention the sole carrier."
+     ],
+     [
+      "Showing that larger models can be trained",
+      "The emphasis is architecture rather than scale; even the base model beats its rivals at a fraction of the cost."
+     ]
+    ]
+   },
+   "q-complexity": {
+    "prompt": "According to Table 1, what is the per-layer computational complexity of a self-attention layer?",
+    "options": [
+     [
+      "O(n² · d)",
+      "Table 1, page 6. It grows with the SQUARE of the sequence length — the paper's acknowledged central trade-off."
+     ],
+     [
+      "O(n · d²)",
+      "That is the cost of a recurrent layer."
+     ],
+     [
+      "O(n log n)",
+      "No such row appears in the paper."
+     ]
+    ]
+   },
+   "q-when-faster": {
+    "prompt": "When is self-attention faster than a recurrent layer?",
+    "options": [
+     [
+      "When the sequence length n is smaller than the representation dimension d",
+      "The paper states this condition explicitly (pp. 6-7). On long contexts the condition breaks and the advantage disappears."
+     ],
+     [
+      "Always",
+      "The paper makes no such claim; it states the condition itself."
+     ],
+     [
+      "Only on GPUs",
+      "The comparison is asymptotic and hardware-independent."
+     ]
+    ]
+   },
+   "q-scaling": {
+    "prompt": "At what evidence level does the paper justify dividing dot products by √d_k?",
+    "options": [
+     [
+      "A hypothesis — the paper says 'We suspect' and offers no measurement",
+      "Page 4. The footnote gives a probabilistic motivation, but no direct comparison of scaled against unscaled is reported here."
+     ],
+     [
+      "A result measured by ablation",
+      "Table 3 ablates head count, d_k, model size and position encoding — not the scaling factor."
+     ],
+     [
+      "A mathematical theorem",
+      "The variance argument in the footnote is a motivation, not a derivation or proof."
+     ]
+    ]
+   },
+   "q-heads": {
+    "prompt": "Which of these are true of multi-head attention?",
+    "options": [
+     [
+      "It uses h = 8 heads with d_k = d_v = 64",
+      "Page 5: d_k = d_v = d_model/h = 512/8 = 64."
+     ],
+     [
+      "Total computational cost stays comparable to single-head at full dimensionality",
+      "Because the per-head dimension is divided by h, the total stays constant — the paper states this explicitly."
+     ],
+     [
+      "Increasing the head count monotonically improves quality",
+      "Table 3 row (A): with too many heads quality FALLS again. h is a hyperparameter to be tuned."
+     ],
+     [
+      "Single-head attention is 0.9 BLEU worse than the best setting",
+      "Table 3 row (A), page 9."
+     ]
+    ]
+   },
+   "q-positional": {
+    "prompt": "Sinusoidal position encoding is measurably better than learned positional embeddings.",
+    "options": [
+     [
+      "False",
+      "Table 3 row (E): the two versions give NEARLY IDENTICAL results. The sinusoidal version was preferred in the HOPE that it would generalise to longer sequences — a hope that was never tested."
+     ],
+     [
+      "True",
+      "The paper does not show this; it reports nearly identical results."
+     ]
+    ]
+   },
+   "q-masking": {
+    "prompt": "What does masking in the decoder accomplish?",
+    "options": [
+     [
+      "It guarantees the prediction at position i depends only on positions before i",
+      "Page 3. This is not a speed optimisation but a CORRECTNESS condition for auto-regressive generation."
+     ],
+     [
+      "It reduces memory",
+      "Masking sets forbidden entries to −∞ at the softmax input; memory is not the goal."
+     ],
+     [
+      "It speeds up training",
+      "The goal is not speed but preventing the model from seeing the future."
+     ]
+    ]
+   },
+   "q-cost": {
+    "prompt": "How were the training-cost (FLOPs) figures in Table 2 obtained?",
+    "options": [
+     [
+      "Estimated: time × GPU count × assumed capacity per GPU",
+      "Page 8. These are estimates, not measurements; adequate for comparing orders of magnitude but not small differences."
+     ],
+     [
+      "Measured directly with a profiler",
+      "The paper performs no such measurement."
+     ],
+     [
+      "Taken from the hardware vendor's report",
+      "The capacity figures are given as assumptions in a footnote; the costs are computed by the authors."
+     ]
+    ]
+   },
+   "q-restricted": {
+    "prompt": "The restricted self-attention proposed for long sequences was measured in this paper.",
+    "options": [
+     [
+      "False",
+      "Page 7: 'We plan to investigate this approach further in future work.' There is a proposal, but no measurement."
+     ],
+     [
+      "True",
+      "It has a row in Table 1 but no experimental result is reported."
+     ]
+    ]
+   },
+   "q-generalization": {
+    "prompt": "What evidence of generalisation beyond translation does the paper offer?",
+    "options": [
+     [
+      "English constituency parsing: a 4-layer model reaching 92.7 F1 in the semi-supervised setting",
+      "Table 4, page 10. Obtained without task-specific tuning; it is the only additional task."
+     ],
+     [
+      "Image classification",
+      "There is no vision experiment here; it appears only as a future plan in the conclusion."
+     ],
+     [
+      "Language modelling",
+      "The paper reports no language modelling result."
+     ]
+    ]
+   }
+  }
+ },
+ "applicationGuide": {
+  "title": "Using it in your own project",
+  "overview": "You do not need to write a Transformer from scratch today. But knowing why each decision was made changes how you pick your own configuration. Every value below comes from the paper — there are no invented defaults. The code sketches are EXPLANATORY, not runnable library code.",
+  "recipe": [
+   [
+    "Fix the dimension budget",
+    "Choose d_model first, then h so that it divides evenly. Preserve the relation d_k = d_v = d_model/h; break it and the total cost no longer stays constant, which invalidates any comparison with the paper's ablations."
+   ],
+   [
+    "Tie the scaling to d_k, do not hard-code it",
+    "The 1/√d_k factor depends on d_k. Change the head dimension and the scaling must change with it; a hard-coded 0.125 (that is, 1/√64) turns into a silent bug."
+   ],
+   [
+    "Put the mask INSIDE the attention function",
+    "Masking is not zeroing after softmax. Forbidden connections must be set to −∞ at the softmax INPUT; zero them afterwards and the rows no longer sum to 1 and the weights are wrong."
+   ],
+   [
+    "Use the warmup learning rate schedule",
+    "Training a Transformer with a fixed learning rate is a classic failure mode. Equation (3) rises linearly for the first warmup_steps and then decays with step^-0.5; the breakpoint is exactly step = warmup."
+   ],
+   [
+    "Select checkpoints on BLEU, not perplexity",
+    "Label smoothing deliberately hurts perplexity. The paper says so outright: 'This hurts perplexity ... but improves accuracy and BLEU score.' Pick your best checkpoint by validation perplexity and you will pick the wrong model."
+   ]
+  ],
+  "hyperparameters": [
+   [
+    "d_model",
+    "512 (base), 1024 (big)",
+    "256–1024 explored in ablations",
+    "Table 3 row (C): dropping to 256 takes BLEU from 25.8 to 24.5; raising to 1024 lifts it to 26.0. Bigger helps, with diminishing returns."
+   ],
+   [
+    "h (head count)",
+    "8",
+    "1–32 explored in ablations",
+    "A single head costs 0.9 BLEU; 32 heads also degrade. The band between 8 and 16 works best. Not monotonic — tune it."
+   ],
+   [
+    "d_ff",
+    "2048",
+    "1024–4096 explored in ablations",
+    "Usually taken as 4·d_model. Raising it to 4096 lifts BLEU to 26.2 but pushes the parameter count to 90M."
+   ],
+   [
+    "warmup_steps",
+    "4000",
+    "not ablated in the paper",
+    "This value is given as a single setting and never swept. If your total step count differs greatly from 100K, consider scaling proportionally — but the paper offers no basis for that, so measure it on your own validation set."
+   ],
+   [
+    "P_drop",
+    "0.1 (EN-DE), 0.1 (EN-FR big)",
+    "0.0–0.2 explored in ablations",
+    "Table 3 row (D): turning dropout off takes BLEU from 25.8 to 24.6. Smaller datasets may need a higher value."
+   ]
+  ],
+  "pitfalls": [
+   [
+    "Training diverges or the loss becomes NaN in the first few thousand steps",
+    "A fixed learning rate with no warmup. The model takes large steps while still randomly initialised.",
+    "Apply the warmup schedule from Equation (3); the learning rate should rise linearly over the first 4000 steps."
+   ],
+   [
+    "Attention weights are almost one-hot and the model is not learning",
+    "The √d_k scaling is missing or tied to the wrong dimension. Scores grow on the order of √d_k and push softmax into saturation.",
+    "Tie the scaling to d_k. You can see the effect by sliding d_k in the \"Why the scaling is necessary\" playground."
+   ],
+   [
+    "Validation perplexity improves while BLEU falls",
+    "Label smoothing hurts perplexity by design; the two metrics do not move together.",
+    "Select checkpoints by BLEU, as the paper does."
+   ],
+   [
+    "Memory blows up on long documents",
+    "Self-attention costs O(n²·d). The paper's advantage condition (n < d) is violated in long contexts.",
+    "The paper proposes restricted attention for this case but never measures it. In practice look at chunking, sparse attention, or the efficient-attention variants developed after this paper."
+   ],
+   [
+    "My ablation numbers do not match the paper's",
+    "Table 3 was measured on the development set (newstest2013) WITHOUT checkpoint averaging; Table 2 was measured on the test set with averaging.",
+    "Check which table you are comparing against. The two are not directly comparable, and the paper warns about this explicitly."
+   ]
+  ],
+  "whenNotToUse": [
+   "When the sequence length markedly exceeds the representation dimension: the paper's own analysis says self-attention loses its advantage over a recurrent layer in that regime.",
+   "On very small datasets without task-specific tuning: the paper notes that even its parsing experiments involved only a small number of hyperparameter trials.",
+   "When sequential generation latency is critical: the Transformer parallelises training, but inference still emits one token at a time — the paper leaves 'making generation less sequential' to future work.",
+   "When carrying the paper's numbers to another model family: all results are specific to 2017 hardware and these datasets, and the FLOP estimates do not hold on today's hardware."
+  ]
+ }
+}

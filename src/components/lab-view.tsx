@@ -19,6 +19,8 @@ import {
 import type { Claim, ResearchProject } from "@/lib/schema";
 import {
   ApplicationGuideView,
+  LanguageProvider,
+  stringsFor,
   DerivationView,
   InteractiveRenderer,
   MathText,
@@ -52,6 +54,7 @@ const reportKindLabels = {
 } as const;
 
 export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: LabViewProps) {
+  const t = stringsFor(project.language);
   const [section, setSection] = useState("overview");
   const selectedClaim = useMemo(
     () => project.evidence.claims.find((claim) => claim.id === selectedClaimId),
@@ -67,8 +70,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
 
   const nav = [
     { id: "overview", label: "Overview", icon: Lightbulb },
-    ...(project.primer ? [{ id: "primer", label: "Ön bilgi", icon: GraduationCap }] : []),
-    ...(hasPractice ? [{ id: "practice", label: "Öğren & Dene", icon: SlidersHorizontal }] : []),
+    ...(project.primer ? [{ id: "primer", label: t.navPrimer, icon: GraduationCap }] : []),
+    ...(hasPractice ? [{ id: "practice", label: t.navPractice, icon: SlidersHorizontal }] : []),
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
     { id: "claims", label: "Claims", icon: Quote },
     { id: "method", label: "Method", icon: FlaskConical },
@@ -79,9 +82,10 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
   ];
 
   return (
+    <LanguageProvider language={project.language}>
     <div className="lab-layout">
-      <nav className="lab-nav" aria-label="Paper inceleme bölümleri">
-        <div className="lab-nav-label">Paper map</div>
+      <nav className="lab-nav" aria-label={t.labSectionsAria}>
+        <div className="lab-nav-label">{t.paperMap}</div>
         {nav.map((item) => {
           const Icon = item.icon;
           return (
@@ -97,7 +101,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
         })}
         <div className="source-count">
           <span>{project.evidence.sources.length}</span>
-          <small>bağlı kaynak</small>
+          <small>{t.linkedSources}</small>
         </div>
       </nav>
 
@@ -325,7 +329,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
           <section className="lab-block">
             {project.derivations?.length ? (
               <>
-                <div className="block-title"><Sigma size={16} /> Adım adım türetimler</div>
+                <div className="block-title"><Sigma size={16} /> {t.derivationsHeading}</div>
                 {project.derivations.map((derivation) => (
                   <DerivationView derivation={derivation} key={derivation.id} />
                 ))}
@@ -334,7 +338,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
 
             {project.interactives?.length ? (
               <>
-                <div className="block-title"><SlidersHorizontal size={16} /> İnteraktif deneme</div>
+                <div className="block-title"><SlidersHorizontal size={16} /> {t.interactivesHeading}</div>
                 {project.interactives.map((interactive) => (
                   <InteractiveRenderer interactive={interactive} key={interactive.id} />
                 ))}
@@ -357,6 +361,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
         persistent
       />
     </div>
+    </LanguageProvider>
   );
 }
 

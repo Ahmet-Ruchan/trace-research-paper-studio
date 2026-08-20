@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useStrings } from "../language-context";
 import type { Interactive } from "@/lib/schema";
 import { evaluateNode, parseFormula, type FormulaNode } from "@/lib/formula";
 import { extent, formatNumber, makeScale, toPath, ticks, type Point } from "../chart";
@@ -31,6 +32,7 @@ function evaluate(node: FormulaNode | null | undefined, params: Record<string, n
 }
 
 export function PlaygroundView({ playground }: { playground: Playground }) {
+  const t = useStrings();
   const compiled = useCompiled(playground);
 
   const paperPoint = useMemo(() => {
@@ -54,7 +56,7 @@ export function PlaygroundView({ playground }: { playground: Playground }) {
     <section className="interactive playground" aria-label={playground.title}>
       <header className="interactive-head">
         <div>
-          <span className="interactive-kind">Oyun alanı</span>
+          <span className="interactive-kind">{t.playgroundKind}</span>
           <h4>{playground.title}</h4>
           <p>{playground.description}</p>
         </div>
@@ -64,7 +66,7 @@ export function PlaygroundView({ playground }: { playground: Playground }) {
           onClick={() => setParams(paperPoint)}
           disabled={atPaperValues}
         >
-          Makale değerlerine dön
+          {t.resetToPaper}
         </button>
       </header>
 
@@ -106,7 +108,7 @@ export function PlaygroundView({ playground }: { playground: Playground }) {
               <span className="param-scale">
                 <small>{formatNumber(parameter.min)}</small>
                 <small className="param-paper-note">
-                  makale: {formatNumber(parameter.paperValue)}
+                  {t.paperValueShort}: {formatNumber(parameter.paperValue)}
                 </small>
                 <small>{formatNumber(parameter.max)}</small>
               </span>
@@ -121,7 +123,7 @@ export function PlaygroundView({ playground }: { playground: Playground }) {
             <strong>{output.value === null ? "—" : formatNumber(output.value, output.precision)}</strong>
             <span>{output.label}</span>
             {output.unit ? <small>{output.unit}</small> : null}
-            {output.value === null ? <em className="output-undefined">hesaplanamadı</em> : null}
+            {output.value === null ? <em className="output-undefined">{t.notComputable}</em> : null}
           </div>
         ))}
       </div>
@@ -134,7 +136,7 @@ export function PlaygroundView({ playground }: { playground: Playground }) {
         <p className={atPaperValues ? "anchor-note is-anchored" : "anchor-note"}>
           {atPaperValues
             ? playground.paperAnchor
-            : `Makale dışı bölgedesin — bu değerler makalede doğrulanmadı. ${playground.paperAnchor}`}
+            : t.offPaperWarning(playground.paperAnchor)}
         </p>
       </footer>
     </section>
@@ -150,6 +152,7 @@ function PlaygroundChart({
   compiled: Map<string, FormulaNode | null>;
   params: Record<string, number>;
 }) {
+  const t = useStrings();
   const chart = playground.chart!;
   const axis = playground.parameters.find((parameter) => parameter.name === chart.xParam);
   if (!axis) return null;
@@ -180,7 +183,7 @@ function PlaygroundChart({
 
   return (
     <figure className="playground-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${chart.xParam} eksenli grafik`}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${chart.xParam}`}>
         {ticks(yDomain).map((tick) => (
           <g key={`y-${tick}`}>
             <line className="chart-grid" x1={pad.left} x2={width - pad.right} y1={sy(tick)} y2={sy(tick)} />
@@ -209,7 +212,7 @@ function PlaygroundChart({
             {entry.label}
           </span>
         ))}
-        <span className="chart-key is-paper">makale değeri</span>
+        <span className="chart-key is-paper">{t.chartPaperKey}</span>
       </figcaption>
     </figure>
   );

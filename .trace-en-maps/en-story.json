@@ -1,0 +1,158 @@
+{
+  "title": "Attention Is Enough: The Architecture That Dropped Sequentiality",
+  "dek": "How the Transformer removed recurrence, what it paid in exchange, and which numbers the paper actually proves — tracked page by page against the evidence.",
+  "readingTime": "14 min read",
+  "closing": {
+    "title": "Why it is still read",
+    "body": "This paper is less an architecture proposal than the removal of a constraint: once sequential computation stopped being mandatory, the bottleneck on scaling moved from the architecture to the hardware. Read today, the most prescient part is the plan in the conclusion — extending the input and output to modalities beyond text, and investigating local, restricted attention for large inputs. Those two sentences describe much of the following decade's research agenda. Against that, the ground the paper measures is narrow: two translation directions and one parsing task. The Transformer's generality was not proved here; it was proved by what came after."
+  },
+  "sections": {
+    "story-problem": {
+      "kicker": "The problem",
+      "title": "Sequentiality was the wall in front of scale",
+      "body": "In 2017 the standard for sequence modelling was the recurrent network, and its core constraint was temporal rather than architectural: because the hidden state h_t depends on h_{t-1}, computation had to queue along the positions of the sequence. The paper names this plainly as a barrier to parallelisation, and notes that memory constraints also limit batching across examples at longer lengths, which is where the problem turns critical.\n\nConvolutional alternatives — ByteNet, ConvS2S — brought parallelism at a different price: the number of operations required to relate two distant positions grew with the distance between them, linearly for ConvS2S and logarithmically for ByteNet. You had to sacrifice either sequentiality or the cheapness of long-range dependencies.\n\nThe Transformer's claim is that this dilemma can be removed entirely: connect any two positions with a constant number of operations.",
+      "visual": {
+        "eyebrow": "Design pressure",
+        "caption": "The three constraints described in Sections 1 and 2, and the choice they force on the Transformer.",
+        "center": "Learn long-range dependency cheaply",
+        "items": [
+          ["Sequential computation", "In recurrent models h_t depends on h_{t-1}; no parallelisation is possible within a training example (p. 2)."],
+          ["Cost growing with distance", "In convolutional models relating two positions costs linearly for ConvS2S and logarithmically for ByteNet (p. 2)."],
+          ["Path length", "The shorter the path a signal travels, the easier a distant dependency is to learn; this is the main criterion for the architectural choice (p. 6)."],
+          ["The constant-path promise", "Self-attention connects all positions with O(1) sequential operations; Table 1 gives a maximum path length of O(1) (p. 6)."]
+        ]
+      }
+    },
+    "story-architecture": {
+      "kicker": "Architecture",
+      "title": "Six layers, three uses of attention, zero recurrence",
+      "body": "The Transformer keeps the classic encoder-decoder skeleton but hollows it out and refills it. The encoder is six identical layers; each has two sub-layers, multi-head self-attention and a position-wise fully connected feed-forward network. Every sub-layer is wrapped in a residual connection followed by layer normalisation — which is why all sub-layers and the embedding layers must produce outputs of dimension d_model = 512.\n\nThe decoder is also six layers, but a third sub-layer is inserted between them: multi-head attention over the output of the encoder stack. This is the counterpart of encoder-decoder attention in classic seq2seq.\n\nThe critical detail is masking. In the decoder's self-attention sub-layer, looking at later positions is prevented. Combined with offsetting the output embeddings by one position, this guarantees that the prediction for position i depends only on known outputs at positions before i. That is how auto-regressive generation is preserved.",
+      "visual": {
+        "eyebrow": "Sections 3.1–3.3",
+        "caption": "The evidence-linked flow of the encoder and decoder stacks; every node is a component the paper describes explicitly.",
+        "nodes": {
+          "input": ["Input embedding + position encoding", "Learned embeddings at d_model = 512; order is added through sinusoidal encoding (pp. 5-6)."],
+          "enc-self": ["Encoder self-attention", "Every position may attend to all positions of the previous encoder layer (p. 5)."],
+          "enc-ffn": ["Encoder feed-forward", "Two position-wise linear transformations with ReLU in between; d_ff = 2048 (p. 5)."],
+          "dec-masked": ["Masked decoder self-attention", "Looking ahead is masked with −∞; auto-regression is preserved (pp. 3, 5)."],
+          "dec-cross": ["Encoder-decoder attention", "Queries come from the decoder, keys and values from the encoder output (pp. 3, 5)."],
+          "dec-ffn": ["Decoder feed-forward", "Applied to each position separately, exactly as in the encoder (p. 5)."],
+          "output": ["Linear + softmax", "Next-token probabilities through weights shared with the embedding matrix (p. 5)."],
+          "residual": ["Residual + LayerNorm", "Every sub-layer output has the form LayerNorm(x + Sublayer(x)) (p. 3)."]
+        },
+        "edges": {
+          "input>enc-self": "stack of 6",
+          "enc-self>enc-ffn": "sub-layer 2",
+          "enc-ffn>dec-cross": "memory: keys and values",
+          "input>dec-masked": "shifted output embeddings",
+          "dec-masked>dec-cross": "queries",
+          "dec-cross>dec-ffn": "sub-layer 3",
+          "dec-ffn>output": "token probabilities",
+          "residual>enc-self": "wraps every sub-layer",
+          "residual>dec-masked": "wraps every sub-layer"
+        }
+      }
+    },
+    "story-attention": {
+      "kicker": "Mechanism",
+      "title": "Why the scaling was necessary",
+      "body": "Attention itself is not new; the paper's contribution is making it the sole carrier and adding one correction that makes it work in practice. In Scaled Dot-Product Attention the query is dotted with every key, each result is divided by √d_k, softmax turns those into weights, and the values are summed with them.\n\nThe division is not cosmetic. Additive attention outperforms unscaled dot-product attention at larger d_k. The authors' explanation is offered as a supposition: for large d_k the dot products may grow large in magnitude and push softmax into a region where its gradients are extremely small. A footnote shows why that is expected — if the components are independent with mean 0 and variance 1, the dot product has variance d_k.\n\nDot product was preferred for an engineering reason: although the theoretical complexity is similar, it is much faster and more space-efficient in practice because it can be implemented with highly optimised matrix multiplication.",
+      "visual": {
+        "eyebrow": "Equation (1), page 4",
+        "caption": "Scaled Dot-Product Attention: the paper's definition, term by term.",
+        "terms": {
+          "Q": ["Query matrix", "All queries are packed into one matrix so they can be computed simultaneously (p. 4)."],
+          "K": ["Key matrix", "d_k-dimensional vectors determining the query's compatibility with each position (p. 4)."],
+          "V": ["Value matrix", "d_v-dimensional content vectors to be summed with the weights (p. 4)."],
+          "√d_k": ["Scaling factor", "A precaution against large d_k pushing softmax into its small-gradient region (p. 4)."],
+          "softmax": ["Weight normalisation", "Turns compatibility scores into weights summing to 1; masked connections are set to −∞ (pp. 4-5)."]
+        },
+        "steps": [
+          "Take the dot product of the query with every key.",
+          "Divide each score by √d_k, to prevent gradient collapse at large d_k.",
+          "Mask forbidden connections by setting them to −∞ at the softmax input.",
+          "Apply softmax to obtain the weights.",
+          "Sum the values with those weights to produce the output."
+        ]
+      }
+    },
+    "story-tradeoff": {
+      "kicker": "The trade-off",
+      "title": "Table 1: what is won and what is paid",
+      "body": "Table 1 is the paper's most honest table. It compares three criteria: computational complexity per layer, the minimum number of sequential operations required, and the maximum path length.\n\nSelf-attention wins outright on sequential operations and path length, O(1) on both, where a recurrent layer is O(n) on both. But the complexity column reverses it: self-attention is O(n² · d) against O(n · d²) for recurrence. The paper does not hide this trade-off; it states the condition under which self-attention is faster — the sequence length n must be smaller than the representation dimension d.\n\nIn the sentence-level translation setting of 2017 that condition usually held. What to do when it does not is left as an unmeasured suggestion: restricted self-attention over a neighbourhood of size r, at the cost of raising the path length to O(n/r). The authors' phrasing is explicit — they plan to investigate it in future work.",
+      "visual": {
+        "eyebrow": "Table 1, page 6",
+        "caption": "Layer types compared on three criteria; tone marks an advantage (high) or disadvantage (low) from self-attention's point of view.",
+        "columns": ["Complexity per layer", "Sequential operations", "Maximum path length"],
+        "rows": {
+          "Self-attention": ["O(n² · d)", "O(1)", "O(1)"],
+          "Recurrent": ["O(n · d²)", "O(n)", "O(n)"],
+          "Convolutional": ["O(k · n · d²)", "O(1)", "O(log_k n)"],
+          "Restricted self-attention": ["O(r · n · d)", "O(1)", "O(n/r)"]
+        }
+      }
+    },
+    "story-results": {
+      "kicker": "Results",
+      "title": "Two BLEU scores and a difference in cost",
+      "body": "On WMT 2014 English-to-German, Transformer (big) scores 28.4 BLEU and beats the best previously reported models — ensembles included — by more than 2.0 BLEU. That a single model surpasses ensembles is the strongest part of the result.\n\nThe second axis is the striking one: cost. Even the base model beats every previously published model and ensemble, and does it at an estimated 3.3 · 10^18 FLOPs — most of its rivals in Table 2 sit between 10^19 and 10^21.\n\nOne caveat is required. Those FLOP figures were not measured. The paper says they were estimated by multiplying training time, the number of GPUs and an assumed sustained capacity per GPU. So while the cost comparison gives the right order of magnitude, it should not be read as a precise measurement.",
+      "visual": {
+        "eyebrow": "Table 2, page 8",
+        "caption": "BLEU on WMT 2014 English-German newstest2014; every number comes from the evidence metrics.",
+        "items": {
+          "GNMT + RL Ensemble": "26.30",
+          "ConvS2S Ensemble": "26.36",
+          "Transformer (base)": "27.3",
+          "Transformer (big)": "28.4"
+        }
+      }
+    },
+    "story-training": {
+      "kicker": "Training regime",
+      "title": "A recipe running from 12 hours to 3.5 days",
+      "body": "Most of the training details are stated explicitly, which matters for reproducibility. On the data side, WMT 2014 English-German supplied about 4.5 million sentence pairs with a shared byte-pair vocabulary of roughly 37000 tokens; batches were formed to hold approximately 25000 source and 25000 target tokens.\n\nThe hardware was a single machine with 8 NVIDIA P100 GPUs. The base model trained for 100,000 steps — about 12 hours — and the big model for 300,000 steps, or 3.5 days.\n\nOptimisation used Adam under a warmup schedule: a linear rise over the first 4000 steps, then decay proportional to the inverse square root of the step number. Regularisation had two parts — dropout at P_drop = 0.1 on sub-layer outputs and on the sum of embeddings and position encodings, plus label smoothing of 0.1. Here too the paper shares an honest observation: label smoothing hurts perplexity but improves accuracy and BLEU.",
+      "visual": {
+        "eyebrow": "Section 5, pages 7-8",
+        "caption": "The training pipeline in the order the paper describes it; every step is taken directly from Section 5.",
+        "items": {
+          "Data and tokenisation": "~4.5M sentence pairs (EN-DE) with a shared ~37000-token byte-pair vocabulary; 36M sentences and 32000 word-pieces for EN-FR.",
+          "Batching": "Sentence pairs grouped by approximate length; about 25000 source and 25000 target tokens per batch.",
+          "Warmup (4000 steps)": "The learning rate rises linearly; Adam with β1 = 0.9, β2 = 0.98, ϵ = 10⁻⁹.",
+          "Main training": "Base model 100,000 steps / 12 hours; big model 300,000 steps / 3.5 days on 8 P100 GPUs.",
+          "Regularisation": "Residual dropout P_drop = 0.1 and label smoothing ϵ_ls = 0.1; the latter hurts perplexity and improves BLEU.",
+          "Inference": "Average of the last 5 checkpoints for the base model and the last 20 for the big one; beam size 4, length penalty α = 0.6."
+        }
+      }
+    },
+    "story-ablation": {
+      "kicker": "Ablation",
+      "title": "Which part was actually necessary",
+      "body": "Table 3 measures how much each component carries, on the newstest2013 development set. Four findings stand out.\n\nFirst, multi-head really helps, but not monotonically: single-head attention is 0.9 BLEU below the best setting, yet quality falls again when the head count is pushed too high. So h is a hyperparameter, not a free source of gains.\n\nSecond, shrinking d_k degrades quality. The paper draws from this that determining compatibility is not easy and that a more sophisticated compatibility function than the dot product might help.\n\nThird, as expected: bigger models are better, and dropout is very helpful against overfitting.\n\nFourth, and most interesting — replacing the sinusoidal position encoding with learned positional embeddings gives nearly identical results. One of the paper's most iconic design details is, in terms of measured performance, not necessary; the reason it was chosen is an unmeasured hope about generalisation.",
+      "visual": {
+        "eyebrow": "Table 3, page 9",
+        "caption": "Four messages from the ablations, each resting on development-set measurements.",
+        "items": {
+          "Head count cuts both ways": ["A single head is 0.9 BLEU below the best setting; too many heads and quality falls again.", "h = 8"],
+          "Shrinking d_k hurts": ["Reducing the key dimension degrades quality; determining compatibility is harder than it looks.", "d_k = 64"],
+          "Size and dropout": ["Larger models do better; dropout gives a clear benefit against overfitting.", "213M"],
+          "Sinusoid ≈ learned": ["Positional embeddings give nearly identical results; the choice rests on hope of extrapolation, not measured superiority.", "row (E)"]
+        }
+      }
+    },
+    "story-limits": {
+      "kicker": "Limits",
+      "title": "What the paper concedes, and one inconsistency",
+      "body": "The Transformer's impact is not in question, but three separate kinds of caution are required when reading this paper.\n\nThe first is an acknowledged limit: quadratic cost. Self-attention is faster than a recurrent layer only while n < d. The restricted attention proposed as the long-sequence remedy was never tried here.\n\nThe second is a difference in evidence level. Interpretability is not a result but a side benefit, presented with 'could' and 'appear to'. The justification for the √d_k scaling is likewise a supposition ('We suspect'), not a measured explanation of mechanism. The paper concedes that averaging reduces effective resolution and claims multi-head attention counteracts it, but the degree of compensation is never quantified.\n\nThe third is a direct inconsistency: the English-to-French result appears as 41.0 BLEU in the body of Section 6.1 and as 41.8 BLEU in the abstract and Table 2. Two different numbers for the same model. Anyone citing this paper should say which value they used; this project keeps both with their evidence and marks the relevant claim as needing review.",
+      "visual": {
+        "eyebrow": "Evidence confidence",
+        "caption": "The paper's claims layered by strength of support; the top layer has the weakest backing.",
+        "items": {
+          "Directly measured": "BLEU 28.4 (EN-DE), base model 27.3, parsing F1 92.7, the ablation differences — all measured on a test or development set.",
+          "Estimated": "The FLOP costs in Table 2, derived from time × GPU count × assumed throughput.",
+          "Hypothesis level": "The √d_k rationale ('We suspect') and the extrapolation advantage of sinusoidal encoding ('may allow') — unmeasured.",
+          "Inconsistently reported": "EN-FR BLEU: 41.0 in the body, 41.8 in the abstract and Table 2. Same model, two numbers."
+        }
+      }
+    }
+  }
+}

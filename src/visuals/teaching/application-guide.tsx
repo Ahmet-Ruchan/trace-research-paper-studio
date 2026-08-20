@@ -1,10 +1,12 @@
 import type { ApplicationGuide } from "@/lib/schema";
+import { useStrings } from "../language-context";
 
 /**
  * "Bunu kendi projemde nasıl kullanırım." Kod taslakları AÇIKLAYICIDIR —
  * Trace makale kodunu çalıştırmaz, çalıştırılabilir olduğunu da iddia etmez.
  */
 export function ApplicationGuideView({ guide }: { guide: ApplicationGuide }) {
+  const t = useStrings();
   return (
     <section className="app-guide" aria-label={guide.title}>
       <header className="app-guide-head">
@@ -31,15 +33,15 @@ export function ApplicationGuideView({ guide }: { guide: ApplicationGuide }) {
 
       {guide.hyperparameters.length ? (
         <div className="guide-block">
-          <h4>Hiperparametre seçimi</h4>
+          <h4>{t.hyperparameters}</h4>
           <div className="guide-scroll">
             <table className="guide-table">
               <thead>
                 <tr>
-                  <th scope="col">Parametre</th>
-                  <th scope="col">Makale değeri</th>
-                  <th scope="col">Aralık</th>
-                  <th scope="col">Nasıl seçilir</th>
+                  <th scope="col">{t.guideParameter}</th>
+                  <th scope="col">{t.guidePaperValue}</th>
+                  <th scope="col">{t.guideRange}</th>
+                  <th scope="col">{t.guideHowToChoose}</th>
                 </tr>
               </thead>
               <tbody>
@@ -59,16 +61,16 @@ export function ApplicationGuideView({ guide }: { guide: ApplicationGuide }) {
 
       {guide.pitfalls.length ? (
         <div className="guide-block">
-          <h4>Sık yapılan hatalar</h4>
+          <h4>{t.pitfalls}</h4>
           <ul className="guide-pitfalls">
             {guide.pitfalls.map((pitfall, index) => (
               <li key={index}>
                 <strong className="pitfall-symptom">{pitfall.symptom}</strong>
                 <p className="pitfall-cause">
-                  <em>Neden:</em> {pitfall.cause}
+                  <em>{t.pitfallCause}</em> {pitfall.cause}
                 </p>
                 <p className="pitfall-fix">
-                  <em>Çözüm:</em> {pitfall.fix}
+                  <em>{t.pitfallFix}</em> {pitfall.fix}
                 </p>
               </li>
             ))}
@@ -77,7 +79,7 @@ export function ApplicationGuideView({ guide }: { guide: ApplicationGuide }) {
       ) : null}
 
       <div className="guide-block guide-warning">
-        <h4>Ne zaman kullanılmaz</h4>
+        <h4>{t.whenNotToUse}</h4>
         <ul>
           {guide.whenNotToUse.map((item, index) => (
             <li key={index}>{item}</li>

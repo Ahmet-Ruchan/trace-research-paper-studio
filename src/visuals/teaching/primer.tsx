@@ -1,8 +1,7 @@
 import { useState } from "react";
+import { useStrings } from "../language-context";
 import type { Primer } from "@/lib/schema";
 import { MathText } from "../math";
-
-const levelLabels = { temel: "Temel", orta: "Orta", ileri: "İleri" } as const;
 
 /**
  * Ön bilgi. Kavramlar ön koşul zincirine göre sıralanır: bir kavram, ona
@@ -10,6 +9,7 @@ const levelLabels = { temel: "Temel", orta: "Orta", ileri: "İleri" } as const;
  * edebilir.
  */
 export function PrimerView({ primer }: { primer: Primer }) {
+  const t = useStrings();
   const [openId, setOpenId] = useState<string | null>(primer.concepts[0]?.id ?? null);
   const ordered = orderByPrerequisites(primer.concepts);
 
@@ -31,7 +31,7 @@ export function PrimerView({ primer }: { primer: Primer }) {
               <button type="button" onClick={() => setOpenId(open ? null : concept.id)} aria-expanded={open}>
                 <span className="primer-index">{String(index + 1).padStart(2, "0")}</span>
                 <span className="primer-term">{concept.term}</span>
-                <span className={`primer-level level-${concept.level}`}>{levelLabels[concept.level]}</span>
+                <span className={`primer-level level-${concept.level}`}>{t.levels[concept.level]}</span>
               </button>
               {open ? (
                 <div className="primer-body">
@@ -42,11 +42,11 @@ export function PrimerView({ primer }: { primer: Primer }) {
                     </div>
                   ) : null}
                   <p className="primer-why">
-                    <strong>Bu makalede neden gerekli:</strong> {concept.whyItMatters}
+                    <strong>{t.whyItMatters}</strong> {concept.whyItMatters}
                   </p>
                   {prerequisites.length ? (
                     <p className="primer-prereq">
-                      Önce şunları oku: {prerequisites.join(", ")}
+                      {t.readFirst} {prerequisites.join(", ")}
                     </p>
                   ) : null}
                 </div>

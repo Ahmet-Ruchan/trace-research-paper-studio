@@ -9,6 +9,7 @@ import {
   isGenerationStreamEvent,
   type GenerationProgress,
 } from "@/lib/generation-events";
+import { stringsFor } from "@/visuals";
 import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
 import { sampleProject } from "@/lib/sample-project";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
@@ -112,6 +113,15 @@ export function AppShell() {
     }, 500);
     return () => window.clearTimeout(timer);
   }, [project, hydrated, screen]);
+
+  /**
+   * Kök `lang` projeye bağlanır. Sabit "tr" bırakılırsa CSS
+   * `text-transform: uppercase` Türkçe kuralını uygular ve İngilizce
+   * başlıklar "DERİVATİONS" gibi noktalı İ ile çıkar.
+   */
+  useEffect(() => {
+    document.documentElement.lang = project?.language ?? "tr";
+  }, [project?.language]);
 
   useEffect(() => () => { if (fileUrl) URL.revokeObjectURL(fileUrl); }, [fileUrl]);
 
@@ -261,6 +271,8 @@ export function AppShell() {
     setScreen("workspace");
   }
 
+  const t = stringsFor(project?.language);
+
   if (!hydrated) return <div className="boot-screen"><span>trace</span></div>;
   if (screen === "library") {
     return <LibraryView projects={projects} onOpen={openProject} onDelete={removeProject} onHome={() => setScreen("home")} onNew={newProject} onImport={importProject} />;
@@ -283,8 +295,8 @@ export function AppShell() {
           <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}><Share2 size={15} /> Preview</button>
         </nav>
         <div className="workspace-actions">
-          <button title="Ana sayfa" onClick={() => setScreen("home")}><Home size={16} /><span>Ana sayfa</span></button>
-          <button title="Kütüphane" onClick={() => setScreen("library")}><BookOpen size={16} /><span>Kütüphane</span></button>
+          <button title={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>
+          <button title={t.library} onClick={() => setScreen("library")}><BookOpen size={16} /><span>{t.library}</span></button>
           <button title="Proje JSON’unu indir" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
           <button className="export-button" onClick={() => download(`${slug}.html`, buildStandaloneStory(project), "text/html")}><Download size={16} /> Export</button>
           <button className="icon-button" title="Yeni paper" onClick={newProject}><Plus size={17} /></button>

@@ -13,7 +13,8 @@
     "build:viewer": "node scripts/build-viewer.mjs",
     "check:artifacts": "node scripts/check-artifacts.mjs",
     "build:validator": "node scripts/build-plugin-validator.mjs",
-    "build:artifacts": "npm run build:viewer && npm run build:validator"
+    "build:artifacts": "npm run build:viewer && npm run build:validator",
+    "build:example-en": "node scripts/build-english-example.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.118.0",
