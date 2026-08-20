@@ -1,6 +1,11 @@
 /**
  * Öğrenme katmanı stilleri — TEK KAYNAK.
  * Tailwind sınıfı kullanılmaz; viewer paketinde Tailwind yoktur.
+ *
+ * KURAL: kendi zeminini boyayan her kart kendi metin rengini de yazar.
+ * Bu bileşenler koyu bir kartın (örneğin teknik ekin denklem kutusu) içine
+ * gömülebiliyor; rengi miras alan açık zeminli bir kart orada beyaz üstüne
+ * beyaz yazıya dönüşüyordu.
  */
 
 /* --- Matematik ---------------------------------------------------- */
@@ -11,7 +16,7 @@
 .math-plain.is-display { display: block; margin: 14px 0; padding: 14px; text-align: center; font-size: 1.05em; }
 
 /* --- Ortak interaktif iskeleti ------------------------------------ */
-.interactive { margin: 22px 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
+.interactive { margin: 22px 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); overflow: hidden; }
 .interactive-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
 .interactive-kind { display: block; margin-bottom: 8px; color: var(--accent); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
 .interactive-head h4 { margin: 0; font: 19px/1.25 Georgia, serif; }
@@ -114,7 +119,7 @@
 .primer-head h3 { margin: 0; font: 24px/1.2 Georgia, serif; }
 .primer-head p { margin: 10px 0 22px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; max-width: 68ch; }
 .primer-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
-.primer-item { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--surface); }
+.primer-item { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--surface); color: var(--ink); }
 .primer-item.is-open { border-color: var(--accent); }
 .primer-item > button { width: 100%; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; padding: 15px 17px; border: 0; background: none; text-align: left; cursor: pointer; }
 .primer-index { color: var(--accent); font: italic 12px Georgia, serif; }
@@ -130,7 +135,7 @@
 .primer-prereq { margin: 9px 0 0; color: var(--muted); font-size: 9px; }
 
 /* --- Türetim ------------------------------------------------------- */
-.derivation { margin: 20px 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.derivation { margin: 20px 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); }
 .derivation-head h4 { margin: 0; font: 18px/1.25 Georgia, serif; }
 .derivation-goal { margin: 9px 0 20px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .derivation-steps { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
@@ -152,7 +157,7 @@
 .quiz-head p { margin: 10px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
 .quiz-score { margin: 12px 0 0 !important; color: var(--accent) !important; font-size: 11px !important; font-weight: 650; }
 .quiz-list { display: grid; gap: 14px; margin: 22px 0 0; padding: 0; list-style: none; }
-.quiz-question { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.quiz-question { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
 .quiz-prompt { display: grid; grid-template-columns: 30px 1fr; gap: 10px; margin: 0 0 14px; font-size: 12px; line-height: 1.6; }
 .quiz-index { color: var(--accent); font: italic 12px Georgia, serif; }
 .quiz-options { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }

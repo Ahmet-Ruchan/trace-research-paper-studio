@@ -359,7 +359,7 @@ export const quizSchema = z.object({
 
 /** Kullanıcının oynattığı bir değişken. `paperValue` makalenin kendi değeri. */
 export const interactiveParameterSchema = z.object({
-  name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Parametre adı formül tanımlayıcısı olmalı"),
+  name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Parameter name must be a valid formula identifier"),
   label: z.string(),
   min: z.number(),
   max: z.number(),

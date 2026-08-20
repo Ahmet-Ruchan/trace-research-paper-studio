@@ -41,7 +41,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
       <aside className="story-outline">
         <div className="outline-header">
           <span>Story outline</span>
-          <strong>{project.story.sections.length} bölüm</strong>
+          <strong>{project.story.sections.length} sections</strong>
         </div>
         {project.story.sections.map((section) => (
           <button
@@ -63,7 +63,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
         {selected && (
           <>
             <div className="editor-section-meta">
-              <span><PencilLine size={14} /> Bölüm {selected.indexLabel}</span>
+              <span><PencilLine size={14} /> Section {selected.indexLabel}</span>
               <span>{selected.visual.type} visual</span>
             </div>
             <div className="editor-fields">
@@ -72,7 +72,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
                 <input value={selected.kicker} onChange={(event) => updateSection({ kicker: event.target.value })} />
               </label>
               <label>
-                Başlık
+                Title
                 <textarea
                   className="title-input"
                   value={selected.title}
@@ -80,7 +80,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
                 />
               </label>
               <label>
-                Anlatı
+                Narrative
                 <textarea
                   className="body-input"
                   value={selected.body}
@@ -89,7 +89,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
               </label>
             </div>
             <div className="editor-evidence-links">
-              <span><Link2 size={14} /> Bağlı claim’ler</span>
+              <span><Link2 size={14} /> Linked claims</span>
               <div>
                 {selected.claimIds.map((id) => {
                   const linked = project.evidence.claims.find((item) => item.id === id);
@@ -109,7 +109,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
         {selected && <VisualRenderer visual={selected.visual} accent={project.story.accent} />}
         <div className="preview-note">
           <span>Renderer output</span>
-          <p>Görsel, doğrulanmış StorySpec verisinden üretiliyor; burada serbest model kodu çalıştırılmaz.</p>
+          <p>The visual is generated from validated StorySpec data; no free-form model code runs here.</p>
         </div>
       </aside>
 

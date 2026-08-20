@@ -14,7 +14,7 @@ function openLibrary() {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("Kütüphane açılamadı."));
+    request.onerror = () => reject(request.error ?? new Error("The library could not be opened."));
   });
 }
 
@@ -27,9 +27,9 @@ async function runTransaction<T>(
     const transaction = database.transaction(PROJECT_STORE, mode);
     const request = operation(transaction.objectStore(PROJECT_STORE));
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("Kütüphane işlemi başarısız."));
+    request.onerror = () => reject(request.error ?? new Error("The library operation failed."));
     transaction.oncomplete = () => database.close();
-    transaction.onerror = () => reject(transaction.error ?? new Error("Kütüphane işlemi başarısız."));
+    transaction.onerror = () => reject(transaction.error ?? new Error("The library operation failed."));
   });
 }
 

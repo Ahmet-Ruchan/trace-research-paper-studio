@@ -1,23 +1,23 @@
 export const generationStages = [
   {
     id: "document",
-    label: "Belge hazırlama",
-    description: "PDF ve yardımcı kaynaklar güvenle hazırlanıyor.",
+    label: "Document preparation",
+    description: "Preparing the PDF and supporting sources safely.",
   },
   {
     id: "evidence",
-    label: "Kanıt çıkarma",
-    description: "İddialar, metrikler ve sayfa referansları bulunuyor.",
+    label: "Evidence extraction",
+    description: "Locating claims, metrics and page references.",
   },
   {
     id: "story",
-    label: "Uzman çıktıları",
-    description: "Görsel anlatı, derin rapor ve teknik ek atanmış modellerce hazırlanıyor.",
+    label: "Specialist outputs",
+    description: "Visual story, deep report and technical appendix built by the assigned models.",
   },
   {
     id: "finalize",
     label: "Son denetim",
-    description: "Bütün bağlantılar ve veri şeması kontrol ediliyor.",
+    description: "Checking every link and the data schema.",
   },
 ] as const;
 
@@ -42,8 +42,8 @@ export type GenerationStreamEvent =
 export const initialGenerationProgress: GenerationProgress = {
   stage: "document",
   progress: 4,
-  title: "Paper gönderiliyor.",
-  detail: "API key yalnızca bu istek boyunca bellekte tutuluyor.",
+  title: "Sending the paper.",
+  detail: "The API key stays in memory for this request only.",
 };
 
 export function isGenerationStreamEvent(value: unknown): value is GenerationStreamEvent {

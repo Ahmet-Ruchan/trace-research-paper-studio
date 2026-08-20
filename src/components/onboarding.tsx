@@ -63,11 +63,11 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
     setError(undefined);
     if (!nextFile) return;
     if (nextFile.type !== "application/pdf") {
-      setError("Yalnızca PDF dosyası yükleyebilirsin.");
+      setError("Only PDF files can be uploaded.");
       return;
     }
     if (nextFile.size > 35 * 1024 * 1024) {
-      setError("PDF 35 MB sınırını aşıyor.");
+      setError("The PDF exceeds the 35 MB limit.");
       return;
     }
     setFile(nextFile);
@@ -80,23 +80,23 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
       const url = new URL(value);
       if (!["http:", "https:"].includes(url.protocol)) throw new Error();
       if (sources.length >= 3) {
-        setError("MVP’de en fazla 3 yardımcı kaynak ekleyebilirsin.");
+        setError("You can add at most 3 supporting sources.");
         return;
       }
       setSources((current) => [...current, url.toString()]);
       setSourceInput("");
       setError(undefined);
     } catch {
-      setError("Geçerli bir HTTP veya HTTPS adresi gir.");
+      setError("Enter a valid HTTP or HTTPS address.");
     }
   }
 
   function submit() {
-    if (!file) return setError("Önce bir paper PDF’i yükle.");
+    if (!file) return setError("Upload a paper PDF first.");
     const missingProvider = usedProviders.find((item) => !apiKeys[item.id]?.trim());
-    if (missingProvider) return setError(`${missingProvider.label} için ${missingProvider.keyLabel} gerekli.`);
+    if (missingProvider) return setError(`${missingProvider.label} needs its ${missingProvider.keyLabel}.`);
     const invalidAssignment = Object.entries(assignments).find(([, assignment]) => !assignment.model.trim());
-    if (invalidAssignment) return setError(`${generationTaskCatalog.find((task) => task.id === invalidAssignment[0])?.label ?? "Görev"} için model seç.`);
+    if (invalidAssignment) return setError(`${generationTaskCatalog.find((task) => task.id === invalidAssignment[0])?.label ?? "Task"} needs a model.`);
     setError(undefined);
     onGenerate({
       file,
@@ -121,7 +121,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
 
   async function loadOpenRouterModels() {
     const openRouterKey = apiKeys.openrouter?.trim();
-    if (!openRouterKey) return setError("Model kataloğu için önce OpenRouter API key’ini gir.");
+    if (!openRouterKey) return setError("Enter your OpenRouter API key before loading the model catalogue.");
     setModelsLoading(true);
     setError(undefined);
     try {
@@ -131,10 +131,10 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
         body: JSON.stringify({ apiKey: openRouterKey }),
       });
       const data = await response.json() as { models?: typeof openRouterModels; error?: string };
-      if (!response.ok || !data.models) throw new Error(data.error ?? "Model kataloğu alınamadı.");
+      if (!response.ok || !data.models) throw new Error(data.error ?? "The model catalogue could not be loaded.");
       setOpenRouterModels(data.models);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Model kataloğu alınamadı.");
+      setError(caught instanceof Error ? caught.message : "The model catalogue could not be loaded.");
     } finally {
       setModelsLoading(false);
     }
@@ -148,28 +148,28 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
           <span><strong>trace</strong><small>research studio</small></span>
         </a>
         <div className="landing-header-actions">
-          <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> Kütüphane <span className="nav-count">{libraryCount}</span></button>
-          <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? "Örnek yükleniyor…" : "Örnek projeyi aç"} <ArrowRight size={15} /></button>
+          <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> Library <span className="nav-count">{libraryCount}</span></button>
+          <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? "Loading example…" : "Open the example project"} <ArrowRight size={15} /></button>
         </div>
       </header>
 
       <section className="landing-hero" id="top">
         <div className="landing-copy">
           <p className="landing-eyebrow"><span /> Evidence-first paper studio</p>
-          <h1>Bir paper’ı okumak başka, <em>gerçekten görmek</em> başka.</h1>
+          <h1>Reading a paper is one thing. <em>Actually seeing it</em> is another.</h1>
           <p className="landing-lead">
-            PDF’ini kanıtlarına ayır, yöntemini incele ve her iddiası kaynağına bağlı interaktif bir web anlatısına dönüştür.
+            Break your PDF down into its evidence, inspect the method, and turn it into an interactive account where every claim points back to its source.
           </p>
           <div className="principle-row">
-            <span><Check size={14} /> Kaynak bağlı</span>
-            <span><Check size={14} /> Düzenlenebilir</span>
+            <span><Check size={14} /> Source-linked</span>
+            <span><Check size={14} /> Editable</span>
             <span><Check size={14} /> Statik export</span>
           </div>
         </div>
 
         <div className="ingest-panel">
           <div className="panel-heading">
-            <div><span>01</span><strong>Paper’ını ekle</strong></div>
+            <div><span>01</span><strong>Add your paper</strong></div>
             <small>PDF · maks. 35 MB</small>
           </div>
 
@@ -188,14 +188,14 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
             {file ? (
               <>
                 <span className="file-icon"><FileText size={22} /></span>
-                <div className="file-copy"><strong>{file.name}</strong><small>{(file.size / 1024 / 1024).toFixed(1)} MB · PDF hazır</small></div>
-                <button className="icon-button" onClick={() => setFile(undefined)} aria-label="PDF’i kaldır"><X size={17} /></button>
+                <div className="file-copy"><strong>{file.name}</strong><small>{(file.size / 1024 / 1024).toFixed(1)} MB · PDF ready</small></div>
+                <button className="icon-button" onClick={() => setFile(undefined)} aria-label="Remove the PDF"><X size={17} /></button>
               </>
             ) : (
               <>
                 <span className="upload-icon"><Upload size={21} /></span>
-                <div><strong>PDF’i buraya bırak</strong><small>veya bilgisayarından seç</small></div>
-                <button onClick={() => inputRef.current?.click()}>Dosya seç</button>
+                <div><strong>Drop the PDF here</strong><small>or pick one from your computer</small></div>
+                <button onClick={() => inputRef.current?.click()}>Choose file</button>
               </>
             )}
           </div>
@@ -215,9 +215,9 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
           </div>
 
           <div className="config-grid">
-            <label>Okuyucu<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="general">Genel okuyucu</option><option value="student">Öğrenci</option><option value="expert">Uzman</option></select></label>
-            <label>Derinlik<select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}><option value="concise">Kısa · 5 bölüm</option><option value="standard">Standart · 6 bölüm</option><option value="deep">Derin · 8 bölüm</option></select></label>
-            <label>Dil<select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)}><option value="tr">Türkçe</option><option value="en">English</option></select></label>
+            <label>Reader<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="general">General reader</option><option value="student">Student</option><option value="expert">Expert</option></select></label>
+            <label>Depth<select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}><option value="concise">Concise · 5 sections</option><option value="standard">Standard · 6 sections</option><option value="deep">Deep · 8 sections</option></select></label>
+            <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)}><option value="tr">Turkish</option><option value="en">English</option></select></label>
           </div>
 
           <section className="orchestration-config">
@@ -231,15 +231,15 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
 
             {orchestration === "single" ? (
               <div className="single-model-row">
-                <div className="model-select provider-select"><select aria-label="Model sağlayıcısı" value={provider} onChange={(event) => changeProvider(event.target.value as ProviderId)}>{providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></div>
+                <div className="model-select provider-select"><select aria-label="Model provider" value={provider} onChange={(event) => changeProvider(event.target.value as ProviderId)}>{providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></div>
                 <ModelPicker assignment={{ provider, model }} onChange={(assignment) => { setProvider(assignment.provider); setModel(assignment.model); }} openRouterModels={openRouterModels} inputId="single" />
-                <p>Bu model dört görevin tamamını yürütür.</p>
+                <p>This model runs all four tasks.</p>
               </div>
             ) : (
               <>
                 <div className="team-preset-row">
-                  <div><strong>Görev dağılımı</strong><span>Her uzman yalnızca kendine atanan structured görevi üretir.</span></div>
-                  <button onClick={() => setTeam(structuredClone(recommendedModelTeam))}>Önerilen 4-model ekip</button>
+                  <div><strong>Task assignment</strong><span>Each specialist produces only the structured task assigned to it.</span></div>
+                  <button onClick={() => setTeam(structuredClone(recommendedModelTeam))}>Recommended 4-model team</button>
                 </div>
                 <div className="task-assignment-grid">
                   {generationTaskCatalog.map((task, index) => (
@@ -247,7 +247,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
                       <header><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{task.label}</strong><small>{task.recommendation}</small></div></header>
                       <p>{task.description}</p>
                       <div className="task-model-controls">
-                        <select aria-label={`${task.label} sağlayıcısı`} value={team[task.id].provider} onChange={(event) => {
+                        <select aria-label={`${task.label} provider`} value={team[task.id].provider} onChange={(event) => {
                           const nextProvider = event.target.value as ProviderId;
                           updateTeamAssignment(task.id, { provider: nextProvider, model: defaultModelByProvider[nextProvider] });
                         }}>{providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
@@ -259,21 +259,21 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
               </>
             )}
 
-            <div className="credential-heading"><LockKeyhole size={14} /><div><strong>Kullanılan provider key’leri</strong><span>Yalnızca seçili provider’lar için gerekli.</span></div></div>
+            <div className="credential-heading"><LockKeyhole size={14} /><div><strong>Provider keys in use</strong><span>Only required for the providers you selected.</span></div></div>
             <div className="credential-grid">
               {usedProviders.map((item) => (
                 <label className="key-input" key={item.id}>
                   <span>{item.label}</span>
                   <input type={visibleKeys[item.id] ? "text" : "password"} value={apiKeys[item.id] ?? ""} onChange={(event) => setApiKeys((current) => ({ ...current, [item.id]: event.target.value }))} placeholder={item.keyLabel} autoComplete="off" />
-                  <button type="button" onClick={() => setVisibleKeys((current) => ({ ...current, [item.id]: !current[item.id] }))} aria-label={`${item.label} API key görünürlüğü`}>{visibleKeys[item.id] ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                  <button type="button" onClick={() => setVisibleKeys((current) => ({ ...current, [item.id]: !current[item.id] }))} aria-label={`Toggle ${item.label} API key visibility`}>{visibleKeys[item.id] ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                 </label>
               ))}
             </div>
-            {usedProviders.some((item) => item.id === "openrouter") && <div className="openrouter-catalog-row"><span>Katalog yalnızca Trace canvas’ı için güvenli <code>text-only output + structured output</code> modellerini gösterir. Görsel girdi desteklenebilir; görsel çıktı modelleri StorySpec üretiminden elenir.</span><button onClick={loadOpenRouterModels} disabled={modelsLoading}>{modelsLoading ? "Yükleniyor…" : "Uyumlu modelleri yükle"}</button></div>}
-            <p className="key-note">Key’ler yalnızca bu üretim isteğinde backend proxy’ye gönderilir; tarayıcıda veya projede kaydedilmez.</p>
+            {usedProviders.some((item) => item.id === "openrouter") && <div className="openrouter-catalog-row"><span>The catalogue lists only <code>text-only output + structured output</code> models, which are the ones safe for the Trace canvas. Image input may be supported; image-output models are excluded from StorySpec generation.</span><button onClick={loadOpenRouterModels} disabled={modelsLoading}>{modelsLoading ? "Loading…" : "Load compatible models"}</button></div>}
+            <p className="key-note">Keys are sent to the backend proxy for this generation request only; nothing is stored in the browser or in the project.</p>
           </section>
           {error && <p className="form-error">{error}</p>}
-          <button className="primary-action" onClick={submit}>Paper’ı incele <ArrowRight size={17} /></button>
+          <button className="primary-action" onClick={submit}>Analyse paper <ArrowRight size={17} /></button>
         </div>
       </section>
 
@@ -300,7 +300,7 @@ function ModelPicker({
     const listId = `openrouter-models-${inputId}`;
     return (
       <div className={`model-select openrouter-model-select ${compact ? "compact" : ""}`}>
-        <input aria-label="OpenRouter model kimliği" list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder="provider/model" />
+        <input aria-label="OpenRouter model id" list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder="provider/model" />
         <datalist id={listId}>{openRouterModels.map((item) => <option key={item.id} value={item.id}>{item.label}{item.contextLength ? ` · ${Math.round(item.contextLength / 1000)}k` : ""}</option>)}</datalist>
       </div>
     );

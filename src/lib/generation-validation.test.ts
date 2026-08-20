@@ -20,7 +20,7 @@ describe("generation integrity checks", () => {
   it("rejects paper claims without a page locator", () => {
     const evidence = structuredClone(exampleProject.evidence);
     delete evidence.claims[0].sourceRefs[0].page;
-    expect(() => validateEvidenceIntegrity(evidence)).toThrow(/PDF sayfası eksik/);
+    expect(() => validateEvidenceIntegrity(evidence)).toThrow(/missing a PDF page/);
   });
 
   it("rejects invented comparison values", () => {
@@ -29,7 +29,7 @@ describe("generation integrity checks", () => {
     if (!comparison || comparison.visual.type !== "comparison") throw new Error("fixture eksik");
     comparison.visual.items[0].value = 999;
     expect(() => validateStoryIntegrity(story, exampleProject.evidence, SECTION_BUDGETS.story[exampleProject.depth])).toThrow(
-      /evidence metrics içinde yok/,
+      /not in evidence metrics/,
     );
   });
 });

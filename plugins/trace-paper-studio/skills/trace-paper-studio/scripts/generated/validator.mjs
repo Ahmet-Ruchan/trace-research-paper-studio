@@ -4464,7 +4464,7 @@ const quizSchema = object({
 });
 /** Kullanıcının oynattığı bir değişken. `paperValue` makalenin kendi değeri. */
 const interactiveParameterSchema = object({
-	name: string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Parametre adı formül tanımlayıcısı olmalı"),
+	name: string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Parameter name must be a valid formula identifier"),
 	label: string(),
 	min: number(),
 	max: number(),
@@ -4804,7 +4804,7 @@ function tokenize(input) {
 			index += nameMatch[0].length;
 			continue;
 		}
-		throw new FormulaError(`Geçersiz karakter: "${char}" (konum ${index})`);
+		throw new FormulaError(`Invalid character: "${char}" (position ${index})`);
 	}
 	return tokens;
 }
@@ -4818,18 +4818,18 @@ const PRECEDENCE = {
 	"^": 3
 };
 function parseFormula(source) {
-	if (typeof source !== "string" || !source.trim()) throw new FormulaError("Formül boş olamaz");
-	if (source.length > FORMULA_LIMITS.maxLength) throw new FormulaError(`Formül çok uzun (en fazla ${FORMULA_LIMITS.maxLength} karakter)`);
+	if (typeof source !== "string" || !source.trim()) throw new FormulaError("The formula cannot be empty");
+	if (source.length > FORMULA_LIMITS.maxLength) throw new FormulaError(`Formula too long (at most ${FORMULA_LIMITS.maxLength} characters)`);
 	const tokens = tokenize(source);
 	let position = 0;
 	let nodeCount = 0;
 	const countNode = () => {
 		nodeCount += 1;
-		if (nodeCount > FORMULA_LIMITS.maxNodes) throw new FormulaError(`Formül çok karmaşık (en fazla ${FORMULA_LIMITS.maxNodes} düğüm)`);
+		if (nodeCount > FORMULA_LIMITS.maxNodes) throw new FormulaError(`Formula too complex (at most ${FORMULA_LIMITS.maxNodes} nodes)`);
 	};
 	const peek = () => tokens[position];
 	function parseExpression(minPrecedence, depth) {
-		if (depth > FORMULA_LIMITS.maxDepth) throw new FormulaError(`Formül çok derin (en fazla ${FORMULA_LIMITS.maxDepth} seviye)`);
+		if (depth > FORMULA_LIMITS.maxDepth) throw new FormulaError(`Formula too deep (at most ${FORMULA_LIMITS.maxDepth} levels)`);
 		let left = parseUnary(depth);
 		for (;;) {
 			const token = peek();
@@ -4865,7 +4865,7 @@ function parseFormula(source) {
 	}
 	function parsePrimary(depth) {
 		const token = peek();
-		if (!token) throw new FormulaError("Formül beklenmedik şekilde bitti");
+		if (!token) throw new FormulaError("The formula ended unexpectedly");
 		if (token.type === "number") {
 			position += 1;
 			countNode();
@@ -4878,7 +4878,7 @@ function parseFormula(source) {
 			position += 1;
 			const inner = parseExpression(1, depth + 1);
 			const closing = peek();
-			if (!closing || closing.type !== "paren" || closing.value !== ")") throw new FormulaError("Kapanmamış parantez");
+			if (!closing || closing.type !== "paren" || closing.value !== ")") throw new FormulaError("Unclosed parenthesis");
 			position += 1;
 			return inner;
 		}
@@ -4902,10 +4902,10 @@ function parseFormula(source) {
 						position += 1;
 						break;
 					}
-					throw new FormulaError(`${token.value}( ... ) çağrısı kapanmadı`);
+					throw new FormulaError(`The ${token.value}( ... ) call was never closed`);
 				}
 				const [minArity, maxArity] = Array.isArray(spec.arity) ? spec.arity : [spec.arity, spec.arity];
-				if (args.length < minArity || args.length > maxArity) throw new FormulaError(`${token.value} fonksiyonu ${minArity === maxArity ? minArity : `${minArity}-${maxArity}`} argüman alır (verilen ${args.length})`);
+				if (args.length < minArity || args.length > maxArity) throw new FormulaError(`${token.value} fonksiyonu ${minArity === maxArity ? minArity : `${minArity}-${maxArity}`} arguments (verilen ${args.length})`);
 				countNode();
 				return {
 					kind: "call",
@@ -4923,10 +4923,10 @@ function parseFormula(source) {
 				name: token.value
 			};
 		}
-		throw new FormulaError(`Beklenmeyen belirteç: ${JSON.stringify(token)}`);
+		throw new FormulaError(`Unexpected token: ${JSON.stringify(token)}`);
 	}
 	const ast = parseExpression(1, 0);
-	if (position !== tokens.length) throw new FormulaError("Formülün sonunda çözümlenemeyen ifade var");
+	if (position !== tokens.length) throw new FormulaError("Unparsed expression left at the end of the formula");
 	return ast;
 }
 /** AST'de geçen serbest değişkenleri toplar — parametre doğrulaması için. */
@@ -4944,7 +4944,7 @@ function evaluateNode(node, params) {
 		case "number": return node.value;
 		case "param": {
 			const value = params[node.name];
-			if (typeof value !== "number" || !Number.isFinite(value)) throw new FormulaError(`Parametre tanımsız veya sonlu değil: ${node.name}`);
+			if (typeof value !== "number" || !Number.isFinite(value)) throw new FormulaError(`Parameter is undefined or not finite: ${node.name}`);
 			return value;
 		}
 		case "unary": return -evaluateNode(node.operand, params);
@@ -4975,7 +4975,7 @@ const FORMULA_CONSTANT_NAMES = Object.keys(CONSTANTS);
 //#region src/lib/generation-validation.ts
 var IntegrityError = class extends Error {
 	constructor(stage, issues) {
-		super(`${stage} bütünlük denetimi başarısız: ${issues.join("; ")}`);
+		super(`${stage} integrity check failed: ${issues.join("; ")}`);
 		this.name = "IntegrityError";
 		this.issues = issues;
 	}
@@ -4985,9 +4985,9 @@ function duplicates(values) {
 	return [...new Set(values.filter((value) => seen.has(value) ? true : !seen.add(value)))];
 }
 function checkReference(reference, owner, sourceIds, issues) {
-	if (!sourceIds.has(reference.sourceId)) issues.push(`${owner} bilinmeyen kaynak kullanıyor: ${reference.sourceId}`);
-	if (!reference.excerpt.trim()) issues.push(`${owner} için doğrulanabilir excerpt eksik`);
-	if (reference.sourceId === "paper" && !reference.page) issues.push(`${owner} için PDF sayfası eksik`);
+	if (!sourceIds.has(reference.sourceId)) issues.push(`${owner} uses an unknown source: ${reference.sourceId}`);
+	if (!reference.excerpt.trim()) issues.push(`${owner} is missing a verifiable excerpt`);
+	if (reference.sourceId === "paper" && !reference.page) issues.push(`${owner} is missing a PDF page`);
 }
 function validateEvidenceIntegrity(evidence) {
 	const issues = [];
@@ -4995,21 +4995,21 @@ function validateEvidenceIntegrity(evidence) {
 	const duplicateSources = duplicates(evidence.sources.map((source) => source.id));
 	const duplicateClaims = duplicates(evidence.claims.map((claim) => claim.id));
 	const duplicateMetrics = duplicates(evidence.metrics.map((metric) => metric.id));
-	if (!sourceIds.has("paper")) issues.push("Ana PDF kaynağı \"paper\" eksik");
+	if (!sourceIds.has("paper")) issues.push("The main PDF source \"paper\" is missing");
 	if (duplicateSources.length) issues.push(`Tekrarlanan source ID: ${duplicateSources.join(", ")}`);
 	if (duplicateClaims.length) issues.push(`Tekrarlanan claim ID: ${duplicateClaims.join(", ")}`);
 	if (duplicateMetrics.length) issues.push(`Tekrarlanan metric ID: ${duplicateMetrics.join(", ")}`);
 	evidence.claims.forEach((claim) => {
 		claim.sourceRefs.forEach((reference) => checkReference(reference, `Claim ${claim.id}`, sourceIds, issues));
-		if (claim.confidence === "verified" && claim.sourceRefs.every((reference) => !reference.excerpt.trim())) issues.push(`Verified claim ${claim.id} için doğrulanabilir excerpt eksik`);
+		if (claim.confidence === "verified" && claim.sourceRefs.every((reference) => !reference.excerpt.trim())) issues.push(`Verified claim ${claim.id} is missing a verifiable excerpt`);
 	});
 	evidence.metrics.forEach((metric) => checkReference(metric.sourceRef, `Metric ${metric.id}`, sourceIds, issues));
 	evidence.glossary.forEach((item) => {
 		if (item.sourceRef) checkReference(item.sourceRef, `Terim ${item.term}`, sourceIds, issues);
 	});
-	if (!evidence.claims.some((claim) => claim.kind === "method")) issues.push("En az bir yöntem claim’i gerekli");
-	if (!evidence.claims.some((claim) => claim.kind === "limitation")) issues.push("En az bir sınırlılık claim’i gerekli");
-	if (!evidence.claims.some((claim) => claim.confidence === "verified")) issues.push("En az bir doğrudan doğrulanmış claim gerekli");
+	if (!evidence.claims.some((claim) => claim.kind === "method")) issues.push("At least one method claim is required");
+	if (!evidence.claims.some((claim) => claim.kind === "limitation")) issues.push("At least one limitation claim is required");
+	if (!evidence.claims.some((claim) => claim.confidence === "verified")) issues.push("At least one directly verified claim is required");
 	if (issues.length) throw new IntegrityError("Evidence", issues);
 }
 function validateStoryIntegrity(story, evidence, expectedSectionCount) {
@@ -5017,28 +5017,28 @@ function validateStoryIntegrity(story, evidence, expectedSectionCount) {
 	const claims = new Map(evidence.claims.map((claim) => [claim.id, claim]));
 	const metricValues = evidence.metrics.map((metric) => metric.value);
 	const duplicateSections = duplicates(story.sections.map((section) => section.id));
-	if (story.sections.length !== expectedSectionCount) issues.push(`${expectedSectionCount} yerine ${story.sections.length} bölüm üretildi`);
+	if (story.sections.length !== expectedSectionCount) issues.push(`${story.sections.length} sections were produced instead of ${expectedSectionCount}`);
 	if (duplicateSections.length) issues.push(`Tekrarlanan section ID: ${duplicateSections.join(", ")}`);
 	story.sections.forEach((section, index) => {
 		const expectedIndex = String(index + 1).padStart(2, "0");
-		if (section.indexLabel !== expectedIndex) issues.push(`${section.id} indexLabel değeri ${expectedIndex} olmalı`);
+		if (section.indexLabel !== expectedIndex) issues.push(`${section.id} indexLabel must be ${expectedIndex}`);
 		section.claimIds.forEach((claimId) => {
-			if (!claims.has(claimId)) issues.push(`${section.id} bilinmeyen claim kullanıyor: ${claimId}`);
+			if (!claims.has(claimId)) issues.push(`${section.id} uses an unknown claim: ${claimId}`);
 		});
 		if (section.visual.type === "comparison") section.visual.items.forEach((item) => {
-			if (!metricValues.some((value) => Math.abs(value - item.value) < 1e-9)) issues.push(`${section.id} görselindeki ${item.value} evidence metrics içinde yok`);
+			if (!metricValues.some((value) => Math.abs(value - item.value) < 1e-9)) issues.push(`${item.value} in the ${section.id} visual is not in evidence metrics`);
 		});
 		if (section.visual.type === "architecture") {
 			const nodeIds = new Set(section.visual.nodes.map((node) => node.id));
 			section.visual.edges.forEach((edge) => {
-				if (!nodeIds.has(edge.from)) issues.push(`${section.id} bilinmeyen edge başlangıcı: ${edge.from}`);
-				if (!nodeIds.has(edge.to)) issues.push(`${section.id} bilinmeyen edge bitişi: ${edge.to}`);
+				if (!nodeIds.has(edge.from)) issues.push(`${section.id} has an unknown edge source: ${edge.from}`);
+				if (!nodeIds.has(edge.to)) issues.push(`${section.id} has an unknown edge target: ${edge.to}`);
 			});
 		}
 		if (section.visual.type === "matrix") {
 			const matrix = section.visual;
 			matrix.rows.forEach((row) => {
-				if (row.cells.length !== matrix.columns.length) issues.push(`${section.id} matrix satırı sütun sayısıyla eşleşmiyor: ${row.label}`);
+				if (row.cells.length !== matrix.columns.length) issues.push(`${section.id} matrix row does not match the column count: ${row.label}`);
 			});
 		}
 	});
@@ -5050,21 +5050,21 @@ function validateStoryIntegrity(story, evidence, expectedSectionCount) {
 		"matrix",
 		"infographic"
 	]);
-	if (visualTypes.size < 3) issues.push("Story en az üç farklı görsel gramer kullanmalı");
-	if (![...visualTypes].some((type) => advancedVisuals.has(type))) issues.push("Story en az bir gelişmiş mimari, denklem, timeline, matrix veya infographic görseli içermeli");
+	if (visualTypes.size < 3) issues.push("The story must use at least three different visual grammars");
+	if (![...visualTypes].some((type) => advancedVisuals.has(type))) issues.push("The story must include at least one advanced architecture, equation, timeline, matrix or infographic visual");
 	const linkedClaims = story.sections.flatMap((section) => section.claimIds.map((claimId) => claims.get(claimId)).filter(Boolean));
-	if (!linkedClaims.some((claim) => claim?.kind === "method")) issues.push("Story bir yöntem claim’ine bağlanmalı");
-	if (!linkedClaims.some((claim) => claim?.kind === "limitation")) issues.push("Story bir sınırlılık claim’ine bağlanmalı");
+	if (!linkedClaims.some((claim) => claim?.kind === "method")) issues.push("The story must link to a method claim");
+	if (!linkedClaims.some((claim) => claim?.kind === "limitation")) issues.push("The story must link to a limitation claim");
 	if (issues.length) throw new IntegrityError("Story", issues);
 }
 function validateDeepReportIntegrity(report, evidence, expectedSectionCount) {
 	const issues = [];
 	const claimIds = new Set(evidence.claims.map((claim) => claim.id));
 	const duplicateSections = duplicates(report.sections.map((section) => section.id));
-	if (report.sections.length !== expectedSectionCount) issues.push(`${expectedSectionCount} yerine ${report.sections.length} rapor bölümü üretildi`);
+	if (report.sections.length !== expectedSectionCount) issues.push(`${report.sections.length} report sections were produced instead of ${expectedSectionCount}`);
 	if (duplicateSections.length) issues.push(`Tekrarlanan report ID: ${duplicateSections.join(", ")}`);
 	report.sections.forEach((section) => section.claimIds.forEach((claimId) => {
-		if (!claimIds.has(claimId)) issues.push(`${section.id} bilinmeyen claim kullanıyor: ${claimId}`);
+		if (!claimIds.has(claimId)) issues.push(`${section.id} uses an unknown claim: ${claimId}`);
 	}));
 	const kinds = new Set(report.sections.map((section) => section.kind));
 	[
@@ -5075,7 +5075,7 @@ function validateDeepReportIntegrity(report, evidence, expectedSectionCount) {
 		"reproduction",
 		"implication"
 	].forEach((kind) => {
-		if (!kinds.has(kind)) issues.push(`Report ${kind} bölümü içermeli`);
+		if (!kinds.has(kind)) issues.push(`The report must include a ${kind} section`);
 	});
 	if (issues.length) throw new IntegrityError("DeepReport", issues);
 }
@@ -5089,11 +5089,11 @@ function validateTechnicalAppendixIntegrity(appendix, evidence) {
 		...appendix.complexity
 	];
 	linkedItems.forEach((item, index) => item.claimIds.forEach((claimId) => {
-		if (!claimIds.has(claimId)) issues.push(`Technical item ${index + 1} bilinmeyen claim kullanıyor: ${claimId}`);
+		if (!claimIds.has(claimId)) issues.push(`Technical item ${index + 1} uses an unknown claim: ${claimId}`);
 	}));
 	const duplicateEquations = duplicates(appendix.equations.map((equation) => equation.id));
 	if (duplicateEquations.length) issues.push(`Tekrarlanan equation ID: ${duplicateEquations.join(", ")}`);
-	if (!linkedItems.length) issues.push("Technical appendix en az bir kanıta bağlı teknik öğe içermeli");
+	if (!linkedItems.length) issues.push("The technical appendix must include at least one evidence-linked item");
 	if (issues.length) throw new IntegrityError("TechnicalAppendix", issues);
 }
 /**
@@ -5117,7 +5117,7 @@ function validateLearningIntegrity(project, options = {}) {
 	};
 	if (options.requireDepthBlocks) for (const block of LEARNING_REQUIREMENTS[project.depth]) {
 		const value = project[block];
-		if (value === void 0 || Array.isArray(value) && value.length === 0) issues.push(`${block}: "${project.depth}" derinliğinde zorunlu`);
+		if (value === void 0 || Array.isArray(value) && value.length === 0) issues.push(`${block}: required at "${project.depth}" depth`);
 	}
 	if (project.primer) {
 		const conceptIds = project.primer.concepts.map((concept) => concept.id);
@@ -5126,8 +5126,8 @@ function validateLearningIntegrity(project, options = {}) {
 		const known = new Set(conceptIds);
 		project.primer.concepts.forEach((concept) => {
 			concept.prerequisiteIds.forEach((id) => {
-				if (id === concept.id) issues.push(`primer.${concept.id}: kendini ön koşul gösteremez`);
-				else if (!known.has(id)) issues.push(`primer.${concept.id}: bilinmeyen ön koşul ${id}`);
+				if (id === concept.id) issues.push(`primer.${concept.id}: cannot list itself as a prerequisite`);
+				else if (!known.has(id)) issues.push(`primer.${concept.id}: unknown prerequisite ${id}`);
 			});
 			checkClaims(concept.claimIds, `primer.${concept.id}`);
 		});
@@ -5139,7 +5139,7 @@ function validateLearningIntegrity(project, options = {}) {
 		project.derivations.forEach((derivation) => {
 			if (derivation.equationId && !equationIds.has(derivation.equationId)) issues.push(`derivations.${derivation.id}: bilinmeyen equationId ${derivation.equationId}`);
 			const duplicateSteps = duplicates(derivation.steps.map((step) => step.id));
-			if (duplicateSteps.length) issues.push(`derivations.${derivation.id}: tekrarlanan adım ID ${duplicateSteps.join(", ")}`);
+			if (duplicateSteps.length) issues.push(`derivations.${derivation.id}: duplicate step id ${duplicateSteps.join(", ")}`);
 			checkClaims(derivation.claimIds, `derivations.${derivation.id}`);
 		});
 	}
@@ -5148,10 +5148,10 @@ function validateLearningIntegrity(project, options = {}) {
 		if (duplicateQuestions.length) issues.push(`quiz: tekrarlanan soru ID ${duplicateQuestions.join(", ")}`);
 		project.quiz.questions.forEach((question) => {
 			const correct = question.options.filter((option) => option.correct).length;
-			if (correct === 0) issues.push(`quiz.${question.id}: doğru şık yok`);
-			if (question.kind !== "multi" && correct !== 1) issues.push(`quiz.${question.id}: "${question.kind}" sorusunda tam olarak bir doğru şık olmalı (bulunan ${correct})`);
-			if (question.kind === "multi" && correct < 2) issues.push(`quiz.${question.id}: "multi" sorusunda en az iki doğru şık olmalı`);
-			if (question.kind === "true-false" && question.options.length !== 2) issues.push(`quiz.${question.id}: doğru-yanlış sorusu tam iki şık içermeli`);
+			if (correct === 0) issues.push(`quiz.${question.id}: no correct option`);
+			if (question.kind !== "multi" && correct !== 1) issues.push(`quiz.${question.id}: a "${question.kind}" question must have exactly one correct option (found ${correct})`);
+			if (question.kind === "multi" && correct < 2) issues.push(`quiz.${question.id}: a "multi" question must have at least two correct options`);
+			if (question.kind === "true-false" && question.options.length !== 2) issues.push(`quiz.${question.id}: a true/false question must have exactly two options`);
 			checkClaims(question.claimIds, `quiz.${question.id}`);
 		});
 	}
@@ -5167,9 +5167,9 @@ function validateLearningIntegrity(project, options = {}) {
 				if (duplicateParams.length) issues.push(`${owner}: tekrarlanan parametre ${duplicateParams.join(", ")}`);
 				const declared = new Set(names);
 				interactive.parameters.forEach((parameter) => {
-					if (!(parameter.min < parameter.max)) issues.push(`${owner}.${parameter.name}: min < max olmalı`);
-					if (parameter.paperValue < parameter.min || parameter.paperValue > parameter.max) issues.push(`${owner}.${parameter.name}: makale değeri (${parameter.paperValue}) aralık dışında`);
-					if (parameter.step > parameter.max - parameter.min) issues.push(`${owner}.${parameter.name}: adım aralıktan büyük`);
+					if (!(parameter.min < parameter.max)) issues.push(`${owner}.${parameter.name}: min must be less than max`);
+					if (parameter.paperValue < parameter.min || parameter.paperValue > parameter.max) issues.push(`${owner}.${parameter.name}: the paper value (${parameter.paperValue}) is outside the range`);
+					if (parameter.step > parameter.max - parameter.min) issues.push(`${owner}.${parameter.name}: the step is larger than the range`);
 				});
 				const paperPoint = {};
 				interactive.parameters.forEach((parameter) => {
@@ -5177,42 +5177,42 @@ function validateLearningIntegrity(project, options = {}) {
 				});
 				const outputIds = /* @__PURE__ */ new Set();
 				interactive.outputs.forEach((output) => {
-					if (outputIds.has(output.id)) issues.push(`${owner}: tekrarlanan çıktı ID ${output.id}`);
+					if (outputIds.has(output.id)) issues.push(`${owner}: duplicate output id ${output.id}`);
 					outputIds.add(output.id);
 					try {
 						const ast = parseFormula(output.formula);
 						collectParams(ast).forEach((name) => {
-							if (!declared.has(name)) issues.push(`${owner}.${output.id}: formül bildirilmemiş parametre kullanıyor: ${name}`);
+							if (!declared.has(name)) issues.push(`${owner}.${output.id}: the formula uses an undeclared parameter: ${name}`);
 						});
 						const atPaperValue = evaluateNode(ast, paperPoint);
-						if (!Number.isFinite(atPaperValue)) issues.push(`${owner}.${output.id}: makale değerlerinde sonlu sonuç üretmiyor`);
+						if (!Number.isFinite(atPaperValue)) issues.push(`${owner}.${output.id}: does not produce a finite result at the paper values`);
 					} catch (error) {
 						const detail = error instanceof FormulaError ? error.message : String(error);
-						issues.push(`${owner}.${output.id}: formül geçersiz — ${detail}`);
+						issues.push(`${owner}.${output.id}: invalid formula — ${detail}`);
 					}
 				});
 				if (interactive.chart) {
-					if (!declared.has(interactive.chart.xParam)) issues.push(`${owner}.chart: xParam bildirilmemiş parametre (${interactive.chart.xParam})`);
+					if (!declared.has(interactive.chart.xParam)) issues.push(`${owner}.chart: xParam is an undeclared parameter (${interactive.chart.xParam})`);
 					interactive.chart.series.forEach((series) => {
-						if (!outputIds.has(series.outputId)) issues.push(`${owner}.chart: bilinmeyen çıktı ${series.outputId}`);
+						if (!outputIds.has(series.outputId)) issues.push(`${owner}.chart: unknown output ${series.outputId}`);
 					});
 				}
 			}
 			if (interactive.kind === "mechanism-simulation") {
 				const nodeIds = new Set(interactive.stageNodes.map((node) => node.id));
 				const duplicateNodes = duplicates(interactive.stageNodes.map((node) => node.id));
-				if (duplicateNodes.length) issues.push(`${owner}: tekrarlanan düğüm ID ${duplicateNodes.join(", ")}`);
+				if (duplicateNodes.length) issues.push(`${owner}: duplicate node id ${duplicateNodes.join(", ")}`);
 				interactive.frames.forEach((frame, index) => {
 					frame.activeNodeIds.forEach((id) => {
-						if (!nodeIds.has(id)) issues.push(`${owner}.frames[${index}]: bilinmeyen düğüm ${id}`);
+						if (!nodeIds.has(id)) issues.push(`${owner}.frames[${index}]: unknown node ${id}`);
 					});
 					if (frame.grid) {
 						const { rowLabels, columnLabels, values } = frame.grid;
-						if (values.length !== rowLabels.length) issues.push(`${owner}.frames[${index}].grid: satır sayısı etiketlerle eşleşmiyor`);
+						if (values.length !== rowLabels.length) issues.push(`${owner}.frames[${index}].grid: the row count does not match the labels`);
 						values.forEach((row, rowIndex) => {
-							if (row.length !== columnLabels.length) issues.push(`${owner}.frames[${index}].grid: ${rowIndex}. satır sütun sayısıyla eşleşmiyor`);
+							if (row.length !== columnLabels.length) issues.push(`${owner}.frames[${index}].grid: row ${rowIndex} does not match the column count`);
 							row.forEach((cell) => {
-								if (!Number.isFinite(cell)) issues.push(`${owner}.frames[${index}].grid: sonlu olmayan hücre değeri`);
+								if (!Number.isFinite(cell)) issues.push(`${owner}.frames[${index}].grid: non-finite cell value`);
 							});
 						});
 					}
@@ -5221,18 +5221,18 @@ function validateLearningIntegrity(project, options = {}) {
 			if (interactive.kind === "dataset-explorer") {
 				const columnIds = interactive.columns.map((column) => column.id);
 				const duplicateColumns = duplicates(columnIds);
-				if (duplicateColumns.length) issues.push(`${owner}: tekrarlanan sütun ID ${duplicateColumns.join(", ")}`);
+				if (duplicateColumns.length) issues.push(`${owner}: duplicate column id ${duplicateColumns.join(", ")}`);
 				interactive.rows.forEach((row, index) => {
 					if (row.cells.length !== interactive.columns.length) {
-						issues.push(`${owner}.rows[${index}]: hücre sayısı sütun sayısıyla eşleşmiyor`);
+						issues.push(`${owner}.rows[${index}]: the cell count does not match the column count`);
 						return;
 					}
 					interactive.columns.forEach((column, columnIndex) => {
 						const cell = row.cells[columnIndex];
-						if (column.type === "number" && (typeof cell !== "number" || !Number.isFinite(cell))) issues.push(`${owner}.rows[${index}].${column.id}: sayısal sütun sayı olmayan değer içeriyor`);
+						if (column.type === "number" && (typeof cell !== "number" || !Number.isFinite(cell))) issues.push(`${owner}.rows[${index}].${column.id}: a numeric column holds a non-numeric value`);
 					});
 				});
-				if (interactive.defaultSort && !columnIds.includes(interactive.defaultSort.columnId)) issues.push(`${owner}.defaultSort: bilinmeyen sütun ${interactive.defaultSort.columnId}`);
+				if (interactive.defaultSort && !columnIds.includes(interactive.defaultSort.columnId)) issues.push(`${owner}.defaultSort: unknown column ${interactive.defaultSort.columnId}`);
 				checkReference(interactive.sourceRef, `${owner}.sourceRef`, sourceIds, issues);
 			}
 		});
@@ -5248,7 +5248,7 @@ function validateLearningIntegrity(project, options = {}) {
 function describeValidationError(error) {
 	if (error instanceof IntegrityError) return error.issues;
 	if (error instanceof ZodError) return error.issues.map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`);
-	return [error instanceof Error ? error.message : "Bilinmeyen doğrulama hatası"];
+	return [error instanceof Error ? error.message : "Unknown validation error"];
 }
 
 //#endregion

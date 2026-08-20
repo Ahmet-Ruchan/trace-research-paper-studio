@@ -1,4 +1,5 @@
 import type { StoryVisual } from "@/lib/schema";
+import { useStrings } from "./language-context";
 
 /**
  * Hikâye görselleri — TEK KAYNAK.
@@ -16,13 +17,17 @@ type VisualRendererProps = {
 };
 
 export function VisualRenderer({ visual, accent = "#e75b37", active = true }: VisualRendererProps) {
+  // Görsel metinleri MAKALEDEN gelir. Arayüz İngilizce olsa da bu metinler
+  // projenin dilinde kalır; `lang` olmadan CSS büyük harf dönüşümü Türkçe
+  // "i" harfini "I" yapıp "İÇ ÇARPIM" yerine "IÇ ÇARPIM" üretir.
+  const t = useStrings();
   return (
     <figure
       className={`visual-frame ${active ? "is-active" : ""}`}
       style={{ "--story-accent": accent } as React.CSSProperties}
     >
       <div className="visual-topline">
-        <span>{visual.eyebrow}</span>
+        <span lang={t.locale}>{visual.eyebrow}</span>
         <span className="visual-signal" aria-hidden="true" />
       </div>
 
@@ -89,7 +94,7 @@ export function VisualRenderer({ visual, accent = "#e75b37", active = true }: Vi
         {visual.type === "quote" && (
           <div className="quote-visual">
             <span className="quote-mark" aria-hidden="true">∴</span>
-            <blockquote>{visual.quote}</blockquote>
+            <blockquote lang={t.locale}>{visual.quote}</blockquote>
             <p>{visual.attribution}</p>
           </div>
         )}
@@ -99,11 +104,11 @@ export function VisualRenderer({ visual, accent = "#e75b37", active = true }: Vi
             <div className="architecture-nodes">
               {visual.nodes.map((node) => (
                 <div className={`architecture-node group-${node.group}`} key={node.id} tabIndex={0}>
-                  <span>{node.group}</span><strong>{node.label}</strong><small>{node.detail}</small>
+                  <span lang={t.locale}>{node.group}</span><strong>{node.label}</strong><small>{node.detail}</small>
                 </div>
               ))}
             </div>
-            <div className="architecture-edges" aria-label="Mimari bağlantılar">
+            <div className="architecture-edges" aria-label="Architecture connections">
               {visual.edges.map((edge, index) => {
                 const from = visual.nodes.find((node) => node.id === edge.from)?.label ?? edge.from;
                 const to = visual.nodes.find((node) => node.id === edge.to)?.label ?? edge.to;

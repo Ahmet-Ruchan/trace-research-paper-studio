@@ -32,7 +32,10 @@ export function ViewerShell({ project, initialTab }: { project: ResearchProject;
   const [tab, setTab] = useState<Tab>(tabs.includes(initialTab) ? initialTab : "lab");
 
   useEffect(() => {
-    document.documentElement.lang = project.language;
+    // Arayüz İngilizce; kök `lang` de öyle. Makale metninin dili tek tek
+    // içerik öğelerinde işaretlenir, kökte değil — kökü Türkçeye çekmek
+    // İngilizce başlıkları "TECHNİCAL" gibi bozardı.
+    document.documentElement.lang = "en";
     document.title = `${project.story.title} · Trace`;
     const accent = /^#[0-9a-f]{6}$/i.test(project.story.accent) ? project.story.accent : "#e75b37";
     document.documentElement.style.setProperty("--accent", accent);

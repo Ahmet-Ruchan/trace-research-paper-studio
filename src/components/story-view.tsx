@@ -55,19 +55,19 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
           <span>{project.story.readingTime}</span>
         </div>
         <div className="story-hero-copy">
-          <p className="story-overline">{project.evidence.paper.year} · {project.evidence.paper.venue}</p>
+          <p className="story-overline" lang={project.language}>{project.evidence.paper.year} · {project.evidence.paper.venue}</p>
           <h1>{project.story.title}</h1>
           <p className="story-dek">{project.story.dek}</p>
           <div className="story-authors">
             {project.evidence.paper.authors.slice(0, 4).join(", ")}
-            {project.evidence.paper.authors.length > 4 && " ve diğerleri"}
+            {project.evidence.paper.authors.length > 4 && " et al."}
           </div>
         </div>
         <button
           className="story-scroll-cue"
           onClick={() => sectionRefs.current[project.story.sections[0]?.id]?.scrollIntoView({ behavior: "smooth" })}
         >
-          Hikâyeye başla <ArrowDown size={15} />
+          Start the story <ArrowDown size={15} />
         </button>
       </header>
 
@@ -81,7 +81,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
               className={`story-section ${activeId === section.id ? "is-active" : ""}`}
             >
               <span className="story-index">{section.indexLabel}</span>
-              <p className="story-kicker">{section.kicker}</p>
+              <p className="story-kicker" lang={project.language}>{section.kicker}</p>
               <h2>{section.title}</h2>
               <p>{section.body}</p>
               <div className="story-claim-links">
@@ -112,7 +112,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
               active
             />
           )}
-          <nav className="story-section-dots" aria-label="Story bölümleri">
+          <nav className="story-section-dots" aria-label="Story sections">
             {project.story.sections.map((section) => (
               <button
                 key={section.id}
@@ -135,7 +135,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
       ) : null}
 
       <footer className="story-closing">
-        <p className="story-overline">Son okuma</p>
+        <p className="story-overline">Closing</p>
         <h2>{project.story.closing.title}</h2>
         <p>{project.story.closing.body}</p>
         <div className="story-source-card">

@@ -28,7 +28,7 @@ function makeStrict(schema: unknown): unknown {
 
   if (Array.isArray(next.oneOf)) {
     if (next.anyOf !== undefined) {
-      throw new Error("OpenAI strict schema aynı düğümde oneOf ve anyOf içeremez.");
+      throw new Error("An OpenAI strict schema cannot carry both oneOf and anyOf on the same node.");
     }
     // Zod discriminated unions use oneOf. Their literal discriminator keeps the
     // branches exclusive, while OpenAI's strict subset represents unions as anyOf.

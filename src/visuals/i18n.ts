@@ -1,12 +1,11 @@
 /**
- * Arayüz metinleri.
+ * Arayüz metinleri — HER ZAMAN İNGİLİZCE.
  *
- * Şema `language: "tr" | "en"` taşıyor ama arayüz sabit Türkçeydi: İngilizce
- * bir proje de Türkçe düğmelerle render oluyordu. Buradaki tablo projenin
- * kendi diline göre seçiliyor.
+ * Ürün tek bir arayüz dili konuşuyor; makale içeriği ise onu üreten modelin
+ * yazdığı dilde kalıyor. İkisi ayrı: kanıta bağlı metni çevirmek alıntıyı
+ * bozar, arayüzü çevirmek ise ürünü iki farklı ürüne böler.
  *
- * Yalnızca ARAYÜZ metinleri burada. Makale içeriği projenin kendisinden gelir
- * ve çevrilmez — kanıta bağlı metni çevirmek alıntıyı bozar.
+ * Projenin dilinden yalnızca `locale` etkilenir (sıralama ve harf dönüşümü).
  */
 
 export type Language = "tr" | "en";
@@ -102,88 +101,6 @@ export type Strings = {
   labSectionsAria: string;
 };
 
-const tr: Strings = {
-  locale: "tr",
-  sourceLabel: "Kaynağı gör",
-  page: (page) => `s. ${page}`,
-  evidenceLabel: "Kanıtı gör",
-  playgroundKind: "Oyun alanı",
-  simulationKind: "Simülasyon",
-  explorerKind: "Veri keşfi",
-  resetToPaper: "Makale değerlerine dön",
-  paperValueShort: "makale",
-  offPaperWarning: (anchor) =>
-    `Makale dışı bölgedesin — bu değerler makalede doğrulanmadı. ${anchor}`,
-  notComputable: "hesaplanamadı",
-  chartPaperKey: "makale değeri",
-  back: "‹ Geri",
-  forward: "İleri ›",
-  play: "Oynat",
-  pause: "Duraklat",
-  replay: "Baştan oynat",
-  filterPlaceholder: "Filtrele…",
-  filterAria: "Tabloyu filtrele",
-  emptyRows: "Filtreye uyan satır yok.",
-  levels: { temel: "Temel", orta: "Orta", ileri: "İleri" },
-  whyItMatters: "Bu makalede neden gerekli:",
-  readFirst: "Önce şunları oku:",
-  goal: "Hedef:",
-  nextStep: (shown, total) => `Sonraki adımı göster (${shown}/${total})`,
-  numericExample: "Sayısal örnek",
-  result: "Sonuç:",
-  checkAnswer: "Yanıtı kontrol et",
-  correct: "Doğru",
-  wrong: "Yanlış",
-  score: (right, total) => `${right} / ${total} doğru`,
-  hyperparameters: "Hiperparametre seçimi",
-  pitfalls: "Sık yapılan hatalar",
-  pitfallCause: "Neden:",
-  pitfallFix: "Çözüm:",
-  whenNotToUse: "Ne zaman kullanılmaz",
-  guideParameter: "Parametre",
-  guidePaperValue: "Makale değeri",
-  guideRange: "Aralık",
-  guideHowToChoose: "Nasıl seçilir",
-  navPrimer: "Ön bilgi",
-  navPractice: "Öğren & Dene",
-  tabLab: "Lab",
-  tabStory: "Hikâye",
-  tabPractice: "Öğren & Dene",
-  tabTechnical: "Teknik",
-  practiceHeading: "Öğren & Dene",
-  derivationsHeading: "Adım adım türetimler",
-  interactivesHeading: "İnteraktif deneme",
-  tryItHeading: "Şimdi kendin dene",
-  localStudio: "Yerel makale stüdyosu",
-  thesis: "Tez",
-  plainSummary: "Sade özet",
-  researchQuestion: "Araştırma sorusu",
-  methodsFindingsLimits: "Yöntem, bulgular, sınırlılıklar",
-  methods: "Yöntem",
-  findings: "Bulgular",
-  limitations: "Sınırlılıklar",
-  metrics: "Metrikler",
-  claims: "İddialar",
-  glossary: "Sözlük",
-  openQuestions: "Açık sorular",
-  equations: "Denklemler",
-  algorithmSteps: "Algoritma adımları",
-  codeSketches: "Kod taslakları",
-  complexity: "Karmaşıklık",
-  implementationNotes: "Uygulama notları",
-  operation: "İşlem",
-  cost: "Maliyet",
-  context: "Bağlam",
-  sourceFallback: "kaynak",
-  home: "Ana sayfa",
-  library: "Kütüphane",
-  paperMap: "Paper map",
-  linkedSources: "bağlı kaynak",
-  pickAClaim: "Bir claim seç",
-  pickAClaimHint: "Kaynağını görmek için bir bulgu veya story içindeki kaynak etiketine tıkla.",
-  labSectionsAria: "Paper inceleme bölümleri",
-};
-
 const en: Strings = {
   locale: "en",
   sourceLabel: "View source",
@@ -266,8 +183,13 @@ const en: Strings = {
   labSectionsAria: "Paper review sections",
 };
 
-const TABLES: Record<Language, Strings> = { tr, en };
+/**
+ * Türkçe içerik için yalnızca `locale` değişir: sıralama ve küçük/büyük harf
+ * dönüşümü makalenin diline göre yapılmalı ("i" → "İ"), arayüz metni ise
+ * değişmez.
+ */
+const enWithTurkishLocale: Strings = { ...en, locale: "tr" };
 
 export function stringsFor(language: string | undefined): Strings {
-  return TABLES[(language as Language) ?? "tr"] ?? tr;
+  return language === "tr" ? enWithTurkishLocale : en;
 }

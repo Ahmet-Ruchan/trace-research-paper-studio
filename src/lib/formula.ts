@@ -108,7 +108,7 @@ function tokenize(input: string): Token[] {
       index += nameMatch[0].length;
       continue;
     }
-    throw new FormulaError(`Geçersiz karakter: "${char}" (konum ${index})`);
+    throw new FormulaError(`Invalid character: "${char}" (position ${index})`);
   }
   return tokens;
 }
@@ -118,10 +118,10 @@ const PRECEDENCE: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2, "%"
 
 export function parseFormula(source: string): FormulaNode {
   if (typeof source !== "string" || !source.trim()) {
-    throw new FormulaError("Formül boş olamaz");
+    throw new FormulaError("The formula cannot be empty");
   }
   if (source.length > FORMULA_LIMITS.maxLength) {
-    throw new FormulaError(`Formül çok uzun (en fazla ${FORMULA_LIMITS.maxLength} karakter)`);
+    throw new FormulaError(`Formula too long (at most ${FORMULA_LIMITS.maxLength} characters)`);
   }
 
   const tokens = tokenize(source);
@@ -131,7 +131,7 @@ export function parseFormula(source: string): FormulaNode {
   const countNode = () => {
     nodeCount += 1;
     if (nodeCount > FORMULA_LIMITS.maxNodes) {
-      throw new FormulaError(`Formül çok karmaşık (en fazla ${FORMULA_LIMITS.maxNodes} düğüm)`);
+      throw new FormulaError(`Formula too complex (at most ${FORMULA_LIMITS.maxNodes} nodes)`);
     }
   };
 
@@ -139,7 +139,7 @@ export function parseFormula(source: string): FormulaNode {
 
   function parseExpression(minPrecedence: number, depth: number): FormulaNode {
     if (depth > FORMULA_LIMITS.maxDepth) {
-      throw new FormulaError(`Formül çok derin (en fazla ${FORMULA_LIMITS.maxDepth} seviye)`);
+      throw new FormulaError(`Formula too deep (at most ${FORMULA_LIMITS.maxDepth} levels)`);
     }
     let left = parseUnary(depth);
     for (;;) {
@@ -173,7 +173,7 @@ export function parseFormula(source: string): FormulaNode {
 
   function parsePrimary(depth: number): FormulaNode {
     const token = peek();
-    if (!token) throw new FormulaError("Formül beklenmedik şekilde bitti");
+    if (!token) throw new FormulaError("The formula ended unexpectedly");
 
     if (token.type === "number") {
       position += 1;
@@ -186,7 +186,7 @@ export function parseFormula(source: string): FormulaNode {
       const inner = parseExpression(1, depth + 1);
       const closing = peek();
       if (!closing || closing.type !== "paren" || closing.value !== ")") {
-        throw new FormulaError("Kapanmamış parantez");
+        throw new FormulaError("Unclosed parenthesis");
       }
       position += 1;
       return inner;
@@ -214,7 +214,7 @@ export function parseFormula(source: string): FormulaNode {
               position += 1;
               break;
             }
-            throw new FormulaError(`${token.value}( ... ) çağrısı kapanmadı`);
+            throw new FormulaError(`The ${token.value}( ... ) call was never closed`);
           }
         }
         const [minArity, maxArity] = Array.isArray(spec.arity)
@@ -222,7 +222,7 @@ export function parseFormula(source: string): FormulaNode {
           : [spec.arity, spec.arity];
         if (args.length < minArity || args.length > maxArity) {
           throw new FormulaError(
-            `${token.value} fonksiyonu ${minArity === maxArity ? minArity : `${minArity}-${maxArity}`} argüman alır (verilen ${args.length})`,
+            `${token.value} fonksiyonu ${minArity === maxArity ? minArity : `${minArity}-${maxArity}`} arguments (verilen ${args.length})`,
           );
         }
         countNode();
@@ -233,12 +233,12 @@ export function parseFormula(source: string): FormulaNode {
       return { kind: "param", name: token.value };
     }
 
-    throw new FormulaError(`Beklenmeyen belirteç: ${JSON.stringify(token)}`);
+    throw new FormulaError(`Unexpected token: ${JSON.stringify(token)}`);
   }
 
   const ast = parseExpression(1, 0);
   if (position !== tokens.length) {
-    throw new FormulaError("Formülün sonunda çözümlenemeyen ifade var");
+    throw new FormulaError("Unparsed expression left at the end of the formula");
   }
   return ast;
 }
@@ -261,7 +261,7 @@ export function evaluateNode(node: FormulaNode, params: Record<string, number>):
     case "param": {
       const value = params[node.name];
       if (typeof value !== "number" || !Number.isFinite(value)) {
-        throw new FormulaError(`Parametre tanımsız veya sonlu değil: ${node.name}`);
+        throw new FormulaError(`Parameter is undefined or not finite: ${node.name}`);
       }
       return value;
     }

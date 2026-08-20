@@ -69,10 +69,10 @@ export const evidenceCheckpointSchema = z.object({
 export type EvidenceCheckpoint = z.infer<typeof evidenceCheckpointSchema>;
 
 export const evidencePassLabels: Record<EvidencePassId, string> = {
-  overview: "Genel çerçeve",
-  methods: "Yöntem ve mimari",
+  overview: "Overview",
+  methods: "Method and architecture",
   results: "Bulgular ve metrikler",
-  limitations: "Sınırlar ve kapsam",
+  limitations: "Limits and scope",
 };
 
 function referencesForPass(value: EvidencePassOutputs[EvidencePassId]) {
@@ -107,12 +107,12 @@ export function validateEvidencePass(
 
   referencesForPass(value).forEach(({ owner, reference }) => {
     if (!sourceIds.has(reference.sourceId)) {
-      issues.push(`${owner} bilinmeyen kaynak kullanıyor: ${reference.sourceId}`);
+      issues.push(`${owner} uses an unknown source: ${reference.sourceId}`);
     }
     if (reference.sourceId === "paper" && !reference.page) {
-      issues.push(`${owner} için görünür PDF sayfası eksik`);
+      issues.push(`${owner} is missing a visible PDF page`);
     }
-    if (!reference.excerpt.trim()) issues.push(`${owner} için doğrulanabilir excerpt eksik`);
+    if (!reference.excerpt.trim()) issues.push(`${owner} is missing a verifiable excerpt`);
   });
 
   const allowedKinds = {
@@ -129,18 +129,18 @@ export function validateEvidencePass(
   }[passId];
   value.claims.forEach((claim) => {
     if (!allowedKinds.has(claim.kind)) {
-      issues.push(`${claim.id} claim türü ${passId} aşamasına ait değil: ${claim.kind}`);
+      issues.push(`Claim ${claim.id} does not belong to the ${passId} stage: ${claim.kind}`);
     }
     if (!claim.id.startsWith(expectedPrefix)) {
-      issues.push(`${claim.id} ID değeri "${expectedPrefix}" ile başlamalı`);
+      issues.push(`Claim ${claim.id} must start with "${expectedPrefix}"`);
     }
   });
 
   if (passId === "methods" && !value.claims.some((claim) => claim.kind === "method")) {
-    issues.push("Yöntem aşaması en az bir method claim’i içermeli");
+    issues.push("The method stage must contain at least one method claim");
   }
   if (passId === "limitations" && !value.claims.some((claim) => claim.kind === "limitation")) {
-    issues.push("Sınırlılık aşaması en az bir limitation claim’i içermeli");
+    issues.push("The limitations stage must contain at least one limitation claim");
   }
 
   if (issues.length) throw new IntegrityError(`${evidencePassLabels[passId]} evidence`, issues);
@@ -152,7 +152,7 @@ export function mergeEvidenceParts(
 ): PaperEvidence {
   const { overview, methods, results, limitations } = parts;
   if (!overview || !methods || !results || !limitations) {
-    throw new IntegrityError("Evidence merge", ["Dört evidence aşamasının tamamlanması gerekli"]);
+    throw new IntegrityError("Evidence merge", ["All four evidence stages must be completed"]);
   }
 
   return paperEvidenceSchema.parse({

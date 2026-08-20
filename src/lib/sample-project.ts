@@ -23,6 +23,6 @@ export function sampleProjectUrl(language?: string) {
 
 export async function loadSampleProject(language?: string): Promise<ResearchProject> {
   const response = await fetch(sampleProjectUrl(language), { cache: "force-cache" });
-  if (!response.ok) throw new Error(`Örnek proje yüklenemedi (HTTP ${response.status}).`);
+  if (!response.ok) throw new Error(`The example project could not be loaded (HTTP ${response.status}).`);
   return researchProjectSchema.parse(await response.json());
 }

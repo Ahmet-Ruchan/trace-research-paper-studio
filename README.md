@@ -108,8 +108,11 @@ quote behind the right answer.
 
 ## Install in under a minute
 
-<details open>
-<summary><b id="claude-code">Claude Code</b></summary>
+Pick your agent. Two commands, then restart — the plugin is the same on all three.
+
+<a id="claude-code"></a>
+
+### <img src="https://cdn.simpleicons.org/anthropic/E75B37" height="18" align="top"> &nbsp;Claude Code
 
 ```bash
 claude plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --scope user
@@ -118,10 +121,9 @@ claude plugin install trace-paper-studio@trace-research-tools --scope user
 
 Restart Claude Code. That is it.
 
-</details>
+<a id="codex"></a>
 
-<details>
-<summary><b id="codex">Codex</b></summary>
+### <img src="https://cdn.simpleicons.org/openai/191B18" height="18" align="top"> &nbsp;Codex
 
 ```bash
 codex plugin marketplace add Ahmet-Ruchan/trace-research-paper-studio --ref main
@@ -131,18 +133,15 @@ codex plugin add trace-paper-studio@trace-research-tools
 Restart Codex or open a new session. You can also invoke the skill explicitly with
 `$trace-paper-studio`.
 
-</details>
+<a id="gemini-cli"></a>
 
-<details>
-<summary><b id="gemini-cli">Gemini CLI</b></summary>
+### <img src="https://cdn.simpleicons.org/googlegemini/2E7254" height="18" align="top"> &nbsp;Gemini CLI
 
 ```bash
 gemini extensions install https://github.com/Ahmet-Ruchan/trace-research-paper-studio
 ```
 
 Restart the CLI or open a new session.
-
-</details>
 
 **Requirements:** Node.js 20+, and `pdftotext` (from Poppler) for page-accurate extraction.
 Without it the agent falls back to its own PDF reader.
@@ -403,8 +402,11 @@ Not there yet: hosted publishing, accounts, shared persistence, local and open-w
 
 *Attention Is All You Need* ships fully enriched in `public/examples/`, in English and Turkish,
 serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
-by tests so neither can silently fall behind the schema. Interface text follows the project's own
-`language` field, so an English project renders an English interface and a Turkish one does not.
+by tests so neither can silently fall behind the schema.
+
+The interface is always English. The analysis is not: it stays in whatever language the model
+wrote it in, and a test scans the interface layer to keep the two from mixing. Turkish content
+still sorts and uppercases by Turkish rules, because casing follows the text, not the chrome.
 
 ## Roadmap
 

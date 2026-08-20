@@ -13,24 +13,24 @@ type EvidenceDrawerProps = {
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
-  "reported-result": "Raporlanan sonuç",
+  "reported-result": "Reported result",
   "author-interpretation": "Yazar yorumu",
-  method: "Yöntem",
+  method: "Method",
   background: "Arka plan",
-  limitation: "Sınırlılık",
+  limitation: "Limitation",
 };
 
 export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent = false }: EvidenceDrawerProps) {
   const t = useStrings();
   return (
-    <aside className={`evidence-drawer ${persistent ? "is-persistent" : ""}`} aria-label="Kanıt ayrıntısı">
+    <aside className={`evidence-drawer ${persistent ? "is-persistent" : ""}`} aria-label="Evidence detail">
       <div className="drawer-header">
         <div>
           <span>Evidence</span>
           <strong>{claim ? kindLabels[claim.kind] : t.pickAClaim}</strong>
         </div>
         {onClose && (
-          <button className="icon-button" onClick={onClose} aria-label="Kanıt panelini kapat">
+          <button className="icon-button" onClick={onClose} aria-label="Close evidence panel">
             <X size={17} />
           </button>
         )}
@@ -45,7 +45,7 @@ export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent =
         <div className="drawer-content">
           <div className="claim-status">
             <span className={claim.confidence === "verified" ? "verified" : "review"}>
-              <Check size={13} /> {claim.confidence === "verified" ? "Doğrulandı" : "İnceleme gerekli"}
+              <Check size={13} /> {claim.confidence === "verified" ? "Verified" : "Needs review"}
             </span>
             <small>{kindLabels[claim.kind]}</small>
           </div>
@@ -69,7 +69,7 @@ export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent =
                   <div className="reference-source">
                     <span>{source?.title ?? reference.sourceId}</span>
                     {href && (
-                      <a href={href} target="_blank" rel="noreferrer" aria-label="Kaynağı aç">
+                      <a href={href} target="_blank" rel="noreferrer" aria-label="Open source">
                         <ExternalLink size={14} />
                       </a>
                     )}

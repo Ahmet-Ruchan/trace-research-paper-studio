@@ -54,7 +54,7 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
             event.target.value = "";
             if (!file) return;
             setImportError(undefined);
-            void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : "Trace projesi içe alınamadı."));
+            void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : "Could not import the Trace project."));
           }} />
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>
           <button className="library-new-button" onClick={onNew}><Plus size={16} /> Yeni paper</button>
@@ -66,15 +66,15 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
       <section className="library-hero">
         <div>
           <p className="landing-eyebrow"><span /> Personal research archive</p>
-          <h1>Paper kütüphanen.</h1>
-          <p>Ürettiğin kanıt haritaları, derin raporlar ve interaktif anlatılar tek yerde.</p>
+          <h1>Your paper library.</h1>
+          <p>Every evidence map, deep report and interactive explanation you have produced, in one place.</p>
         </div>
-        <div className="library-stat"><strong>{projects.length}</strong><span>kayıtlı çalışma</span></div>
+        <div className="library-stat"><strong>{projects.length}</strong><span>saved projects</span></div>
       </section>
 
       <section className="library-toolbar">
-        <label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Başlık, yazar veya venue ara" /></label>
-        <span>{filtered.length} sonuç</span>
+        <label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, author or venue" /></label>
+        <span>{filtered.length} results</span>
       </section>
 
       {filtered.length ? (
@@ -102,10 +102,10 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
               <footer>
                 <span>{formatDate(project.updatedAt)}{generationLabel(project) ? ` · ${generationLabel(project)}` : ""}</span>
                 <div>
-                  <button className="library-delete" title="Kütüphaneden sil" onClick={() => {
-                    if (window.confirm(`“${project.evidence.paper.title}” kütüphaneden silinsin mi?`)) onDelete(project.id);
+                  <button className="library-delete" title="Remove from library" onClick={() => {
+                    if (window.confirm(`Remove “${project.evidence.paper.title}” from the library?`)) onDelete(project.id);
                   }}><Trash2 size={15} /></button>
-                  <button className="library-open" onClick={() => onOpen(project)}>Aç <ArrowRight size={15} /></button>
+                  <button className="library-open" onClick={() => onOpen(project)}>Open <ArrowRight size={15} /></button>
                 </div>
               </footer>
             </article>
@@ -114,8 +114,8 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
       ) : (
         <section className="library-empty">
           <BookOpen size={30} />
-          <h2>{projects.length ? "Aramanla eşleşen paper yok." : "Kütüphanen ilk paper’ını bekliyor."}</h2>
-          <p>Bir PDF ekle veya Codex, Claude Code ya da Gemini CLI’nin ürettiği Trace JSON’u içe al.</p>
+          <h2>{projects.length ? "No paper matches your search." : "Your library is waiting for its first paper."}</h2>
+          <p>Add a PDF, or import a Trace JSON produced by Codex, Claude Code or Gemini CLI.</p>
           <button onClick={onNew}>Paper ekle <ArrowRight size={16} /></button>
         </section>
       )}

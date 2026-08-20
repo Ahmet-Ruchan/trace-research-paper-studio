@@ -29,7 +29,7 @@ export const providerCatalog: readonly ProviderDefinition[] = [
     label: "Google Gemini",
     keyLabel: "Gemini API key",
     models: [
-      { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", note: "Hızlı" },
+      { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", note: "Fast" },
       { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", note: "Derin" },
       { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", note: "Uyumlu" },
     ],
@@ -39,8 +39,8 @@ export const providerCatalog: readonly ProviderDefinition[] = [
     label: "OpenAI",
     keyLabel: "OpenAI API key",
     models: [
-      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", note: "Önerilen" },
-      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", note: "En yüksek kalite" },
+      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", note: "Recommended" },
+      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", note: "Highest quality" },
       { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", note: "Ekonomik" },
     ],
   },
@@ -49,9 +49,9 @@ export const providerCatalog: readonly ProviderDefinition[] = [
     label: "Anthropic Claude",
     keyLabel: "Claude API key",
     models: [
-      { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5", note: "Önerilen" },
+      { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5", note: "Recommended" },
       { id: "claude-opus-4-1", label: "Claude Opus 4.1", note: "Derin" },
-      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", note: "Hızlı" },
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", note: "Fast" },
     ],
   },
   {
@@ -60,7 +60,7 @@ export const providerCatalog: readonly ProviderDefinition[] = [
     keyLabel: "OpenRouter API key",
     dynamicModels: true,
     models: [
-      { id: "openrouter/auto", label: "Auto Router", note: "Otomatik seçim" },
+      { id: "openrouter/auto", label: "Auto Router", note: "Automatic selection" },
     ],
   },
 ] as const;
@@ -81,31 +81,31 @@ export const generationTaskCatalog: ReadonlyArray<{
 }> = [
   {
     id: "evidence",
-    label: "Kanıt ve kaynak okuma",
+    label: "Evidence and source reading",
     shortLabel: "Evidence",
-    description: "Paper özeti, kaynak haritası, sınırlılıklar ve doğrulanabilir claim’ler.",
-    recommendation: "Geniş bağlam ve güçlü PDF okuma",
+    description: "Paper summary, source map, limitations and verifiable claims.",
+    recommendation: "Large context and strong PDF reading",
   },
   {
     id: "technical",
     label: "Teknik ve matematiksel analiz",
     shortLabel: "Technical",
-    description: "Yöntem, denklemler, mimari, deney düzeni, sonuçlar ve kodlama mantığı.",
-    recommendation: "Derin reasoning ve kod yeteneği",
+    description: "Method, equations, architecture, experimental setup, results and coding logic.",
+    recommendation: "Deep reasoning and coding ability",
   },
   {
     id: "report",
-    label: "Rapor ve açıklayıcı anlatım",
+    label: "Report and explanatory writing",
     shortLabel: "Report",
-    description: "Derin rapor, eleştiri, reprodüksiyon notları ve anlaşılır açıklamalar.",
-    recommendation: "Güçlü yazım ve sentez",
+    description: "Deep report, critique, reproduction notes and clear explanations.",
+    recommendation: "Strong writing and synthesis",
   },
   {
     id: "visual",
-    label: "Canvas ve görsel yönetmenlik",
+    label: "Canvas and visual direction",
     shortLabel: "Visual",
-    description: "İnfografikler, mimari haritalar, canvas düzenleri ve scrollytelling planı.",
-    recommendation: "Tasarım yargısı ve structured output",
+    description: "Infographics, architecture maps, canvas layouts and the scrollytelling plan.",
+    recommendation: "Design judgement and structured output",
   },
 ];
 

@@ -53,7 +53,7 @@ describe("öğrenme katmanı bütünlüğü", () => {
 
   it("derinlik zorunluluğunu yalnızca üretim modunda uygular", () => {
     expect(() => validateLearningIntegrity(base)).not.toThrow();
-    expect(() => validateLearningIntegrity(base, { requireDepthBlocks: true })).toThrow(/zorunlu/);
+    expect(() => validateLearningIntegrity(base, { requireDepthBlocks: true })).toThrow(/required at/);
   });
 
   it("geçerli bir formül oyun alanını kabul eder", () => {
@@ -66,7 +66,7 @@ describe("interaktif çalışırlık garantisi", () => {
     const broken = structuredClone(playground);
     broken.outputs[0].formula = "1 / sqrt(d_model)";
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [broken] }))).toThrow(
-      /bildirilmemiş parametre/,
+      /undeclared parameter/,
     );
   });
 
@@ -74,7 +74,7 @@ describe("interaktif çalışırlık garantisi", () => {
     const broken = structuredClone(playground);
     broken.outputs[0].formula = "1 / sqrt(";
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [broken] }))).toThrow(
-      /formül geçersiz/,
+      /invalid formula/,
     );
   });
 
@@ -82,7 +82,7 @@ describe("interaktif çalışırlık garantisi", () => {
     const broken = structuredClone(playground);
     broken.outputs[0].formula = "constructor.constructor('return 1')()";
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [broken] }))).toThrow(
-      /formül geçersiz/,
+      /invalid formula/,
     );
   });
 
@@ -90,7 +90,7 @@ describe("interaktif çalışırlık garantisi", () => {
     const broken = structuredClone(playground);
     broken.outputs[0].formula = "1 / (d_k - 64)"; // paperValue 64 → sıfıra bölme
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [broken] }))).toThrow(
-      /sonlu sonuç üretmiyor/,
+      /does not produce a finite result/,
     );
   });
 
@@ -98,7 +98,7 @@ describe("interaktif çalışırlık garantisi", () => {
     const broken = structuredClone(playground);
     broken.parameters[0].paperValue = 9999;
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [broken] }))).toThrow(
-      /aralık dışında/,
+      /outside the range/,
     );
   });
 
@@ -106,13 +106,13 @@ describe("interaktif çalışırlık garantisi", () => {
     const badSeries = structuredClone(playground);
     badSeries.chart!.series[0].outputId = "yok";
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [badSeries] }))).toThrow(
-      /bilinmeyen çıktı/,
+      /unknown output/,
     );
 
     const badAxis = structuredClone(playground);
     badAxis.chart!.xParam = "yok";
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [badAxis] }))).toThrow(
-      /xParam bildirilmemiş/,
+      /xParam is an undeclared/,
     );
   });
 
@@ -138,7 +138,7 @@ describe("interaktif çalışırlık garantisi", () => {
       claimIds: [claimId],
     };
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [simulation] }))).toThrow(
-      /sütun sayısıyla eşleşmiyor/,
+      /does not match the column count/,
     );
   });
 
@@ -160,7 +160,7 @@ describe("interaktif çalışırlık garantisi", () => {
       claimIds: [claimId],
     };
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [explorer] }))).toThrow(
-      /sayı olmayan değer/,
+      /non-numeric value/,
     );
   });
 });
@@ -212,14 +212,14 @@ describe("quiz ve ön bilgi tutarlılığı", () => {
     broken.questions[0].options.forEach((option) => {
       option.correct = false;
     });
-    expect(() => validateLearningIntegrity(withBlocks({ quiz: broken }))).toThrow(/doğru şık yok/);
+    expect(() => validateLearningIntegrity(withBlocks({ quiz: broken }))).toThrow(/no correct option/);
   });
 
   it("tek yanıtlı soruda birden çok doğru şıkkı reddeder", () => {
     const broken = structuredClone(quizBase);
     broken.questions[0].options[1].correct = true;
     expect(() => validateLearningIntegrity(withBlocks({ quiz: broken }))).toThrow(
-      /tam olarak bir doğru şık/,
+      /exactly one correct option/,
     );
   });
 
@@ -258,8 +258,8 @@ describe("quiz ve ön bilgi tutarlılığı", () => {
       ],
     };
     expect(() => validateLearningIntegrity(withBlocks({ primer }))).toThrow(
-      /kendini ön koşul gösteremez/,
+      /cannot list itself as a prerequisite/,
     );
-    expect(() => validateLearningIntegrity(withBlocks({ primer }))).toThrow(/bilinmeyen ön koşul/);
+    expect(() => validateLearningIntegrity(withBlocks({ primer }))).toThrow(/unknown prerequisite/);
   });
 });

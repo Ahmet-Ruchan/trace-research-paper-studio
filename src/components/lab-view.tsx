@@ -37,20 +37,20 @@ type LabViewProps = {
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
-  "reported-result": "Sonuç",
-  "author-interpretation": "Yorum",
-  method: "Yöntem",
-  background: "Bağlam",
-  limitation: "Sınır",
+  "reported-result": "Result",
+  "author-interpretation": "Interpretation",
+  method: "Method",
+  background: "Background",
+  limitation: "Limitation",
 };
 
 const reportKindLabels = {
-  contribution: "Katkı",
-  mechanism: "Mekanizma",
-  experiment: "Deney",
-  critique: "Eleştiri",
-  reproduction: "Reprodüksiyon",
-  implication: "Çıkarım",
+  contribution: "Contribution",
+  mechanism: "Mechanism",
+  experiment: "Experiment",
+  critique: "Critique",
+  reproduction: "Reproduction",
+  implication: "Implication",
 } as const;
 
 export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: LabViewProps) {
@@ -120,16 +120,16 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
             </section>
             <section className="lab-block two-column-block">
               <div>
-                <div className="block-title"><Lightbulb size={16} /> Araştırma sorusu</div>
+                <div className="block-title"><Lightbulb size={16} /> Research question</div>
                 <p className="large-body">{project.evidence.researchQuestion}</p>
               </div>
               <div>
-                <div className="block-title"><ListChecks size={16} /> Plain-language özet</div>
+                <div className="block-title"><ListChecks size={16} /> Plain-language summary</div>
                 <p>{project.evidence.plainSummary}</p>
               </div>
             </section>
             <section className="lab-block">
-              <div className="block-title"><Quote size={16} /> Öne çıkan bulgular</div>
+              <div className="block-title"><Quote size={16} /> Key findings</div>
               <div className="finding-list">
                 {project.evidence.findings.map((finding, index) => {
                   const claim = project.evidence.claims.find((item) =>
@@ -173,7 +173,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
             </div>
             <section className="report-questions">
               <span>Open questions</span>
-              <h2>Paper’ın henüz cevaplamadığı sorular</h2>
+              <h2>Questions the paper has not answered yet</h2>
               <ol>{project.deepReport.openQuestions.map((question, index) => <li key={`${question}-${index}`}><i>{String(index + 1).padStart(2, "0")}</i><p>{question}</p></li>)}</ol>
             </section>
           </div>
@@ -182,8 +182,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
         {section === "claims" && (
           <section className="lab-block">
             <div className="block-heading-row">
-              <div className="block-title"><Quote size={16} /> Kanıt defteri</div>
-              <span>{project.evidence.claims.filter((claim) => claim.confidence === "verified").length}/{project.evidence.claims.length} doğrulandı</span>
+              <div className="block-title"><Quote size={16} /> Evidence ledger</div>
+              <span>{project.evidence.claims.filter((claim) => claim.confidence === "verified").length}/{project.evidence.claims.length} verified</span>
             </div>
             <div className="claims-table">
               {project.evidence.claims.map((claim) => (
@@ -208,7 +208,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
 
         {section === "method" && (
           <section className="lab-block">
-            <div className="block-title"><FlaskConical size={16} /> Yöntem akışı</div>
+            <div className="block-title"><FlaskConical size={16} /> Method flow</div>
             <div className="method-timeline">
               {project.evidence.methods.map((method, index) => (
                 <div key={`${method}-${index}`}>
@@ -229,14 +229,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
             </header>
 
             {project.technicalAppendix.equations.length > 0 && <section className="technical-section">
-              <div className="block-title"><Code2 size={16} /> Denklemler ve mekanizmalar</div>
+              <div className="block-title"><Code2 size={16} /> Equations and mechanisms</div>
               <div className="technical-equations">{project.technicalAppendix.equations.map((equation) => {
                 // Aynı kimliği taşıyan türetim varsa denklemin hemen altına
                 // yerleşir: okuyucu formülü görüp adım adım açabilir.
                 const derivation = project.derivations?.find((item) => item.equationId === equation.id);
                 return (
                   <article key={equation.id}>
-                    <span>{equation.label}</span>
+                    <span className="technical-equation-label" lang={project.language}>{equation.label}</span>
                     <MathText latex={equation.latex} plain={equation.expression} display />
                     <p>{equation.explanation}</p>
                     <dl>{equation.variables.map((variable) => <div key={variable.symbol}><dt>{variable.symbol}</dt><dd>{variable.meaning}</dd></div>)}</dl>
@@ -248,25 +248,25 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
             </section>}
 
             <section className="technical-section">
-              <div className="block-title"><FlaskConical size={16} /> Algoritma akışı</div>
+              <div className="block-title"><FlaskConical size={16} /> Algorithm flow</div>
               <ol className="technical-steps">{project.technicalAppendix.algorithmSteps.map((step, index) => <li key={`${step.label}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{step.label}</strong><p>{step.detail}</p><TechnicalClaimLinks claimIds={step.claimIds} project={project} onClaimSelect={onClaimSelect} /></div></li>)}</ol>
             </section>
 
             {project.technicalAppendix.codeSketches.length > 0 && <section className="technical-section">
-              <div className="block-title"><Code2 size={16} /> Açıklayıcı kod taslakları</div>
+              <div className="block-title"><Code2 size={16} /> Explanatory code sketches</div>
               <div className="code-sketches">{project.technicalAppendix.codeSketches.map((sketch) => <article key={sketch.title}><header><strong>{sketch.title}</strong><span>{sketch.language}</span></header><pre><code>{sketch.code}</code></pre><p>{sketch.explanation}</p><TechnicalClaimLinks claimIds={sketch.claimIds} project={project} onClaimSelect={onClaimSelect} /></article>)}</div>
             </section>}
 
             <div className="technical-bottom-grid">
-              <section className="technical-section"><div className="block-title"><Gauge size={16} /> Karmaşıklık</div>{project.technicalAppendix.complexity.map((item) => <article className="complexity-card" key={item.operation}><span>{item.operation}</span><strong>{item.cost}</strong><p>{item.context}</p><TechnicalClaimLinks claimIds={item.claimIds} project={project} onClaimSelect={onClaimSelect} /></article>)}</section>
-              <section className="technical-section"><div className="block-title"><ListChecks size={16} /> Uygulama notları</div><ul className="implementation-notes">{project.technicalAppendix.implementationNotes.map((note, index) => <li key={`${note}-${index}`}>{note}</li>)}</ul></section>
+              <section className="technical-section"><div className="block-title"><Gauge size={16} /> Complexity</div>{project.technicalAppendix.complexity.map((item) => <article className="complexity-card" key={item.operation}><span lang={project.language}>{item.operation}</span><strong>{item.cost}</strong><p>{item.context}</p><TechnicalClaimLinks claimIds={item.claimIds} project={project} onClaimSelect={onClaimSelect} /></article>)}</section>
+              <section className="technical-section"><div className="block-title"><ListChecks size={16} /> Implementation notes</div><ul className="implementation-notes">{project.technicalAppendix.implementationNotes.map((note, index) => <li key={`${note}-${index}`}>{note}</li>)}</ul></section>
             </div>
           </div>
         )}
 
         {section === "metrics" && (
           <section className="lab-block">
-            <div className="block-title"><Gauge size={16} /> Çıkarılan ölçümler</div>
+            <div className="block-title"><Gauge size={16} /> Extracted metrics</div>
             <div className="metrics-table">
               {project.evidence.metrics.map((metric) => (
                 <button
@@ -292,8 +292,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
 
         {section === "limits" && (
           <section className="lab-block limit-block">
-            <div className="block-title"><TriangleAlert size={16} /> Paper’ın sınırları</div>
-            <p className="section-intro">Güçlü bir anlatı, bulgular kadar sınırlarını da görünür tutar.</p>
+            <div className="block-title"><TriangleAlert size={16} /> Limitations of the paper</div>
+            <p className="section-intro">A strong account keeps its limits as visible as its findings.</p>
             <ol>
               {project.evidence.limitations.map((limitation, index) => (
                 <li key={`${limitation}-${index}`}>
@@ -307,7 +307,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
 
         {section === "glossary" && (
           <section className="lab-block">
-            <div className="block-title"><BookMarked size={16} /> Kavram sözlüğü</div>
+            <div className="block-title"><BookMarked size={16} /> Glossary</div>
             <div className="glossary-grid">
               {project.evidence.glossary.map((item) => (
                 <article key={item.term}>

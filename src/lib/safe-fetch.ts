@@ -24,21 +24,21 @@ function isPrivateAddress(address: string) {
 async function assertPublicUrl(rawUrl: string) {
   const url = new URL(rawUrl);
   if (!['http:', 'https:'].includes(url.protocol)) {
-    throw new Error("Yalnızca HTTP veya HTTPS kaynakları desteklenir.");
+    throw new Error("Only HTTP or HTTPS sources are supported.");
   }
   if (url.username || url.password) {
-    throw new Error("Kimlik bilgisi içeren URL desteklenmez.");
+    throw new Error("URLs carrying credentials are not supported.");
   }
   if (url.hostname === "localhost" || url.hostname.endsWith(".local")) {
-    throw new Error("Yerel ağ adresleri kaynak olarak kullanılamaz.");
+    throw new Error("Local network addresses cannot be used as sources.");
   }
 
   if (isIP(url.hostname)) {
-    if (isPrivateAddress(url.hostname)) throw new Error("Özel IP adreslerine erişim engellendi.");
+    if (isPrivateAddress(url.hostname)) throw new Error("Access to private IP addresses is blocked.");
   } else {
     const addresses = await lookup(url.hostname, { all: true });
     if (!addresses.length || addresses.some((item) => isPrivateAddress(item.address))) {
-      throw new Error("Kaynak güvenli, herkese açık bir adrese çözülmedi.");
+      throw new Error("The source did not resolve to a safe, public address.");
     }
   }
   return url;
@@ -56,7 +56,7 @@ function decodeEntities(value: string) {
 
 function cleanHtml(html: string) {
   const title = decodeEntities(
-    html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ") ?? "Web kaynağı",
+    html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ") ?? "Web source",
   ).trim();
   const text = decodeEntities(
     html
@@ -92,26 +92,26 @@ export async function fetchPublicSource(rawUrl: string, id: string): Promise<Fet
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location || redirect === MAX_REDIRECTS) throw new Error("Kaynak çok fazla yönlendirme yaptı.");
+      if (!location || redirect === MAX_REDIRECTS) throw new Error("The source redirected too many times.");
       url = await assertPublicUrl(new URL(location, url).toString());
       continue;
     }
 
-    if (!response.ok) throw new Error(`Kaynak ${response.status} yanıtı verdi.`);
+    if (!response.ok) throw new Error(`The source responded with ${response.status}.`);
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
     if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-      throw new Error("Kaynak HTML veya düz metin değil.");
+      throw new Error("The source is neither HTML nor plain text.");
     }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new Error("Kaynak içeriği okunamadı.");
+    if (!reader) throw new Error("The source content could not be read.");
     const chunks: Uint8Array[] = [];
     let total = 0;
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > MAX_BYTES) throw new Error("Kaynak içerik sınırını aşıyor.");
+      if (total > MAX_BYTES) throw new Error("The source exceeds the content limit.");
       chunks.push(value);
     }
 
@@ -134,6 +134,6 @@ export async function fetchPublicSource(rawUrl: string, id: string): Promise<Fet
     };
   }
 
-  throw new Error("Kaynak alınamadı.");
+  throw new Error("The source could not be fetched.");
 }
 

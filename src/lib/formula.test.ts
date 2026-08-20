@@ -85,19 +85,19 @@ describe("formül güvenliği", () => {
   });
 
   it("yanlış argüman sayısını reddeder", () => {
-    expect(() => evaluateFormula("sqrt(1, 2)", {})).toThrow(/argüman alır/);
-    expect(() => evaluateFormula("clamp(1)", {})).toThrow(/argüman alır/);
+    expect(() => evaluateFormula("sqrt(1, 2)", {})).toThrow(/arguments/);
+    expect(() => evaluateFormula("clamp(1)", {})).toThrow(/arguments/);
   });
 
   it("kaynak tüketimini sınırlar", () => {
     const tooLong = `1${"+1".repeat(FORMULA_LIMITS.maxLength)}`;
-    expect(() => evaluateFormula(tooLong, {})).toThrow(/çok uzun/);
+    expect(() => evaluateFormula(tooLong, {})).toThrow(/too long/);
 
     const tooDeep = `${"(".repeat(FORMULA_LIMITS.maxDepth + 5)}1${")".repeat(FORMULA_LIMITS.maxDepth + 5)}`;
-    expect(() => evaluateFormula(tooDeep, {})).toThrow(/çok derin|çok uzun/);
+    expect(() => evaluateFormula(tooDeep, {})).toThrow(/too deep|too long/);
 
     const tooManyNodes = Array.from({ length: FORMULA_LIMITS.maxNodes }, () => "1").join("+");
-    expect(() => evaluateFormula(tooManyNodes, {})).toThrow(/çok karmaşık|çok uzun/);
+    expect(() => evaluateFormula(tooManyNodes, {})).toThrow(/too complex|too long/);
   });
 
   it("dengesiz parantezi reddeder", () => {

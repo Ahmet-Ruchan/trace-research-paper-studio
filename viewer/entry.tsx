@@ -16,11 +16,11 @@ const MODE_ELEMENT_ID = "trace-mode";
 
 function readProject() {
   const node = document.getElementById(DATA_ELEMENT_ID);
-  if (!node?.textContent) throw new Error("Proje verisi bulunamadı.");
+  if (!node?.textContent) throw new Error("Project data not found.");
   const parsed = researchProjectSchema.safeParse(JSON.parse(node.textContent));
   if (!parsed.success) {
     const first = parsed.error.issues[0];
-    throw new Error(`Trace proje şeması geçersiz: ${first.path.join(".") || "root"} · ${first.message}`);
+    throw new Error(`Invalid Trace project schema: ${first.path.join(".") || "root"} · ${first.message}`);
   }
   return parsed.data;
 }
@@ -37,7 +37,7 @@ function mount() {
     root.textContent = "";
     const message = document.createElement("p");
     message.className = "viewer-fatal";
-    message.textContent = error instanceof Error ? error.message : "Proje yüklenemedi.";
+    message.textContent = error instanceof Error ? error.message : "Could not load the project.";
     root.appendChild(message);
   }
 }
