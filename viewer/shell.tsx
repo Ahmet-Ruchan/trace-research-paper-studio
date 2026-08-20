@@ -15,9 +15,28 @@ import {
 
 type Tab = "lab" | "story" | "practice" | "technical";
 
+/**
+ * Bu sayfa ile ana uygulama arasındaki köprü. `deliver` teslim anında doldurur:
+ *   `url`       — stüdyo ayakta; düğme doğrudan oraya götürür ve proje
+ *                 kendiliğinden kütüphaneye düşer.
+ *   `command`   — stüdyo ayakta değil; kullanıcıya onu başlatan komut gösterilir.
+ *   ikisi de yok — paylaşılan hikâye çıktısı; düğme hiç çizilmez.
+ *
+ * Ayakta olup olmadığını sayfa İÇİNDEN yoklamıyoruz: bu dosya paylaşılabilir
+ * ve sıkı bir CSP ile geliyor; ona loopback'e istek atma yetkisi vermek,
+ * paylaşılan bir dosyanın alıcının yerel portlarını taramasına izin vermek olurdu.
+ */
+export type StudioHandoff = { url?: string; command?: string; directory?: string };
 
-
-export function ViewerShell({ project, initialTab }: { project: ResearchProject; initialTab: Tab }) {
+export function ViewerShell({
+  project,
+  initialTab,
+  studio = {},
+}: {
+  project: ResearchProject;
+  initialTab: Tab;
+  studio?: StudioHandoff;
+}) {
   const t = stringsFor(project.language);
   const tabLabels: Record<Tab, string> = {
     lab: t.tabLab,
@@ -30,6 +49,7 @@ export function ViewerShell({ project, initialTab }: { project: ResearchProject;
   );
   const tabs: Tab[] = ["lab", "story", ...(hasPractice ? (["practice"] as Tab[]) : []), ...(project.technicalAppendix ? (["technical"] as Tab[]) : [])];
   const [tab, setTab] = useState<Tab>(tabs.includes(initialTab) ? initialTab : "lab");
+  const [studioOpen, setStudioOpen] = useState(false);
 
   useEffect(() => {
     // Arayüz İngilizce; kök `lang` de öyle. Makale metninin dili tek tek
@@ -62,10 +82,22 @@ export function ViewerShell({ project, initialTab }: { project: ResearchProject;
             </button>
           ))}
         </div>
-        <a className="viewer-download" download href={`./${encodeURIComponent(project.id)}.trace.json`}>
-          Trace JSON ↓
-        </a>
+        <div className="viewer-actions">
+          {studio.url ? (
+            <a className="viewer-studio" href={studio.url}>
+              {t.openInStudio} →
+            </a>
+          ) : studio.command ? (
+            <button type="button" className="viewer-studio" onClick={() => setStudioOpen(true)}>
+              {t.openInStudio} →
+            </button>
+          ) : null}
+          <a className="viewer-download" download href={`./${encodeURIComponent(project.id)}.trace.json`}>
+            Trace JSON ↓
+          </a>
+        </div>
       </nav>
+      {studioOpen && <StudioPanel studio={studio} onClose={() => setStudioOpen(false)} />}
 
       <main className="viewer-main">
         {tab === "lab" ? <LabTab project={project} /> : null}
@@ -75,6 +107,29 @@ export function ViewerShell({ project, initialTab }: { project: ResearchProject;
       </main>
     </div>
     </LanguageProvider>
+  );
+}
+
+/**
+ * Stüdyo ayakta değilken çıkan panel. Kullanıcıyı boş bir bağlantı hatasına
+ * göndermek yerine onu ayağa kaldıran tam komutu veriyor; JSON da zaten
+ * indirilebilir durumda, yani stüdyo hiç kurulmasa bile iş kaybolmuyor.
+ */
+function StudioPanel({ studio, onClose }: { studio: StudioHandoff; onClose: () => void }) {
+  const t = useStrings();
+  return (
+    <div className="viewer-studio-overlay" role="dialog" aria-modal="true" aria-label={t.openInStudio} onClick={onClose}>
+      <div className="viewer-studio-panel" onClick={(event) => event.stopPropagation()}>
+        <h2>{t.studioOfflineTitle}</h2>
+        <p>{t.studioOfflineBody}</p>
+        <pre>{studio.command}</pre>
+        <p className="viewer-studio-note">{t.studioOfflineNote}</p>
+        <div className="viewer-studio-buttons">
+          <a href="http://127.0.0.1:3000/">{t.studioTryAnyway}</a>
+          <button type="button" onClick={onClose}>{t.close}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

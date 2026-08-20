@@ -291,8 +291,14 @@ With `--title`, the command reports which paper it matched, the runner-up candid
 `confident` flag. Re-run with `--pick <n>` or `--arxiv <id>` to switch.
 
 `deliver` brings up everything in one shot: the portable JSON, the self-contained site on a
-loopback-only server, and the main application — reused if already running, otherwise started —
-with the project handed straight into its Library. `--no-app` limits it to the standalone site,
+loopback-only server, and the studio — reused if already running, otherwise started — with the
+project handed straight into its Library. Once a studio has been started successfully its
+location is remembered, so later deliveries find it from any directory.
+
+If no studio can be started, the delivery still succeeds: the standalone site carries an
+**Open in Studio** button that names the one command that fixes it. That happens when no copy
+of the repository has its dependencies installed — the plugin's own clone ships without them.
+`--install-app` installs them once. `--no-app` limits delivery to the standalone site,
 `--no-open` suits headless environments, and `stop --site <dir>` shuts down what it started.
 
 </details>

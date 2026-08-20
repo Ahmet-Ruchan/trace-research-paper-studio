@@ -18,5 +18,8 @@ export function buildStandaloneStory(project: ResearchProject): string {
   // referansı sanıp projeyi bozardı.
   return VIEWER_TEMPLATE
     .replace("__TRACE_PROJECT_JSON__", () => serialized)
-    .replace("__TRACE_VIEW_MODE__", () => "story");
+    .replace("__TRACE_VIEW_MODE__", () => "story")
+    // Paylaşılabilir çıktı: yerel stüdyo bağlantısı GÖMÜLMEZ. Yazarın
+    // localhost adresi başka bir makinede anlamsız, hatta yanıltıcıdır.
+    .replace("__TRACE_STUDIO_JSON__", () => "{}");
 }

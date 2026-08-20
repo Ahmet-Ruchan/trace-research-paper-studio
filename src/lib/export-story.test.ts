@@ -13,9 +13,18 @@ describe("standalone story export", () => {
 
   it("leaves no unfilled placeholder", () => {
     const html = buildStandaloneStory(exampleProject);
-    expect(html).not.toContain("__TRACE_PROJECT_JSON__");
-    expect(html).not.toContain("__TRACE_VIEW_MODE__");
+    // Tek tek saymak yerine deseni tarıyoruz: şablona yeni bir yer tutucu
+    // eklenip burada doldurulmazsa ham etiket paylaşılan çıktıya sızardı.
+    expect(html.match(/__TRACE_[A-Z_]+__/g)).toBeNull();
     expect(html).toContain(">story<");
+  });
+
+  it("paylaşılan çıktıya yerel stüdyo adresi gömmez", () => {
+    const html = buildStandaloneStory(exampleProject);
+    expect(html).toContain('id="trace-studio" type="application/json">{}<');
+    // Paketin içinde "stüdyo zaten çalışıyorsa" bağlantısı sabit olarak var;
+    // yasak olan, teslimatın ürettiği devir teslim adresinin gömülmesi.
+    expect(html).not.toContain("?import=");
   });
 
   /**

@@ -16,6 +16,23 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.
 .viewer-download { padding: 8px 13px; border: 1px solid var(--line); border-radius: 20px; color: var(--ink-soft); font-size: 10px; text-decoration: none; }
 .viewer-download:hover { border-color: var(--accent); color: var(--accent); }
 
+/* Stüdyo köprüsü. Ana eylem olduğu için dolu, indirme bağlantısı ise çerçeveli. */
+.viewer-actions { display: flex; align-items: center; gap: 9px; }
+.viewer-studio { padding: 8px 14px; border: 1px solid var(--ink); border-radius: 20px; background: var(--ink); color: var(--paper); font: inherit; font-size: 10px; text-decoration: none; cursor: pointer; transition: 160ms ease; }
+.viewer-studio:hover { border-color: var(--accent); background: var(--accent); }
+
+.viewer-studio-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 22px; background: rgba(25,27,24,.44); backdrop-filter: blur(3px); }
+.viewer-studio-panel { max-width: 560px; padding: 28px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 60px rgba(35,31,24,.22); }
+.viewer-studio-panel h2 { margin: 0 0 10px; font: 21px/1.25 Georgia, serif; }
+.viewer-studio-panel p { margin: 0 0 14px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.viewer-studio-panel pre { margin: 0 0 14px; padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 9px; background: #1b1d1a; color: #e6e9e2; font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.viewer-studio-note { font-size: 11px; }
+.viewer-studio-buttons { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.viewer-studio-buttons a { color: var(--accent); font-size: 11px; text-decoration: none; }
+.viewer-studio-buttons a:hover { text-decoration: underline; }
+.viewer-studio-buttons button { padding: 8px 15px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: 11px; cursor: pointer; }
+.viewer-studio-buttons button:hover { border-color: var(--accent); color: var(--accent); }
+
 .viewer-main { flex: 1; }
 .viewer-page { max-width: 900px; margin: 0 auto; padding: clamp(34px, 5vw, 68px) 22px 90px; }
 .viewer-page-head h1 { margin: 0; font: 400 clamp(28px, 4vw, 42px)/1.15 Georgia, serif; letter-spacing: -.02em; }

@@ -26,7 +26,7 @@ const VIEWER_HTML = join(root, "plugins/trace-paper-studio/skills/trace-paper-st
 const TEMPLATE_TS = join(root, "src/generated/viewer-template.ts");
 const MAX_BYTES = 600 * 1024;
 
-const PLACEHOLDERS = ["__TRACE_PROJECT_JSON__", "__TRACE_VIEW_MODE__"];
+const PLACEHOLDERS = ["__TRACE_PROJECT_JSON__", "__TRACE_VIEW_MODE__", "__TRACE_STUDIO_JSON__"];
 
 async function bundle() {
   const build = await rolldown({

@@ -98,6 +98,13 @@ export type Strings = {
   linkedSources: string;
   pickAClaim: string;
   pickAClaimHint: string;
+  // Bağımsız görüntüleyici → stüdyo köprüsü
+  openInStudio: string;
+  studioOfflineTitle: string;
+  studioOfflineBody: string;
+  studioOfflineNote: string;
+  studioTryAnyway: string;
+  close: string;
   labSectionsAria: string;
 };
 
@@ -180,6 +187,12 @@ const en: Strings = {
   linkedSources: "linked sources",
   pickAClaim: "Select a claim",
   pickAClaimHint: "Click a finding, or a source tag inside the story, to see where it comes from.",
+  openInStudio: "Open in Studio",
+  studioOfflineTitle: "Trace Studio is not running",
+  studioOfflineBody: "The studio is the full workspace: a library, editing and side-by-side papers. Start it once with this command, then run the delivery again and the project lands there on its own.",
+  studioOfflineNote: "Everything on this page works without the studio, and the Trace JSON above is yours to keep — import it into any studio later.",
+  studioTryAnyway: "Already running it? Open localhost:3000",
+  close: "Close",
   labSectionsAria: "Paper review sections",
 };
 

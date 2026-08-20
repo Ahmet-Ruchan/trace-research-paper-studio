@@ -4,6 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
+import { homedir } from "node:os";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateProjectObject } from "./generated/validator.mjs";
@@ -18,7 +19,7 @@ Usage:
   node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) [--pick <n>] [--out <directory>] [--language tr|en] [--audience general|student|expert] [--depth concise|standard|deep]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
-                              [--no-open] [--no-app] [--app <trace-repo>] [--app-url <http://...>]
+                              [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
   node trace-agent.mjs stop --site <site-directory>
 
   --title   Kullanıcıda PDF yoksa: makaleyi arXiv'de arar, indirir ve hakkında
@@ -28,6 +29,9 @@ Usage:
             rehberi) seçilen derinlik için ZORUNLU sayar.
 
   --no-app  Ana Trace uygulamasını başlatma/açma; yalnızca bağımsız siteyi ver.
+  --install-app
+            Stüdyonun bağımlılıkları kurulu değilse "npm install" çalıştırır.
+            Dakikalar sürebilir; bu yüzden kendiliğinden yapılmaz.
   --app     Trace deposunun kökü (varsayılan: otomatik bulunur, TRACE_APP_DIR).
   --app-url Zaten çalışan bir Trace uygulamasının adresi (TRACE_APP_URL).
 
@@ -36,7 +40,11 @@ The bridge never calls an LLM API. The active Codex, Claude Code, or Gemini CLI 
 Deliver tek komutta her şeyi ayağa kaldırır: JSON'u saklar, bağımsız yerel
 siteyi kurar, ana Trace uygulamasını (yoksa dev sunucusunu başlatarak) hazırlar,
 projeyi kütüphaneye devreder ve ikisini de tarayıcıda açar. Kullanıcının elle
-içe aktarma yapması gerekmez. Açılan sunucular "stop --site" ile kapatılır.`);
+içe aktarma yapması gerekmez. Açılan sunucular "stop --site" ile kapatılır.
+
+Stüdyo ayağa kalkmazsa teslimat yine başarılıdır: bağımsız site çalışır ve
+üzerindeki "Open in Studio" düğmesi stüdyoyu kuran komutu gösterir. Çıktıdaki
+"appNote" ve "studioCommand" alanlarını KULLANICIYA AKTARIN.`);
   process.exit(exitCode);
 }
 
@@ -47,7 +55,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (key === "no-open" || key === "no-app" || key === "strict") {
+    if (key === "no-open" || key === "no-app" || key === "install-app" || key === "strict") {
       args[key] = true;
       continue;
     }
@@ -301,8 +309,14 @@ async function probeTraceApp(baseUrl, timeoutMs = 1_500) {
 /**
  * Trace deposunun kökünü arar. İşaret olarak `trace:agent` betiği kullanılıyor;
  * ada bakmak sahte eşleşme üretir, bu betik yalnızca bu projede var.
+ *
+ * Birden çok aday çıkabiliyor — plugin klonu deponun tamamını taşıdığı için
+ * kendisi de bir adaydır, ama bağımlılıkları kurulu değildir. Bu yüzden
+ * BAĞIMLILIKLARI KURULU olan aday tercih edilir: kullanıcının çalışan bir
+ * kopyası varsa yüzlerce megabaytlık ikinci bir kurulum gereksizdir.
  */
-function findAppRoot(startDirectories) {
+function findAppRoots(startDirectories) {
+  const found = [];
   for (const start of startDirectories) {
     if (!start) continue;
     let current = resolve(start);
@@ -311,7 +325,7 @@ function findAppRoot(startDirectories) {
       if (existsSync(manifest)) {
         try {
           const parsed = JSON.parse(readFileSync(manifest, "utf8"));
-          if (parsed?.scripts?.["trace:agent"]) return current;
+          if (parsed?.scripts?.["trace:agent"] && !found.includes(current)) found.push(current);
         } catch {
           // bozuk package.json: yukarı çıkmayı sürdür
         }
@@ -321,18 +335,81 @@ function findAppRoot(startDirectories) {
       current = parent;
     }
   }
-  return undefined;
+  return found;
 }
 
-async function startTraceApp(appRoot, logDirectory) {
+const STUDIO_MEMO = join(homedir(), ".trace", "studio.json");
+
+/**
+ * Çalışır durumda bir stüdyo bir kez bulunduğunda yeri hatırlanır.
+ *
+ * Sebebi somut: ajan çoğu zaman kullanıcının BAŞKA bir projesinin dizininde
+ * çalışıyor ve yukarı doğru arama Trace deposuna hiç rastlamıyor. Bir kez
+ * depodan çalıştırmak, sonraki bütün teslimatların stüdyoyu bulmasına yetiyor.
+ */
+function readRememberedAppRoot() {
+  try {
+    const { appRoot } = JSON.parse(readFileSync(STUDIO_MEMO, "utf8"));
+    return typeof appRoot === "string" && existsSync(join(appRoot, "package.json")) ? appRoot : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberAppRoot(appRoot) {
+  try {
+    mkdirSync(dirname(STUDIO_MEMO), { recursive: true });
+    writeFileSync(STUDIO_MEMO, `${JSON.stringify({ appRoot }, null, 2)}\n`, "utf8");
+  } catch {
+    // hatırlamak bir kolaylık; başarısız olması teslimatı etkilemez
+  }
+}
+
+function findAppRoot(startDirectories) {
+  const roots = findAppRoots([readRememberedAppRoot(), ...startDirectories]);
+  return roots.find((root) => existsSync(join(root, "node_modules", "next"))) ?? roots[0];
+}
+
+function npmCommand() {
+  return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+/**
+ * Stüdyonun bağımlılıklarını kurar. Yüzlerce megabayt indirip dakikalar
+ * sürebildiği için KENDİLİĞİNDEN çalışmaz: bir makaleyi anlatma isteği,
+ * kullanıcının diskine bu boyutta bir şey yazma izni değildir. `--install-app`
+ * ile açıkça istenir.
+ */
+function installAppDependencies(appRoot, logDirectory) {
+  const logPath = join(logDirectory, "trace-app-install.log");
+  const log = openSync(logPath, "a");
+  const result = spawnSync(npmCommand(), ["install", "--no-audit", "--no-fund"], {
+    cwd: appRoot,
+    stdio: ["ignore", log, log],
+    timeout: 15 * 60 * 1000,
+  });
+  if (result.status === 0) return { ok: true, logPath };
+  return { ok: false, reason: `npm install başarısız (${result.status ?? result.signal}); günlük: ${logPath}`, logPath };
+}
+
+async function startTraceApp(appRoot, logDirectory, args) {
   if (!existsSync(join(appRoot, "node_modules", "next"))) {
-    return { ok: false, reason: `bağımlılıklar kurulu değil; önce ${appRoot} içinde "npm install" çalıştırın.` };
+    if (!args["install-app"]) {
+      return {
+        ok: false,
+        appRoot,
+        command: `cd "${appRoot}" && npm install && npm run dev`,
+        reason: `Trace Studio dependencies are not installed. Run once: cd "${appRoot}" && npm install — or re-run deliver with --install-app.`,
+      };
+    }
+    const installed = installAppDependencies(appRoot, logDirectory);
+    if (!installed.ok) return { ok: false, appRoot, command: `cd "${appRoot}" && npm install && npm run dev`, reason: installed.reason };
   }
   const port = await findOpenPort(3000);
   const url = `http://127.0.0.1:${port}`;
   const logPath = join(logDirectory, "trace-app.log");
   const log = openSync(logPath, "a");
-  const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev", "--", "--port", String(port)], {
+  const child = spawn(npmCommand(), ["run", "dev", "--", "--port", String(port)], {
     cwd: appRoot,
     detached: true,
     stdio: ["ignore", log, log],
@@ -344,13 +421,16 @@ async function startTraceApp(appRoot, logDirectory) {
 
   const deadline = Date.now() + APP_BOOT_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await probeTraceApp(url, 2_000)) return { ok: true, url, port, pid: child.pid, logPath, started: true, appRoot };
+    if (await probeTraceApp(url, 2_000)) {
+      rememberAppRoot(appRoot);
+      return { ok: true, url, port, pid: child.pid, logPath, started: true, appRoot };
+    }
     if (exited) {
-      return { ok: false, reason: `dev sunucusu kapandı; günlük: ${logPath}`, logPath };
+      return { ok: false, appRoot, command: `cd "${appRoot}" && npm run dev`, reason: `The dev server exited; log: ${logPath}`, logPath };
     }
     await new Promise((wait) => setTimeout(wait, 500));
   }
-  return { ok: false, reason: `dev sunucusu ${APP_BOOT_TIMEOUT_MS / 1000} saniyede yanıt vermedi; günlük: ${logPath}`, logPath };
+  return { ok: false, appRoot, command: `cd "${appRoot}" && npm run dev`, reason: `The dev server did not answer within ${APP_BOOT_TIMEOUT_MS / 1000}s; log: ${logPath}`, logPath };
 }
 
 /**
@@ -359,13 +439,13 @@ async function startTraceApp(appRoot, logDirectory) {
  * diskte duruyor; ana uygulama bir ek yüzey.
  */
 async function ensureTraceApp(args, logDirectory) {
-  if (args["no-app"]) return { ok: false, skipped: "--no-app verildi." };
+  if (args["no-app"]) return { ok: false, skipped: "--no-app was passed." };
 
   const explicitUrl = args["app-url"] ?? process.env.TRACE_APP_URL;
   if (explicitUrl) {
     const url = explicitUrl.replace(/\/+$/, "");
     if (await probeTraceApp(url, 4_000)) return { ok: true, url, started: false, reused: true };
-    return { ok: false, reason: `${url} adresinde Trace uygulaması yanıt vermedi.` };
+    return { ok: false, reason: `No Trace app answered at ${url}.` };
   }
 
   for (const port of [3000, 3001, 3002]) {
@@ -376,12 +456,12 @@ async function ensureTraceApp(args, logDirectory) {
   const appRoot = args.app ?? process.env.TRACE_APP_DIR
     ?? findAppRoot([SKILL_DIRECTORY, process.cwd()]);
   if (!appRoot) {
-    return { ok: false, reason: "Trace deposu bulunamadı; --app <dizin> veya TRACE_APP_DIR ile gösterin." };
+    return { ok: false, reason: "The Trace repository was not found; point at it with --app <dir> or TRACE_APP_DIR." };
   }
   if (!existsSync(join(resolve(appRoot), "package.json"))) {
-    return { ok: false, reason: `${appRoot} bir Node projesi değil.` };
+    return { ok: false, reason: `${appRoot} is not a Node project.` };
   }
-  return startTraceApp(resolve(appRoot), logDirectory);
+  return startTraceApp(resolve(appRoot), logDirectory, args);
 }
 
 function isAlive(pid) {
@@ -523,12 +603,8 @@ async function deliver(args) {
   // yer tutucular doldurulur; böylece plugin çalışma anında bağımlılıksız kalır.
   // `replace` yerine fonksiyon verilir: proje metni "$&" gibi diziler içerirse
   // string sürümü onları desen referansı sanıp bozar.
-  const html = readFileSync(templatePath, "utf8")
-    .replace("__TRACE_PROJECT_JSON__", () => serializedProject)
-    .replace("__TRACE_VIEW_MODE__", () => (args.mode === "story" ? "story" : "lab"));
   const projectId = validation.project.id || "project";
   const jsonPath = join(siteDirectory, `${projectId}.trace.json`);
-  writeFileSync(join(siteDirectory, "index.html"), html, "utf8");
   writeFileSync(jsonPath, `${JSON.stringify(validation.project, null, 2)}\n`, "utf8");
 
   const statusPath = join(siteDirectory, ".trace-server.json");
@@ -547,7 +623,10 @@ async function deliver(args) {
     child.unref();
     url = `http://127.0.0.1:${port}`;
     serverPid = child.pid;
-    await waitForServer(url);
+    // Hazır olma denetimi PROJE DOSYASI üzerinden yapılır: `index.html` ancak
+    // stüdyo devir teslimi belli olduktan sonra yazılıyor, dolayısıyla kök
+    // adres bu noktada henüz 404 döner.
+    await waitForServer(`${url}/${encodeURIComponent(projectId)}.trace.json`);
   }
 
   const jsonUrl = `${url}/${encodeURIComponent(projectId)}.trace.json`;
@@ -558,6 +637,20 @@ async function deliver(args) {
   if (app.ok && app.started) {
     writeFileSync(join(siteDirectory, ".trace-app.json"), `${JSON.stringify(app, null, 2)}\n`, "utf8");
   }
+
+  // Bağımsız sayfadaki "Open in Studio" köprüsü. Stüdyo ayaktaysa doğrudan
+  // adres, değilse onu ayağa kaldıran komut gömülür — kullanıcı hangi durumda
+  // olduğunu sayfadan görür, tarayıcı hata ekranından değil.
+  const studio = appUrl
+    ? { url: appUrl }
+    : app.command
+      ? { command: app.command, directory: app.appRoot }
+      : {};
+  const html = readFileSync(templatePath, "utf8")
+    .replace("__TRACE_PROJECT_JSON__", () => serializedProject)
+    .replace("__TRACE_VIEW_MODE__", () => (args.mode === "story" ? "story" : "lab"))
+    .replace("__TRACE_STUDIO_JSON__", () => JSON.stringify(studio).replaceAll("<", "\\u003c"));
+  writeFileSync(join(siteDirectory, "index.html"), html, "utf8");
 
   // Bağımsız site önce, ana uygulama sonra açılır: tarayıcı son sekmeye
   // odaklanır ve kullanıcı zengin yüzeyde başlar.
@@ -581,9 +674,10 @@ async function deliver(args) {
     sourceProjectPath: projectPath,
     serverPid,
     appPid: app.ok ? app.pid : undefined,
+    studioCommand: app.ok ? undefined : app.command,
     note: opened.length > 0
-      ? `Açılan sekmeler: ${opened.join(", ")}. JSON aynı klasörde tutuluyor.`
-      : `Tarayıcı açılamadı. Bağımsız site: ${url}${appUrl ? ` · Ana uygulama: ${appUrl}` : ""}`,
+      ? `Opened: ${opened.join(", ")}. The JSON stays in the same folder.`
+      : `Could not open a browser. Standalone site: ${url}${appUrl ? ` · Studio: ${appUrl}` : ""}`,
   }, null, 2));
 }
 

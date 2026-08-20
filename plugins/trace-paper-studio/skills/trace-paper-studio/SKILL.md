@@ -72,12 +72,14 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 
    Read the returned fields:
    - `url` — the self-contained site (works with no install, shareable as a folder).
-   - `appUrl` — the main app with the project already adopted.
-   - `appNote` — present only when the main app could not be brought up. The delivery still succeeded; say what is missing and that the standalone site is live.
+   - `appUrl` — the studio with the project already adopted.
+   - `appNote` and `studioCommand` — present only when the studio could not be brought up. **Pass both to the user.** The delivery still succeeded and the standalone site carries an *Open in Studio* button showing the same command, but the user should not have to find that on their own.
    - `jsonPath` / `jsonUrl` — the portable project file.
 
-   `--no-app` skips the main app. `--app <dir>` or `TRACE_APP_DIR` points at the Trace repository when auto-detection fails; `--app-url` targets an app already running elsewhere. `stop --site <site-directory>` shuts down whatever `deliver` started.
-10. Do not claim completion until `deliver` returns `ok: true`. The final response should state which surfaces are open and give the URLs plus the `.trace.json` path.
+   The studio usually needs nothing: a running one is reused, and once one has been started successfully its location is remembered, so later deliveries find it from any directory. It fails only when no copy of the Trace repository has its dependencies installed — the plugin's own clone ships without them. `--install-app` installs them once (minutes, hundreds of megabytes: offer it, do not assume it).
+
+   `--no-app` skips the studio. `--app <dir>` or `TRACE_APP_DIR` points at the Trace repository directly; `--app-url` targets a studio already running elsewhere. `stop --site <site-directory>` shuts down whatever `deliver` started.
+10. Do not claim completion until `deliver` returns `ok: true`. The final response should state which surfaces are open, give the URLs plus the `.trace.json` path, and — when the studio did not come up — repeat `appNote` so the user knows the one command that fixes it.
 
 ## Quality rules
 

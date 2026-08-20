@@ -1,6 +1,6 @@
 import { render } from "preact";
 import { researchProjectSchema } from "@/lib/schema";
-import { ViewerShell } from "./shell";
+import { ViewerShell, type StudioHandoff } from "./shell";
 
 /**
  * Bağımsız viewer giriş noktası.
@@ -13,6 +13,7 @@ import { ViewerShell } from "./shell";
 
 const DATA_ELEMENT_ID = "trace-data";
 const MODE_ELEMENT_ID = "trace-mode";
+const STUDIO_ELEMENT_ID = "trace-studio";
 
 function readProject() {
   const node = document.getElementById(DATA_ELEMENT_ID);
@@ -25,6 +26,29 @@ function readProject() {
   return parsed.data;
 }
 
+/**
+ * Stüdyo devir teslim bilgisi teslim anında gömülür ve OPSİYONELDİR:
+ * paylaşılan bir hikâye çıktısında boş gelir, o zaman düğme hiç çizilmez.
+ * Okunamazsa sessizce boş kabul edilir — bu bilgi yüzünden sayfa açılmamazlık
+ * etmemeli.
+ */
+function readStudio(): StudioHandoff {
+  const raw = document.getElementById(STUDIO_ELEMENT_ID)?.textContent?.trim();
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const { url, command, directory } = parsed as StudioHandoff;
+    return {
+      url: typeof url === "string" ? url : undefined,
+      command: typeof command === "string" ? command : undefined,
+      directory: typeof directory === "string" ? directory : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function mount() {
   const root = document.getElementById("trace-root");
   if (!root) return;
@@ -32,7 +56,7 @@ function mount() {
     const project = readProject();
     const mode = document.getElementById(MODE_ELEMENT_ID)?.textContent?.trim();
     const initialTab = mode === "story" ? "story" : "lab";
-    render(<ViewerShell project={project} initialTab={initialTab} />, root);
+    render(<ViewerShell project={project} initialTab={initialTab} studio={readStudio()} />, root);
   } catch (error) {
     root.textContent = "";
     const message = document.createElement("p");
