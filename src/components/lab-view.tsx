@@ -21,6 +21,7 @@ import {
   ApplicationGuideView,
   DerivationView,
   InteractiveRenderer,
+  MathText,
   PrimerView,
   QuizView,
 } from "@/visuals";
@@ -225,11 +226,21 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
 
             {project.technicalAppendix.equations.length > 0 && <section className="technical-section">
               <div className="block-title"><Code2 size={16} /> Denklemler ve mekanizmalar</div>
-              <div className="technical-equations">{project.technicalAppendix.equations.map((equation) => <article key={equation.id}>
-                <span>{equation.label}</span><code>{equation.expression}</code><p>{equation.explanation}</p>
-                <dl>{equation.variables.map((variable) => <div key={variable.symbol}><dt>{variable.symbol}</dt><dd>{variable.meaning}</dd></div>)}</dl>
-                <TechnicalClaimLinks claimIds={equation.claimIds} project={project} onClaimSelect={onClaimSelect} />
-              </article>)}</div>
+              <div className="technical-equations">{project.technicalAppendix.equations.map((equation) => {
+                // Aynı kimliği taşıyan türetim varsa denklemin hemen altına
+                // yerleşir: okuyucu formülü görüp adım adım açabilir.
+                const derivation = project.derivations?.find((item) => item.equationId === equation.id);
+                return (
+                  <article key={equation.id}>
+                    <span>{equation.label}</span>
+                    <MathText latex={equation.latex} plain={equation.expression} display />
+                    <p>{equation.explanation}</p>
+                    <dl>{equation.variables.map((variable) => <div key={variable.symbol}><dt>{variable.symbol}</dt><dd>{variable.meaning}</dd></div>)}</dl>
+                    <TechnicalClaimLinks claimIds={equation.claimIds} project={project} onClaimSelect={onClaimSelect} />
+                    {derivation ? <DerivationView derivation={derivation} /> : null}
+                  </article>
+                );
+              })}</div>
             </section>}
 
             <section className="technical-section">

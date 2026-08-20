@@ -241,7 +241,11 @@ export function validateLearningIntegrity(
   if (project.derivations) {
     const duplicateDerivations = duplicates(project.derivations.map((item) => item.id));
     if (duplicateDerivations.length) issues.push(`derivations: tekrarlanan ID ${duplicateDerivations.join(", ")}`);
+    const equationIds = new Set((project.technicalAppendix?.equations ?? []).map((item) => item.id));
     project.derivations.forEach((derivation) => {
+      if (derivation.equationId && !equationIds.has(derivation.equationId)) {
+        issues.push(`derivations.${derivation.id}: bilinmeyen equationId ${derivation.equationId}`);
+      }
       const duplicateSteps = duplicates(derivation.steps.map((step) => step.id));
       if (duplicateSteps.length) issues.push(`derivations.${derivation.id}: tekrarlanan adım ID ${duplicateSteps.join(", ")}`);
       checkClaims(derivation.claimIds, `derivations.${derivation.id}`);

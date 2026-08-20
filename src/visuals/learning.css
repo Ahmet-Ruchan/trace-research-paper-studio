@@ -193,6 +193,10 @@
 .pitfall-cause em, .pitfall-fix em { color: var(--muted); font-style: normal; font-weight: 650; }
 .guide-warning ul { display: grid; gap: 8px; margin: 0; padding: 15px 17px 15px 33px; border-left: 2px solid var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--ink-soft); font-size: 11px; line-height: 1.65; }
 
+/* --- Hikâye içindeki deneme alanı --------------------------------- */
+.story-practice { max-width: 900px; margin: 60px auto 0; padding: 50px 22px 0; border-top: 1px solid var(--line); }
+.story-practice h2 { margin: 0 0 26px; font: 400 26px/1.25 Georgia, serif; }
+
 @media (max-width: 760px) {
   .interactive-head { flex-direction: column; }
   .playground-outputs { grid-template-columns: 1fr 1fr; }

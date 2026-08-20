@@ -4373,6 +4373,8 @@ const technicalAppendixSchema = object({
 		label: string(),
 		expression: string(),
 		explanation: string(),
+		/** Opsiyonel LaTeX. Verilirse MathML olarak gösterilir; yoksa `expression` düz metin olarak. */
+		latex: string().optional(),
 		variables: array(object({
 			symbol: string(),
 			meaning: string()
@@ -4427,6 +4429,8 @@ const derivationSchema = object({
 	id: string(),
 	title: string(),
 	goal: string(),
+	/** technicalAppendix.equations[].id — verilirse türetim o denklemin altında gösterilir. */
+	equationId: string().optional(),
 	steps: array(derivationStepSchema).min(2).max(10),
 	numericExample: object({
 		setup: string(),
@@ -5131,7 +5135,9 @@ function validateLearningIntegrity(project, options = {}) {
 	if (project.derivations) {
 		const duplicateDerivations = duplicates(project.derivations.map((item) => item.id));
 		if (duplicateDerivations.length) issues.push(`derivations: tekrarlanan ID ${duplicateDerivations.join(", ")}`);
+		const equationIds = new Set((project.technicalAppendix?.equations ?? []).map((item) => item.id));
 		project.derivations.forEach((derivation) => {
+			if (derivation.equationId && !equationIds.has(derivation.equationId)) issues.push(`derivations.${derivation.id}: bilinmeyen equationId ${derivation.equationId}`);
 			const duplicateSteps = duplicates(derivation.steps.map((step) => step.id));
 			if (duplicateSteps.length) issues.push(`derivations.${derivation.id}: tekrarlanan adım ID ${duplicateSteps.join(", ")}`);
 			checkClaims(derivation.claimIds, `derivations.${derivation.id}`);

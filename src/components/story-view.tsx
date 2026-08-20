@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, BookOpen, ExternalLink } from "lucide-react";
 import type { ResearchProject } from "@/lib/schema";
-import { VisualRenderer } from "./visual-renderer";
+import { InteractiveRenderer, VisualRenderer } from "@/visuals";
 
 type StoryViewProps = {
   project: ResearchProject;
@@ -123,6 +123,16 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
           </nav>
         </aside>
       </div>
+
+      {project.interactives?.length ? (
+        <section className="story-practice">
+          <p className="story-overline">Şimdi kendin dene</p>
+          <h2>Makaleyi oynatarak anla</h2>
+          {project.interactives.map((interactive) => (
+            <InteractiveRenderer interactive={interactive} key={interactive.id} />
+          ))}
+        </section>
+      ) : null}
 
       <footer className="story-closing">
         <p className="story-overline">Son okuma</p>

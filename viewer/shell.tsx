@@ -314,7 +314,12 @@ function PracticeTab({ project }: { project: ResearchProject }) {
 function TechnicalTab({ project }: { project: ResearchProject }) {
   const appendix = project.technicalAppendix;
   const derivationByEquation = useMemo(
-    () => new Map((project.derivations ?? []).map((item) => [item.id, item])),
+    () =>
+      new Map(
+        (project.derivations ?? [])
+          .filter((item) => item.equationId)
+          .map((item) => [item.equationId!, item]),
+      ),
     [project.derivations],
   );
   if (!appendix) return null;
@@ -332,7 +337,7 @@ function TechnicalTab({ project }: { project: ResearchProject }) {
           {appendix.equations.map((equation) => (
             <article className="viewer-equation" key={equation.id}>
               <h3>{equation.label}</h3>
-              <MathText plain={equation.expression} display />
+              <MathText latex={equation.latex} plain={equation.expression} display />
               <p>{equation.explanation}</p>
               <dl className="viewer-variables">
                 {equation.variables.map((variable) => (

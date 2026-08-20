@@ -75,12 +75,25 @@ export function AppShell() {
         if (search.get("library") === "1") setScreen("library");
         if (search.get("team") === "1") setInitialTeam(true);
         setHydrated(true);
+        // Eski tek-proje localStorage kaydını kütüphaneye taşı.
+        // Taşıma BİR KEZ olmalı: anahtar silinmezse her açılışta tekrar
+        // yazılıyor ve kullanıcının daha yeni içe aktardığı sürümü sessizce
+        // eskisiyle değiştiriyordu. Ayrıca kütüphanedeki kayıt daha yeniyse
+        // hiç dokunmuyoruz.
         const stored = window.localStorage.getItem(STORAGE_KEY);
         if (stored) {
           try {
             const legacy = researchProjectSchema.parse(JSON.parse(stored));
-            await saveLibraryProject(legacy);
-          } catch { window.localStorage.removeItem(STORAGE_KEY); }
+            const existing = (await listLibraryProjects().catch(() => [])).find(
+              (item) => item.id === legacy.id,
+            );
+            if (!existing || existing.updatedAt < legacy.updatedAt) {
+              await saveLibraryProject(legacy);
+            }
+          } catch {
+            // yoksayılır; anahtar aşağıda zaten temizleniyor
+          }
+          window.localStorage.removeItem(STORAGE_KEY);
         }
         setProjects(await listLibraryProjects().catch(() => []));
       })();

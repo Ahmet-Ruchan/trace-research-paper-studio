@@ -2,7 +2,7 @@
   "version": 1,
   "id": "attention-is-all-you-need",
   "createdAt": "2026-08-20T00:00:00.000Z",
-  "updatedAt": "2026-08-20T07:01:25.633Z",
+  "updatedAt": "2026-08-20T07:41:37.195Z",
   "language": "tr",
   "audience": "student",
   "depth": "deep",
@@ -1595,7 +1595,8 @@
         "claimIds": [
           "claim-method-05",
           "claim-interpretation-01"
-        ]
+        ],
+        "latex": "\\operatorname{Attention}(Q,K,V)=\\operatorname{softmax}\\!\\left(\\frac{QK^{\\top}}{\\sqrt{d_k}}\\right)V"
       },
       {
         "id": "eq-multi-head",
@@ -1623,7 +1624,8 @@
         "claimIds": [
           "claim-method-06",
           "claim-result-05"
-        ]
+        ],
+        "latex": "\\operatorname{MultiHead}(Q,K,V)=\\operatorname{Concat}(\\text{head}_1,\\dots,\\text{head}_h)\\,W^{O}"
       },
       {
         "id": "eq-ffn",
@@ -1650,7 +1652,8 @@
         ],
         "claimIds": [
           "claim-method-07"
-        ]
+        ],
+        "latex": "\\operatorname{FFN}(x)=\\max(0,\\;xW_1+b_1)W_2+b_2"
       },
       {
         "id": "eq-positional-encoding",
@@ -1675,7 +1678,8 @@
           "claim-method-08",
           "claim-interpretation-02",
           "claim-result-06"
-        ]
+        ],
+        "latex": "PE_{(pos,2i)}=\\sin\\!\\left(\\frac{pos}{10000^{2i/d_{\\text{model}}}}\\right),\\quad PE_{(pos,2i+1)}=\\cos\\!\\left(\\frac{pos}{10000^{2i/d_{\\text{model}}}}\\right)"
       },
       {
         "id": "eq-lrate",
@@ -1698,7 +1702,8 @@
         ],
         "claimIds": [
           "claim-method-10"
-        ]
+        ],
+        "latex": "lrate = d_{\\text{model}}^{-0.5}\\cdot\\min\\!\\left(step^{-0.5},\\; step\\cdot warmup^{-1.5}\\right)"
       }
     ],
     "algorithmSteps": [
@@ -1986,7 +1991,8 @@
       "claimIds": [
         "claim-method-05",
         "claim-interpretation-01"
-      ]
+      ],
+      "equationId": "eq-scaled-dot-product"
     },
     {
       "id": "deriv-multihead",
@@ -2041,7 +2047,8 @@
       "claimIds": [
         "claim-method-06",
         "claim-result-05"
-      ]
+      ],
+      "equationId": "eq-multi-head"
     },
     {
       "id": "deriv-lrate",
@@ -2075,7 +2082,8 @@
       ],
       "claimIds": [
         "claim-method-10"
-      ]
+      ],
+      "equationId": "eq-lrate"
     }
   ],
   "interactives": [

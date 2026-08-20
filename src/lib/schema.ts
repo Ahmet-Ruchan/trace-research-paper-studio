@@ -253,6 +253,8 @@ export const technicalAppendixSchema = z.object({
     label: z.string(),
     expression: z.string(),
     explanation: z.string(),
+    /** Opsiyonel LaTeX. Verilirse MathML olarak gösterilir; yoksa `expression` düz metin olarak. */
+    latex: z.string().optional(),
     variables: z.array(z.object({ symbol: z.string(), meaning: z.string() })).max(10),
   })).max(8),
   algorithmSteps: z.array(technicalClaimLinksSchema.extend({
@@ -313,6 +315,8 @@ export const derivationSchema = z.object({
   id: z.string(),
   title: z.string(),
   goal: z.string(),
+  /** technicalAppendix.equations[].id — verilirse türetim o denklemin altında gösterilir. */
+  equationId: z.string().optional(),
   steps: z.array(derivationStepSchema).min(2).max(10),
   numericExample: z
     .object({
