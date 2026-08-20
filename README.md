@@ -295,8 +295,9 @@ loopback-only server, and the studio — reused if already running, otherwise st
 project handed straight into its Library. Once a studio has been started successfully its
 location is remembered, so later deliveries find it from any directory.
 
-If no studio can be started, the delivery still succeeds: the standalone site carries an
-**Open in Studio** button that names the one command that fixes it. That happens when no copy
+If no studio can be started, the delivery still succeeds and the agent asks whether to set one
+up. Say no and the standalone site still carries a **Show me the command** strip: one click
+gives the terminal command, with a copy button. That happens when no copy
 of the repository has its dependencies installed — the plugin's own clone ships without them.
 `--install-app` installs them once. `--no-app` limits delivery to the standalone site,
 `--no-open` suits headless environments, and `stop --site <dir>` shuts down what it started.

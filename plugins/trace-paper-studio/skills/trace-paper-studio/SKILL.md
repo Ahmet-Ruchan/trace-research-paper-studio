@@ -79,7 +79,15 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    The studio usually needs nothing: a running one is reused, and once one has been started successfully its location is remembered, so later deliveries find it from any directory. It fails only when no copy of the Trace repository has its dependencies installed — the plugin's own clone ships without them. `--install-app` installs them once (minutes, hundreds of megabytes: offer it, do not assume it).
 
    `--no-app` skips the studio. `--app <dir>` or `TRACE_APP_DIR` points at the Trace repository directly; `--app-url` targets a studio already running elsewhere. `stop --site <site-directory>` shuts down whatever `deliver` started.
-10. Do not claim completion until `deliver` returns `ok: true`. The final response should state which surfaces are open, give the URLs plus the `.trace.json` path, and — when the studio did not come up — repeat `appNote` so the user knows the one command that fixes it.
+9b. **If `appNote` is present, the studio did not open. Ask the user before finishing — do not just report it.** The studio at `localhost:3000` is the product's main surface; the standalone page is the portable copy. Ask plainly, in the user's language, something like:
+
+   > The full Trace Studio is not running on this machine. Starting it is a one-time setup that installs its dependencies (a few minutes, a few hundred megabytes). Shall I do that now and open it?
+
+   - **Yes** → run `deliver` again with `--install-app` and report the studio URL when it comes up.
+   - **No** → give them `studioCommand` verbatim so they can paste it into a terminal themselves. The same command sits behind the *Show me the command* button on the page that is already open, with a copy button.
+
+   Ask once. Do not install without an answer, and do not skip the question because the standalone page "already works" — it is not the same surface.
+10. Do not claim completion until `deliver` returns `ok: true`. The final response should state which surfaces are open, give the URLs plus the `.trace.json` path, and — when the studio did not come up — carry the question from 9b.
 
 ## Quality rules
 

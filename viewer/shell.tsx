@@ -97,6 +97,12 @@ export function ViewerShell({
           </a>
         </div>
       </nav>
+      {studio.command && !studioOpen ? (
+        <div className="viewer-studio-banner">
+          <p>{t.studioBanner}</p>
+          <button type="button" onClick={() => setStudioOpen(true)}>{t.studioBannerAction} →</button>
+        </div>
+      ) : null}
       {studioOpen && <StudioPanel studio={studio} onClose={() => setStudioOpen(false)} />}
 
       <main className="viewer-main">
@@ -107,6 +113,44 @@ export function ViewerShell({
       </main>
     </div>
     </LanguageProvider>
+  );
+}
+
+/**
+ * Komut kopyalanabilir olmalı: kullanıcı bunu terminale yapıştıracak ve uzun
+ * bir yolu elle seçmek en sık hata kaynağı. `navigator.clipboard` loopback
+ * üzerinde güvenli bağlam sayılır; yine de eski tarayıcılar için seçim yoluyla
+ * bir yedek var.
+ */
+function CopyableCommand({ command }: { command: string }) {
+  const t = useStrings();
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(command);
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = command;
+      field.setAttribute("readonly", "");
+      field.style.position = "fixed";
+      field.style.opacity = "0";
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand("copy");
+      field.remove();
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2_000);
+  }
+
+  return (
+    <div className="viewer-command">
+      <pre>{command}</pre>
+      <button type="button" onClick={() => void copy()} className={copied ? "is-copied" : ""}>
+        {copied ? `${t.copied} ✓` : t.copyCommand}
+      </button>
+    </div>
   );
 }
 
@@ -122,7 +166,7 @@ function StudioPanel({ studio, onClose }: { studio: StudioHandoff; onClose: () =
       <div className="viewer-studio-panel" onClick={(event) => event.stopPropagation()}>
         <h2>{t.studioOfflineTitle}</h2>
         <p>{t.studioOfflineBody}</p>
-        <pre>{studio.command}</pre>
+        <CopyableCommand command={studio.command ?? ""} />
         <p className="viewer-studio-note">{t.studioOfflineNote}</p>
         <div className="viewer-studio-buttons">
           <a href="http://127.0.0.1:3000/">{t.studioTryAnyway}</a>

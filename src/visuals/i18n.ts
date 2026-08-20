@@ -104,6 +104,10 @@ export type Strings = {
   studioOfflineBody: string;
   studioOfflineNote: string;
   studioTryAnyway: string;
+  studioBanner: string;
+  studioBannerAction: string;
+  copyCommand: string;
+  copied: string;
   close: string;
   labSectionsAria: string;
 };
@@ -192,6 +196,10 @@ const en: Strings = {
   studioOfflineBody: "The studio is the full workspace: a library, editing and side-by-side papers. Start it once with this command, then run the delivery again and the project lands there on its own.",
   studioOfflineNote: "Everything on this page works without the studio, and the Trace JSON above is yours to keep — import it into any studio later.",
   studioTryAnyway: "Already running it? Open localhost:3000",
+  studioBanner: "This is the portable copy of your paper. The full studio — library, editing, side-by-side papers — is one command away.",
+  studioBannerAction: "Show me the command",
+  copyCommand: "Copy command",
+  copied: "Copied",
   close: "Close",
   labSectionsAria: "Paper review sections",
 };

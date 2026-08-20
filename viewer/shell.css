@@ -21,11 +21,24 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.
 .viewer-studio { padding: 8px 14px; border: 1px solid var(--ink); border-radius: 20px; background: var(--ink); color: var(--paper); font: inherit; font-size: 10px; text-decoration: none; cursor: pointer; transition: 160ms ease; }
 .viewer-studio:hover { border-color: var(--accent); background: var(--accent); }
 
+/* Stüdyo şeridi: sayfanın en görünür yerinde, kapatılabilir değil —
+   :3000'daki asıl ekran ürünün ana yüzeyi ve buraya düşen kullanıcı onu
+   bulamadan kalmamalı. */
+.viewer-studio-banner { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 22px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 17%, var(--paper)); }
+.viewer-studio-banner p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.6; }
+.viewer-studio-banner button { flex: 0 0 auto; padding: 8px 15px; border: 1px solid var(--ink); border-radius: 20px; background: var(--ink); color: var(--paper); font: inherit; font-size: 10px; cursor: pointer; transition: 160ms ease; }
+.viewer-studio-banner button:hover { border-color: var(--accent); background: var(--accent); }
+
+.viewer-command { margin: 0 0 14px; border-radius: 9px; overflow: hidden; background: #1b1d1a; }
+.viewer-command pre { margin: 0; padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; color: #e6e9e2; font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.viewer-command button { width: 100%; padding: 10px; border: 0; border-top: 1px solid #34382f; background: transparent; color: #c8cbc5; font: inherit; font-size: 10px; cursor: pointer; transition: 160ms ease; }
+.viewer-command button:hover { background: #24261f; color: #fff; }
+.viewer-command button.is-copied { color: #8fd0a8; }
+
 .viewer-studio-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 22px; background: rgba(25,27,24,.44); backdrop-filter: blur(3px); }
 .viewer-studio-panel { max-width: 560px; padding: 28px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 60px rgba(35,31,24,.22); }
 .viewer-studio-panel h2 { margin: 0 0 10px; font: 21px/1.25 Georgia, serif; }
 .viewer-studio-panel p { margin: 0 0 14px; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
-.viewer-studio-panel pre { margin: 0 0 14px; padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 9px; background: #1b1d1a; color: #e6e9e2; font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .viewer-studio-note { font-size: 11px; }
 .viewer-studio-buttons { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .viewer-studio-buttons a { color: var(--accent); font-size: 11px; text-decoration: none; }
