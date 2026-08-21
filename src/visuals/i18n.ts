@@ -8,7 +8,8 @@
  * Projenin dilinden yalnızca `locale` etkilenir (sıralama ve harf dönüşümü).
  */
 
-export type Language = "tr" | "en";
+/** BCP-47 dil etiketi; artık iki dille sınırlı değil. */
+export type Language = string;
 
 export type Strings = {
   /** Sıralama ve büyük/küçük harf dönüşümü için BCP-47 etiketi. */
@@ -204,13 +205,17 @@ const en: Strings = {
   labSectionsAria: "Paper review sections",
 };
 
-/**
- * Türkçe içerik için yalnızca `locale` değişir: sıralama ve küçük/büyük harf
- * dönüşümü makalenin diline göre yapılmalı ("i" → "İ"), arayüz metni ise
- * değişmez.
- */
-const enWithTurkishLocale: Strings = { ...en, locale: "tr" };
+const BCP47 = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 
+/**
+ * İçeriğin dilinden yalnızca `locale` etkilenir: sayı ve tarih biçimleme,
+ * sıralama, harf dönüşümü ("i" → "İ") makalenin diline göre yapılmalı. Arayüz
+ * metinleri her dilde aynı kalır.
+ *
+ * Etiket doğrudan `Intl`e gidiyor, o yüzden biçimi doğrulanıyor: bozuk bir
+ * etiket orada `RangeError` fırlatır ve bileşeni komple düşürürdü.
+ */
 export function stringsFor(language: string | undefined): Strings {
-  return language === "tr" ? enWithTurkishLocale : en;
+  const tag = language?.trim();
+  return tag && BCP47.test(tag) ? { ...en, locale: tag } : en;
 }

@@ -9,19 +9,23 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 
 ## Workflow
 
-1. Resolve the paper. **The user does not need to have the PDF** — a name is enough. Use Turkish, student, and deep when the user gives no options. Do not stop for configuration questions.
+1. Resolve the paper. **The user does not need to have the PDF** — a name is enough. Do not stop for configuration questions; choose the options yourself.
+
+   **`--language` is the language the user is writing to you in, always.** Pass its BCP-47 tag: English message → `--language en`; Turkish → `tr`; German → `de`; Brazilian Portuguese → `pt-BR`. **Any language works** — the bridge checks the tag's format, never a list, so never fall back to English just because a language feels unusual. This is not a preference to guess at or a project default: a user who writes in English and receives a Turkish analysis has been handed something they cannot read. Judge it from the user's own words in this conversation, not from the paper's language, not from the machine's locale, and not from the language of this skill file. Only ask when their messages genuinely give you nothing to go on. The flag is required and the bridge fails loudly without it, because it cannot see the conversation and therefore has no safe default.
+
+   The other options do have defaults: use `student` and `deep` when the user gives no preference.
 2. Run the bundled bridge next to this skill. Resolve `scripts/trace-agent.mjs` relative to this `SKILL.md`, not the user's current directory.
 
    ```bash
    # The user named a paper but has no file — find it on arXiv, download it,
-   # and collect current metadata about it:
-   node scripts/trace-agent.mjs prepare --title "attention is all you need" --language tr --audience student --depth deep
+   # and collect current metadata about it. They wrote to you in English:
+   node scripts/trace-agent.mjs prepare --title "attention is all you need" --language en --audience student --depth deep
 
-   # The user gave an arXiv id:
-   node scripts/trace-agent.mjs prepare --arxiv 1706.03762 --depth deep
+   # The user gave an arXiv id, writing in Turkish:
+   node scripts/trace-agent.mjs prepare --arxiv 1706.03762 --language tr --depth deep
 
-   # The user gave a local file:
-   node scripts/trace-agent.mjs prepare --paper "<paper.pdf>" --depth deep
+   # The user gave a local file, writing in German:
+   node scripts/trace-agent.mjs prepare --paper "<paper.pdf>" --language de --depth deep
    ```
 
    Use the returned `jobPath`, `pageTextPath`, and `outputPath`.
@@ -40,6 +44,7 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 3. If extraction succeeded, read `paper.pages.txt` in manageable page ranges. Preserve `--- PAGE N ---` boundaries. If it did not, use the host's native PDF-reading tool and keep page numbers explicit.
 4. Read [references/project-contract.md](references/project-contract.md) completely before authoring the output. When working inside the Trace source repository, also inspect `src/lib/schema.ts` and `src/lib/generation-validation.ts`; those files are authoritative if the bundled reference differs.
 5. Build the project evidence-first:
+   - **Write every reader-facing word in `options.language` from `job.json`**, and set the project's own `language` field to it. Evidence excerpts are the one exception: they are quotations and stay verbatim in the source's language. See "Language" in the contract.
    - Extract bibliographic metadata, thesis, question, methods, findings, limitations, glossary, and metrics.
    - Give every material claim a stable ID and at least one exact, short source excerpt.
    - Use `sourceId: "paper"` and a positive PDF page for paper evidence.

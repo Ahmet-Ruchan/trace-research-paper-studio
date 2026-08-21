@@ -9,7 +9,7 @@ Required fields:
 - `version`: exactly `1`
 - `id`: stable kebab-case or UUID string
 - `createdAt`, `updatedAt`: ISO-8601 strings
-- `language`: `tr` or `en`
+- `language`: BCP-47 tag, copied from `options.language` in `job.json` (`en`, `tr`, `de`, `pt-BR`, …)
 - `audience`: `general`, `student`, or `expert`
 - `depth`: `concise`, `standard`, or `deep`
 - `evidence`: required evidence graph
@@ -17,6 +17,18 @@ Required fields:
 - `deepReport`: recommended
 - `technicalAppendix`: recommended
 - `generation`: `{ "provider": "native-agent", "model": "<host/model>" }`
+
+### Language
+
+`language` is not a label on the file — it is a binding instruction. **Write every word a reader will see in that language**: titles, summaries, story bodies, report analysis, glossary definitions, equation explanations, derivation rationale, quiz questions and their explanations, interactive captions, and the application guide. Copy the value from `options.language` in `job.json`; never override it because the paper is written in another language.
+
+Any BCP-47 tag is valid — there is no list of supported languages. A regional tag means what it says: `pt-BR` is Brazilian Portuguese, not European Portuguese, and `zh-Hans` is Simplified. Honour the distinction rather than flattening it to the base language.
+
+Three things stay untouched whatever `language` says:
+
+- **JSON keys and enum values** — always `en`-style identifiers (`storySections`, `verified`, `needs-review`). They are protocol, not prose.
+- **Quoted evidence excerpts** — an excerpt is a verbatim quotation from the source. Reproduce it exactly as printed, in the source's own language. Never translate one. The claim *statement* around it is prose and follows `language`.
+- **Proper nouns and established technical terms** — author names, model names, dataset names, metric names. Keep "Transformer", "BLEU", "WMT 2014" as they are; do not invent local translations for them.
 
 Depth controls exact output size:
 

@@ -1,3 +1,4 @@
+import { preferredLanguage } from "./preferred-language";
 import { researchProjectSchema, type ResearchProject } from "./schema";
 
 /**
@@ -15,10 +16,16 @@ export const SAMPLE_PROJECT_FILES = {
   en: "/examples/attention-is-all-you-need.en.trace.json",
 } as const;
 
-/** Tarayıcı dili Türkçe değilse örnek İngilizce açılır. */
+/**
+ * Örnek, kullanıcının diline en yakın sürümde açılır.
+ *
+ * Trace her dilde çıktı üretebiliyor ama PAKETLİ örnek yalnızca iki dilde
+ * var — 150 KB'lık bir dosyayı her dil için taşımanın anlamı yok. Türkçe
+ * konuşan Türkçe kopyayı, herkes İngilizce kopyayı görür.
+ */
 export function sampleProjectUrl(language?: string) {
-  const preferred = (language ?? (typeof navigator === "undefined" ? "tr" : navigator.language)) || "tr";
-  return preferred.toLowerCase().startsWith("tr") ? SAMPLE_PROJECT_FILES.tr : SAMPLE_PROJECT_FILES.en;
+  const tag = preferredLanguage(language).toLowerCase();
+  return tag === "tr" || tag.startsWith("tr-") ? SAMPLE_PROJECT_FILES.tr : SAMPLE_PROJECT_FILES.en;
 }
 
 export async function loadSampleProject(language?: string): Promise<ResearchProject> {

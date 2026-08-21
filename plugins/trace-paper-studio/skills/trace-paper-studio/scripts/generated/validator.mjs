@@ -4142,6 +4142,20 @@ function superRefine(fn, params) {
 
 //#endregion
 //#region src/lib/schema.ts
+/**
+* Analiz metninin dili — BCP-47 etiketi ("en", "tr", "de", "pt-BR").
+*
+* Burası eskiden `z.enum(["tr", "en"])` idi ve ürünün gerçek tavanı buydu:
+* Trace çıktıyı kullanıcının yazdığı dilde üretiyor, ama şema yalnızca iki
+* dile izin verdiği için Almanca yazan biri istediğini alamıyordu. Etiket
+* biçimi serbest bırakıldı; "tr" ve "en" geçerli BCP-47 olduğu için daha önce
+* üretilmiş bütün projeler değişmeden geçerli kalıyor.
+*
+* Serbest metin DEĞİL: biçim doğrulanıyor, çünkü bu değer `Intl` API'lerine
+* (sayı/tarih biçimleme, dil adı gösterimi) doğrudan gidiyor ve geçersiz bir
+* etiket orada `RangeError` fırlatır.
+*/
+const languageTagSchema = string().regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/, "language must be a BCP-47 tag, e.g. \"en\" or \"pt-BR\"").max(35);
 const sourceSchema = object({
 	id: string(),
 	type: _enum(["paper", "web"]),
@@ -4581,7 +4595,7 @@ const researchProjectSchema = generationResultSchema.extend({
 	id: string(),
 	createdAt: string(),
 	updatedAt: string(),
-	language: _enum(["tr", "en"]),
+	language: languageTagSchema,
 	audience: _enum([
 		"general",
 		"student",

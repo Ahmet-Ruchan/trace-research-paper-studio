@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRight, BookOpen, Check, Eye, EyeOff, FileText, Link2, LockKeyhole, Plus, Sparkles, Upload, Users, X } from "lucide-react";
 import {
   createSingleModelTeam,
@@ -14,16 +14,22 @@ import {
   type ModelTeam,
   type ProviderId,
 } from "@/lib/model-providers";
+import { languageOptions, preferredLanguage, type ProjectLanguage } from "@/lib/preferred-language";
 
 export type GenerationOptions = {
   file: File;
   sources: string[];
   apiKeys: Partial<Record<ProviderId, string>>;
   assignments: ModelTeam;
-  language: "tr" | "en";
+  language: string;
   audience: "general" | "student" | "expert";
   depth: "concise" | "standard" | "deep";
 };
+
+/** Tarayıcı dili oturum boyunca değişmez; abone olunacak bir olay yok. */
+const subscribeNever = () => () => {};
+const readBrowserLanguage = () => preferredLanguage();
+const readServerLanguage = (): ProjectLanguage => "en";
 
 type OnboardingProps = {
   onGenerate: (options: GenerationOptions) => void;
@@ -42,7 +48,16 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
   const [sources, setSources] = useState<string[]>([]);
   const [apiKeys, setApiKeys] = useState<Partial<Record<ProviderId, string>>>({});
   const [visibleKeys, setVisibleKeys] = useState<Partial<Record<ProviderId, boolean>>>({});
-  const [language, setLanguage] = useState<"tr" | "en">("tr");
+  // Çıktının dili kullanıcıdan gelir; başlangıçta tarayıcı dili öneriliyor.
+  // Sunucuda `navigator` yok, o yüzden değer doğrudan başlangıç durumu olarak
+  // okunamaz: sunucu "en" çizerken istemci "tr" çizer ve hydration ayrışır.
+  // `useSyncExternalStore` iki tarafa ayrı anlık görüntü vermenin React'teki
+  // yolu. Kullanıcı seçimi bunu geçersiz kılar.
+  const detectedLanguage = useSyncExternalStore(subscribeNever, readBrowserLanguage, readServerLanguage);
+  const [chosenLanguage, setLanguage] = useState<ProjectLanguage>();
+  const language = chosenLanguage ?? detectedLanguage;
+  // Liste kullanıcının kendi dilini de içerir; yaygın diller yalnızca kısayol.
+  const languageChoices = useMemo(() => languageOptions(detectedLanguage), [detectedLanguage]);
   const [audience, setAudience] = useState<"general" | "student" | "expert">("student");
   const [depth, setDepth] = useState<"concise" | "standard" | "deep">("standard");
   const [provider, setProvider] = useState<ProviderId>("gemini");
@@ -143,7 +158,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
   return (
     <main className="onboarding-page">
       <header className="landing-header">
-        <a className="brand" href="#top" aria-label="Trace ana sayfa">
+        <a className="brand" href="#top" aria-label="Trace home">
           <span className="brand-glyph">t</span>
           <span><strong>trace</strong><small>research studio</small></span>
         </a>
@@ -163,14 +178,14 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
           <div className="principle-row">
             <span><Check size={14} /> Source-linked</span>
             <span><Check size={14} /> Editable</span>
-            <span><Check size={14} /> Statik export</span>
+            <span><Check size={14} /> Static export</span>
           </div>
         </div>
 
         <div className="ingest-panel">
           <div className="panel-heading">
             <div><span>01</span><strong>Add your paper</strong></div>
-            <small>PDF · maks. 35 MB</small>
+            <small>PDF · max. 35 MB</small>
           </div>
 
           <div
@@ -203,8 +218,8 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
           <div className="source-entry">
             <div className="input-with-icon">
               <Link2 size={16} />
-              <input value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSource()} placeholder="Opsiyonel kaynak URL’si" />
-              <button onClick={addSource} aria-label="Kaynak ekle"><Plus size={16} /></button>
+              <input value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSource()} placeholder="Optional supporting source URL" />
+              <button onClick={addSource} aria-label="Add source"><Plus size={16} /></button>
             </div>
             {sources.map((source) => (
               <div className="source-chip" key={source}>
@@ -217,15 +232,15 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
           <div className="config-grid">
             <label>Reader<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="general">General reader</option><option value="student">Student</option><option value="expert">Expert</option></select></label>
             <label>Depth<select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}><option value="concise">Concise · 5 sections</option><option value="standard">Standard · 6 sections</option><option value="deep">Deep · 8 sections</option></select></label>
-            <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)}><option value="tr">Turkish</option><option value="en">English</option></select></label>
+            <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value)}>{languageChoices.map((choice) => <option key={choice.tag} value={choice.tag}>{choice.label}</option>)}</select></label>
           </div>
 
           <section className="orchestration-config">
             <div className="orchestration-heading">
               <div><Sparkles size={15} /><span>Model orchestration</span></div>
               <div className="orchestration-toggle">
-                <button className={orchestration === "single" ? "active" : ""} onClick={() => setOrchestration("single")}>Tek model</button>
-                <button className={orchestration === "team" ? "active" : ""} onClick={() => setOrchestration("team")}><Users size={13} /> Model ekibi</button>
+                <button className={orchestration === "single" ? "active" : ""} onClick={() => setOrchestration("single")}>Single model</button>
+                <button className={orchestration === "team" ? "active" : ""} onClick={() => setOrchestration("team")}><Users size={13} /> Model team</button>
               </div>
             </div>
 

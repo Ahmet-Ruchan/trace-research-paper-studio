@@ -16,35 +16,44 @@ function usage(exitCode = 0) {
   console.log(`Trace native-agent bridge
 
 Usage:
-  node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) [--pick <n>] [--out <directory>] [--language tr|en] [--audience general|student|expert] [--depth concise|standard|deep]
+  node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
   node trace-agent.mjs stop --site <site-directory>
 
-  --title   Kullanıcıda PDF yoksa: makaleyi arXiv'de arar, indirir ve hakkında
-            güncel üstveri toplar (sürüm geçmişi, DOI, yayımlandığı yer, atıf).
-            Eşleşme kesin değilse alternatifler raporlanır; --pick ile seçin.
-  --strict  Öğrenme bloklarını (ön bilgi, türetim, quiz, interaktif, uygulama
-            rehberi) seçilen derinlik için ZORUNLU sayar.
+  --language  Required. BCP-47 tag for the language the analysis prose is
+            written in (en, tr, de, pt-BR, …). Pass the language the user is
+            writing to you in — the bridge cannot see the conversation, so it
+            has no safe default to guess. There is no list of allowed
+            languages; only the tag format is checked.
+  --title   When the user has no PDF: searches arXiv for the paper, downloads
+            it, and collects current metadata (version history, DOI, where it
+            was published, citations). If the match is not certain the
+            alternatives are reported; choose one with --pick.
+  --strict  Treats the learning blocks (primer, derivations, quiz,
+            interactives, application guide) as REQUIRED for the chosen depth.
 
-  --no-app  Ana Trace uygulamasını başlatma/açma; yalnızca bağımsız siteyi ver.
+  --no-app  Do not start or open the main Trace app; deliver only the
+            standalone site.
   --install-app
-            Stüdyonun bağımlılıkları kurulu değilse "npm install" çalıştırır.
-            Dakikalar sürebilir; bu yüzden kendiliğinden yapılmaz.
-  --app     Trace deposunun kökü (varsayılan: otomatik bulunur, TRACE_APP_DIR).
-  --app-url Zaten çalışan bir Trace uygulamasının adresi (TRACE_APP_URL).
+            Runs "npm install" when the studio's dependencies are missing.
+            This can take minutes, which is why it never happens on its own.
+  --app     Root of the Trace repository (default: found automatically,
+            TRACE_APP_DIR).
+  --app-url Address of a Trace app that is already running (TRACE_APP_URL).
 
 The bridge never calls an LLM API. The active Codex, Claude Code, or Antigravity CLI model reads the prepared paper and writes the project.
 
-Deliver tek komutta her şeyi ayağa kaldırır: JSON'u saklar, bağımsız yerel
-siteyi kurar, ana Trace uygulamasını (yoksa dev sunucusunu başlatarak) hazırlar,
-projeyi kütüphaneye devreder ve ikisini de tarayıcıda açar. Kullanıcının elle
-içe aktarma yapması gerekmez. Açılan sunucular "stop --site" ile kapatılır.
+Deliver brings everything up in one command: it keeps the JSON, builds the
+standalone local site, readies the main Trace app (starting its dev server if
+it is not already running), hands the project over to the library, and opens
+both in the browser. The user never has to import anything by hand. Servers
+that were started this way are shut down with "stop --site".
 
-Stüdyo ayağa kalkmazsa teslimat yine başarılıdır: bağımsız site çalışır ve
-üzerindeki "Open in Studio" düğmesi stüdyoyu kuran komutu gösterir. Çıktıdaki
-"appNote" ve "studioCommand" alanlarını KULLANICIYA AKTARIN.`);
+If the studio does not come up the delivery still succeeded: the standalone
+site works, and its "Open in Studio" button shows the command that installs
+the studio. PASS THE "appNote" AND "studioCommand" FIELDS ON TO THE USER.`);
   process.exit(exitCode);
 }
 
@@ -59,7 +68,7 @@ function parseArgs(values) {
       args[key] = true;
       continue;
     }
-    if (!value || value.startsWith("--")) throw new Error(`--${key} için değer gerekli.`);
+    if (!value || value.startsWith("--")) throw new Error(`--${key} needs a value.`);
     args[key] = value;
     index += 1;
   }
@@ -77,7 +86,7 @@ function slugify(value) {
 }
 
 function assertChoice(value, choices, label) {
-  if (!choices.includes(value)) throw new Error(`${label} ${choices.join(", ")} değerlerinden biri olmalı.`);
+  if (!choices.includes(value)) throw new Error(`${label} must be one of: ${choices.join(", ")}.`);
   return value;
 }
 
@@ -91,7 +100,7 @@ async function resolvePaper(args) {
   if (args.paper) return { paperPath: resolve(args.paper), resolution: null };
 
   const query = args.title ?? args.arxiv;
-  if (!query) throw new Error("--paper <dosya.pdf>, --title \"<makale adı>\" veya --arxiv <id> gerekli.");
+  if (!query) throw new Error("One of --paper <file.pdf>, --title \"<paper name>\" or --arxiv <id> is required.");
 
   const { searchArxiv, fetchArxivById, rankByTitle, downloadPdf, collectContext } = await import(
     "./lib/paper-source.mjs"
@@ -103,11 +112,11 @@ async function resolvePaper(args) {
     chosen = await fetchArxivById(args.arxiv);
   } else {
     const results = await searchArxiv(args.title, 8);
-    if (!results.length) throw new Error(`arXiv'de sonuç bulunamadı: "${args.title}"`);
+    if (!results.length) throw new Error(`No arXiv result for: "${args.title}"`);
     candidates = rankByTitle(results, args.title);
     const index = args.pick ? Number(args.pick) - 1 : 0;
     chosen = candidates[index];
-    if (!chosen) throw new Error(`--pick ${args.pick} aralık dışında (${candidates.length} aday).`);
+    if (!chosen) throw new Error(`--pick ${args.pick} is out of range (${candidates.length} candidates).`);
   }
 
   const directory = resolve(args.out ?? `.trace/jobs/${slugify(chosen.title ?? chosen.arxivId)}`);
@@ -150,17 +159,39 @@ async function resolvePaper(args) {
 }
 
 async function prepare(args) {
-  const { paperPath, jobDirectoryOverride, resolution } = await resolvePaper(args);
-  if (!existsSync(paperPath)) throw new Error(`PDF bulunamadı: ${paperPath}`);
-  if (extname(paperPath).toLowerCase() !== ".pdf") throw new Error("Girdi .pdf uzantılı olmalı.");
-  const size = statSync(paperPath).size;
-  if (size > 35 * 1024 * 1024) throw new Error("PDF 35 MB Trace sınırını aşıyor.");
-  const signature = readFileSync(paperPath).subarray(0, 5).toString("ascii");
-  if (signature !== "%PDF-") throw new Error("Dosya geçerli bir PDF imzası taşımıyor.");
-
-  const language = assertChoice(args.language ?? "tr", ["tr", "en"], "--language");
+  /**
+   * Seçenekler PDF'ten ÖNCE doğrulanıyor: `resolvePaper` arXiv'e gidip
+   * megabaytlarca dosya indiriyor ve bunu eksik bir bayrak için yapmanın
+   * anlamı yok. Ayrıca hatayı ajana anında geri veriyor.
+   *
+   * `--language` bu köprü kullanıcının hangi dilde yazdığını göremediği için
+   * zorunlu. Buradaki her sessiz varsayılan kullanıcıların bir kısmı için
+   * sessizce yanlış dilde çıktı üretir; tam olarak bu yaşandı: varsayılan
+   * "tr" idi ve İngilizce yazan kullanıcı Türkçe analiz aldı.
+   */
+  if (args.language === undefined) {
+    throw new Error(
+      "--language is required. Pass a BCP-47 tag for the language the user is writing in (en, tr, de, pt-BR, …): it decides the language of the analysis prose, and this bridge cannot see the conversation to infer it.",
+    );
+  }
+  // Etiket biçimi doğrulanıyor ama dil listesi YOK: Trace çıktıyı kullanıcının
+  // dilinde üretiyor ve buraya konacak her liste birilerini dışarıda bırakır.
+  // Biçim yine de denetleniyor, çünkü bu değer `Intl` API'lerine gidiyor.
+  if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(args.language)) {
+    throw new Error(`--language must be a BCP-47 tag such as "en", "tr" or "pt-BR"; received "${args.language}".`);
+  }
+  const language = args.language;
   const audience = assertChoice(args.audience ?? "student", ["general", "student", "expert"], "--audience");
   const depth = assertChoice(args.depth ?? "standard", ["concise", "standard", "deep"], "--depth");
+
+  const { paperPath, jobDirectoryOverride, resolution } = await resolvePaper(args);
+  if (!existsSync(paperPath)) throw new Error(`PDF not found: ${paperPath}`);
+  if (extname(paperPath).toLowerCase() !== ".pdf") throw new Error("The input must have a .pdf extension.");
+  const size = statSync(paperPath).size;
+  if (size > 35 * 1024 * 1024) throw new Error("The PDF exceeds the 35 MB Trace limit.");
+  const signature = readFileSync(paperPath).subarray(0, 5).toString("ascii");
+  if (signature !== "%PDF-") throw new Error("The file does not carry a valid PDF signature.");
+
   const jobDirectory =
     jobDirectoryOverride ??
     resolve(args.out ?? `.trace/jobs/${slugify(basename(paperPath, extname(paperPath)))}`);
@@ -178,11 +209,11 @@ async function prepare(args) {
     extractedText = pages.map((page, index) => `--- PAGE ${index + 1} ---\n${page.trimEnd()}`).join("\n\n");
     writeFileSync(pageTextPath, `${extractedText}\n`, "utf8");
     pageCount = pages.length;
-    extractionNote = "pdftotext -layout ile sayfa sınırları korunarak çıkarıldı";
+    extractionNote = "extracted with pdftotext -layout, page boundaries preserved";
   } else {
     extractionNote = extraction.error?.code === "ENOENT"
-      ? "pdftotext bulunamadı; aktif agent PDF’i kendi belge aracına yüklemeli"
-      : `pdftotext başarısız: ${(extraction.stderr || extraction.error?.message || "unknown").trim()}`;
+      ? "pdftotext not found; the active agent must load the PDF with its own document tool"
+      : `pdftotext failed: ${(extraction.stderr || extraction.error?.message || "unknown").trim()}`;
   }
 
   const outputPath = resolve(jobDirectory, `${slugify(basename(paperPath, extname(paperPath)))}.trace.json`);
@@ -228,15 +259,15 @@ async function prepare(args) {
  * parite artık yapısal bir garanti.
  */
 function inspectProject(args, print = true) {
-  if (!args.project) throw new Error("--project <project.trace.json> gerekli.");
+  if (!args.project) throw new Error("--project <project.trace.json> is required.");
   const projectPath = resolve(args.project);
-  if (!existsSync(projectPath)) throw new Error(`Proje bulunamadı: ${projectPath}`);
+  if (!existsSync(projectPath)) throw new Error(`Project not found: ${projectPath}`);
 
   let raw;
   try {
     raw = JSON.parse(readFileSync(projectPath, "utf8"));
   } catch (error) {
-    throw new Error(`Proje geçerli JSON değil: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`The project is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   // --strict: öğrenme bloklarının `depth` için zorunlu olanlarını da arar.
@@ -389,7 +420,7 @@ function installAppDependencies(appRoot, logDirectory) {
     timeout: 15 * 60 * 1000,
   });
   if (result.status === 0) return { ok: true, logPath };
-  return { ok: false, reason: `npm install başarısız (${result.status ?? result.signal}); günlük: ${logPath}`, logPath };
+  return { ok: false, reason: `npm install failed (${result.status ?? result.signal}); log: ${logPath}`, logPath };
 }
 
 async function startTraceApp(appRoot, logDirectory, args) {
@@ -520,11 +551,11 @@ function contentType(pathname) {
 }
 
 function serve(args) {
-  if (!args.site) throw new Error("--site <site-directory> gerekli.");
-  if (!args.port) throw new Error("--port <port> gerekli.");
+  if (!args.site) throw new Error("--site <site-directory> is required.");
+  if (!args.port) throw new Error("--port <port> is required.");
   const siteDirectory = resolve(args.site);
   const port = Number(args.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("--port geçerli bir TCP portu olmalı.");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("--port must be a valid TCP port.");
 
   const server = createServer((request, response) => {
     const requested = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
@@ -575,7 +606,7 @@ async function waitForServer(url) {
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, 125));
   }
-  throw new Error(`Yerel Trace sunucusu başlatılamadı: ${lastError instanceof Error ? lastError.message : "zaman aşımı"}`);
+  throw new Error(`The local Trace server could not be started: ${lastError instanceof Error ? lastError.message : "timed out"}`);
 }
 
 function openBrowser(url) {
@@ -597,7 +628,7 @@ async function deliver(args) {
   mkdirSync(siteDirectory, { recursive: true });
 
   const templatePath = join(SKILL_DIRECTORY, "assets", "viewer.html");
-  if (!existsSync(templatePath)) throw new Error(`Trace görüntüleyici şablonu bulunamadı: ${templatePath}`);
+  if (!existsSync(templatePath)) throw new Error(`The Trace viewer template could not be found: ${templatePath}`);
   const serializedProject = JSON.stringify(validation.project).replaceAll("<", "\\u003c");
   // Şablon bir DERLEME ARTEFAKTIDIR (npm run build:viewer). Burada yalnızca
   // yer tutucular doldurulur; böylece plugin çalışma anında bağımlılıksız kalır.
@@ -683,7 +714,7 @@ async function deliver(args) {
 
 /** Teslimat sırasında başlatılan sunucuları kapatır. */
 function stopServers(args) {
-  if (!args.site) throw new Error("--site <site-directory> gerekli.");
+  if (!args.site) throw new Error("--site <site-directory> is required.");
   const siteDirectory = resolve(args.site);
   const stopped = [];
   for (const [name, file] of [["viewer", ".trace-server.json"], ["app", ".trace-app.json"]]) {

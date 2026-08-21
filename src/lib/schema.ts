@@ -1,5 +1,23 @@
 import { z } from "zod";
 
+/**
+ * Analiz metninin dili — BCP-47 etiketi ("en", "tr", "de", "pt-BR").
+ *
+ * Burası eskiden `z.enum(["tr", "en"])` idi ve ürünün gerçek tavanı buydu:
+ * Trace çıktıyı kullanıcının yazdığı dilde üretiyor, ama şema yalnızca iki
+ * dile izin verdiği için Almanca yazan biri istediğini alamıyordu. Etiket
+ * biçimi serbest bırakıldı; "tr" ve "en" geçerli BCP-47 olduğu için daha önce
+ * üretilmiş bütün projeler değişmeden geçerli kalıyor.
+ *
+ * Serbest metin DEĞİL: biçim doğrulanıyor, çünkü bu değer `Intl` API'lerine
+ * (sayı/tarih biçimleme, dil adı gösterimi) doğrudan gidiyor ve geçersiz bir
+ * etiket orada `RangeError` fırlatır.
+ */
+export const languageTagSchema = z
+  .string()
+  .regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/, "language must be a BCP-47 tag, e.g. \"en\" or \"pt-BR\"")
+  .max(35);
+
 export const sourceSchema = z.object({
   id: z.string(),
   type: z.enum(["paper", "web"]),
@@ -508,7 +526,7 @@ export const researchProjectSchema = generationResultSchema.extend({
   id: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  language: z.enum(["tr", "en"]),
+  language: languageTagSchema,
   audience: z.enum(["general", "student", "expert"]),
   depth: z.enum(["concise", "standard", "deep"]),
   deepReport: deepReportSchema.optional(),

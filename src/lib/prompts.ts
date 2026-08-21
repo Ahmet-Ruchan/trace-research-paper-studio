@@ -2,13 +2,26 @@ import type { EvidencePassId } from "./evidence-pipeline";
 import type { PaperEvidence } from "./schema";
 
 type PromptOptions = {
-  language: "tr" | "en";
+  language: string;
   audience: "general" | "student" | "expert";
   depth: "concise" | "standard" | "deep";
   webContext: string;
 };
 
-const languageName = { tr: "Turkish", en: "English" } as const;
+/**
+ * Dilin İngilizce adı, prompt'a yazmak için: "de" → "German".
+ *
+ * Sabit bir { tr, en } tablosuydu ve ürünün gerçek dil tavanı buydu.
+ * `Intl` her geçerli BCP-47 etiketini adlandırıyor, tanımadığında etiketin
+ * kendisini döndürüyor — model "pt-BR" gibi bir etiketi de doğru yorumlar.
+ */
+function languageName(tag: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(tag) ?? tag;
+  } catch {
+    return tag;
+  }
+}
 
 export function buildEvidencePrompt(options: PromptOptions) {
   const audienceDescriptions = {
@@ -30,7 +43,7 @@ Hard rules:
 6. A claim is "verified" only when directly supported by a located excerpt. Otherwise use "needs-review".
 7. Do not convert correlations into causal claims.
 8. Extract limitations even when they weaken the story.
-9. Use ${languageName[options.language]} for all reader-facing prose. Preserve official names and technical terms where useful.
+9. Use ${languageName(options.language)} for all reader-facing prose. Preserve official names and technical terms where useful.
 10. Write for ${audienceDescriptions[options.audience]}. Requested depth: ${options.depth}.
 11. IDs must be unique, stable kebab-case strings. Use only "paper" and the SOURCE IDs explicitly supplied below in source references.
 12. In the results task, put every number that could be visualized into metrics, with its exact numeric value, display form, unit, context, page, and excerpt.
@@ -98,7 +111,7 @@ Create a single-page scrollytelling StorySpec using ONLY the evidence JSON below
 
 Editorial rules:
 - Produce exactly ${targetSections} sequential sections.
-- Write all reader-facing text in ${languageName[options.language]}.
+- Write all reader-facing text in ${languageName(options.language)}.
 - Adapt explanations for audience "${options.audience}".
 - Build an arc: problem → mechanism/method → important findings → limitations → meaning.
 - Do not exaggerate novelty, causality, generality, or real-world impact.
@@ -130,7 +143,7 @@ export function buildDeepReportPrompt(
 Create a rigorous DeepReport using ONLY the evidence JSON below. Every analytical section must cite existing claim IDs. Do not add outside knowledge, speculate beyond the evidence, or hide uncertainty.
 
 Requirements:
-- Produce exactly ${targetSections} sections in ${languageName[options.language]} for audience "${options.audience}".
+- Produce exactly ${targetSections} sections in ${languageName(options.language)} for audience "${options.audience}".
 - Cover contribution, mechanism, experiment, critique, reproduction, and implication at least once. Additional sections may revisit the most important kind.
 - Each summary states the section's central conclusion. Each analysis array contains 2–5 substantial, non-repetitive paragraphs or points.
 - Separate what the authors report from what follows analytically. A needs-review claim must be described as uncertain.
@@ -155,7 +168,7 @@ export function buildTechnicalAppendixPrompt(
 Create a TechnicalAppendix using ONLY the evidence JSON below. It must help a reader understand the mathematics, algorithm, computational costs, and implementation shape of the paper without pretending that illustrative pseudocode is the authors' released code.
 
 Requirements:
-- Write in ${languageName[options.language]} for audience "${options.audience}" at depth "${options.depth}".
+- Write in ${languageName(options.language)} for audience "${options.audience}" at depth "${options.depth}".
 - Every equation, algorithm step, code sketch, and complexity item must cite existing claim IDs.
 - Include an equation only when its mechanism is supported by the evidence. Preserve mathematical symbols as readable plain text or LaTeX-like text; never invent constants or dimensions.
 - Code sketches are explanatory pseudocode or minimal implementation skeletons, never claimed to be verbatim source code. If evidence is insufficient for safe code, return an empty codeSketches array.
