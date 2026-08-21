@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import OpenAI from "openai";
 import { z } from "zod";
+import { preferredLanguage } from "@/lib/preferred-language";
 import {
   evidenceCheckpointSchema,
   evidencePassIds,
@@ -64,7 +65,7 @@ type GenerationInput = {
   apiKeys: Partial<Record<ProviderId, string>>;
   assignments: ModelTeam;
   urls: string[];
-  language: "tr" | "en";
+  language: string;
   audience: "general" | "student" | "expert";
   depth: "concise" | "standard" | "deep";
   provider: ProviderId;
@@ -103,6 +104,14 @@ type TaggedProviderError = Error & {
   modelId?: string;
   taskRole?: GenerationTaskRole;
   errorType?: string;
+  /**
+   * "Bu model Trace görevleri için uygun değil" hatası. Bayrak olarak
+   * taşınıyor çünkü eskiden mesaj metni eşleştiriliyordu ve metin İngilizce'ye
+   * çevrildiği anda sınıflandırma sessizce bozuldu: kullanıcıya modelini
+   * değiştirmesini söyleyen açıklama yerine genel bir upstream hatası
+   * dönüyordu. Kullanıcıya görünen metin hiçbir zaman kontrol akışı taşımamalı.
+   */
+  incompatibleModel?: boolean;
   providerCode?: string;
   attemptedModel?: string;
 };
@@ -110,17 +119,22 @@ type TaggedProviderError = Error & {
 type StreamWriter = (event: GenerationStreamEvent) => void;
 type ProgressWriter = (progress: GenerationProgress) => void;
 
+/** Kullanıcıya olduğu gibi gösterilen, "başka model seç" diyen hata. */
+function incompatibleModelError(message: string): TaggedProviderError {
+  return Object.assign(new Error(message), { incompatibleModel: true });
+}
+
 function jsonError(message: string, status: number, detail?: unknown) {
   return Response.json({ error: message, detail }, { status });
 }
 
 function parseJsonResponse(text: string | undefined, stage: string) {
-  if (!text) throw new Error(`${stage} aşaması boş yanıt döndürdü.`);
+  if (!text) throw new Error(`The ${stage} stage returned an empty response.`);
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
     return omitNullObjectFields(JSON.parse(cleaned));
   } catch {
-    throw new Error(`${stage} aşaması geçerli JSON döndürmedi.`);
+    throw new Error(`The ${stage} stage did not return valid JSON.`);
   }
 }
 
@@ -287,18 +301,18 @@ async function waitUntilActive(
     const file = await ai.files.get({ name, config: { abortSignal: signal } });
     const state = String(file.state ?? "ACTIVE");
     if (state === "ACTIVE") return file;
-    if (state === "FAILED") throw new Error("PDF model tarafından işlenemedi.");
+    if (state === "FAILED") throw new Error("The model could not process the PDF.");
     if (attempt > 0 && attempt % 8 === 0) {
       progress({
         stage: "document",
         progress: Math.min(25, 18 + attempt / 5),
-        title: "PDF model için hazırlanıyor.",
-        detail: "Belge sayfaları ve görsel katmanları ayrıştırılıyor.",
+        title: "Preparing the PDF for the model.",
+        detail: "Parsing the document pages and their visual layers.",
       });
     }
     await abortableDelay(1_000, signal);
   }
-  throw new Error("PDF işleme zaman aşımına uğradı.");
+  throw new Error("Processing the PDF timed out.");
 }
 
 async function collectOpenRouterStream(
@@ -307,7 +321,7 @@ async function collectOpenRouterStream(
 ) {
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: { code?: number; message?: string; metadata?: Record<string, unknown> } } | undefined;
-    const error = new Error(payload?.error?.message ?? `OpenRouter isteği ${response.status} koduyla başarısız oldu.`);
+    const error = new Error(payload?.error?.message ?? `The OpenRouter request failed with status ${response.status}.`);
     Object.assign(error, {
       status: payload?.error?.code ?? response.status,
       errorType: payload?.error?.metadata?.error_type,
@@ -315,7 +329,7 @@ async function collectOpenRouterStream(
     });
     throw error;
   }
-  if (!response.body) throw new Error("OpenRouter yanıt akışı açılamadı.");
+  if (!response.body) throw new Error("The OpenRouter response stream could not be opened.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -335,7 +349,7 @@ async function collectOpenRouterStream(
         choices?: Array<{ delta?: { content?: string | Array<{ type?: string; text?: string }> } }>;
       };
       if (event.error) {
-        const providerError = new Error(event.error.message ?? "OpenRouter model hatası.");
+        const providerError = new Error(event.error.message ?? "OpenRouter model error.");
         Object.assign(providerError, {
           status: event.error.code,
           errorType: event.error.metadata?.error_type,
@@ -372,7 +386,7 @@ async function assertOpenRouterModelCompatible(
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: { message?: string } } | undefined;
-    const error = new Error(payload?.error?.message ?? `OpenRouter modeli bulunamadı: ${model}`);
+    const error = new Error(payload?.error?.message ?? `OpenRouter model not found: ${model}`);
     Object.assign(error, { status: response.status });
     throw error;
   }
@@ -385,10 +399,14 @@ async function assertOpenRouterModelCompatible(
   const outputModalities = payload.data?.architecture?.output_modalities ?? [];
   const supportedParameters = payload.data?.supported_parameters ?? [];
   if (!outputModalities.includes("text")) {
-    throw new Error(`OpenRouter modeli ${model} metin/JSON çıktısı üretmiyor. Trace görevleri için output modality “text” olan bir model seç.`);
+    throw incompatibleModelError(
+      `The OpenRouter model ${model} does not produce text/JSON output. Pick a model whose output modality is “text” for Trace tasks.`,
+    );
   }
   if (!supportedParameters.includes("structured_outputs")) {
-    throw new Error(`OpenRouter modeli ${model} strict structured output desteklemiyor. Uyumlu model kataloğundan başka bir model seç.`);
+    throw incompatibleModelError(
+      `The OpenRouter model ${model} does not support strict structured output. Pick another model from the compatible catalogue.`,
+    );
   }
   return { outputModalities };
 }
@@ -426,12 +444,12 @@ async function prepareProviderRuntime(
           },
         });
         markProviderActivity();
-        if (!uploaded.name) throw new Error("PDF yükleme kimliği alınamadı.");
+        if (!uploaded.name) throw new Error("The PDF upload id could not be obtained.");
         activeName = uploaded.name;
         progress({
           stage: "document",
           progress: 18,
-          title: "PDF alındı, sayfalar çözümleniyor.",
+          title: "PDF received; resolving its pages.",
           detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · Gemini`,
         });
         const readyFile = await waitUntilActive(ai, uploaded.name, signal, progress);
@@ -451,7 +469,7 @@ async function prepareProviderRuntime(
           signal: requestSignal,
           onChunk,
         }) => {
-          if (includeDocument && !activeFile) throw new Error("Gemini PDF kimliği bulunamadı.");
+          if (includeDocument && !activeFile) throw new Error("The Gemini PDF id could not be found.");
           return collectStructuredStream(
             () =>
               ai.models.generateContentStream({
@@ -501,7 +519,7 @@ async function prepareProviderRuntime(
       progress({
         stage: "document",
         progress: 22,
-        title: "PDF Claude için görsel ve metin katmanlarına ayrıldı.",
+        title: "The PDF was split into visual and text layers for Claude.",
         detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · Messages API`,
       });
     }
@@ -516,7 +534,7 @@ async function prepareProviderRuntime(
         signal: requestSignal,
         onChunk,
       }) => {
-        if (includeDocument && !documentData) throw new Error("Claude PDF içeriği bulunamadı.");
+        if (includeDocument && !documentData) throw new Error("The Claude PDF content could not be found.");
         const stream = ai.messages.stream({
           model: input.model,
           max_tokens: maxOutputTokens,
@@ -545,7 +563,7 @@ async function prepareProviderRuntime(
         });
         const message = await stream.finalMessage();
         if (message.stop_reason !== "end_turn" && message.stop_reason !== "stop_sequence") {
-          throw new Error(`Claude yanıtı tamamlanamadı: ${message.stop_reason ?? "unknown"}.`);
+          throw new Error(`The Claude response did not complete: ${message.stop_reason ?? "unknown"}.`);
         }
         return message.content
           .filter((block) => block.type === "text")
@@ -565,8 +583,8 @@ async function prepareProviderRuntime(
       progress({
         stage: input.taskRole === "visual" ? "story" : "document",
         progress: input.taskRole === "visual" ? 78 : 12,
-        title: "OpenRouter structured model’e yönlendirildi.",
-        detail: `${input.model} görsel çıktı modeli; Trace canvas JSON’u ${effectiveModel} ile üretilecek.`,
+        title: "Redirected to an OpenRouter structured model.",
+        detail: `${input.model} is an image-output model; the Trace canvas JSON will be produced with ${effectiveModel}.`,
       });
     }
     const documentData = input.needsDocument
@@ -577,7 +595,7 @@ async function prepareProviderRuntime(
       progress({
         stage: "document",
         progress: 22,
-        title: "PDF OpenRouter isteği için hazırlandı.",
+        title: "The PDF is ready for the OpenRouter request.",
         detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · ${input.model}`,
       });
     }
@@ -593,7 +611,7 @@ async function prepareProviderRuntime(
         signal: requestSignal,
         onChunk,
       }) => {
-        if (includeDocument && !documentData) throw new Error("OpenRouter PDF içeriği bulunamadı.");
+        if (includeDocument && !documentData) throw new Error("The OpenRouter PDF content could not be found.");
         const timeoutSignal = AbortSignal.timeout(MODEL_TIMEOUT_MS);
         const combinedSignal = AbortSignal.any([requestSignal, timeoutSignal]);
         const requestModel = async (model: string) => {
@@ -644,8 +662,8 @@ async function prepareProviderRuntime(
           progress({
             stage: input.taskRole === "visual" ? "story" : "evidence",
             progress: input.taskRole === "visual" ? 80 : 36,
-            title: "OpenRouter endpoint’i yeniden yönlendiriliyor.",
-            detail: `${effectiveModel} upstream hatası verdi; ${OPENROUTER_STRUCTURED_FALLBACK_MODEL} ile güvenli tekrar deneniyor.`,
+            title: "Redirecting the OpenRouter endpoint.",
+            detail: `${effectiveModel} returned an upstream error; retrying safely with ${OPENROUTER_STRUCTURED_FALLBACK_MODEL}.`,
           });
           await assertOpenRouterModelCompatible(input.apiKey, OPENROUTER_STRUCTURED_FALLBACK_MODEL, requestSignal);
           return requestModel(OPENROUTER_STRUCTURED_FALLBACK_MODEL);
@@ -675,7 +693,7 @@ async function prepareProviderRuntime(
     progress({
       stage: "document",
       progress: 22,
-      title: "PDF OpenAI çalışma alanına alındı.",
+      title: "The PDF was taken into the OpenAI workspace.",
       detail: `${input.file.name} · ${(input.file.size / 1024 / 1024).toFixed(1)} MB · Responses API`,
     });
   }
@@ -691,7 +709,7 @@ async function prepareProviderRuntime(
       signal: requestSignal,
       onChunk,
     }) => {
-      if (includeDocument && !activeFileId) throw new Error("OpenAI PDF kimliği bulunamadı.");
+      if (includeDocument && !activeFileId) throw new Error("The OpenAI PDF id could not be found.");
       const stream = ai.responses.stream(
         {
           model: input.model,
@@ -735,7 +753,7 @@ async function prepareProviderRuntime(
         throw new Error(
           response.error?.message ??
             response.incomplete_details?.reason ??
-            "OpenAI yanıtı tamamlanamadı.",
+            "The OpenAI response did not complete.",
         );
       }
       return response.output_text || text;
@@ -759,7 +777,7 @@ async function loadWebSources(urls: string[]) {
     if (result.status === "fulfilled") sources.push(result.value);
     else {
       warnings.push(
-        `${urls[index]}: ${result.reason instanceof Error ? result.reason.message : "okunamadı"}`,
+        `${urls[index]}: ${result.reason instanceof Error ? result.reason.message : "could not be read"}`,
       );
     }
   });
@@ -768,7 +786,8 @@ async function loadWebSources(urls: string[]) {
 
 function parseInput(form: FormData): GenerationInput {
   const file = form.get("paper");
-  const language = form.get("language") === "en" ? "en" : "tr";
+  // Eksik alan sessizce Türkçe'ye düşmemeli — bkz. `preferred-language.ts`.
+  const language = preferredLanguage(String(form.get("language") ?? ""));
   const audienceValue = String(form.get("audience") ?? "student");
   const audience = ["general", "student", "expert"].includes(audienceValue)
     ? (audienceValue as GenerationInput["audience"])
@@ -781,7 +800,7 @@ function parseInput(form: FormData): GenerationInput {
   const inferredProvider = getProviderForModel(requestedModel)?.id ?? "gemini";
   const requestedProvider = String(form.get("provider") ?? inferredProvider);
   const fallbackSelection = resolveProviderModel(requestedProvider, requestedModel);
-  if (!fallbackSelection) throw new InputError("Model ve sağlayıcı seçimi geçersiz.", 400);
+  if (!fallbackSelection) throw new InputError("The model and provider selection is not valid.", 400);
 
   let assignments: ModelTeam;
   const rawAssignments = String(form.get("assignments") ?? "");
@@ -796,7 +815,7 @@ function parseInput(form: FormData): GenerationInput {
       return [role, selection];
     })) as ModelTeam;
   } catch {
-    throw new InputError("Görev bazlı model dağılımı geçersiz.", 400);
+    throw new InputError("The per-task model assignment is not valid.", 400);
   }
   const { provider, model } = assignments.evidence;
 
@@ -812,19 +831,19 @@ function parseInput(form: FormData): GenerationInput {
     const legacyKey = String(form.get("apiKey") ?? "").trim();
     if (legacyKey && !apiKeys[provider]) apiKeys[provider] = legacyKey;
   } catch {
-    throw new InputError("Provider API key dağılımı geçersiz.", 400);
+    throw new InputError("The provider API key assignment is not valid.", 400);
   }
 
-  if (!(file instanceof File)) throw new InputError("Bir PDF dosyası yüklemelisin.", 400);
+  if (!(file instanceof File)) throw new InputError("You must upload a PDF file.", 400);
   if (file.type !== "application/pdf") {
-    throw new InputError("Yalnızca PDF dosyaları destekleniyor.", 415);
+    throw new InputError("Only PDF files are supported.", 415);
   }
   if (file.size > MAX_PDF_BYTES) {
-    throw new InputError("PDF boyutu 35 MB sınırını aşıyor.", 413);
+    throw new InputError("The PDF exceeds the 35 MB limit.", 413);
   }
   const documentAssignments = [assignments.evidence, assignments.technical];
   if (documentAssignments.some((assignment) => assignment.provider === "anthropic") && file.size > 24 * 1024 * 1024) {
-    throw new InputError("Claude için PDF üst sınırı 24 MB; base64 kodlama toplam istek sınırını aşar.", 413);
+    throw new InputError("The PDF limit for Claude is 24 MB; base64 encoding would push the request past its total limit.", 413);
   }
   const missingProvider = Object.values(assignments)
     .map((assignment) => assignment.provider)
@@ -837,7 +856,7 @@ function parseInput(form: FormData): GenerationInput {
     if (!Array.isArray(rawUrls)) throw new Error("array expected");
     urls = rawUrls.filter((item): item is string => typeof item === "string").slice(0, 3);
   } catch {
-    throw new InputError("Kaynak URL listesi geçersiz.", 400);
+    throw new InputError("The list of source URLs is not valid.", 400);
   }
 
   let checkpoint: unknown;
@@ -860,45 +879,45 @@ class InputError extends Error {
 }
 
 function publicError(error: unknown, callerAborted: boolean, fallbackProvider: ProviderId) {
-  if (callerAborted) return "Üretim iptal edildi.";
+  if (callerAborted) return "Generation cancelled.";
   const message = error instanceof Error ? error.message : String(error);
   const tagged = error as TaggedProviderError;
   const provider = tagged.providerId ?? fallbackProvider;
-  const providerLabel = getProvider(provider)?.label ?? "Model sağlayıcısı";
+  const providerLabel = getProvider(provider)?.label ?? "Model provider";
   const modelLabel = tagged.modelId ? ` (${tagged.modelId})` : "";
-  const taskLabel = tagged.taskRole ? ` · ${tagged.taskRole} görevi` : "";
-  if (/metin\/JSON çıktısı üretmiyor|strict structured output desteklemiyor/i.test(message)) {
+  const taskLabel = tagged.taskRole ? ` · ${tagged.taskRole} task` : "";
+  if (tagged.incompatibleModel) {
     return message;
   }
   if (error instanceof Error && error.name === "AbortError") {
-    return `${providerLabel}${modelLabel}${taskLabel} 120 saniyede tamamlanmadı. Tamamlanan aşamalar korundu; yeniden deneyebilirsin.`;
+    return `${providerLabel}${modelLabel}${taskLabel} did not finish within 120 seconds. Completed stages were kept; you can try again.`;
   }
   if (/API_KEY_INVALID|API key not valid|invalid api key|incorrect api key|authentication|permission_denied|401/i.test(message)) {
-    return `${providerLabel} API key geçersiz veya bu model için yetkili değil.`;
+    return `The ${providerLabel} API key is invalid, or not authorised for this model.`;
   }
   if (/RESOURCE_EXHAUSTED|quota|rate limit|429/i.test(message)) {
-    return `${providerLabel} kullanım kotası doldu veya istek sınırına ulaşıldı. Tamamlanan aşamalar korundu.`;
+    return `The ${providerLabel} quota is exhausted, or its rate limit was reached. Completed stages were kept.`;
   }
   if (/insufficient credits|402/i.test(message)) {
-    return `${providerLabel} hesabında bu istek için yeterli kredi yok.${modelLabel}`;
+    return `The ${providerLabel} account does not have enough credit for this request.${modelLabel}`;
   }
   if (/NOT_FOUND|model.*not found|404/i.test(message)) {
-    return `Seçilen ${providerLabel} modeli bu API key için kullanılamıyor. Başka bir model seçip yeniden dene.`;
+    return `The selected ${providerLabel} model is not available to this API key. Pick another model and try again.`;
   }
   if (/UNAVAILABLE|503|504|fetch failed|ECONNRESET|ETIMEDOUT|terminated/i.test(message)) {
-    return `${providerLabel} servisine şu anda ulaşılamıyor. Tamamlanan aşamalar korundu; yeniden deneyebilirsin.`;
+    return `${providerLabel} cannot be reached right now. Completed stages were kept; you can try again.`;
   }
   if (/Provider returned error/i.test(message)) {
     const diagnostic = [tagged.errorType, tagged.providerCode].filter(Boolean).join(" / ");
     const attempted = tagged.attemptedModel && tagged.attemptedModel !== tagged.modelId
-      ? ` Uyumlu fallback ${tagged.attemptedModel} de başarısız oldu.`
+      ? ` The compatible fallback ${tagged.attemptedModel} failed as well.`
       : "";
-    return `${providerLabel}${modelLabel}${taskLabel} upstream sağlayıcıda başarısız oldu${diagnostic ? ` (${diagnostic})` : ""}.${attempted} Uyumlu model kataloğundan başka bir text-only output + structured-output modeli seç.`;
+    return `${providerLabel}${modelLabel}${taskLabel} failed at the upstream provider${diagnostic ? ` (${diagnostic})` : ""}.${attempted} Pick another text-only output + structured-output model from the compatible catalogue.`;
   }
   if (error instanceof z.ZodError || error instanceof Error && error.name === "IntegrityError") {
-    return "Model çıktısı iki denemede de kanıt şemasını geçemedi. Uydurma veri yayınlanmadı; tamamlanan aşamalar korundu.";
+    return "The model output failed the evidence schema on both attempts. No invented data was published; completed stages were kept.";
   }
-  return message || "Paper işlenirken beklenmeyen bir hata oluştu.";
+  return message || "Something went wrong while processing the paper.";
 }
 
 async function inputFingerprint(input: GenerationInput) {
@@ -1031,10 +1050,10 @@ async function runPipeline(
     progress({
       stage: "document",
       progress: 8,
-      title: "Kaynaklar güvenli alanda hazırlanıyor.",
+      title: "Preparing the sources in a sandbox.",
       detail: input.urls.length
-        ? `PDF ile birlikte ${input.urls.length} yardımcı kaynak kontrol ediliyor.`
-        : "PDF, analiz öncesi dosya doğrulamasından geçirildi.",
+        ? `Checking the PDF along with ${input.urls.length} supporting source(s).`
+        : "The PDF passed file validation before analysis.",
     });
 
     const webResultPromise = loadWebSources(input.urls);
@@ -1072,16 +1091,16 @@ async function runPipeline(
       progress({
         stage: "evidence",
         progress: evidenceHighWater,
-        title: "Kaydedilmiş evidence aşamalarından devam ediliyor.",
-        detail: `${completed}/4 aşama yeniden kullanılacak; yalnızca eksikler üretilecek.`,
+        title: "Resuming from the saved evidence stages.",
+        detail: `${completed}/4 stages will be reused; only the missing ones are generated.`,
       });
       emit({ type: "checkpoint", checkpoint, completed: completedPasses(checkpoint) });
     } else {
       progress({
         stage: "evidence",
         progress: 27,
-        title: "Paper dört kanıt katmanına ayrılıyor.",
-        detail: "En fazla iki küçük model görevi aynı anda çalışacak.",
+        title: "Splitting the paper into four evidence layers.",
+        detail: "At most two small model tasks run at a time.",
       });
       emit({ type: "checkpoint", checkpoint, completed: [] });
     }
@@ -1115,8 +1134,8 @@ async function runPipeline(
       progress({
         stage: "evidence",
         progress: evidenceHighWater,
-        title: `${evidencePassLabels[passId]} çıkarılıyor.`,
-        detail: `${completed}/4 aşama tamamlandı · structured stream bekleniyor`,
+        title: `Extracting ${evidencePassLabels[passId]}.`,
+        detail: `${completed}/4 stages complete · waiting for the structured stream`,
       });
 
       try {
@@ -1146,7 +1165,7 @@ async function runPipeline(
                   stage: "evidence",
                   progress: evidenceHighWater,
                   title: `${evidencePassLabels[passId]} stream ediliyor.`,
-                  detail: `${characters.toLocaleString("tr-TR")} karakter alındı · ${completed}/4 aşama tamamlandı`,
+                  detail: `${characters.toLocaleString("en")} characters received · ${completed}/4 stages complete`,
                 });
               },
             }),
@@ -1156,15 +1175,15 @@ async function runPipeline(
               stage: "evidence",
               progress: evidenceHighWater,
               title: `${evidencePassLabels[passId]} yeniden denetleniyor.`,
-              detail: `${issues.length} tutarsızlık temizleniyor · yapı denemesi ${attempt}/2`,
+              detail: `Clearing ${issues.length} inconsistencies · structure attempt ${attempt}/2`,
               attempt,
             }),
           onNetworkRetry: (attempt) =>
             progress({
               stage: "evidence",
               progress: evidenceHighWater,
-              title: `${evidencePassLabels[passId]} bağlantısı yenileniyor.`,
-              detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+              title: `Reconnecting for ${evidencePassLabels[passId]}.`,
+              detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
               attempt,
             }),
         });
@@ -1176,8 +1195,8 @@ async function runPipeline(
         progress({
           stage: "evidence",
           progress: evidenceHighWater,
-          title: `${evidencePassLabels[passId]} doğrulandı.`,
-          detail: `${completed}/4 evidence aşaması tamamlandı ve checkpoint’e kaydedildi.`,
+          title: `${evidencePassLabels[passId]} validated.`,
+          detail: `${completed}/4 evidence stages complete and written to the checkpoint.`,
         });
         console.info("Trace generation stage", {
           stage: `evidence:${passId}`,
@@ -1203,7 +1222,7 @@ async function runPipeline(
     await runWithConcurrency(missingPasses, EVIDENCE_CONCURRENCY, runEvidencePass);
 
     const overview = checkpoint.parts.overview;
-    if (!overview) throw new Error("Paper overview checkpoint’i bulunamadı.");
+    if (!overview) throw new Error("The paper overview checkpoint could not be found.");
     const sources: Source[] = [
       {
         id: "paper",
@@ -1224,8 +1243,8 @@ async function runPipeline(
     progress({
       stage: "evidence",
       progress: 64,
-      title: "Dört evidence katmanı birleştirildi.",
-      detail: `${evidence.claims.length} claim · ${evidence.metrics.length} metrik · ${evidence.limitations.length} sınırlılık`,
+      title: "The four evidence layers were merged.",
+      detail: `${evidence.claims.length} claims · ${evidence.metrics.length} metrics · ${evidence.limitations.length} limitations`,
     });
 
     const storyPrompt = buildStoryPrompt(evidence, {
@@ -1252,8 +1271,8 @@ async function runPipeline(
     progress({
       stage: "story",
       progress: storyHighWater,
-      title: "Görsel anlatı ve derin rapor tasarlanıyor.",
-      detail: "Farklı modeller paralel, aynı modele atanmış görevler kontrollü sırayla çalışıyor.",
+      title: "Designing the visual narrative and the deep report.",
+      detail: "Different models run in parallel; tasks sharing one model run in a controlled sequence.",
     });
     const [visualRuntime, reportRuntime, technicalRuntime] = await Promise.all([
       getRuntime("visual"),
@@ -1261,7 +1280,7 @@ async function runPipeline(
       getRuntime("technical", false),
     ]);
     const generateStory = () => generateValidated<StorySpec>({
-      stage: "Story planlama",
+      stage: "Story planning",
       schema: storySpecSchema,
       signal,
       request: async (feedback) =>
@@ -1284,7 +1303,7 @@ async function runPipeline(
               stage: "story",
               progress: storyHighWater,
               title: "StorySpec stream ediliyor.",
-              detail: `${characters.toLocaleString("tr-TR")} karakterlik doğrulanmış anlatı alındı.`,
+              detail: `Received ${characters.toLocaleString("en")} characters of validated narrative.`,
             });
           },
         }),
@@ -1294,23 +1313,23 @@ async function runPipeline(
         progress({
           stage: "story",
           progress: storyHighWater,
-          title: "Story bağlantıları yeniden kuruluyor.",
-          detail: `${issues.length} anlatı tutarsızlığı temizleniyor · yapı denemesi ${attempt}/2`,
+          title: "Relinking the story.",
+          detail: `Clearing ${issues.length} narrative inconsistencies · structure attempt ${attempt}/2`,
           attempt,
         }),
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
           progress: storyHighWater,
-          title: "Story bağlantısı yenileniyor.",
-          detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+          title: "Reconnecting for the story.",
+          detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
           attempt,
         }),
     }).catch((error) => {
       throw tagProviderError(error, input.assignments.visual, "visual");
     });
     const generateReport = () => generateValidated<DeepReport>({
-      stage: "Derin rapor",
+      stage: "Deep report",
       schema: deepReportSchema,
       signal,
       request: async (feedback) =>
@@ -1332,8 +1351,8 @@ async function runPipeline(
             progress({
               stage: "story",
               progress: Math.min(storyHighWater, reportHighWater),
-              title: "Derin rapor stream ediliyor.",
-              detail: `${characters.toLocaleString("tr-TR")} karakterlik analitik rapor alındı.`,
+              title: "Streaming the deep report.",
+              detail: `Received ${characters.toLocaleString("en")} characters of analytical report.`,
             });
           },
         }),
@@ -1343,23 +1362,23 @@ async function runPipeline(
         progress({
           stage: "story",
           progress: Math.min(storyHighWater, reportHighWater),
-          title: "Rapor bağlantıları yeniden kuruluyor.",
-          detail: `${issues.length} rapor tutarsızlığı temizleniyor · yapı denemesi ${attempt}/2`,
+          title: "Relinking the report.",
+          detail: `Clearing ${issues.length} report inconsistencies · structure attempt ${attempt}/2`,
           attempt,
         }),
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
           progress: Math.min(storyHighWater, reportHighWater),
-          title: "Rapor bağlantısı yenileniyor.",
-          detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+          title: "Reconnecting for the report.",
+          detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
           attempt,
         }),
     }).catch((error) => {
       throw tagProviderError(error, input.assignments.report, "report");
     });
     const generateTechnical = () => generateValidated<TechnicalAppendix>({
-      stage: "Teknik appendix",
+      stage: "Technical appendix",
       schema: technicalAppendixSchema,
       signal,
       request: async (feedback) =>
@@ -1380,8 +1399,8 @@ async function runPipeline(
             progress({
               stage: "story",
               progress: Math.min(storyHighWater, reportHighWater),
-              title: "Teknik appendix hazırlanıyor.",
-              detail: `${characters.toLocaleString("tr-TR")} karakterlik denklem, algoritma ve kod analizi alındı.`,
+              title: "Preparing the technical appendix.",
+              detail: `Received ${characters.toLocaleString("en")} characters of equation, algorithm and code analysis.`,
             });
           },
         }),
@@ -1389,15 +1408,15 @@ async function runPipeline(
       onStructureRetry: (attempt, issues) => progress({
         stage: "story",
         progress: Math.min(storyHighWater, reportHighWater),
-        title: "Teknik bağlantılar yeniden kuruluyor.",
-        detail: `${issues.length} teknik tutarsızlık temizleniyor · yapı denemesi ${attempt}/2`,
+        title: "Relinking the technical appendix.",
+        detail: `Clearing ${issues.length} technical inconsistencies · structure attempt ${attempt}/2`,
         attempt,
       }),
       onNetworkRetry: (attempt) => progress({
         stage: "story",
         progress: Math.min(storyHighWater, reportHighWater),
-        title: "Teknik model bağlantısı yenileniyor.",
-        detail: `Geçici model hatası · ağ denemesi ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+        title: "Reconnecting for the technical appendix.",
+        detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
         attempt,
       }),
     }).catch((error) => {
@@ -1417,7 +1436,7 @@ async function runPipeline(
       for (const task of tasks) await task();
     }));
     if (!story || !deepReport || !technicalAppendix) {
-      throw new Error("Model ekibi gerekli çıktıların tamamını üretmedi.");
+      throw new Error("The model team did not produce every required output.");
     }
     console.info("Trace generation stage", {
       stage: "story",
@@ -1432,8 +1451,8 @@ async function runPipeline(
     progress({
       stage: "finalize",
       progress: 91,
-      title: "Son bütünlük denetimi yapılıyor.",
-      detail: "Claim, sayfa, metrik ve görsel bağlantıları birlikte kontrol ediliyor.",
+      title: "Running the final integrity check.",
+      detail: "Claims, pages, metrics and visual links are checked together.",
     });
     validateEvidenceIntegrity(evidence);
     validateStoryIntegrity(story, evidence, expectedSections(input.depth));
@@ -1468,8 +1487,8 @@ async function runPipeline(
     progress({
       stage: "finalize",
       progress: 97,
-      title: "Geçici dosyalar temizleniyor.",
-      detail: `${runtimePromises.size} model çalışma alanı temizleniyor; API key’ler saklanmıyor.`,
+      title: "Cleaning up temporary files.",
+      detail: `Cleaning up ${runtimePromises.size} model workspace(s); no API key is retained.`,
     });
     await cleanupRuntimes();
 
@@ -1486,7 +1505,7 @@ export async function POST(request: Request) {
     input = parseInput(await request.formData());
   } catch (error) {
     if (error instanceof InputError) return jsonError(error.message, error.status);
-    return jsonError("Gönderilen form verisi okunamadı.", 400);
+    return jsonError("The submitted form data could not be read.", 400);
   }
 
   const encoder = new TextEncoder();

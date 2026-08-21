@@ -40,14 +40,14 @@ function assertAllowed(url) {
   try {
     parsed = new URL(url);
   } catch {
-    throw new SourceError(`Geçersiz URL: ${url}`);
+    throw new SourceError(`Invalid URL: ${url}`);
   }
   if (parsed.protocol !== "https:") {
-    throw new SourceError(`Yalnızca HTTPS destekleniyor: ${parsed.protocol}//`);
+    throw new SourceError(`Only HTTPS is supported: ${parsed.protocol}//`);
   }
   if (!ALLOWED_HOSTS.has(parsed.hostname)) {
     throw new SourceError(
-      `İzin verilmeyen host: ${parsed.hostname}. İzinli: ${[...ALLOWED_HOSTS].join(", ")}`,
+      `Host not allowed: ${parsed.hostname}. Allowed: ${[...ALLOWED_HOSTS].join(", ")}`,
     );
   }
   return parsed;
@@ -67,7 +67,7 @@ function extraHeaders(url) {
 
 async function request(url, { accept = "application/json", attempt = 0, hops = 0, retries = 3 } = {}) {
   assertAllowed(url);
-  if (hops > 4) throw new SourceError(`Çok fazla yönlendirme: ${url}`);
+  if (hops > 4) throw new SourceError(`Too many redirects: ${url}`);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -80,7 +80,7 @@ async function request(url, { accept = "application/json", attempt = 0, hops = 0
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location) throw new SourceError(`Yönlendirme hedefi yok: ${url}`);
+      if (!location) throw new SourceError(`Redirect has no target: ${url}`);
       const next = new URL(location, url).toString();
       assertAllowed(next); // yönlendirme izin listesinden çıkamaz
       return request(next, { accept, hops: hops + 1, retries });
@@ -202,7 +202,7 @@ export async function fetchArxivById(id) {
     new URLSearchParams({ id_list: clean, max_results: "1" });
   const response = await request(url, { accept: "application/atom+xml" });
   const entries = parseEntries(await response.text());
-  if (!entries.length) throw new SourceError(`arXiv kaydı bulunamadı: ${id}`);
+  if (!entries.length) throw new SourceError(`No arXiv record found: ${id}`);
   return entries[0];
 }
 
@@ -246,7 +246,7 @@ export async function downloadPdf(url, destination) {
   const response = await request(url, { accept: "application/pdf" });
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType && !/pdf|octet-stream/i.test(contentType)) {
-    throw new SourceError(`Beklenen PDF değil, gelen içerik türü: ${contentType}`);
+    throw new SourceError(`Expected a PDF; received content type: ${contentType}`);
   }
 
   const chunks = [];
@@ -254,13 +254,13 @@ export async function downloadPdf(url, destination) {
   for await (const chunk of response.body) {
     total += chunk.length;
     if (total > MAX_PDF_BYTES) {
-      throw new SourceError(`PDF ${MAX_PDF_BYTES / 1024 / 1024} MB sınırını aşıyor`);
+      throw new SourceError(`The PDF exceeds the ${MAX_PDF_BYTES / 1024 / 1024} MB limit`);
     }
     chunks.push(chunk);
   }
   const buffer = Buffer.concat(chunks);
   if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
-    throw new SourceError("İndirilen dosya geçerli bir PDF imzası taşımıyor");
+    throw new SourceError("The downloaded file does not carry a valid PDF signature");
   }
   writeFileSync(destination, buffer);
   return { path: destination, sizeBytes: buffer.length, url };
@@ -314,7 +314,7 @@ export async function fetchOpenAlex(arxivId, doi) {
   // Code LLM" kaydını 2.516 atıfla döndürüyor; doğrusu 22.087. Otoriter
   // görünümlü yanlış veri, eksik veriden çok daha kötüdür.
   if (!doi || /^10\.48550\//i.test(doi)) {
-    return { ok: false, skipped: "yayıncı DOI'si yok; arXiv kimliğiyle sorgu yanlış kayıt döndürüyor" };
+    return { ok: false, skipped: "no publisher DOI; querying by arXiv id returns the wrong record" };
   }
   const target = `https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`;
   try {

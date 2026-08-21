@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   });
   if (!response.ok) {
     return Response.json(
-      { error: response.status === 401 ? "OpenRouter API key geçersiz." : "OpenRouter model kataloğu alınamadı." },
+      { error: response.status === 401 ? "The OpenRouter API key is not valid." : "The OpenRouter model catalogue could not be loaded." },
       { status: response.status === 401 ? 401 : 502 },
     );
   }

@@ -71,7 +71,7 @@ export type EvidenceCheckpoint = z.infer<typeof evidenceCheckpointSchema>;
 export const evidencePassLabels: Record<EvidencePassId, string> = {
   overview: "Overview",
   methods: "Method and architecture",
-  results: "Bulgular ve metrikler",
+  results: "Findings and metrics",
   limitations: "Limits and scope",
 };
 

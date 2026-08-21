@@ -17,6 +17,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { Claim, ResearchProject } from "@/lib/schema";
+import { foldForSearch } from "@/lib/search-text";
 import {
   ApplicationGuideView,
   LanguageProvider,
@@ -133,7 +134,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
               <div className="finding-list">
                 {project.evidence.findings.map((finding, index) => {
                   const claim = project.evidence.claims.find((item) =>
-                    item.statement.toLocaleLowerCase("tr").includes(finding.slice(0, 18).toLocaleLowerCase("tr")),
+                    foldForSearch(item.statement).includes(foldForSearch(finding.slice(0, 18))),
                   ) ?? project.evidence.claims.filter((item) => item.kind === "reported-result")[index];
                   return (
                     <button key={`${finding}-${index}`} onClick={() => claim && onClaimSelect(claim.id)}>

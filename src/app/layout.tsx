@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Trace — Evidence-first research studio",
-  description: "Bilimsel paper’ları doğrulanabilir, interaktif web anlatılarına dönüştür.",
+  description: "Turn research papers into verifiable, interactive web narratives.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

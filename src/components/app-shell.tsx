@@ -84,7 +84,7 @@ export function AppShell() {
       throw new Error("Imports are only accepted from an address on this machine.");
     }
     const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error(`Proje indirilemedi (HTTP ${response.status}).`);
+    if (!response.ok) throw new Error(`The project could not be downloaded (HTTP ).`);
     const text = await response.text();
     if (text.length > 5 * 1024 * 1024) throw new Error("The Trace JSON exceeds the 5 MB limit.");
     const parsed = researchProjectSchema.safeParse(JSON.parse(text));
@@ -332,7 +332,7 @@ export function AppShell() {
     return <LibraryView projects={projects} onOpen={openProject} onDelete={removeProject} onHome={() => setScreen("home")} onNew={newProject} onImport={importProject} />;
   }
   if (screen === "home" || !project) {
-    return <><Onboarding onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Kapat</button></div>}</>;
+    return <><Onboarding onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>;
   }
 
   const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);

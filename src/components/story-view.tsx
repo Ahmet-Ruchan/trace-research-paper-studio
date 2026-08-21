@@ -91,7 +91,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
                   return (
                     <button key={claimId} onClick={() => onClaimSelect?.(claimId)}>
                       <span className={claim?.confidence === "verified" ? "verified-dot" : "review-dot"} />
-                      Kaynak {page ? `· s. ${page}` : ""}
+                      Source {page ? `· p. ${page}` : ""}
                     </button>
                   );
                 })}
@@ -140,7 +140,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
         <p>{project.story.closing.body}</p>
         <div className="story-source-card">
           <div>
-            <span>Birincil kaynak</span>
+            <span>Primary source</span>
             <strong>{project.evidence.paper.title}</strong>
           </div>
           {project.evidence.paper.doi && (

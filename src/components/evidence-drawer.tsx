@@ -14,9 +14,9 @@ type EvidenceDrawerProps = {
 
 const kindLabels: Record<Claim["kind"], string> = {
   "reported-result": "Reported result",
-  "author-interpretation": "Yazar yorumu",
+  "author-interpretation": "Author interpretation",
   method: "Method",
-  background: "Arka plan",
+  background: "Background",
   limitation: "Limitation",
 };
 
@@ -63,7 +63,7 @@ export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent =
                 <article className="reference-card" key={`${reference.sourceId}-${index}`}>
                   <div className="reference-meta">
                     <span>{source?.type === "paper" ? "PDF" : "WEB"}</span>
-                    <span>{reference.page ? `Sayfa ${reference.page}` : reference.locator ?? "Kaynak"}</span>
+                    <span>{reference.page ? `Page ${reference.page}` : reference.locator ?? "Source"}</span>
                   </div>
                   <blockquote>“{reference.excerpt}”</blockquote>
                   <div className="reference-source">
