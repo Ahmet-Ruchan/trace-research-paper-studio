@@ -1,0 +1,58 @@
+# Tek kapı: `npm run check`.
+#
+# Bu depoda doğruluğun büyük kısmı testlerde yaşıyor — arayüz dili taraması,
+# çıktı dili bekçileri, plugin manifest tutarlılığı, üretilmiş dosyaların
+# kaynaklarıyla senkron olup olmadığı. Hiçbiri derleyicinin yakalayabileceği
+# şeyler değil, dolayısıyla çalıştırılmadıkları sürece yoklar. Bu iş akışı
+# onları her push ve her PR'da çalıştırır.
+#
+# Adımlar bilerek ayrılmadı: `npm run check` geliştiricinin yerelde
+# çalıştırdığı komutun aynısı. CI'ın ayrı bir sırası olsaydı, yerelde geçip
+# CI'da düşen (ya da tersi) bir durum mümkün olurdu.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Aynı dal için üst üste binen çalıştırmaları iptal et; son commit önemli olan.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 24 = katkı verenlerin büyük olasılıkla kullandığı LTS.
+        # 26 = deponun geliştirildiği sürüm (`.nvmrc`).
+        # İkisini birlikte koşturmak "bende çalışıyordu" sınıfını kapatıyor.
+        node: [24, 26]
+    name: check (node ${{ matrix.node }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # `npm ci` lockfile'a birebir uyar; `npm install` sessizce sürüm
+      # yükseltip CI'ı yereldekinden farklı bir ağaçla çalıştırabilirdi.
+      - run: npm ci
+
+      # Köprü PDF metnini `pdftotext` ile çıkarıyor. Kurulu değilse geri düşüş
+      # yolu devreye giriyor ve testler yine geçiyor — yani gerçek yol hiç
+      # denenmemiş oluyor. Bu yüzden kuruyoruz.
+      - name: Install pdftotext
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+
+      - run: npm run check

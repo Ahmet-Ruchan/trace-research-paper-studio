@@ -7,6 +7,7 @@
 Trace turns a research paper into something you can verify, learn from and experiment with —
 running on the coding agent you already use, with no second API key.
 
+[![Check](https://img.shields.io/github/actions/workflow/status/Ahmet-Ruchan/trace-research-paper-studio/check.yml?branch=main&style=for-the-badge&label=check&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/actions/workflows/check.yml)
 [![Stars](https://img.shields.io/github/stars/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=E75B37&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/stargazers)
 [![Forks](https://img.shields.io/github/forks/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/network/members)
 [![Issues](https://img.shields.io/github/issues/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=A36A1E&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/issues)
@@ -245,8 +246,8 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The built-in demo **is** the flagship project: press *Örnek
-projeyi aç* (or add `?sample=1`) and the fully enriched *Attention Is All You Need* loads —
+Open `http://localhost:3000`. The built-in demo **is** the flagship project: press *Open the
+example project* (or add `?sample=1`) and the fully enriched *Attention Is All You Need* loads —
 English or Turkish, chosen from your browser language. Both files also ship as plain downloads
 at `/examples/`, and any `.trace.json` imports through **Library → Trace JSON**.
 
@@ -415,9 +416,14 @@ Not there yet: hosted publishing, accounts, shared persistence, local and open-w
 serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
 by tests so neither can silently fall behind the schema.
 
-The interface is always English. The analysis is not: it stays in whatever language the model
-wrote it in, and a test scans the interface layer to keep the two from mixing. Turkish content
-still sorts and uppercases by Turkish rules, because casing follows the text, not the chrome.
+The interface is always English. The analysis is not: **it comes back in the language you wrote
+to your agent in** — any language, identified by its BCP-47 tag, with `pt-BR` kept distinct from
+`pt-PT`. Nothing is guessed: the bridge cannot see your conversation, so `--language` is required
+and fails loudly rather than picking a default that would be wrong for somebody. Quoted evidence
+is the one exception; an excerpt stays verbatim in the source's own language, because translating
+a quotation breaks the chain back to the page. Content still sorts and uppercases by its own
+locale — casing follows the text, not the chrome — and a test scans the interface layer to keep
+the two from mixing.
 
 ## Roadmap
 
