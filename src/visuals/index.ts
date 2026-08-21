@@ -17,4 +17,5 @@ export { PrimerView } from "./teaching/primer";
 export { DerivationView } from "./teaching/derivations";
 export { QuizView } from "./teaching/quiz";
 export { ApplicationGuideView } from "./teaching/application-guide";
+export { FiguresView } from "./teaching/figures";
 export * from "./chart";

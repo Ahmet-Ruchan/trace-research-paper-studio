@@ -4558,6 +4558,38 @@ const interactiveSchema = discriminatedUnion("kind", [
 		claimIds: array(string()).min(1)
 	})
 ]);
+/**
+* Makalenin KENDİ şekilleri.
+*
+* Trace'in kendi görsel dilbilgisi (architecture, equation, matrix…) makalenin
+* anlattığını yeniden çiziyor. Ama bazı şekiller yeniden çizilemez: yazarların
+* ta kendisi ikonik olmuştur — Transformer'ın mimari şeması, ResNet'in residual
+* bloğu, ViT'in patch akışı. Bu blok onları okuyucuya olduğu gibi gösterir.
+*
+* Görsel PDF'ten çıkarılır, internetten DEĞİL. Sebep ürünün temel kuralı: bir
+* web görselinin gerçekten bu makalenin mimarisi olduğu doğrulanamaz, ve
+* doğrulanamayan bir diyagram doğrulanamayan bir sayıdan daha tehlikelidir —
+* daha yetkili görünür. Buradaki her şekil bir sayfaya ve kendi başlığına
+* bağlıdır, tıpkı claim'lerin alıntıya bağlı olması gibi.
+*/
+const figureSchema = object({
+	id: string(),
+	/** Makaledeki adı: "Figure 1", "Table 2". */
+	label: string().min(1).max(40),
+	/** Şeklin makaledeki kendi başlığı — yeniden yazılmaz, kopyalanır. */
+	caption: string().min(1).max(1200),
+	/** Bu şeklin NEDEN burada olduğu; ajanın kendi cümlesi. */
+	whyItMatters: string().min(1).max(600),
+	/** Görünür PDF sayfası, 1'den başlar. */
+	page: number().int().positive(),
+	/**
+	* Gömülü PNG. Uzak URL kabul edilmiyor: bağımsız görüntüleyicinin CSP'si
+	* `default-src 'none'`, yani uzaktaki bir görsel zaten yüklenmez — ve
+	* paylaşılan dosya kaynağına bağımlı kalmamalı.
+	*/
+	image: string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "image must be an embedded data URI"),
+	claimIds: array(string()).default([])
+});
 /** "Bunu kendi projemde nasıl kullanırım." */
 const applicationGuideSchema = object({
 	title: string(),
@@ -4613,6 +4645,7 @@ const researchProjectSchema = generationResultSchema.extend({
 	quiz: quizSchema.optional(),
 	interactives: array(interactiveSchema).max(8).optional(),
 	applicationGuide: applicationGuideSchema.optional(),
+	figures: array(figureSchema).max(6).optional(),
 	generation: object({
 		provider: string(),
 		model: string(),
@@ -5132,6 +5165,27 @@ function validateLearningIntegrity(project, options = {}) {
 	if (options.requireDepthBlocks) for (const block of LEARNING_REQUIREMENTS[project.depth]) {
 		const value = project[block];
 		if (value === void 0 || Array.isArray(value) && value.length === 0) issues.push(`${block}: required at "${project.depth}" depth`);
+	}
+	if (project.figures) {
+		/**
+		* Şekiller de kanıt zincirinin parçası. Şema biçimi denetliyor, burada
+		* anlam denetleniyor: sayfa makalenin içinde mi, aynı şekil iki kez
+		* gömülmüş mü, ve toplam ağırlık taşınabilir mi.
+		*
+		* Bütçe gerçek bir kısıt: her şekil `.trace.json`'a base64 olarak giriyor
+		* ve dosya hem indirilen çıktı hem paylaşılan sayfa. Sınırsız bırakılırsa
+		* bir proje sessizce onlarca megabayta çıkar.
+		*/
+		const MAX_TOTAL_IMAGE_BYTES = 14e5;
+		const duplicateFigures = duplicates(project.figures.map((figure) => figure.id));
+		if (duplicateFigures.length) issues.push(`figures: tekrarlanan ID ${duplicateFigures.join(", ")}`);
+		let totalBytes = 0;
+		project.figures.forEach((figure) => {
+			checkClaims(figure.claimIds, `figures.${figure.id}`);
+			totalBytes += Math.round((figure.image.length - figure.image.indexOf(",") - 1) * .75);
+			if (figure.caption.trim() === figure.whyItMatters.trim()) issues.push(`figures.${figure.id}: whyItMatters must add to the caption, not repeat it`);
+		});
+		if (totalBytes > MAX_TOTAL_IMAGE_BYTES) issues.push(`figures: embedded images total ${Math.round(totalBytes / 1024)} KB, over the ${Math.round(MAX_TOTAL_IMAGE_BYTES / 1024)} KB budget`);
 	}
 	if (project.primer) {
 		const conceptIds = project.primer.concepts.map((concept) => concept.id);

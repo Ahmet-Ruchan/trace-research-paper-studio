@@ -1,0 +1,4 @@
+{
+  "figure-p3-1": "The whole argument in one picture: the encoder and decoder stacks contain no recurrence and no convolution, only attention and feed-forward layers. Every claim in this paper about parallelism and path length follows from what is missing here.",
+  "figure-p4-2": "Scaled dot-product attention on the left, multi-head attention on the right. The scaling by √d_k and the h parallel projections are the two design choices the paper defends most directly."
+}

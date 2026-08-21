@@ -477,6 +477,39 @@ export const interactiveSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+/**
+ * Makalenin KENDİ şekilleri.
+ *
+ * Trace'in kendi görsel dilbilgisi (architecture, equation, matrix…) makalenin
+ * anlattığını yeniden çiziyor. Ama bazı şekiller yeniden çizilemez: yazarların
+ * ta kendisi ikonik olmuştur — Transformer'ın mimari şeması, ResNet'in residual
+ * bloğu, ViT'in patch akışı. Bu blok onları okuyucuya olduğu gibi gösterir.
+ *
+ * Görsel PDF'ten çıkarılır, internetten DEĞİL. Sebep ürünün temel kuralı: bir
+ * web görselinin gerçekten bu makalenin mimarisi olduğu doğrulanamaz, ve
+ * doğrulanamayan bir diyagram doğrulanamayan bir sayıdan daha tehlikelidir —
+ * daha yetkili görünür. Buradaki her şekil bir sayfaya ve kendi başlığına
+ * bağlıdır, tıpkı claim'lerin alıntıya bağlı olması gibi.
+ */
+export const figureSchema = z.object({
+  id: z.string(),
+  /** Makaledeki adı: "Figure 1", "Table 2". */
+  label: z.string().min(1).max(40),
+  /** Şeklin makaledeki kendi başlığı — yeniden yazılmaz, kopyalanır. */
+  caption: z.string().min(1).max(1200),
+  /** Bu şeklin NEDEN burada olduğu; ajanın kendi cümlesi. */
+  whyItMatters: z.string().min(1).max(600),
+  /** Görünür PDF sayfası, 1'den başlar. */
+  page: z.number().int().positive(),
+  /**
+   * Gömülü PNG. Uzak URL kabul edilmiyor: bağımsız görüntüleyicinin CSP'si
+   * `default-src 'none'`, yani uzaktaki bir görsel zaten yüklenmez — ve
+   * paylaşılan dosya kaynağına bağımlı kalmamalı.
+   */
+  image: z.string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "image must be an embedded data URI"),
+  claimIds: z.array(z.string()).default([]),
+});
+
 /** "Bunu kendi projemde nasıl kullanırım." */
 export const applicationGuideSchema = z.object({
   title: z.string(),
@@ -536,6 +569,7 @@ export const researchProjectSchema = generationResultSchema.extend({
   quiz: quizSchema.optional(),
   interactives: z.array(interactiveSchema).max(8).optional(),
   applicationGuide: applicationGuideSchema.optional(),
+  figures: z.array(figureSchema).max(6).optional(),
   generation: z.object({
     provider: z.string(),
     model: z.string(),
@@ -566,6 +600,7 @@ export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
 export type Interactive = z.infer<typeof interactiveSchema>;
 export type InteractiveParameter = z.infer<typeof interactiveParameterSchema>;
 export type ApplicationGuide = z.infer<typeof applicationGuideSchema>;
+export type Figure = z.infer<typeof figureSchema>;
 export type ResearchProject = z.infer<typeof researchProjectSchema>;
 
 /** `depth` başına hangi öğrenme bloklarının zorunlu olduğu. */

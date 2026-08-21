@@ -6,6 +6,7 @@ import {
   stringsFor,
   useStrings,
   DerivationView,
+  FiguresView,
   InteractiveRenderer,
   MathText,
   PrimerView,
@@ -217,6 +218,15 @@ function LabTab({ project }: { project: ResearchProject }) {
         <h2>{t.researchQuestion}</h2>
         <p>{evidence.researchQuestion}</p>
       </section>
+
+      {/* Makalenin kendi şekilleri: "bu şey neye benziyor" sorusu, yöntemin
+          anlatımından önce cevaplanıyor. */}
+      {project.figures?.length ? (
+        <section className="viewer-block">
+          <h2>{t.figuresHeading}</h2>
+          <FiguresView figures={project.figures} />
+        </section>
+      ) : null}
 
       <section className="viewer-block">
         <h2>{t.methodsFindingsLimits}</h2>

@@ -50,6 +50,9 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    - Use `sourceId: "paper"` and a positive PDF page for paper evidence.
    - Mark a claim `verified` only when its excerpt directly supports the statement. Otherwise use `needs-review` and narrow the statement.
    - Never invent metrics, equations, dimensions, baselines, citations, URLs, released code, or implementation details.
+5b. Choose the paper's own figures. `prepare` extracts candidates and lists them in `job.json` under `figures`, each with its label, caption, page and a rendered PNG. Read `figureNote` when the list is empty — a paper with no text layer yields nothing, and that is not a failure.
+
+   Pick the ones that carry an argument — the architecture, the mechanism, the curve whose shape *is* the finding — and write a `whyItMatters` for each in the project's language. Most candidates are tables or appendix plots; including all of them buries the one that matters. See "figures" in the contract for the rules, including why a `matrix` visual beats a picture of a table.
 6. Derive the deep report, technical appendix, and StorySpec only from the evidence object. Every report section, technical item, and story section must link to existing claim IDs.
 6b. Build the learning layer so the reader can actually learn the paper and experiment with it. Required blocks depend on depth: `concise` needs `primer`; `standard` adds `derivations` and `quiz`; `deep` adds `interactives` and `applicationGuide`. Read the "Learning layer" section of the contract before authoring these.
    - `primer` explains what the paper assumes and never explains. Write `whyItMatters` about *this* paper, not a generic definition.

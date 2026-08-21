@@ -133,6 +133,34 @@ Each section is `{ id, kind, title, summary, analysis, claimIds }`. `analysis` h
 
 Every technical item must cite existing claim IDs. Omit unsupported equations or code rather than inventing them. At least one technical item must exist.
 
+## `figures` — the paper's own pictures
+
+Optional, up to six. Everything else in this contract *redraws* the paper in Trace's own grammar. This block does the opposite: some figures cannot be redrawn, because the drawing itself is the thing people remember — the Transformer's architecture diagram, ResNet's residual block, ViT's patch pipeline.
+
+`prepare` extracts candidates into the job directory and lists them in `job.json` under `figures`, each with its label, its own caption, its page and a PNG path. **Choosing is your job.** A paper yields up to ten candidates and most are tables or appendix plots; picking all of them buries the two that matter.
+
+```json
+{
+  "id": "figure-p3-1",
+  "label": "Figure 1",
+  "caption": "Figure 1: The Transformer - model architecture.",
+  "whyItMatters": "The whole argument in one picture: the stacks contain no recurrence and no convolution.",
+  "page": 3,
+  "image": "data:image/png;base64,…",
+  "claimIds": ["claim-method-01"]
+}
+```
+
+- **Include a figure only when it carries an argument.** An architecture, a mechanism, a topology, a curve whose shape is the finding. Skip decorative plots and sample grids.
+- **Prefer a table over a picture of a table.** A `matrix` visual is searchable, themeable and readable on a phone; a screenshot of the same table is none of those. Use a figure image only when the layout itself cannot be reconstructed.
+- `caption` is the paper's own sentence. Copy it, do not rewrite or translate it — like an excerpt, it is a quotation.
+- `whyItMatters` is **yours**, written in the project's `language`. Say what the reader should see in it and what the paper argues from it. Repeating the caption is rejected by validation.
+- `image` must be the embedded data URI produced by `prepare`. A remote URL is rejected: the standalone viewer runs under `default-src 'none'`, so it would never load, and a shared file must not depend on a host staying up.
+- Link `claimIds` to the claims the figure supports, the same as every other block.
+- Six figures at most, and roughly 1.4 MB of images in total. Both are enforced.
+
+Never source a picture from the web. A web image cannot be shown to depict *this* paper, and an unverifiable diagram is worse than an unverifiable number: it looks authoritative. Every figure here is anchored to a page in the PDF you were given.
+
 ---
 
 # Learning layer

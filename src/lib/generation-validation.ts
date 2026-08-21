@@ -224,6 +224,37 @@ export function validateLearningIntegrity(
     }
   }
 
+  if (project.figures) {
+    /**
+     * Şekiller de kanıt zincirinin parçası. Şema biçimi denetliyor, burada
+     * anlam denetleniyor: sayfa makalenin içinde mi, aynı şekil iki kez
+     * gömülmüş mü, ve toplam ağırlık taşınabilir mi.
+     *
+     * Bütçe gerçek bir kısıt: her şekil `.trace.json`'a base64 olarak giriyor
+     * ve dosya hem indirilen çıktı hem paylaşılan sayfa. Sınırsız bırakılırsa
+     * bir proje sessizce onlarca megabayta çıkar.
+     */
+    const MAX_TOTAL_IMAGE_BYTES = 1_400_000;
+    const duplicateFigures = duplicates(project.figures.map((figure) => figure.id));
+    if (duplicateFigures.length) issues.push(`figures: tekrarlanan ID ${duplicateFigures.join(", ")}`);
+
+    let totalBytes = 0;
+    project.figures.forEach((figure) => {
+      checkClaims(figure.claimIds, `figures.${figure.id}`);
+      // base64 dört karakterde üç bayt taşır; dolgu payı ihmal edilebilir.
+      totalBytes += Math.round((figure.image.length - figure.image.indexOf(",") - 1) * 0.75);
+      if (figure.caption.trim() === figure.whyItMatters.trim()) {
+        issues.push(`figures.${figure.id}: whyItMatters must add to the caption, not repeat it`);
+      }
+    });
+
+    if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
+      issues.push(
+        `figures: embedded images total ${Math.round(totalBytes / 1024)} KB, over the ${Math.round(MAX_TOTAL_IMAGE_BYTES / 1024)} KB budget`,
+      );
+    }
+  }
+
   if (project.primer) {
     const conceptIds = project.primer.concepts.map((concept) => concept.id);
     const duplicateConcepts = duplicates(conceptIds);

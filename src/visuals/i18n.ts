@@ -111,6 +111,11 @@ export type Strings = {
   copied: string;
   close: string;
   labSectionsAria: string;
+  // Makalenin kendi şekilleri
+  figuresHeading: string;
+  figureExpand: string;
+  figureCollapse: string;
+  figureFromPaper: (page: number) => string;
 };
 
 const en: Strings = {
@@ -203,6 +208,10 @@ const en: Strings = {
   copied: "Copied",
   close: "Close",
   labSectionsAria: "Paper review sections",
+  figuresHeading: "Figures from the paper",
+  figureExpand: "View full size",
+  figureCollapse: "Fit to width",
+  figureFromPaper: (page) => `From the paper · p. ${page}`,
 };
 
 const BCP47 = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;

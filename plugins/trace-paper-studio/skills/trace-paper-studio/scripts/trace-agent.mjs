@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateProjectObject } from "./generated/validator.mjs";
+import { extractFigures } from "./lib/figures.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SKILL_DIRECTORY = resolve(dirname(SCRIPT_PATH), "..");
@@ -217,12 +218,42 @@ async function prepare(args) {
   }
 
   const outputPath = resolve(jobDirectory, `${slugify(basename(paperPath, extname(paperPath)))}.trace.json`);
+  /**
+   * Makalenin kendi şekilleri çıkarılır. Hangisinin anlatıya girdiğine AJAN
+   * karar verir — bir makalede sekiz şekil bulunabiliyor ve çoğu tablo ya da
+   * ek bölüm grafiği oluyor. Burada yalnızca aday üretiliyor.
+   *
+   * Şekil çıkarılamaması hazırlığı düşürmez: metin zaten elimizde ve görsel
+   * bir ek, zorunluluk değil.
+   */
+  const figureDirectory = resolve(jobDirectory, "figures");
+  let figures = [];
+  let figureNote;
+  try {
+    const extracted = extractFigures(paperPath, figureDirectory, { limit: 10 });
+    figures = extracted.figures;
+    figureNote = extracted.note;
+  } catch (error) {
+    figureNote = error instanceof Error ? error.message : String(error);
+  }
+
   const job = {
     version: 1,
     createdAt: new Date().toISOString(),
     paper: { path: paperPath, fileName: basename(paperPath), sizeBytes: size, pageCount },
     extraction: { ready: Boolean(extractedText), pageTextPath: extractedText ? pageTextPath : undefined, note: extractionNote },
     outputPath,
+    figures: figures.map((figure) => ({
+      id: figure.id,
+      label: figure.label,
+      caption: figure.caption,
+      page: figure.page,
+      path: figure.file,
+      widthPx: figure.widthPx,
+      heightPx: figure.heightPx,
+      bytes: figure.bytes,
+    })),
+    figureNote,
     options: { language, audience, depth },
     targets: {
       storySections: depth === "concise" ? 5 : depth === "deep" ? 8 : 6,
@@ -240,6 +271,9 @@ async function prepare(args) {
         outputPath,
         pageTextPath: extractedText ? pageTextPath : null,
         extractionNote,
+        figureCount: figures.length,
+        figureDirectory: figures.length ? figureDirectory : null,
+        figureNote,
         resolution: resolution ?? undefined,
       },
       null,

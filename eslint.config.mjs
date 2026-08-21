@@ -49,6 +49,13 @@ const eslintConfig = defineConfig([
           ],
         },
       ],
+      /**
+       * Bu bölge zaten `next/image` içe aktaramıyor — iki satır yukarıda
+       * yasak. Next'in "img yerine Image kullan" kuralı burada kendi
+       * yasağıyla çelişiyor, üstelik şekiller gömülü data URI ve
+       * `next/image`'in optimize edecek bir şeyi yok.
+       */
+      "@next/next/no-img-element": "off",
     },
   },
 ]);

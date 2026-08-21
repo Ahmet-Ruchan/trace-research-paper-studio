@@ -269,6 +269,20 @@ const translatePhrases = (node) => {
   return node;
 };
 
+/**
+ * Şekiller: yalnızca `whyItMatters` çevrilir.
+ *
+ * `caption` makalenin kendi cümlesidir — bir alıntıdır ve çevrilmez; `image`
+ * ise ikisinde de aynı ikili veridir, kopyalanarak geçer.
+ */
+if (p.figures?.length) {
+  const fg = JSON.parse(readFileSync(join(MAPS, "en-figures.json"), "utf8"));
+  p.figures = p.figures.map((figure) => ({
+    ...figure,
+    whyItMatters: need(fg[figure.id], `figures.${figure.id}.whyItMatters`) ?? figure.whyItMatters,
+  }));
+}
+
 const translated = translatePhrases(p);
 
 if (missing.length) {
@@ -280,7 +294,7 @@ if (missing.length) {
 const turkish = [];
 const scan = (node, path) => {
   if (typeof node === "string") {
-    if (/[çğışöüÇĞİŞÖÜ]/.test(node) && !/excerpt$/.test(path)) turkish.push({ path, sample: node.slice(0, 70) });
+    if (/[çğışöüÇĞİŞÖÜ]/.test(node) && !/(excerpt|figures\[\d+\]\.caption)$/.test(path)) turkish.push({ path, sample: node.slice(0, 70) });
     return;
   }
   if (Array.isArray(node)) return node.forEach((item, i) => scan(item, `${path}[${i}]`));

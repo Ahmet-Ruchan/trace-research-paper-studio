@@ -9,6 +9,7 @@ import {
   FlaskConical,
   Gauge,
   GraduationCap,
+  Image as ImageIcon,
   Lightbulb,
   ListChecks,
   Quote,
@@ -20,6 +21,7 @@ import type { Claim, ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
 import {
   ApplicationGuideView,
+  FiguresView,
   LanguageProvider,
   stringsFor,
   DerivationView,
@@ -146,6 +148,15 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
                 })}
               </div>
             </section>
+
+            {/* Makalenin kendi şekilleri genel bakışta duruyor: "bu şey neye
+                benziyor" sorusunun cevabı okuyucunun ilk aradığı şey. */}
+            {project.figures?.length ? (
+              <section className="lab-block">
+                <div className="block-title"><ImageIcon size={16} /> {t.figuresHeading}</div>
+                <FiguresView figures={project.figures} />
+              </section>
+            ) : null}
           </div>
         )}
 

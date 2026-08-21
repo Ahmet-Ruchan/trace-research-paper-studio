@@ -1,7 +1,7 @@
 {
   "name": "trace-paper-studio",
   "description": "Name a paper or hand over a PDF: Trace finds it on arXiv, grounds every claim in a page and quote, and builds a local interactive site with primers, step-by-step derivations, live equation playgrounds and an evidence-linked quiz.",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "author": {
     "name": "Ahmet Ruchan"
   },
