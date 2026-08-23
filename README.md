@@ -103,7 +103,31 @@ quote behind the right answer.
 
 ### Read it as a narrative, with the source one click away
 
+The paper's own figures sit beside the paragraph that argues them — the join is the claims they
+share, not a guess about where a picture belongs.
+
 ![Visual story](docs/images/story.jpg)
+
+### See where the evidence is thin
+
+Trace's whole claim is that every sentence ties back to a page. The evidence health panel makes
+that auditable instead of asking you to trust it: how many claims are verified rather than
+needs-review, which pages between the first and last citation nothing ever reaches, which
+collected claims the narrative never used, and which sections rest on a single claim. All of it
+is computed from the project's own data — no model is asked, so a shared `.trace.json` reports
+the same numbers offline.
+
+### Compare two papers without being told which one wins
+
+Pick two projects from the library and Trace lines them up: the same benchmark under the same
+unit, the same term defined twice, each side's limitations. It never says which paper is right —
+that would be interpretation. Every number carries the page it came from and both sources stay
+visible.
+
+### Send someone a link to one claim
+
+Every claim and every story section has its own anchor, in the studio and in the portable
+single-file copy alike. The address bar tracks what is open, so the link is always there to copy.
 
 ---
 
@@ -406,11 +430,19 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
 ## Status
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
-learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), arXiv
-resolution from a paper's name, local library, exports, the native plugin for Codex / Claude
-Code / Antigravity CLI, and generation through Gemini, OpenAI, Claude and OpenRouter.
+learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), the
+paper's own figures placed beside the prose that argues them, the evidence health panel,
+side-by-side comparison of two projects, per-claim and per-section permalinks, arXiv resolution
+from a paper's name, local library, exports, the native plugin for Codex / Claude Code /
+Antigravity CLI, and generation through Gemini, OpenAI, Claude, OpenRouter and a local model
+server (Ollama, LM Studio, llama.cpp).
 
-Not there yet: hosted publishing, accounts, shared persistence, local and open-weight providers.
+A local model runs the report and visual stages. It cannot run the two stages that read the PDF:
+local servers have no file-upload endpoint and most open-weight models cannot see a document at
+all, so those stages refuse it rather than quietly working without the paper. Only a loopback
+address is accepted — the request leaves the Trace server, and "local model" means this machine.
+
+Not there yet: hosted publishing, accounts, shared persistence.
 
 *Attention Is All You Need* ships fully enriched in `public/examples/`, in English and Turkish,
 serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
@@ -427,9 +459,9 @@ the two from mixing.
 
 ## Roadmap
 
-- [ ] Local and open-weight provider adapters
+- [x] Local and open-weight provider adapters
+- [x] Side-by-side paper comparison
 - [ ] Section-level regeneration with evidence locking
-- [ ] Side-by-side paper comparison
 - [ ] Project revisions and reusable narrative templates
 - [ ] Shareable hosted stories with publication controls
 - [ ] Team review, annotations and claim approval
