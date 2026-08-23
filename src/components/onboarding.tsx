@@ -5,15 +5,18 @@ import { ArrowRight, BookOpen, Check, Eye, EyeOff, FileText, Link2, LockKeyhole,
 import {
   createSingleModelTeam,
   defaultModelByProvider,
+  documentTaskRoles,
   generationTaskCatalog,
   getProvider,
   providerCatalog,
+  providerReadsDocuments,
   recommendedModelTeam,
   type GenerationTaskRole,
   type ModelAssignment,
   type ModelTeam,
   type ProviderId,
 } from "@/lib/model-providers";
+import { DEFAULT_LOCAL_ENDPOINT } from "@/lib/local-endpoint";
 import { languageOptions, preferredLanguage, type ProjectLanguage } from "@/lib/preferred-language";
 
 export type GenerationOptions = {
@@ -108,8 +111,17 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
 
   function submit() {
     if (!file) return setError("Upload a paper PDF first.");
-    const missingProvider = usedProviders.find((item) => !apiKeys[item.id]?.trim());
+    // Yerel sağlayıcıda "anahtar" bir adres ve boş bırakılabilir: boşsa
+    // sunucu tarafı Ollama'nın varsayılan adresini kullanıyor.
+    const missingProvider = usedProviders.find((item) => !item.local && !apiKeys[item.id]?.trim());
     if (missingProvider) return setError(`${missingProvider.label} needs its ${missingProvider.keyLabel}.`);
+    const unreadable = documentTaskRoles.find((role) => !providerReadsDocuments(assignments[role].provider));
+    if (unreadable) {
+      const task = generationTaskCatalog.find((item) => item.id === unreadable);
+      return setError(
+        `${getProvider(assignments[unreadable].provider)?.label} cannot be given the PDF, so it cannot run “${task?.shortLabel ?? unreadable}”. That stage reads the paper itself — assign a cloud provider to it.`,
+      );
+    }
     const invalidAssignment = Object.entries(assignments).find(([, assignment]) => !assignment.model.trim());
     if (invalidAssignment) return setError(`${generationTaskCatalog.find((task) => task.id === invalidAssignment[0])?.label ?? "Task"} needs a model.`);
     setError(undefined);
@@ -246,7 +258,14 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
 
             {orchestration === "single" ? (
               <div className="single-model-row">
-                <div className="model-select provider-select"><select aria-label="Model provider" value={provider} onChange={(event) => changeProvider(event.target.value as ProviderId)}>{providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></div>
+                <div className="model-select provider-select"><select aria-label="Model provider" value={provider} onChange={(event) => changeProvider(event.target.value as ProviderId)}>{providerCatalog.map((item) => (
+                  /* Tek model dört işi birden yapıyor; biri makaleyi okumak.
+                     PDF'i alamayan sağlayıcı burada seçilemez — ama model
+                     ekibinde yazı ve görsel işlerine atanabilir. */
+                  <option key={item.id} value={item.id} disabled={item.readsDocuments === false}>
+                    {item.label}{item.readsDocuments === false ? " · model team only" : ""}
+                  </option>
+                ))}</select></div>
                 <ModelPicker assignment={{ provider, model }} onChange={(assignment) => { setProvider(assignment.provider); setModel(assignment.model); }} openRouterModels={openRouterModels} inputId="single" />
                 <p>This model runs all four tasks.</p>
               </div>
@@ -265,7 +284,15 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
                         <select aria-label={`${task.label} provider`} value={team[task.id].provider} onChange={(event) => {
                           const nextProvider = event.target.value as ProviderId;
                           updateTeamAssignment(task.id, { provider: nextProvider, model: defaultModelByProvider[nextProvider] });
-                        }}>{providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+                        }}>{providerCatalog.map((item) => {
+                          const needsDocument = documentTaskRoles.includes(task.id);
+                          const blocked = needsDocument && item.readsDocuments === false;
+                          return (
+                            <option key={item.id} value={item.id} disabled={blocked}>
+                              {item.label}{blocked ? " · cannot read the PDF" : ""}
+                            </option>
+                          );
+                        })}</select>
                         <ModelPicker assignment={team[task.id]} onChange={(assignment) => updateTeamAssignment(task.id, assignment)} openRouterModels={openRouterModels} inputId={task.id} compact />
                       </div>
                     </article>
@@ -277,13 +304,26 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
             <div className="credential-heading"><LockKeyhole size={14} /><div><strong>Provider keys in use</strong><span>Only required for the providers you selected.</span></div></div>
             <div className="credential-grid">
               {usedProviders.map((item) => (
+                /* Yerel sunucuda gizlenecek bir sır yok: istenen şey adres.
+                   Onu yıldızlarla göstermek, kullanıcıyı yazdığını kontrol
+                   edemez hâle getirmekten başka bir işe yaramaz. */
+                item.local ? (
+                  <label className="key-input" key={item.id}>
+                    <span>{item.label}</span>
+                    <input type="text" value={apiKeys[item.id] ?? ""} onChange={(event) => setApiKeys((current) => ({ ...current, [item.id]: event.target.value }))} placeholder={DEFAULT_LOCAL_ENDPOINT} autoComplete="off" spellCheck={false} />
+                  </label>
+                ) : (
                 <label className="key-input" key={item.id}>
                   <span>{item.label}</span>
                   <input type={visibleKeys[item.id] ? "text" : "password"} value={apiKeys[item.id] ?? ""} onChange={(event) => setApiKeys((current) => ({ ...current, [item.id]: event.target.value }))} placeholder={item.keyLabel} autoComplete="off" />
                   <button type="button" onClick={() => setVisibleKeys((current) => ({ ...current, [item.id]: !current[item.id] }))} aria-label={`Toggle ${item.label} API key visibility`}>{visibleKeys[item.id] ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                 </label>
+                )
               ))}
             </div>
+            {usedProviders.filter((item) => item.hint).map((item) => (
+              <p className="provider-hint" key={item.id}><strong>{item.label}.</strong> {item.hint}</p>
+            ))}
             {usedProviders.some((item) => item.id === "openrouter") && <div className="openrouter-catalog-row"><span>The catalogue lists only <code>text-only output + structured output</code> models, which are the ones safe for the Trace canvas. Image input may be supported; image-output models are excluded from StorySpec generation.</span><button onClick={loadOpenRouterModels} disabled={modelsLoading}>{modelsLoading ? "Loading…" : "Load compatible models"}</button></div>}
             <p className="key-note">Keys are sent to the backend proxy for this generation request only; nothing is stored in the browser or in the project.</p>
           </section>
@@ -317,6 +357,18 @@ function ModelPicker({
       <div className={`model-select openrouter-model-select ${compact ? "compact" : ""}`}>
         <input aria-label="OpenRouter model id" list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder="provider/model" />
         <datalist id={listId}>{openRouterModels.map((item) => <option key={item.id} value={item.id}>{item.label}{item.contextLength ? ` · ${Math.round(item.contextLength / 1000)}k` : ""}</option>)}</datalist>
+      </div>
+    );
+  }
+  if (provider.freeformModel) {
+    /* Kullanıcının makinesinde hangi modellerin yüklü olduğunu bilemeyiz:
+       adı serbest yazılıyor, katalogdaki isimler yalnızca öneri. Yanlış ad
+       yazılırsa sunucu isteğin başında yüklü modelleri listeleyerek söylüyor. */
+    const listId = `${provider.id}-models-${inputId}`;
+    return (
+      <div className={`model-select openrouter-model-select ${compact ? "compact" : ""}`}>
+        <input aria-label={`${provider.label} model name`} list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder="model name" spellCheck={false} />
+        <datalist id={listId}>{provider.models.map((item) => <option key={item.id} value={item.id}>{item.note}</option>)}</datalist>
       </div>
     );
   }

@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import OpenAI from "openai";
 import { z } from "zod";
+import { localUrl, resolveLocalEndpoint } from "@/lib/local-endpoint";
 import { preferredLanguage } from "@/lib/preferred-language";
 import {
   evidenceCheckpointSchema,
@@ -29,6 +30,8 @@ import {
   getProvider,
   getProviderForModel,
   generationTaskRoles,
+  documentTaskRoles,
+  providerReadsDocuments,
   resolveProviderModel,
   type GenerationTaskRole,
   type ModelAssignment,
@@ -59,6 +62,14 @@ const MODEL_TIMEOUT_MS = 120_000;
 const HEARTBEAT_MS = 10_000;
 const EVIDENCE_CONCURRENCY = 2;
 const OPENROUTER_STRUCTURED_FALLBACK_MODEL = "google/gemini-3.7-flash";
+/**
+ * Yerel modeller bulut modellerinden yavaş: 8B'lik bir model tüketici bir
+ * GPU'da uzun bir raporu dakikalar içinde yazıyor. Bulut için makul olan
+ * 120 saniyelik sınır burada işi daha başlamadan keserdi.
+ */
+const LOCAL_MODEL_TIMEOUT_MS = 15 * 60 * 1000;
+/** Akıl yürütme belirteçleri de aynı bütçeden düşüyor; bkz. `max_tokens`. */
+const LOCAL_THINKING_BUDGET_FACTOR = 4;
 
 type GenerationInput = {
   file: File;
@@ -315,13 +326,21 @@ async function waitUntilActive(
   throw new Error("Processing the PDF timed out.");
 }
 
-async function collectOpenRouterStream(
+/**
+ * OpenAI uyumlu SSE akışını toplar.
+ *
+ * Hem OpenRouter hem de yerel sunucular (Ollama, LM Studio, llama.cpp) aynı
+ * biçimi konuşuyor, o yüzden tek toplayıcı ikisine de yetiyor; `label` yalnızca
+ * hata mesajının hangi tarafı işaret ettiğini söylemek için var.
+ */
+async function collectOpenAiCompatibleStream(
   response: Response,
   onChunk: (receivedCharacters: number, chunks: number) => void,
+  label = "OpenRouter",
 ) {
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: { code?: number; message?: string; metadata?: Record<string, unknown> } } | undefined;
-    const error = new Error(payload?.error?.message ?? `The OpenRouter request failed with status ${response.status}.`);
+    const error = new Error(payload?.error?.message ?? `The ${label} request failed with status ${response.status}.`);
     Object.assign(error, {
       status: payload?.error?.code ?? response.status,
       errorType: payload?.error?.metadata?.error_type,
@@ -329,11 +348,12 @@ async function collectOpenRouterStream(
     });
     throw error;
   }
-  if (!response.body) throw new Error("The OpenRouter response stream could not be opened.");
+  if (!response.body) throw new Error(`The ${label} response stream could not be opened.`);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let text = "";
+  let thinking = 0;
   let chunks = 0;
   while (true) {
     const { done, value } = await reader.read();
@@ -346,10 +366,17 @@ async function collectOpenRouterStream(
       if (!data || data === "[DONE]") continue;
       const event = JSON.parse(data) as {
         error?: { code?: number; message?: string; metadata?: Record<string, unknown> };
-        choices?: Array<{ delta?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+        choices?: Array<{
+          delta?: {
+            content?: string | Array<{ type?: string; text?: string }>;
+            /** Ollama `reasoning`, kimi sunucular `reasoning_content` diyor. */
+            reasoning?: string;
+            reasoning_content?: string;
+          };
+        }>;
       };
       if (event.error) {
-        const providerError = new Error(event.error.message ?? "OpenRouter model error.");
+        const providerError = new Error(event.error.message ?? `${label} model error.`);
         Object.assign(providerError, {
           status: event.error.code,
           errorType: event.error.metadata?.error_type,
@@ -363,10 +390,25 @@ async function collectOpenRouterStream(
         : Array.isArray(content)
           ? content.map((part) => part.text ?? "").join("")
           : "";
-      if (!delta) continue;
+      /**
+       * Düşünen modeller cevaptan ÖNCE uzunca düşünüyor ve o metin ayrı bir
+       * alanda geliyor. Ölçülen bir yerel çalıştırmada 13.400 karakter akıl
+       * yürütme, 44 karakter cevap üretildi — üç dakika boyunca. Sayılmazsa
+       * arayüz o üç dakika donmuş görünür ve canlılık göstergesi ölür.
+       * Cevaba karışmıyor; yalnızca "hâlâ çalışıyor" demeye yarıyor.
+       */
+      const reasoning = event.choices?.[0]?.delta?.reasoning ?? event.choices?.[0]?.delta?.reasoning_content ?? "";
+      if (typeof reasoning === "string" && reasoning) thinking += reasoning.length;
+      if (!delta) {
+        if (reasoning) {
+          chunks += 1;
+          onChunk(text.length + thinking, chunks);
+        }
+        continue;
+      }
       text += delta;
       chunks += 1;
-      onChunk(text.length, chunks);
+      onChunk(text.length + thinking, chunks);
     }
     if (done) break;
   }
@@ -409,6 +451,42 @@ async function assertOpenRouterModelCompatible(
     );
   }
   return { outputModalities };
+}
+
+/**
+ * Sunucu ayakta mı ve model yüklü mü.
+ *
+ * Yoklama, üretim başlamadan yapılıyor: aksi hâlde kullanıcı PDF'i yükleyip
+ * kanıt aşamasını bekledikten SONRA "bağlantı reddedildi" görürdü. Hata
+ * mesajı ne yapılacağını da söylüyor, çünkü buradaki en sık iki sorun
+ * sunucunun kapalı olması ve modelin hiç indirilmemiş olması.
+ */
+async function assertLocalServerReachable(endpoint: string, model: string, signal: AbortSignal) {
+  let response: Response;
+  try {
+    response = await fetch(localUrl(endpoint, "/models"), {
+      cache: "no-store",
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+    });
+  } catch {
+    throw incompatibleModelError(
+      `No local model server answered at ${endpoint}. Start one — \`ollama serve\`, or LM Studio's local server — or point Trace at the address it is listening on.`,
+    );
+  }
+  if (!response.ok) {
+    throw incompatibleModelError(`The local model server at ${endpoint} answered with ${response.status}.`);
+  }
+  const payload = await response.json().catch(() => undefined) as { data?: Array<{ id?: unknown }> } | undefined;
+  const installed = (payload?.data ?? [])
+    .map((item) => (typeof item.id === "string" ? item.id : ""))
+    .filter(Boolean);
+  // Liste boş dönebiliyor (bazı sunucular /models'i doldurmuyor); boş liste
+  // "model yok" demek değil, o yüzden yalnızca dolu listede karar veriyoruz.
+  if (installed.length && !installed.includes(model)) {
+    throw incompatibleModelError(
+      `The local server at ${endpoint} does not have "${model}". Installed: ${installed.slice(0, 8).join(", ")}${installed.length > 8 ? "…" : ""}. Pull it first, for example \`ollama pull ${model}\`.`,
+    );
+  }
 }
 
 function shouldUseOpenRouterFallback(error: unknown) {
@@ -454,7 +532,7 @@ async function prepareProviderRuntime(
         });
         const readyFile = await waitUntilActive(ai, uploaded.name, signal, progress);
         markProviderActivity();
-        if (!readyFile.uri || !readyFile.mimeType) throw new Error("PDF model URI bilgisi eksik.");
+        if (!readyFile.uri || !readyFile.mimeType) throw new Error("The PDF model URI is missing.");
         activeFile = { uri: readyFile.uri, mimeType: readyFile.mimeType };
       }
 
@@ -574,6 +652,78 @@ async function prepareProviderRuntime(
     };
   }
 
+  if (input.provider === "local") {
+    /**
+     * Yerel model sunucusu — Ollama, LM Studio, llama.cpp.
+     *
+     * Üçü de OpenAI uyumlu bir `/chat/completions` sunuyor, akış biçimi de
+     * aynı; bu yüzden OpenRouter için yazılmış akış toplayıcı burada da
+     * çalışıyor. Adres `resolveLocalEndpoint` ile zaten geri-döngüye
+     * kısıtlanmış durumda.
+     *
+     * Belge YOK: yerel sunucularda dosya yükleme uçnoktası yok. Bu durum
+     * isteğin başında reddediliyor; buraya bir belge isteği gelirse bu bir
+     * program hatasıdır, sessizce belgesiz devam etmek değil.
+     */
+    const endpoint = input.apiKey;
+    await assertLocalServerReachable(endpoint, input.model, signal);
+    markProviderActivity();
+    progress({
+      stage: input.taskRole === "visual" ? "story" : "evidence",
+      progress: input.taskRole === "visual" ? 76 : 62,
+      title: "The local model is answering.",
+      detail: `${input.model} · ${endpoint} · nothing leaves this machine`,
+    });
+
+    return {
+      label: `Local · ${input.model}`,
+      effectiveModel: input.model,
+      generateStructured: async ({
+        prompt: requestPrompt,
+        schema,
+        schemaName,
+        maxOutputTokens,
+        includeDocument,
+        signal: requestSignal,
+        onChunk,
+      }) => {
+        if (includeDocument) {
+          throw new Error("A local model cannot be given the PDF; this stage should never have reached it.");
+        }
+        const response = await fetch(localUrl(endpoint, "/chat/completions"), {
+          method: "POST",
+          signal: AbortSignal.any([requestSignal, AbortSignal.timeout(LOCAL_MODEL_TIMEOUT_MS)]),
+          headers: {
+            "Content-Type": "application/json",
+            // Ollama ve LM Studio anahtarı yok sayıyor; başlığın kendisini
+            // arayan istemci kütüphaneleri olduğu için yine de gönderiliyor.
+            Authorization: "Bearer local",
+          },
+          body: JSON.stringify({
+            model: input.model,
+            messages: [{ role: "user", content: requestPrompt }],
+            temperature: 0.4,
+            /**
+             * Bulut için hesaplanmış bütçe burada yetmiyor. Yerel düşünen
+             * modeller cevaba başlamadan önce bütçeyi tüketebiliyor: ölçülen
+             * bir çalıştırmada 300 belirteçlik sınır, tek bir cevap karakteri
+             * üretilmeden `finish_reason: "length"` ile bitti. Bütçe akıl
+             * yürütmeye de yetecek kadar açılıyor.
+             */
+            max_tokens: Math.max(maxOutputTokens * LOCAL_THINKING_BUDGET_FACTOR, 8_192),
+            stream: true,
+            response_format: {
+              type: "json_schema",
+              json_schema: { name: schemaName, strict: true, schema: openAiJsonSchema(schema) },
+            },
+          }),
+        });
+        return collectOpenAiCompatibleStream(response, onChunk, "The local model");
+      },
+      cleanup: async () => undefined,
+    };
+  }
+
   if (input.provider === "openrouter") {
     const capabilities = await assertOpenRouterModelCompatible(input.apiKey, input.model, signal);
     const imageOutputModel = capabilities.outputModalities.includes("image");
@@ -646,7 +796,7 @@ async function prepareProviderRuntime(
             }),
           });
           try {
-            return await collectOpenRouterStream(response, onChunk);
+            return await collectOpenAiCompatibleStream(response, onChunk);
           } catch (error) {
             if (error instanceof Error) Object.assign(error, { attemptedModel: model });
             throw error;
@@ -845,10 +995,39 @@ function parseInput(form: FormData): GenerationInput {
   if (documentAssignments.some((assignment) => assignment.provider === "anthropic") && file.size > 24 * 1024 * 1024) {
     throw new InputError("The PDF limit for Claude is 24 MB; base64 encoding would push the request past its total limit.", 413);
   }
+  /**
+   * Belge okuyamayan bir sağlayıcı, makaleyi okuyan aşamalara atanamaz.
+   * Yerel sunucuların dosya yükleme uçnoktası yok ve açık ağırlıklı
+   * modellerin çoğu PDF'i hiç göremiyor; sessizce metinsiz devam etmek
+   * kaynağa bağlı olmayan bir analiz üretirdi — Trace'in tek yapmayacağı şey.
+   */
+  const unreadable = documentTaskRoles.find((role) => !providerReadsDocuments(assignments[role].provider));
+  if (unreadable) {
+    const providerLabel = getProvider(assignments[unreadable].provider)?.label ?? assignments[unreadable].provider;
+    throw new InputError(
+      `${providerLabel} cannot be given the PDF, so it cannot run the ${unreadable} stage — that stage reads the paper itself. Assign a provider that reads documents to Evidence and Technical; ${providerLabel} can still write the report and the visuals.`,
+      400,
+    );
+  }
+
+  /**
+   * Yerel sağlayıcıda "anahtar" bir adres ve boş bırakılabilir: boşsa
+   * Ollama'nın varsayılan adresi kullanılır. Adres burada doğrulanıyor ki
+   * hata, üretim yarıda kalmışken değil daha isteğin başında görünsün.
+   */
+  for (const assignment of Object.values(assignments)) {
+    if (!getProvider(assignment.provider)?.local) continue;
+    try {
+      apiKeys[assignment.provider] = resolveLocalEndpoint(apiKeys[assignment.provider]);
+    } catch (error) {
+      throw new InputError(error instanceof Error ? error.message : "The local model address is not valid.", 400);
+    }
+  }
+
   const missingProvider = Object.values(assignments)
     .map((assignment) => assignment.provider)
     .find((providerId) => !apiKeys[providerId]);
-  if (missingProvider) throw new InputError(`${getProvider(missingProvider)!.keyLabel} gerekli.`, 401);
+  if (missingProvider) throw new InputError(`${getProvider(missingProvider)!.keyLabel} is required.`, 401);
 
   let urls: string[] = [];
   try {
@@ -1011,7 +1190,7 @@ async function runPipeline(
     const existing = runtimePromises.get(runtimeKey);
     if (existing) return existing;
     const apiKey = input.apiKeys[assignment.provider];
-    if (!apiKey) throw new InputError(`${getProvider(assignment.provider)!.keyLabel} gerekli.`, 401);
+    if (!apiKey) throw new InputError(`${getProvider(assignment.provider)!.keyLabel} is required.`, 401);
     const runtime = prepareProviderRuntime(
       {
         file: input.file,
@@ -1164,7 +1343,7 @@ async function runPipeline(
                 progress({
                   stage: "evidence",
                   progress: evidenceHighWater,
-                  title: `${evidencePassLabels[passId]} stream ediliyor.`,
+                  title: `Streaming ${evidencePassLabels[passId]}.`,
                   detail: `${characters.toLocaleString("en")} characters received · ${completed}/4 stages complete`,
                 });
               },
@@ -1302,7 +1481,7 @@ async function runPipeline(
             progress({
               stage: "story",
               progress: storyHighWater,
-              title: "StorySpec stream ediliyor.",
+              title: "Streaming the StorySpec.",
               detail: `Received ${characters.toLocaleString("en")} characters of validated narrative.`,
             });
           },

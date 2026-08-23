@@ -322,3 +322,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+.provider-hint { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-left: 2px solid var(--accent); border-radius: 9px; color: var(--ink-soft); font-size: 11px; line-height: 1.65; }
+.provider-hint strong { color: var(--ink); font-weight: 650; }
