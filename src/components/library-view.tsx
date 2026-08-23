@@ -23,7 +23,7 @@ function generationLabel(project: ResearchProject) {
   const assignments = project.generation?.assignments;
   if (!assignments) return project.generation?.model;
   const models = new Set(Object.values(assignments).map((assignment) => `${assignment.provider}:${assignment.model}`));
-  return models.size > 1 ? `-model team` : [...models][0]?.split(":").slice(1).join(":");
+  return models.size > 1 ? `${models.size}-model team` : [...models][0]?.split(":").slice(1).join(":");
 }
 
 export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImport }: LibraryViewProps) {

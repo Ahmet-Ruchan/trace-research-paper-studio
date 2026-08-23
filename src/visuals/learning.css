@@ -233,3 +233,44 @@
 @media (prefers-reduced-motion: reduce) {
   .sim-node, .sim-grid-cell, .sim-track i { transition: none !important; }
 }
+
+/* --- Kanıt sağlığı -------------------------------------------------- */
+/* Tek bir "sağlık puanı" yok: birleştirilmiş bir sayı kötü kanıtı iyi
+   kanıtla ortalayıp gizlerdi. Üç ayrı ölçü, üç ayrı soru cevaplıyor. */
+.health-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.health-stat { padding: 17px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
+.health-stat strong { display: block; font: 400 27px/1 Georgia, serif; }
+.health-stat > span { display: block; margin-top: 6px; font-size: 9px; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); }
+.health-meter { height: 3px; margin: 13px 0 11px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.health-meter i { display: block; height: 100%; border-radius: 999px; }
+.health-meter i.is-good { background: var(--green); }
+.health-meter i.is-fair { background: var(--amber); }
+.health-meter i.is-weak { background: var(--accent); }
+.health-stat small { display: block; font-size: 10.5px; line-height: 1.6; color: var(--ink-soft); }
+.health-block { margin-top: 30px; }
+.health-block h4 { margin: 0 0 8px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.health-note { margin: 0 0 14px; max-width: 74ch; font-size: 11px; line-height: 1.7; color: var(--ink-soft); }
+.health-sources { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.health-sources li { display: grid; grid-template-columns: 54px 1fr auto; gap: 12px; align-items: center; padding: 11px 14px; background: var(--surface); font-size: 11px; }
+.health-sources li.is-unused .health-source-title { color: var(--muted); }
+.health-source-type { font-size: 8.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.health-source-type.type-paper { color: var(--green); }
+.health-source-title { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-source-count { font-size: 10px; color: var(--muted); }
+.health-pages { display: flex; flex-wrap: wrap; gap: 6px; }
+.health-pages span { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); font-size: 10px; color: var(--ink-soft); }
+.health-thin { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.health-thin li { display: grid; grid-template-columns: 62px 1fr auto; gap: 12px; align-items: baseline; padding: 12px 15px; border: 1px solid var(--line); border-left: 2px solid var(--amber); border-radius: 10px; }
+.health-area { font-size: 8.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.health-thin-title { font-size: 11.5px; line-height: 1.5; color: var(--ink); }
+.health-thin-count { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.health-unused { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.health-unused li { border: 1px solid var(--line); border-radius: 10px; }
+.health-unused button, .health-unused p { display: block; width: 100%; margin: 0; padding: 12px 15px; border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 11px; line-height: 1.65; text-align: left; }
+.health-unused button { cursor: pointer; }
+.health-unused button:hover { color: var(--ink); background: var(--surface-2); }
+
+@media (max-width: 760px) {
+  .health-stats { grid-template-columns: 1fr; }
+  .health-thin li, .health-sources li { grid-template-columns: 1fr; gap: 5px; }
+}

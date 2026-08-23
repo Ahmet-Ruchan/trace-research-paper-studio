@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Claim, ResearchProject } from "@/lib/schema";
 import {
   ApplicationGuideView,
+  EvidenceHealthView,
   LanguageProvider,
   stringsFor,
   useStrings,
@@ -302,6 +303,15 @@ function LabTab({ project }: { project: ResearchProject }) {
           </ol>
         </section>
       ) : null}
+
+      {/* Kanıt sağlığı en sonda: okuyucu önce analizi görmeli, sonra onun
+          neresine güvenebileceğini. Model çağrısı yok — tamamı bu dosyanın
+          kendi verisinden hesaplanıyor, yani paylaşılan kopyada da çalışır. */}
+      <section className="viewer-block">
+        <h2>{t.healthHeading}</h2>
+        <p className="viewer-lead">{t.healthIntro}</p>
+        <EvidenceHealthView project={project} />
+      </section>
 
       {evidence.glossary.length ? (
         <section className="viewer-block">

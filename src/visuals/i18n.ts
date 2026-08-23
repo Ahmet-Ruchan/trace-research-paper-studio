@@ -116,6 +116,30 @@ export type Strings = {
   figureExpand: string;
   figureCollapse: string;
   figureFromPaper: (page: number) => string;
+  // Kanıt sağlığı
+  navHealth: string;
+  healthHeading: string;
+  healthIntro: string;
+  healthVerified: string;
+  healthVerifiedNote: (needsReview: number) => string;
+  healthPages: string;
+  healthPagesNote: (first: number, last: number, gaps: number) => string;
+  healthPagesNone: string;
+  healthInUse: string;
+  healthInUseNote: (unused: number) => string;
+  healthGrounding: string;
+  healthGroundingNote: (fromPaper: number, fromWeb: number) => string;
+  healthCitations: (count: number) => string;
+  healthNeverCited: string;
+  healthGaps: string;
+  healthGapsNote: (first: number, last: number) => string;
+  healthThin: string;
+  healthThinNote: string;
+  healthSectionClaims: (verified: number, total: number) => string;
+  healthAreaStory: string;
+  healthAreaReport: string;
+  healthUnused: string;
+  healthUnusedNote: string;
 };
 
 const en: Strings = {
@@ -212,6 +236,45 @@ const en: Strings = {
   figureExpand: "View full size",
   figureCollapse: "Fit to width",
   figureFromPaper: (page) => `From the paper · p. ${page}`,
+  navHealth: "Evidence health",
+  healthHeading: "Evidence health",
+  healthIntro:
+    "Everything below is computed from this project's own data — no model was asked. It shows where the analysis stands on solid ground and where it does not.",
+  healthVerified: "claims verified",
+  healthVerifiedNote: (needsReview) =>
+    needsReview === 0
+      ? "Every claim's excerpt directly supports its statement."
+      : `${needsReview} still marked needs-review: the excerpt supports them only partly.`,
+  healthPages: "pages reached",
+  healthPagesNote: (first, last, gaps) =>
+    gaps === 0
+      ? `Continuous from p. ${first} to p. ${last}.`
+      : `From p. ${first} to p. ${last}, with ${gaps} page${gaps === 1 ? "" : "s"} never cited.`,
+  healthPagesNone: "No claim carries a page number; this analysis rests on web context alone.",
+  healthInUse: "claims in use",
+  healthInUseNote: (unused) =>
+    unused === 0
+      ? "Every collected claim is used somewhere in the narrative."
+      : `${unused} claim${unused === 1 ? " was" : "s were"} collected but never used.`,
+  healthGrounding: "Where the evidence comes from",
+  healthGroundingNote: (fromPaper, fromWeb) =>
+    fromWeb === 0
+      ? `All ${fromPaper} claims are anchored to the paper itself.`
+      : `${fromPaper} claims come from the paper, ${fromWeb} from published context about it — citation counts, venue, version history. Context is not a paper claim.`,
+  healthCitations: (count) => `${count} citation${count === 1 ? "" : "s"}`,
+  healthNeverCited: "never cited",
+  healthGaps: "Pages the analysis never reaches",
+  healthGapsNote: (first, last) =>
+    `The paper's total length is not stored in a Trace project, so only the span between the first and last cited page (p. ${first}–${last}) can be judged. These pages fall inside it and no claim, metric or figure touches them.`,
+  healthThin: "Sections resting on thin evidence",
+  healthThinNote:
+    "A section is thin when it hangs on a single claim, or when none of the claims under it are verified. That is not necessarily wrong — but it is where to look first.",
+  healthSectionClaims: (verified, total) => `${verified}/${total} verified`,
+  healthAreaStory: "Story",
+  healthAreaReport: "Report",
+  healthUnused: "Collected but unused",
+  healthUnusedNote:
+    "These claims are in the evidence ledger and no section, equation or figure refers to them. Often they are the most interesting leftovers.",
 };
 
 const BCP47 = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;

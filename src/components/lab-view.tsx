@@ -13,6 +13,7 @@ import {
   Lightbulb,
   ListChecks,
   Quote,
+  ShieldCheck,
   Sigma,
   SlidersHorizontal,
   TriangleAlert,
@@ -21,6 +22,7 @@ import type { Claim, ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
 import {
   ApplicationGuideView,
+  EvidenceHealthView,
   FiguresView,
   LanguageProvider,
   stringsFor,
@@ -77,6 +79,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
     ...(hasPractice ? [{ id: "practice", label: t.navPractice, icon: SlidersHorizontal }] : []),
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
     { id: "claims", label: "Claims", icon: Quote },
+    { id: "health", label: t.navHealth, icon: ShieldCheck },
     { id: "method", label: "Method", icon: FlaskConical },
     ...(project.technicalAppendix ? [{ id: "technical", label: "Technical", icon: Code2 }] : []),
     { id: "metrics", label: "Metrics", icon: Gauge },
@@ -215,6 +218,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
                 </button>
               ))}
             </div>
+          </section>
+        )}
+
+        {section === "health" && (
+          <section className="lab-block">
+            <div className="block-title"><ShieldCheck size={16} /> {t.healthHeading}</div>
+            <p className="section-intro">{t.healthIntro}</p>
+            <EvidenceHealthView project={project} onClaimSelect={onClaimSelect} />
           </section>
         )}
 

@@ -84,7 +84,7 @@ export function AppShell() {
       throw new Error("Imports are only accepted from an address on this machine.");
     }
     const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error(`The project could not be downloaded (HTTP ).`);
+    if (!response.ok) throw new Error(`The project could not be downloaded (HTTP ${response.status}).`);
     const text = await response.text();
     if (text.length > 5 * 1024 * 1024) throw new Error("The Trace JSON exceeds the 5 MB limit.");
     const parsed = researchProjectSchema.safeParse(JSON.parse(text));
