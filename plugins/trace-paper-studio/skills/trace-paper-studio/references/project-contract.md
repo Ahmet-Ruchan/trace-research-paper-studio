@@ -156,7 +156,7 @@ Optional, up to six. Everything else in this contract *redraws* the paper in Tra
 - `caption` is the paper's own sentence. Copy it, do not rewrite or translate it — like an excerpt, it is a quotation.
 - `whyItMatters` is **yours**, written in the project's `language`. Say what the reader should see in it and what the paper argues from it. Repeating the caption is rejected by validation.
 - `image` must be the embedded data URI produced by `prepare`. A remote URL is rejected: the standalone viewer runs under `default-src 'none'`, so it would never load, and a shared file must not depend on a host staying up.
-- Link `claimIds` to the claims the figure supports, the same as every other block.
+- **`claimIds` decides where the figure appears.** A figure is shown beside the story section built on the same claims, so a figure that shares no claim with any section never reaches the narrative — it stays in the overview alone. Link it to the claims it actually supports, and the placement follows.
 - Six figures at most, and roughly 1.4 MB of images in total. Both are enforced.
 
 Never source a picture from the web. A web image cannot be shown to depict *this* paper, and an unverifiable diagram is worse than an unverifiable number: it looks authoritative. Every figure here is anchored to a page in the PDF you were given.

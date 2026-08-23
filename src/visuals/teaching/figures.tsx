@@ -27,6 +27,39 @@ export function FiguresView({ figures }: { figures: readonly Figure[] }) {
   );
 }
 
+/**
+ * Şekilleri hikâye bölümlerine dağıtır.
+ *
+ * Birleştirme anahtarı zaten veride: şekiller de bölümler de `claimIds`
+ * taşıyor. Yani bir şeklin hangi paragrafa ait olduğunu tahmin etmiyoruz —
+ * ikisi de aynı iddiaya dayanıyorsa aynı yere aittirler.
+ *
+ * Bir şekil EN FAZLA bir kez yerleşir: iddiaların birden çok bölümde geçmesi
+ * olağan ve aynı diyagramı üç kez basmak okumayı bozar. İlk eşleşen bölüm
+ * kazanır, çünkü bölümler anlatı sırasında ve şekil ilk anlatıldığı yerde
+ * en çok işe yarar.
+ */
+export function figuresBySection(
+  figures: readonly Figure[] | undefined,
+  sections: readonly { id: string; claimIds: readonly string[] }[],
+): Map<string, Figure[]> {
+  const placed = new Map<string, Figure[]>();
+  if (!figures?.length) return placed;
+  const taken = new Set<string>();
+
+  for (const section of sections) {
+    const claims = new Set(section.claimIds);
+    const mine = figures.filter(
+      (figure) => !taken.has(figure.id) && figure.claimIds.some((id) => claims.has(id)),
+    );
+    if (!mine.length) continue;
+    for (const figure of mine) taken.add(figure.id);
+    placed.set(section.id, mine);
+  }
+
+  return placed;
+}
+
 function FigureCard({ figure }: { figure: Figure }) {
   const t = useStrings();
   // Şekiller uzun olabiliyor (ResNet'in ağ diyagramı sayfa boyu). Varsayılan

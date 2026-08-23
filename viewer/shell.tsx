@@ -8,6 +8,7 @@ import {
   useStrings,
   DerivationView,
   FiguresView,
+  figuresBySection,
   InteractiveRenderer,
   MathText,
   PrimerView,
@@ -354,6 +355,9 @@ function StoryTab({ project }: { project: ResearchProject }) {
 
   const active = story.sections.find((section) => section.id === activeId) ?? story.sections[0];
   const interactives = project.interactives ?? [];
+  // Şekil, anlattığı paragrafın yanında; eşleştirme paylaşılan iddialar
+  // üzerinden yapılıyor, konum tahminiyle değil.
+  const figures = figuresBySection(project.figures, story.sections);
 
   return (
     <div className="viewer-story" ref={containerRef}>
@@ -373,6 +377,7 @@ function StoryTab({ project }: { project: ResearchProject }) {
               <h2>{section.title}</h2>
               {section.body.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)}
               <ClaimRefs ids={section.claimIds} claims={evidence.claims} />
+              {figures.has(section.id) ? <FiguresView figures={figures.get(section.id)!} /> : null}
               <div className="viewer-mobile-visual">
                 <VisualRenderer visual={section.visual} accent={story.accent} />
               </div>

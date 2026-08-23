@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, BookOpen, ExternalLink } from "lucide-react";
 import type { ResearchProject } from "@/lib/schema";
-import { InteractiveRenderer, LanguageProvider, VisualRenderer, stringsFor } from "@/visuals";
+import { FiguresView, InteractiveRenderer, LanguageProvider, VisualRenderer, figuresBySection, stringsFor } from "@/visuals";
 
 type StoryViewProps = {
   project: ResearchProject;
@@ -17,6 +17,15 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
   const activeSection = useMemo(
     () => project.story.sections.find((section) => section.id === activeId) ?? project.story.sections[0],
     [activeId, project.story.sections],
+  );
+  /**
+   * Şekiller anlattıkları paragrafın yanında duruyor. Eşleştirme iddialar
+   * üzerinden: bir şekil ve bir bölüm aynı iddiaya dayanıyorsa aynı yere
+   * aittir. Hiçbir bölümle eşleşmeyen şekil Lab'in genel bakışında kalır.
+   */
+  const figuresBySectionId = useMemo(
+    () => figuresBySection(project.figures, project.story.sections),
+    [project.figures, project.story.sections],
   );
 
   useEffect(() => {
@@ -96,6 +105,9 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
                   );
                 })}
               </div>
+              {figuresBySectionId.has(section.id) ? (
+                <FiguresView figures={figuresBySectionId.get(section.id)!} />
+              ) : null}
               <div className="story-mobile-visual">
                 <VisualRenderer visual={section.visual} accent={project.story.accent} />
               </div>

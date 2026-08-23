@@ -274,3 +274,15 @@
   .health-stats { grid-template-columns: 1fr; }
   .health-thin li, .health-sources li { grid-template-columns: 1fr; gap: 5px; }
 }
+
+/* Hikâye sütunundaki şekiller. Sütun dar ve okuma akışını kesmemeleri
+   gerekiyor: kart çerçevesiz, yükseklik sınırlı — okuyucu isterse
+   "tam boyut" düğmesiyle açar. */
+.story-section .figures,
+.viewer-story-section .figures { margin: 26px 0; gap: 20px; }
+.story-section .figure-card,
+.viewer-story-section .figure-card { padding: 0; border: 0; background: none; }
+.story-section .figure-frame img,
+.viewer-story-section .figure-frame img { max-height: 460px; }
+.story-section .figure-card.is-expanded .figure-frame img,
+.viewer-story-section .figure-card.is-expanded .figure-frame img { max-height: none; }
