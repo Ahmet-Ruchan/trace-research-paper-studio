@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, FileText, FileUp, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Plus, Search, Trash2 } from "lucide-react";
 import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
 
@@ -12,6 +12,7 @@ type LibraryViewProps = {
   onHome: () => void;
   onNew: () => void;
   onImport: (file: File) => Promise<void>;
+  onCompare: (left: ResearchProject, right: ResearchProject) => void;
 };
 
 function formatDate(value: string) {
@@ -26,8 +27,25 @@ function generationLabel(project: ResearchProject) {
   return models.size > 1 ? `${models.size}-model team` : [...models][0]?.split(":").slice(1).join(":");
 }
 
-export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImport }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const [query, setQuery] = useState("");
+  /**
+   * Karşılaştırma için seçim. Tam olarak iki proje: üç sütun ekrana sığmıyor
+   * ve "hangisi daha iyi" sorusu zaten ikili bir soru. Üçüncüye tıklamak en
+   * eski seçimi düşürüyor — kullanıcıyı önce bir şeyin işaretini kaldırmaya
+   * zorlamak, bir kısıtı iş yüküne çevirmek olurdu.
+   */
+  const [selected, setSelected] = useState<string[]>([]);
+  function toggleSelected(projectId: string) {
+    setSelected((current) =>
+      current.includes(projectId)
+        ? current.filter((item) => item !== projectId)
+        : [...current, projectId].slice(-2),
+    );
+  }
+  const chosen = selected
+    .map((id) => projects.find((project) => project.id === id))
+    .filter((project): project is ResearchProject => Boolean(project));
   const [importError, setImportError] = useState<string>();
   const importRef = useRef<HTMLInputElement>(null);
   const filtered = useMemo(() => {
@@ -77,10 +95,30 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
         <span>{filtered.length} results</span>
       </section>
 
+      {chosen.length > 0 && (
+        <div className="compare-bar">
+          <Columns2 size={16} />
+          <span>
+            {chosen.map((project) => project.evidence.paper.title).join("  ·  ")}
+            {chosen.length === 1 ? "  ·  pick one more" : ""}
+          </span>
+          <div>
+            <button className="text-button" onClick={() => setSelected([])}>Clear</button>
+            <button className="library-open" disabled={chosen.length < 2} onClick={() => chosen.length === 2 && onCompare(chosen[0], chosen[1])}>
+              Compare <ArrowRight size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {filtered.length ? (
         <section className="library-grid">
           {filtered.map((project, index) => (
-            <article className="library-card" key={project.id} style={{ "--card-accent": project.story.accent } as React.CSSProperties}>
+            <article className={selected.includes(project.id) ? "library-card is-selected" : "library-card"} key={project.id} style={{ "--card-accent": project.story.accent } as React.CSSProperties}>
+              <label className="library-select" title="Select for comparison">
+                <input type="checkbox" checked={selected.includes(project.id)} onChange={() => toggleSelected(project.id)} />
+                <span aria-hidden="true" />
+              </label>
               <button className="library-card-main" onClick={() => onOpen(project)}>
                 <div className="library-cover">
                   <span>{String(index + 1).padStart(2, "0")}</span>

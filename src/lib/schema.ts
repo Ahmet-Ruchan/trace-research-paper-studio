@@ -585,6 +585,7 @@ export const researchProjectSchema = generationResultSchema.extend({
 export type Source = z.infer<typeof sourceSchema>;
 export type SourceReference = z.infer<typeof sourceReferenceSchema>;
 export type Claim = z.infer<typeof claimSchema>;
+export type Metric = z.infer<typeof metricSchema>;
 export type PaperEvidence = z.infer<typeof paperEvidenceSchema>;
 export type StoryVisual = z.infer<typeof visualSchema>;
 export type StorySection = z.infer<typeof storySectionSchema>;

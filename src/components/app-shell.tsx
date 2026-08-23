@@ -16,13 +16,14 @@ import { loadSampleProject } from "@/lib/sample-project";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { LabView } from "./lab-view";
+import { CompareView } from "./compare-view";
 import { LibraryView } from "./library-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
 import { StoryView } from "./story-view";
 
 type WorkspaceMode = "lab" | "story" | "preview";
-type AppScreen = "home" | "library" | "workspace";
+type AppScreen = "home" | "library" | "workspace" | "compare";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
 
@@ -49,6 +50,7 @@ export function AppShell() {
   const [project, setProject] = useState<ResearchProject>();
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [screen, setScreen] = useState<AppScreen>("home");
+  const [comparison, setComparison] = useState<[ResearchProject, ResearchProject]>();
   const [initialTeam, setInitialTeam] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("lab");
   const [fileUrl, setFileUrl] = useState<string>();
@@ -400,8 +402,31 @@ export function AppShell() {
   const t = stringsFor(project?.language);
 
   if (!hydrated) return <div className="boot-screen"><span>trace</span></div>;
+  if (screen === "compare" && comparison) {
+    return (
+      <CompareView
+        left={comparison[0]}
+        right={comparison[1]}
+        onBack={() => setScreen("library")}
+        onOpen={openProject}
+      />
+    );
+  }
   if (screen === "library") {
-    return <LibraryView projects={projects} onOpen={openProject} onDelete={removeProject} onHome={() => setScreen("home")} onNew={newProject} onImport={importProject} />;
+    return (
+      <LibraryView
+        projects={projects}
+        onOpen={openProject}
+        onDelete={removeProject}
+        onHome={() => setScreen("home")}
+        onNew={newProject}
+        onImport={importProject}
+        onCompare={(left, right) => {
+          setComparison([left, right]);
+          setScreen("compare");
+        }}
+      />
+    );
   }
   if (screen === "home" || !project) {
     return <><Onboarding onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>;
