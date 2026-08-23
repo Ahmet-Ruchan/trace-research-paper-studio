@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, Download, FileJson, FlaskConical, Home, LayoutTemplate, MoreHorizontal, Plus, Share2 } from "lucide-react";
 import { buildStandaloneStory } from "@/lib/export-story";
+import { claimHash, parseDeepLink, sectionHash } from "@/lib/deep-link";
 import {
   generationStages,
   initialGenerationProgress,
@@ -124,6 +125,29 @@ export function AppShell() {
         }
         if (search.get("library") === "1") setScreen("library");
         if (search.get("team") === "1") setInitialTeam(true);
+
+        /**
+         * Kalıcı bağlantı. `?project=` hangi projenin açılacağını, hash ise
+         * onun neresine gidileceğini söylüyor. İkisi ayrı: hash tek başına
+         * hangi projeye ait olduğunu bilemez, sorgu dizesi ise `#` sonrasını
+         * sunucuya hiç göndermeyen tarayıcı davranışına takılmaz.
+         *
+         * Bu iş `hydrated` bayrağından ÖNCE bitmeli: adresi yazan efekt
+         * bayrağa bakıyor ve proje henüz yüklenmemişken çalışırsa
+         * `?project=` parametresini kendi eliyle silerdi.
+         */
+        const wantedProject = search.get("project");
+        if (wantedProject) {
+          const saved = (await listLibraryProjects().catch(() => [])).find((item) => item.id === wantedProject);
+          if (saved) {
+            setProject(saved);
+            setScreen("workspace");
+          }
+        }
+        const link = parseDeepLink(window.location.hash);
+        if (link?.kind === "claim") setSelectedClaimId(link.id);
+        if (link?.kind === "section") setMode("preview");
+
         setHydrated(true);
         // Eski tek-proje localStorage kaydını kütüphaneye taşı.
         // Taşıma BİR KEZ olmalı: anahtar silinmezse her açılışta tekrar
@@ -162,6 +186,54 @@ export function AppShell() {
     }, 500);
     return () => window.clearTimeout(timer);
   }, [project, hydrated, screen]);
+
+  /**
+   * Adres çubuğu her zaman açık olan şeyi göstersin — kullanıcı bağlantıyı
+   * kopyalamak için hiçbir düğmeye basmak zorunda kalmasın.
+   *
+   * `replaceState` kullanılıyor, `pushState` değil: bir iddiaya tıklamak
+   * gezinme değil seçim. `pushState` olsaydı geri tuşu kullanıcıyı önceki
+   * iddiaya götürürdü ve projeden çıkmak için onlarca kez basmak gerekirdi.
+   */
+  useEffect(() => {
+    if (!hydrated) return;
+    const url = new URL(window.location.href);
+    for (const key of ["sample", "new", "library", "team", "mode", "import"]) url.searchParams.delete(key);
+    if (screen === "workspace" && project) {
+      url.searchParams.set("project", project.id);
+      if (mode !== "lab") url.searchParams.set("mode", mode);
+      /**
+       * Seçili iddia varsa çapa odur. Yoksa adreste zaten duran bir bölüm
+       * çapası KORUNUR: onu silmek, bağlantıyı açan kişinin adres çubuğundan
+       * aynı bağlantıyı bir daha kopyalayamaması demek olurdu.
+       */
+      const existing = parseDeepLink(url.hash);
+      url.hash = selectedClaimId
+        ? claimHash(selectedClaimId)
+        : existing?.kind === "section"
+          ? sectionHash(existing.id)
+          : "";
+    } else {
+      url.searchParams.delete("project");
+      url.hash = "";
+    }
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [hydrated, screen, project, mode, selectedClaimId]);
+
+  /**
+   * Sayfa içindeki bir kalıcı bağlantıya tıklamak belgeyi yeniden yüklemez;
+   * hash değişir ve durum olduğu yerde kalırdı. Yapıştırılan bir bağlantı da
+   * aynı sayfada açıksa aynı sorunu yaşar.
+   */
+  useEffect(() => {
+    const onHashChange = () => {
+      const link = parseDeepLink(window.location.hash);
+      if (link?.kind === "claim") setSelectedClaimId(link.id);
+      if (link?.kind === "section") setMode("preview");
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   useEffect(() => () => { if (fileUrl) URL.revokeObjectURL(fileUrl); }, [fileUrl]);
 

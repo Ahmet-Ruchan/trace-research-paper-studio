@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { claimHash, elementId, parseDeepLink, scrollToDeepLink, sectionHash } from "@/lib/deep-link";
 import type { Claim, ResearchProject } from "@/lib/schema";
 import {
   ApplicationGuideView,
@@ -11,6 +12,7 @@ import {
   figuresBySection,
   InteractiveRenderer,
   MathText,
+  PermalinkButton,
   PrimerView,
   QuizView,
   VisualRenderer,
@@ -51,7 +53,51 @@ export function ViewerShell({
     project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.applicationGuide,
   );
   const tabs: Tab[] = ["lab", "story", ...(hasPractice ? (["practice"] as Tab[]) : []), ...(project.technicalAppendix ? (["technical"] as Tab[]) : [])];
-  const [tab, setTab] = useState<Tab>(tabs.includes(initialTab) ? initialTab : "lab");
+  /**
+   * Kalıcı bağlantı sekmeyi de seçiyor. Bir iddia Lab'de, bir bölüm hikâyede
+   * yaşıyor; bağlantıyı açan kişiyi doğru sekmeye getirmezsek çapa hiçbir
+   * şeye işaret etmez, çünkü hedef öğe o an DOM'da bile değildir.
+   */
+  const link = typeof window === "undefined" ? undefined : parseDeepLink(window.location.hash);
+  const linkedTab: Tab | undefined = link?.kind === "claim" ? "lab" : link?.kind === "section" ? "story" : undefined;
+  const wanted = linkedTab ?? initialTab;
+  const [tab, setTab] = useState<Tab>(tabs.includes(wanted) ? wanted : "lab");
+
+  /**
+   * Bekleyen çapa. Sekme değişimi bir React güncellemesi; hedef öğe ancak
+   * o güncelleme DOM'a işlendikten SONRA var oluyor. `requestAnimationFrame`
+   * yetmedi — kaydırma eski yerleşime göre hesaplanıp hedefi ıskalıyordu.
+   * Bu yüzden niyet bir ref'te bekliyor ve `tab` değiştiğinde çalışan efekt
+   * onu tüketiyor: efektler her zaman işlemeden sonra koşar.
+   */
+  const pendingScroll = useRef(link);
+
+  useEffect(() => {
+    const target = pendingScroll.current;
+    if (target) {
+      pendingScroll.current = undefined;
+      scrollToDeepLink(target);
+    }
+
+    /**
+     * Sayfa içindeki bir kalıcı bağlantıya tıklamak belgeyi yeniden yüklemez;
+     * sekme kendiliğinden değişmezse bağlantı o an DOM'da olmayan bir öğeyi
+     * işaret eder ve hiçbir şey olmaz.
+     */
+    const onHashChange = () => {
+      const next = parseDeepLink(window.location.hash);
+      if (!next) return;
+      const nextTab: Tab = next.kind === "claim" ? "lab" : "story";
+      if (nextTab === tab) {
+        scrollToDeepLink(next);
+        return;
+      }
+      pendingScroll.current = next;
+      setTab(nextTab);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [tab]);
   const [studioOpen, setStudioOpen] = useState(false);
 
   useEffect(() => {
@@ -271,8 +317,15 @@ function LabTab({ project }: { project: ResearchProject }) {
         <h2>{t.claims}</h2>
         <div className="viewer-claims">
           {evidence.claims.map((claim) => (
-            <article key={claim.id} className={claim.confidence === "needs-review" ? "is-review" : ""}>
-              <span className="viewer-claim-kind">{claim.kind}</span>
+            <article
+              key={claim.id}
+              id={elementId({ kind: "claim", id: claim.id })}
+              className={claim.confidence === "needs-review" ? "is-review" : ""}
+            >
+              <span className="viewer-claim-kind">
+                {claim.kind}
+                <PermalinkButton hash={claimHash(claim.id)} />
+              </span>
               <p>{claim.statement}</p>
               {claim.sourceRefs.map((ref, index) => (
                 <details className="evidence-note" key={index}>
@@ -374,7 +427,10 @@ function StoryTab({ project }: { project: ResearchProject }) {
               <span className="viewer-eyebrow">
                 {section.indexLabel} · {section.kicker}
               </span>
-              <h2>{section.title}</h2>
+              <h2 id={elementId({ kind: "section", id: section.id })}>
+                {section.title}
+                <PermalinkButton hash={sectionHash(section.id)} />
+              </h2>
               {section.body.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)}
               <ClaimRefs ids={section.claimIds} claims={evidence.claims} />
               {figures.has(section.id) ? <FiguresView figures={figures.get(section.id)!} /> : null}

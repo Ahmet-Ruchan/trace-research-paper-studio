@@ -19,4 +19,5 @@ export { QuizView } from "./teaching/quiz";
 export { ApplicationGuideView } from "./teaching/application-guide";
 export { FiguresView, figuresBySection } from "./teaching/figures";
 export { EvidenceHealthView } from "./teaching/evidence-health";
+export { PermalinkButton } from "./permalink";
 export * from "./chart";

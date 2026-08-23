@@ -2,8 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, BookOpen, ExternalLink } from "lucide-react";
+import { elementId, parseDeepLink, scrollToDeepLink, sectionHash } from "@/lib/deep-link";
 import type { ResearchProject } from "@/lib/schema";
-import { FiguresView, InteractiveRenderer, LanguageProvider, VisualRenderer, figuresBySection, stringsFor } from "@/visuals";
+import {
+  FiguresView,
+  InteractiveRenderer,
+  LanguageProvider,
+  PermalinkButton,
+  VisualRenderer,
+  figuresBySection,
+  stringsFor,
+} from "@/visuals";
 
 type StoryViewProps = {
   project: ResearchProject;
@@ -42,6 +51,23 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
     Object.values(sectionRefs.current).forEach((node) => node && observer.observe(node));
     return () => observer.disconnect();
   }, [project.story.sections]);
+
+  /**
+   * Bir bölüm bağlantısıyla gelindiyse oraya git. Tarayıcının kendi çapa
+   * atlaması işe yaramıyor: hedef öğe sayfa yüklendiğinde henüz yok, React
+   * onu sonra çiziyor.
+   */
+  useEffect(() => {
+    const goToHash = () => {
+      const link = parseDeepLink(window.location.hash);
+      if (link?.kind === "section") scrollToDeepLink(link);
+    };
+    goToHash();
+    // Sayfa içindeki bir bölüm bağlantısına tıklamak belgeyi yeniden
+    // yüklemiyor; dinlemezsek yalnızca ilk açılış çalışırdı.
+    window.addEventListener("hashchange", goToHash);
+    return () => window.removeEventListener("hashchange", goToHash);
+  }, []);
 
   const activeIndex = Math.max(
     project.story.sections.findIndex((section) => section.id === activeId),
@@ -91,7 +117,10 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
             >
               <span className="story-index">{section.indexLabel}</span>
               <p className="story-kicker" lang={project.language}>{section.kicker}</p>
-              <h2>{section.title}</h2>
+              <h2 id={elementId({ kind: "section", id: section.id })}>
+                {section.title}
+                <PermalinkButton hash={sectionHash(section.id)} />
+              </h2>
               <p>{section.body}</p>
               <div className="story-claim-links">
                 {section.claimIds.map((claimId) => {

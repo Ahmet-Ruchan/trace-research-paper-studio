@@ -286,3 +286,16 @@
 .viewer-story-section .figure-frame img { max-height: 460px; }
 .story-section .figure-card.is-expanded .figure-frame img,
 .viewer-story-section .figure-card.is-expanded .figure-frame img { max-height: none; }
+
+/* --- Kalıcı bağlantı ------------------------------------------------ */
+.permalink { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 7px; color: var(--muted); font-size: 11px; line-height: 1; text-decoration: none; transition: color .15s, background .15s, opacity .15s; }
+.permalink:hover { color: var(--accent); background: var(--surface-2); }
+.permalink.is-copied { color: var(--green); }
+/* Başlık yanındaki bağlantı yalnızca üzerine gelince görünür: her başlıkta
+   duran bir "#" işareti hikâyeyi teknik dokümana çevirirdi. */
+.story-section h2 .permalink,
+.viewer-story-section h2 .permalink { margin-left: 8px; vertical-align: middle; opacity: 0; }
+.story-section h2:hover .permalink,
+.story-section h2:focus-within .permalink,
+.viewer-story-section h2:hover .permalink,
+.viewer-story-section h2:focus-within .permalink { opacity: 1; }

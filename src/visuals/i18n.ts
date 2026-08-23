@@ -140,6 +140,8 @@ export type Strings = {
   healthAreaReport: string;
   healthUnused: string;
   healthUnusedNote: string;
+  // Kalıcı bağlantı
+  permalinkTitle: string;
 };
 
 const en: Strings = {
@@ -275,6 +277,7 @@ const en: Strings = {
   healthUnused: "Collected but unused",
   healthUnusedNote:
     "These claims are in the evidence ledger and no section, equation or figure refers to them. Often they are the most interesting leftovers.",
+  permalinkTitle: "Copy a link to this",
 };
 
 const BCP47 = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   BookMarked,
@@ -19,11 +19,13 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { Claim, ResearchProject } from "@/lib/schema";
+import { claimHash, elementId, parseDeepLink, scrollToDeepLink } from "@/lib/deep-link";
 import { foldForSearch } from "@/lib/search-text";
 import {
   ApplicationGuideView,
   EvidenceHealthView,
   FiguresView,
+  PermalinkButton,
   LanguageProvider,
   stringsFor,
   DerivationView,
@@ -60,11 +62,47 @@ const reportKindLabels = {
 
 export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: LabViewProps) {
   const t = stringsFor(project.language);
-  const [section, setSection] = useState("overview");
+  // Kalıcı bir bağlantıyla gelindiyse doğrudan kanıt defteri açılıyor: iddia
+  // sağdaki çekmecede zaten görünür, ama bağlantıyı gönderen kişi listedeki
+  // yerini de göstermek istemiştir.
+  const [section, setSection] = useState(() => (selectedClaimId ? "claims" : "overview"));
   const selectedClaim = useMemo(
     () => project.evidence.claims.find((claim) => claim.id === selectedClaimId),
     [project.evidence.claims, selectedClaimId],
   );
+
+  /**
+   * Kalıcı bir bağlantıyla gelindiyse iddiaya kaydır. Otuz iddialık bir
+   * defterde vurgulanmış satır ekranın dışında kalabiliyor ve bağlantıyı açan
+   * kişi hiçbir şey olmamış gibi hissediyordu. `block: "center"` çünkü
+   * satırın hemen üstü ve altı bağlamın kendisi.
+   *
+   * YALNIZCA ilk çizimde. Her seçimde kaydırmak, listeye tıklayan kullanıcıyı
+   * kendi tıkladığı satırın altından çekerdi.
+   *
+   * `behavior: "instant"` bilerek: bir bağlantı okuyucuyu hedefe götürmeli,
+   * ona doğru uçurmamalı. Sayfa açılışında yapılan uzun bir animasyon
+   * yönünü kaybettiriyor.
+   */
+  const arrivedAt = useRef(selectedClaimId);
+  useEffect(() => {
+    const id = arrivedAt.current;
+    if (id) {
+      arrivedAt.current = undefined;
+      scrollToDeepLink({ kind: "claim", id });
+    }
+
+    // Sayfa içindeki bir iddia bağlantısına tıklamak belgeyi yeniden
+    // yüklemiyor: defter açık değilse çapa görünmeyen bir satırı işaret eder.
+    const onHashChange = () => {
+      const link = parseDeepLink(window.location.hash);
+      if (link?.kind !== "claim") return;
+      setSection("claims");
+      window.requestAnimationFrame(() => scrollToDeepLink(link));
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   const hasPractice = Boolean(
     project.derivations?.length ||
@@ -202,20 +240,23 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
             </div>
             <div className="claims-table">
               {project.evidence.claims.map((claim) => (
-                <button
+                <div
                   key={claim.id}
-                  className={selectedClaimId === claim.id ? "selected" : ""}
-                  onClick={() => onClaimSelect(claim.id)}
+                  id={elementId({ kind: "claim", id: claim.id })}
+                  className={selectedClaimId === claim.id ? "claim-row selected" : "claim-row"}
                 >
-                  <span className="claim-kind">{kindLabels[claim.kind]}</span>
-                  <p>{claim.statement}</p>
-                  <span className={`claim-confidence ${claim.confidence}`}>
-                    {claim.confidence === "verified" ? "Verified" : "Review"}
-                  </span>
-                  <span className="claim-page">
-                    {claim.sourceRefs[0]?.page ? `s. ${claim.sourceRefs[0].page}` : "web"}
-                  </span>
-                </button>
+                  <button onClick={() => onClaimSelect(claim.id)}>
+                    <span className="claim-kind">{kindLabels[claim.kind]}</span>
+                    <p>{claim.statement}</p>
+                    <span className={`claim-confidence ${claim.confidence}`}>
+                      {claim.confidence === "verified" ? "Verified" : "Review"}
+                    </span>
+                    <span className="claim-page">
+                      {claim.sourceRefs[0]?.page ? `s. ${claim.sourceRefs[0].page}` : "web"}
+                    </span>
+                  </button>
+                  <PermalinkButton hash={claimHash(claim.id)} />
+                </div>
               ))}
             </div>
           </section>

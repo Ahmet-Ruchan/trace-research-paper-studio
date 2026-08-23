@@ -133,3 +133,16 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.
   html { scroll-behavior: auto; }
   * , *:before, *:after { transition: none !important; animation: none !important; }
 }
+
+/* Kalıcı bağlantılar. Sayfa tek dosya ve sunucusu yok; adres çubuğundaki
+   hash, "şu iddiaya bak" demenin tek yolu — o yüzden her iddianın ve her
+   bölümün kendi çapası var. */
+.viewer-claims article { position: relative; }
+.viewer-claim-kind { display: inline-flex; align-items: center; gap: 4px; }
+.viewer-claims .permalink { opacity: 0; }
+.viewer-claims article:hover .permalink,
+.viewer-claims article:focus-within .permalink,
+.viewer-claims article:target .permalink { opacity: 1; }
+/* Bağlantıyla gelinen iddia kendini belli etsin: aksi hâlde okuyucu uzun
+   bir listenin ortasına düşüyor ve hangisi olduğunu anlamıyor. */
+.viewer-claims article:target { border-color: var(--accent); background: var(--surface-2); }
