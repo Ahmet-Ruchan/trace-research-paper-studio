@@ -37,6 +37,7 @@ let result: {
   siteDirectory: string;
   jsonPath: string;
   jsonUrl: string;
+  libraryPath: string;
 };
 
 beforeAll(() => {
@@ -56,7 +57,11 @@ beforeAll(() => {
       "--no-open",
       "--no-app",
     ],
-    { encoding: "utf8", timeout: 120_000 },
+    {
+      encoding: "utf8",
+      timeout: 120_000,
+      env: { ...process.env, TRACE_DATA_DIR: join(workspace, "trace-data") },
+    },
   );
 
   if (run.status !== 0) {
@@ -91,6 +96,8 @@ describe("deliver", () => {
 
     const delivered = JSON.parse(readFileSync(result.jsonPath, "utf8"));
     expect(delivered.id).toBe(loadExampleProject().id);
+    expect(existsSync(result.libraryPath)).toBe(true);
+    expect(result.libraryPath).toContain(join(workspace, "trace-data", "library"));
   });
 
   it("şablondaki yer tutucuların hiçbirini doldurulmamış bırakmaz", () => {
@@ -124,7 +131,11 @@ describe("deliver", () => {
     const again = spawnSync(
       process.execPath,
       [BRIDGE, "deliver", "--project", projectPath, "--out", join(workspace, "site"), "--no-open", "--no-app"],
-      { encoding: "utf8", timeout: 120_000 },
+      {
+        encoding: "utf8",
+        timeout: 120_000,
+        env: { ...process.env, TRACE_DATA_DIR: join(workspace, "trace-data") },
+      },
     );
     expect(again.status).toBe(0);
     expect(JSON.parse(again.stdout).url).toBe(result.url);
@@ -180,7 +191,11 @@ describe("deliver · stüdyo ayağa kalkmadığında", async () => {
       const run = spawnSync(
         process.execPath,
         [BRIDGE, "deliver", "--project", projectPath, "--out", site, "--no-open", "--app", fakeApp],
-        { encoding: "utf8", timeout: 120_000 },
+        {
+          encoding: "utf8",
+          timeout: 120_000,
+          env: { ...process.env, TRACE_DATA_DIR: join(space, "trace-data") },
+        },
       );
       expect(run.status, run.stderr).toBe(0);
       const delivered = JSON.parse(run.stdout);

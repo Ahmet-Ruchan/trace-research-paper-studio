@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash, randomInt, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, openSync, readFileSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { homedir } from "node:os";
@@ -12,6 +13,129 @@ import { extractFigures } from "./lib/figures.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SKILL_DIRECTORY = resolve(dirname(SCRIPT_PATH), "..");
+
+const TRACE_ACCENT_PALETTE = [
+  "#2563EB", "#38BDF8", "#06B6D4", "#1E3A8A", "#7C3AED",
+  "#A78BFA", "#D946EF", "#EC4899", "#F9A8D4", "#EF4444",
+  "#9F1239", "#F97316", "#FB923C", "#FACC15", "#D97706",
+  "#22C55E", "#166534", "#84CC16", "#34D399", "#65A30D",
+];
+const ACCENT_STATE_VERSION = 1;
+const ACCENT_LOCK_STALE_MS = 30_000;
+
+function traceDataDirectory() {
+  return process.env.TRACE_DATA_DIR ? resolve(process.env.TRACE_DATA_DIR) : join(homedir(), ".trace");
+}
+
+function traceLibraryDirectory() {
+  return process.env.TRACE_LIBRARY_DIR ? resolve(process.env.TRACE_LIBRARY_DIR) : join(traceDataDirectory(), "library");
+}
+
+function atomicWrite(path, contents) {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, contents, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    try { unlinkSync(temporary); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  }
+}
+
+function shufflePalette() {
+  const order = [...TRACE_ACCENT_PALETTE];
+  for (let index = order.length - 1; index > 0; index -= 1) {
+    const selected = randomInt(index + 1);
+    [order[index], order[selected]] = [order[selected], order[index]];
+  }
+  return order;
+}
+
+function freshAccentState() {
+  return { version: ACCENT_STATE_VERSION, order: shufflePalette(), nextIndex: 0, assignmentCount: 0, assignments: {} };
+}
+
+function isAccentState(value) {
+  const palette = new Set(TRACE_ACCENT_PALETTE);
+  return Boolean(
+    value && typeof value === "object" &&
+    value.version === ACCENT_STATE_VERSION &&
+    Array.isArray(value.order) && value.order.length === TRACE_ACCENT_PALETTE.length &&
+    new Set(value.order).size === TRACE_ACCENT_PALETTE.length && value.order.every((color) => palette.has(color)) &&
+    Number.isInteger(value.nextIndex) && value.nextIndex >= 0 && value.nextIndex < TRACE_ACCENT_PALETTE.length &&
+    Number.isInteger(value.assignmentCount) && value.assignmentCount >= 0 &&
+    value.assignments && typeof value.assignments === "object"
+  );
+}
+
+function acquireAccentLock(dataDirectory) {
+  const lockPath = join(dataDirectory, "accent-cycle.lock");
+  mkdirSync(dataDirectory, { recursive: true, mode: 0o700 });
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      mkdirSync(lockPath);
+      return () => {
+        try { rmdirSync(lockPath); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+      };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > ACCENT_LOCK_STALE_MS) {
+          rmdirSync(lockPath);
+          continue;
+        }
+      } catch (lockError) {
+        if (lockError?.code !== "ENOENT") throw lockError;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 + Math.min(attempt, 40));
+    }
+  }
+  throw new Error("The Trace accent cycle is busy. Please retry in a moment.");
+}
+
+function assignPaperAccent(paperPath) {
+  const identity = `sha256:${createHash("sha256").update(readFileSync(paperPath)).digest("hex")}`;
+  const dataDirectory = traceDataDirectory();
+  const statePath = join(dataDirectory, "accent-cycle.json");
+  const release = acquireAccentLock(dataDirectory);
+  try {
+    let state;
+    try {
+      const parsed = JSON.parse(readFileSync(statePath, "utf8"));
+      state = isAccentState(parsed) ? parsed : freshAccentState();
+    } catch (error) {
+      if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+      state = freshAccentState();
+    }
+    const existing = state.assignments[identity];
+    if (existing && TRACE_ACCENT_PALETTE.includes(existing.accent)) return { ...existing, reused: true };
+
+    const paletteIndex = state.nextIndex;
+    const assignment = {
+      accent: state.order[paletteIndex],
+      paletteIndex,
+      cycle: Math.floor(state.assignmentCount / TRACE_ACCENT_PALETTE.length) + 1,
+      assignedAt: new Date().toISOString(),
+    };
+    state.assignments[identity] = assignment;
+    state.assignmentCount += 1;
+    state.nextIndex = (paletteIndex + 1) % TRACE_ACCENT_PALETTE.length;
+    atomicWrite(statePath, `${JSON.stringify(state, null, 2)}\n`);
+    return { ...assignment, reused: false };
+  } finally {
+    release();
+  }
+}
+
+function projectLibraryFileName(projectId) {
+  return `project-${createHash("sha256").update(projectId).digest("hex").slice(0, 24)}.trace.json`;
+}
+
+function persistLibraryProject(project) {
+  const path = join(traceLibraryDirectory(), projectLibraryFileName(project.id));
+  atomicWrite(path, `${JSON.stringify(project, null, 2)}\n`);
+  return path;
+}
 
 function usage(exitCode = 0) {
   console.log(`Trace native-agent bridge
@@ -237,6 +361,10 @@ async function prepare(args) {
     figureNote = error instanceof Error ? error.message : String(error);
   }
 
+  // This state lives under ~/.trace, so Codex, Claude Code and Antigravity
+  // share one shuffled sequence regardless of the directory they start in.
+  const presentation = assignPaperAccent(paperPath);
+
   const job = {
     version: 1,
     createdAt: new Date().toISOString(),
@@ -255,6 +383,7 @@ async function prepare(args) {
     })),
     figureNote,
     options: { language, audience, depth },
+    presentation,
     targets: {
       storySections: depth === "concise" ? 5 : depth === "deep" ? 8 : 6,
       reportSections: depth === "concise" ? 6 : depth === "deep" ? 9 : 7,
@@ -274,6 +403,7 @@ async function prepare(args) {
         figureCount: figures.length,
         figureDirectory: figures.length ? figureDirectory : null,
         figureNote,
+        presentation,
         resolution: resolution ?? undefined,
       },
       null,
@@ -292,6 +422,20 @@ async function prepare(args) {
  * "ok" derken web uygulaması aynı dosyayı reddediyordu. Kopya kaldırıldı;
  * parite artık yapısal bir garanti.
  */
+function assignedAccentForProject(projectPath) {
+  const jobPath = join(dirname(projectPath), "job.json");
+  if (!existsSync(jobPath)) return undefined;
+  try {
+    const job = JSON.parse(readFileSync(jobPath, "utf8"));
+    if (resolve(job.outputPath ?? "") !== projectPath) return undefined;
+    return TRACE_ACCENT_PALETTE.includes(job.presentation?.accent)
+      ? job.presentation.accent
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function inspectProject(args, print = true) {
   if (!args.project) throw new Error("--project <project.trace.json> is required.");
   const projectPath = resolve(args.project);
@@ -316,6 +460,20 @@ function inspectProject(args, print = true) {
   }
 
   const project = outcome.project;
+  const assignedAccent = assignedAccentForProject(projectPath);
+  if (assignedAccent && project.story.accent.toUpperCase() !== assignedAccent) {
+    const result = {
+      ok: false,
+      projectPath,
+      issueCount: 1,
+      issues: [{
+        path: ["story", "accent"],
+        message: `Use the paper's assigned accent ${assignedAccent} from job.json; received ${project.story.accent}.`,
+      }],
+    };
+    if (print) console.error(JSON.stringify(result, null, 2));
+    return result;
+  }
   const result = {
     ok: true,
     projectPath,
@@ -658,6 +816,9 @@ async function deliver(args) {
     return;
   }
   const projectPath = validation.projectPath;
+  // Library persistence does not depend on a browser handoff. A successful
+  // delivery is immediately visible to every Trace Studio on this machine.
+  const libraryPath = persistLibraryProject(validation.project);
   const siteDirectory = resolve(args.out ?? join(dirname(projectPath), "trace-site"));
   mkdirSync(siteDirectory, { recursive: true });
 
@@ -696,9 +857,9 @@ async function deliver(args) {
 
   const jsonUrl = `${url}/${encodeURIComponent(projectId)}.trace.json`;
   const app = await appPromise;
-  // Devir teslim adresi: uygulama projeyi kendisi indirip kütüphaneye yazıyor,
-  // kullanıcıdan hiçbir içe aktarma adımı beklenmiyor.
-  const appUrl = app.ok ? `${app.url}/?import=${encodeURIComponent(jsonUrl)}` : undefined;
+  // The project is already in the shared on-disk Library. The URL only tells
+  // Studio which saved project to open; no browser-only import is required.
+  const appUrl = app.ok ? `${app.url}/?project=${encodeURIComponent(projectId)}` : undefined;
   if (app.ok && app.started) {
     writeFileSync(join(siteDirectory, ".trace-app.json"), `${JSON.stringify(app, null, 2)}\n`, "utf8");
   }
@@ -736,6 +897,7 @@ async function deliver(args) {
     siteDirectory,
     jsonPath,
     jsonUrl,
+    libraryPath,
     sourceProjectPath: projectPath,
     serverPid,
     appPid: app.ok ? app.pid : undefined,
@@ -769,6 +931,7 @@ function stopServers(args) {
   console.log(JSON.stringify({ ok: true, stopped }, null, 2));
 }
 
+async function main() {
 try {
   const [command, ...rest] = process.argv.slice(2);
   if (!command || command === "help" || command === "--help" || command === "-h") usage();
@@ -783,3 +946,8 @@ try {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
+}
+
+if (resolve(process.argv[1] ?? "") === SCRIPT_PATH) await main();
+
+export { TRACE_ACCENT_PALETTE, assignPaperAccent, persistLibraryProject };

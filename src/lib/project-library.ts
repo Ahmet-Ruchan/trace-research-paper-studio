@@ -3,8 +3,9 @@ import { researchProjectSchema, type ResearchProject } from "./schema";
 const DATABASE_NAME = "trace-research-studio";
 const DATABASE_VERSION = 1;
 const PROJECT_STORE = "projects";
+const LIBRARY_ENDPOINT = "/api/library";
 
-function openLibrary() {
+function openLegacyLibrary() {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
     request.onupgradeneeded = () => {
@@ -14,39 +15,86 @@ function openLibrary() {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("The library could not be opened."));
+    request.onerror = () => reject(request.error ?? new Error("The legacy library could not be opened."));
   });
 }
 
-async function runTransaction<T>(
+async function runLegacyTransaction<T>(
   mode: IDBTransactionMode,
   operation: (store: IDBObjectStore) => IDBRequest<T>,
 ) {
-  const database = await openLibrary();
+  const database = await openLegacyLibrary();
   return new Promise<T>((resolve, reject) => {
     const transaction = database.transaction(PROJECT_STORE, mode);
     const request = operation(transaction.objectStore(PROJECT_STORE));
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("The library operation failed."));
+    request.onerror = () => reject(request.error ?? new Error("The legacy library operation failed."));
     transaction.oncomplete = () => database.close();
-    transaction.onerror = () => reject(transaction.error ?? new Error("The library operation failed."));
+    transaction.onerror = () => reject(transaction.error ?? new Error("The legacy library operation failed."));
+  });
+}
+
+async function readLegacyProjects() {
+  const values = await runLegacyTransaction<unknown[]>("readonly", (store) => store.getAll());
+  return values
+    .map((value) => researchProjectSchema.safeParse(value))
+    .filter((result) => result.success)
+    .map((result) => result.data);
+}
+
+async function removeLegacyProject(projectId: string) {
+  await runLegacyTransaction<undefined>("readwrite", (store) => store.delete(projectId));
+}
+
+async function clearLegacyProjects() {
+  await runLegacyTransaction<undefined>("readwrite", (store) => store.clear());
+}
+
+async function libraryRequest<T>(input: string, init?: RequestInit) {
+  const response = await fetch(input, { cache: "no-store", ...init });
+  const body = await response.json().catch(() => undefined) as ({ error?: string } & T) | undefined;
+  if (!response.ok) throw new Error(body?.error ?? `The Trace library request failed (HTTP ${response.status}).`);
+  if (!body) throw new Error("The Trace library returned an empty response.");
+  return body;
+}
+
+async function saveToDisk(project: ResearchProject) {
+  await libraryRequest<{ ok: boolean }>(LIBRARY_ENDPOINT, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(project),
   });
 }
 
 export async function listLibraryProjects() {
-  const values = await runTransaction<unknown[]>("readonly", (store) => store.getAll());
-  return values
-    .map((value) => researchProjectSchema.safeParse(value))
-    .filter((result) => result.success)
-    .map((result) => result.data)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const body = await libraryRequest<{ projects: unknown }>(LIBRARY_ENDPOINT);
+  const stored = researchProjectSchema.array().parse(body.projects);
+
+  // Before file-backed storage, Trace lived only in this browser's IndexedDB.
+  // Migrate those projects once so existing users keep their complete archive.
+  const legacy = await readLegacyProjects().catch(() => []);
+  const projects = new Map(stored.map((project) => [project.id, project]));
+  for (const project of legacy) {
+    const existing = projects.get(project.id);
+    if (!existing || existing.updatedAt < project.updatedAt) {
+      await saveToDisk(project);
+      projects.set(project.id, project);
+    }
+  }
+  if (legacy.length) await clearLegacyProjects().catch(() => undefined);
+
+  return [...projects.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 export async function saveLibraryProject(project: ResearchProject) {
   const validated = researchProjectSchema.parse(project);
-  await runTransaction<IDBValidKey>("readwrite", (store) => store.put(validated));
+  await saveToDisk(validated);
+  await removeLegacyProject(validated.id).catch(() => undefined);
 }
 
 export async function deleteLibraryProject(projectId: string) {
-  await runTransaction<undefined>("readwrite", (store) => store.delete(projectId));
+  await libraryRequest<{ ok: boolean }>(`${LIBRARY_ENDPOINT}?id=${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
+  });
+  await removeLegacyProject(projectId).catch(() => undefined);
 }

@@ -372,6 +372,16 @@ export function AppShell() {
 
   async function removeProject(projectId: string) {
     await deleteLibraryProject(projectId);
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        if (researchProjectSchema.parse(JSON.parse(stored)).id === projectId) {
+          window.localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
+    }
     setProjects((current) => current.filter((item) => item.id !== projectId));
     if (project?.id === projectId) setProject(undefined);
   }
@@ -436,7 +446,7 @@ export function AppShell() {
   const slug = project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trace-story";
 
   return (
-    <div className="workspace-shell">
+    <div className="workspace-shell" style={{ "--accent": project.story.accent } as React.CSSProperties}>
       <header className="workspace-header">
         <button className="workspace-brand" onClick={() => setScreen("home")}><span className="brand-glyph">t</span><span><strong>trace</strong><small>research studio</small></span></button>
         <div className="project-identity"><span>Current paper</span><strong>{project.evidence.paper.title}</strong></div>

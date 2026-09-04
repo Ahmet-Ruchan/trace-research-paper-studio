@@ -28,7 +28,7 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    node scripts/trace-agent.mjs prepare --paper "<paper.pdf>" --language de --depth deep
    ```
 
-   Use the returned `jobPath`, `pageTextPath`, and `outputPath`.
+   Use the returned `jobPath`, `pageTextPath`, `outputPath`, and `presentation`. `presentation.accent` is the paper's assigned color from the user's persistent 20-color cycle. Copy it exactly; do not choose or derive another color.
 
    With `--title`, check `resolution` in the output. When `confident` is false, or when the top `alternatives` entries are close in `matchScore`, tell the user which paper you matched and offer the alternatives before spending effort — re-run with `--pick <n>` or `--arxiv <id>` to switch. Beware near-miss titles: "Not All Attention Is All You Need" is a different paper.
 
@@ -60,7 +60,7 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    - `interactives` must make a point the paper argues but never plots — a crossover, a saturation, a cost curve. Anchor every parameter at the paper's own value via `paperValue`, and use `paperAnchor` to state plainly what the paper did NOT verify.
    - `quiz` questions test understanding, not recall of wording. Every option needs an explanation, including the correct one.
    - `applicationGuide` must include `whenNotToUse` grounded in the paper's own limitation claims.
-7. Write the complete JSON to the `outputPath` from `job.json`. Set `generation.provider` to `native-agent` and `generation.model` to the current host/model when known; otherwise use the host name.
+7. Write the complete JSON to the `outputPath` from `job.json`. Set `story.accent` to `presentation.accent` from the same job exactly. Set `generation.provider` to `native-agent` and `generation.model` to the current host/model when known; otherwise use the host name.
 8. Validate the output:
 
    ```bash
@@ -83,8 +83,9 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    - `appUrl` — the studio with the project already adopted.
    - `appNote` and `studioCommand` — present only when the studio could not be brought up. **Pass both to the user.** The delivery still succeeded and the standalone site carries an *Open in Studio* button showing the same command, but the user should not have to find that on their own.
    - `jsonPath` / `jsonUrl` — the portable project file.
+   - `libraryPath` — the persistent copy under the user's shared Trace Library.
 
-   The studio usually needs nothing: a running one is reused, and once one has been started successfully its location is remembered, so later deliveries find it from any directory. It fails only when no copy of the Trace repository has its dependencies installed — the plugin's own clone ships without them. `--install-app` installs them once (minutes, hundreds of megabytes: offer it, do not assume it).
+   The studio usually needs nothing: `deliver` saves the project under `~/.trace/library` before opening anything, so Codex, Claude Code and Antigravity see the same Library regardless of their current directory. A running studio is reused, and once one has been started successfully its location is remembered, so later deliveries find it from any directory. It fails only when no copy of the Trace repository has its dependencies installed — the plugin's own clone ships without them. `--install-app` installs them once (minutes, hundreds of megabytes: offer it, do not assume it).
 
    `--no-app` skips the studio. `--app <dir>` or `TRACE_APP_DIR` points at the Trace repository directly; `--app-url` targets a studio already running elsewhere. `stop --site <site-directory>` shuts down whatever `deliver` started.
 9b. **If `appNote` is present, the studio did not open. Ask the user before finishing — do not just report it.** The studio at `localhost:3000` is the product's main surface; the standalone page is the portable copy. Ask plainly, in the user's language, something like:
@@ -109,7 +110,7 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 - Never invent a number. Slider ranges, dataset cells, and hyperparameter values must trace to `evidence.metrics` or an explicit claim. When a teaching device needs illustrative values the paper never published — a worked attention matrix, for instance — say so in that block's own description.
 - Interactive formulas are declarative and are evaluated on a restricted grammar; they can never contain executable code. Keep them to the documented function set.
 - Do not execute generated paper code, access credentials, make network changes, or perform destructive actions.
-- Keep all generated assets inside the job directory unless the user names another destination.
+- Keep authored assets inside the job directory unless the user names another destination. `deliver` additionally maintains its managed project copy under `~/.trace/library`; do not create other copies elsewhere.
 - Treat the generated `.trace.json` as a first-class deliverable. Never delete or replace it after building the local site.
 
 ## Resume behavior

@@ -89,7 +89,7 @@ Never convert a qualitative adjective into a numeric metric.
 
 ## StorySpec
 
-`story` contains `title`, `dek`, `readingTime`, a six-digit hex `accent`, `sections`, and `closing: { title, body }`.
+`story` contains `title`, `dek`, `readingTime`, a six-digit hex `accent`, `sections`, and `closing: { title, body }`. For a prepared native-agent job, `accent` must exactly equal `presentation.accent` in `job.json`. Trace assigns that value from a shuffled, persistent 20-color cycle; never replace it with a model-selected color.
 
 Each section contains:
 

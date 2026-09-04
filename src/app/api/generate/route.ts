@@ -50,6 +50,7 @@ import {
   type TechnicalAppendix,
 } from "@/lib/schema";
 import { fetchPublicSource, type FetchedSource } from "@/lib/safe-fetch";
+import { allocatePaperAccent, paperIdentityFromBytes } from "@/lib/trace-storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -1426,10 +1427,14 @@ async function runPipeline(
       detail: `${evidence.claims.length} claims · ${evidence.metrics.length} metrics · ${evidence.limitations.length} limitations`,
     });
 
+    const presentation = await allocatePaperAccent(
+      paperIdentityFromBytes(await input.file.arrayBuffer()),
+    );
     const storyPrompt = buildStoryPrompt(evidence, {
       language: input.language,
       audience: input.audience,
       depth: input.depth,
+      accent: presentation.accent,
     });
     const deepReportPrompt = buildDeepReportPrompt(evidence, {
       language: input.language,
@@ -1608,7 +1613,9 @@ async function runPipeline(
     const addPostTask = (runtime: ProviderRuntime, task: () => Promise<void>) => {
       groupedTasks.set(runtime, [...(groupedTasks.get(runtime) ?? []), task]);
     };
-    addPostTask(visualRuntime, async () => { story = await generateStory(); });
+    addPostTask(visualRuntime, async () => {
+      story = { ...(await generateStory()), accent: presentation.accent };
+    });
     addPostTask(reportRuntime, async () => { deepReport = await generateReport(); });
     addPostTask(technicalRuntime, async () => { technicalAppendix = await generateTechnical(); });
     await Promise.all([...groupedTasks.values()].map(async (tasks) => {

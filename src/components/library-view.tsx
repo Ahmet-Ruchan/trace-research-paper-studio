@@ -8,7 +8,7 @@ import { foldForSearch } from "@/lib/search-text";
 type LibraryViewProps = {
   projects: ResearchProject[];
   onOpen: (project: ResearchProject) => void;
-  onDelete: (projectId: string) => void;
+  onDelete: (projectId: string) => Promise<void>;
   onHome: () => void;
   onNew: () => void;
   onImport: (file: File) => Promise<void>;
@@ -140,8 +140,13 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
               <footer>
                 <span>{formatDate(project.updatedAt)}{generationLabel(project) ? ` · ${generationLabel(project)}` : ""}</span>
                 <div>
-                  <button className="library-delete" title="Remove from library" onClick={() => {
-                    if (window.confirm(`Remove “${project.evidence.paper.title}” from the library?`)) onDelete(project.id);
+                  <button className="library-delete" title="Permanently delete from library" onClick={() => {
+                    if (window.confirm(`Permanently delete “${project.evidence.paper.title}” from the library?`)) {
+                      setImportError(undefined);
+                      void onDelete(project.id).catch((error) => {
+                        setImportError(error instanceof Error ? error.message : "Could not delete the Trace project.");
+                      });
+                    }
                   }}><Trash2 size={15} /></button>
                   <button className="library-open" onClick={() => onOpen(project)}>Open <ArrowRight size={15} /></button>
                 </div>

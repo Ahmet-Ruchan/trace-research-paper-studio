@@ -101,7 +101,7 @@ export const SECTION_BUDGETS = {
 
 export function buildStoryPrompt(
   evidence: PaperEvidence,
-  options: Omit<PromptOptions, "webContext">,
+  options: Omit<PromptOptions, "webContext"> & { accent?: string },
 ) {
   const targetSections = SECTION_BUDGETS.story[options.depth];
 
@@ -124,7 +124,7 @@ Editorial rules:
 - The quote visual is a typographic emphasis device; do not use quotation marks or attribute words to an author unless the exact wording exists in a source excerpt.
 - Each body should be one compact paragraph of 2–4 sentences.
 - indexLabel must be a two-digit sequence such as 01.
-- accent must be a restrained six-digit hex color suitable on warm off-white.
+- accent must be exactly ${options.accent ?? "a restrained six-digit hex color suitable on warm off-white"}.
 - Do not use unsupported visual types and do not output code.
 
 Evidence JSON:

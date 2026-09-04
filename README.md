@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo/trace.png" alt="Trace Research Paper Studio" width="720" />
+
 # Trace — Research Paper Studio
 
 **Name a paper. Get an interactive site where every claim points back to a page and a quote.**
@@ -261,7 +263,9 @@ configuration.
 ## The full application
 
 The plugin is one way in. The web app adds generation with your own provider keys, an editable
-narrative, and a local library.
+narrative, and a local library. Projects are stored as files under `~/.trace/library`, shared by
+Codex, Claude Code, Antigravity and every Trace Studio launch directory. Existing browser-only
+projects migrate there automatically; removing a Library item removes its stored file.
 
 ```bash
 git clone https://github.com/Ahmet-Ruchan/trace-research-paper-studio.git
@@ -305,11 +309,11 @@ Agents run these automatically; they are documented for debugging.
 
 ```bash
 # Resolve from a name, download, collect published context
-npm run trace:agent -- prepare --title "attention is all you need" --depth deep
+npm run trace:agent -- prepare --title "attention is all you need" --language en --depth deep
 
 # Or by arXiv id, or from a local file
-npm run trace:agent -- prepare --arxiv 1706.03762 --depth deep
-npm run trace:agent -- prepare --paper "paper.pdf" --depth deep
+npm run trace:agent -- prepare --arxiv 1706.03762 --language en --depth deep
+npm run trace:agent -- prepare --paper "paper.pdf" --language en --depth deep
 
 # --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"
@@ -323,6 +327,10 @@ With `--title`, the command reports which paper it matched, the runner-up candid
 loopback-only server, and the studio — reused if already running, otherwise started — with the
 project handed straight into its Library. Once a studio has been started successfully its
 location is remembered, so later deliveries find it from any directory.
+
+Each paper also receives one accent from a 20-color palette. Trace shuffles the palette once,
+uses every color before repeating, and remembers a paper by its PDF fingerprint so regenerating
+the same paper keeps the same visual identity.
 
 If no studio can be started, the delivery still succeeds and the agent asks whether to set one
 up. Say no and the standalone site still carries a **Show me the command** strip: one click
@@ -442,7 +450,7 @@ local servers have no file-upload endpoint and most open-weight models cannot se
 all, so those stages refuse it rather than quietly working without the paper. Only a loopback
 address is accepted — the request leaves the Trace server, and "local model" means this machine.
 
-Not there yet: hosted publishing, accounts, shared persistence.
+Not there yet: hosted publishing, accounts, or cloud-synced persistence.
 
 *Attention Is All You Need* ships fully enriched in `public/examples/`, in English and Turkish,
 serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
