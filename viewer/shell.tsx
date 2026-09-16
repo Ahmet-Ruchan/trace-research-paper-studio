@@ -31,7 +31,16 @@ type Tab = "lab" | "story" | "practice" | "technical";
  * ve sıkı bir CSP ile geliyor; ona loopback'e istek atma yetkisi vermek,
  * paylaşılan bir dosyanın alıcının yerel portlarını taramasına izin vermek olurdu.
  */
-export type StudioHandoff = { url?: string; command?: string; directory?: string };
+export type StudioHandoff = { url?: string; command?: string; directory?: string; surface?: ViewerSurface };
+
+/**
+ * Sayfanın nerede açıldığı. Üçü aynı paketi kullanıyor ama okuyucuya farklı
+ * şeyler söylemeli: yayınlanmış bir bağlantıda "Local paper studio" yazmak
+ * yanıltıcıydı. Ayrıca yalnızca `deliver`'ın kurduğu yerel sitede JSON dosyası
+ * sayfanın yanında duruyor; yayında ve tek dosyalık çıktıda indirme gömülü
+ * veriden yapılıyor, yoksa bağlantı olmayan bir dosyaya gidiyordu.
+ */
+export type ViewerSurface = "local" | "export" | "published";
 
 export function ViewerShell({
   project,
@@ -99,6 +108,19 @@ export function ViewerShell({
     return () => window.removeEventListener("hashchange", onHashChange);
   }, [tab]);
   const [studioOpen, setStudioOpen] = useState(false);
+  const surface: ViewerSurface = studio.surface ?? (studio.url || studio.command ? "local" : "export");
+  const surfaceLabel = surface === "published" ? t.publishedStory : surface === "export" ? t.exportedCopy : t.localStudio;
+
+  function downloadEmbedded(event: { preventDefault: () => void }) {
+    if (surface === "local") return;
+    event.preventDefault();
+    const url = URL.createObjectURL(new Blob([`${JSON.stringify(project, null, 2)}\n`], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${project.id}.trace.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
 
   useEffect(() => {
     // Arayüz İngilizce; kök `lang` de öyle. Makale metninin dili tek tek
@@ -118,7 +140,7 @@ export function ViewerShell({
           <i />
           Trace
         </div>
-        <span className="viewer-local">{t.localStudio}</span>
+        <span className="viewer-local">{surfaceLabel}</span>
         <div className="viewer-tabs">
           {tabs.map((item) => (
             <button
@@ -141,7 +163,7 @@ export function ViewerShell({
               {t.openInStudio} →
             </button>
           ) : null}
-          <a className="viewer-download" download href={`./${encodeURIComponent(project.id)}.trace.json`}>
+          <a className="viewer-download" download={`${project.id}.trace.json`} href={`./${encodeURIComponent(project.id)}.trace.json`} onClick={downloadEmbedded}>
             Trace JSON ↓
           </a>
         </div>

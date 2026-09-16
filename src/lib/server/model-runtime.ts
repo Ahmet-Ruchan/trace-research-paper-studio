@@ -39,6 +39,11 @@ const LOCAL_MODEL_TIMEOUT_MS = 15 * 60 * 1000;
 /** Akıl yürütme belirteçleri de aynı bütçeden düşüyor; bkz. `max_tokens`. */
 const LOCAL_THINKING_BUDGET_FACTOR = 4;
 
+/** Tek bir model isteğinin süre sınırı; "modeli dene" tahmini buna göre hüküm veriyor. */
+export function requestTimeoutMs(providerId: ProviderId) {
+  return getProvider(providerId)?.local ? LOCAL_MODEL_TIMEOUT_MS : MODEL_TIMEOUT_MS;
+}
+
 export type ProviderPreparationInput = {
   /** Yalnızca `needsDocument` için gerekli; bölüm yeniden üretimi PDF taşımaz. */
   file?: File;

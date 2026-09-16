@@ -21,7 +21,9 @@ describe("standalone story export", () => {
 
   it("paylaşılan çıktıya yerel stüdyo adresi gömmez", () => {
     const html = buildStandaloneStory(exampleProject);
-    expect(html).toContain('id="trace-studio" type="application/json">{}<');
+    expect(html).toContain('id="trace-studio" type="application/json">{"surface":"export"}<');
+    // Yayın sayfası kendini yerel stüdyo değil yayın olarak adlandırır.
+    expect(buildStandaloneStory(exampleProject, { surface: "published" })).toContain('{"surface":"published"}');
     // Paketin içinde "stüdyo zaten çalışıyorsa" bağlantısı sabit olarak var;
     // yasak olan, teslimatın ürettiği devir teslim adresinin gömülmesi.
     expect(html).not.toContain("?import=");

@@ -528,3 +528,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .publish-new { grid-template-columns: 1fr; }
   .publish-actions { justify-items: stretch; }
 }
+
+/* Modeli dene */
+.regen-actions .regen-test { margin-right: auto; }
+.regen-secondary:disabled { opacity: .55; cursor: default; }
+.regen-probe { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-left: 2px solid var(--line-dark); border-radius: 9px; color: var(--ink-soft); font-size: 12px; line-height: 1.55; }
+.regen-probe.probe-fast { border-left-color: var(--green); }
+.regen-probe.probe-slow { border-left-color: var(--amber); }
+.regen-probe.probe-too-slow { border-left-color: var(--accent); color: var(--ink); }

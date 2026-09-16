@@ -73,6 +73,8 @@ export type Strings = {
   interactivesHeading: string;
   tryItHeading: string;
   localStudio: string;
+  exportedCopy: string;
+  publishedStory: string;
   thesis: string;
   plainSummary: string;
   researchQuestion: string;
@@ -197,6 +199,8 @@ const en: Strings = {
   interactivesHeading: "Interactive exploration",
   tryItHeading: "Now try it yourself",
   localStudio: "Local paper studio",
+  exportedCopy: "Standalone copy",
+  publishedStory: "Published story",
   thesis: "Thesis",
   plainSummary: "In plain language",
   researchQuestion: "Research question",

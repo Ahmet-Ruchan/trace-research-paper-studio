@@ -56,3 +56,22 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
 
       - run: npm run check
+
+      # Uçtan uca arayüz testleri. `check` derlemeyi zaten yaptı; Playwright
+      # o derlemeyi geçici bir veri diziniyle başlatıyor. Birim testlerinin
+      # yakalayamadığı sınıfı koruyor: bileşenlerin birbirine ve tarayıcıya
+      # değdiği yerde yaşayan hatalar.
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e
+
+      - name: Keep the Playwright report when a test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-node-${{ matrix.node }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

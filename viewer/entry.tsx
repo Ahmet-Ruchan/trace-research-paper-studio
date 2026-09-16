@@ -38,11 +38,12 @@ function readStudio(): StudioHandoff {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return {};
-    const { url, command, directory } = parsed as StudioHandoff;
+    const { url, command, directory, surface } = parsed as StudioHandoff;
     return {
       url: typeof url === "string" ? url : undefined,
       command: typeof command === "string" ? command : undefined,
       directory: typeof directory === "string" ? directory : undefined,
+      surface: surface === "local" || surface === "export" || surface === "published" ? surface : undefined,
     };
   } catch {
     return {};

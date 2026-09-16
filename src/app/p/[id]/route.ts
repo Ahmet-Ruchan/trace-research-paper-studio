@@ -24,5 +24,5 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (!record || publicationState(record, new Date().toISOString()) !== "live") return notAvailable();
   const project = researchProjectSchema.safeParse(record.project);
   if (!project.success) return notAvailable();
-  return new Response(buildStandaloneStory(project.data), { status: 200, headers: PUBLICATION_HEADERS });
+  return new Response(buildStandaloneStory(project.data, { surface: "published" }), { status: 200, headers: PUBLICATION_HEADERS });
 }

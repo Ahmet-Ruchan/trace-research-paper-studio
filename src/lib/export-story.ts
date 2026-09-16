@@ -9,7 +9,10 @@ import type { ResearchProject } from "./schema";
  * implementasyon demekti. Artık üçü de aynı derleme artefaktından beslenir
  * (`npm run build:viewer`), dolayısıyla burada yalnızca veri enjeksiyonu var.
  */
-export function buildStandaloneStory(project: ResearchProject): string {
+export function buildStandaloneStory(
+  project: ResearchProject,
+  options: { surface?: "export" | "published" } = {},
+): string {
   // `<` kaçırılır: aksi hâlde proje metnindeki bir "</script>" dizisi veri
   // bloğunu erken kapatıp içeriği çalıştırılabilir HTML'e dönüştürebilir.
   const serialized = JSON.stringify(project).replaceAll("<", "\\u003c");
@@ -21,5 +24,7 @@ export function buildStandaloneStory(project: ResearchProject): string {
     .replace("__TRACE_VIEW_MODE__", () => "story")
     // Paylaşılabilir çıktı: yerel stüdyo bağlantısı GÖMÜLMEZ. Yazarın
     // localhost adresi başka bir makinede anlamsız, hatta yanıltıcıdır.
-    .replace("__TRACE_STUDIO_JSON__", () => "{}");
+    // Yalnızca yüzey bilgisi gömülüyor: sayfa kendini doğru adlandırsın ve
+    // JSON'u yanında olmayan bir dosyadan değil gömülü veriden indirsin.
+    .replace("__TRACE_STUDIO_JSON__", () => JSON.stringify({ surface: options.surface ?? "export" }));
 }

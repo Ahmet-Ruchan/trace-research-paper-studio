@@ -35,6 +35,10 @@ describe("ajan manifestleri", () => {
     for (const { path } of MANIFESTS.filter((item) => item.versioned)) {
       expect(read(path).version).toBe(entry.version);
     }
+    // Paket de aynı sürümde: `npm run version:set` hepsini birlikte yazıyor.
+    expect(read("package.json").version).toBe(entry.version);
+    expect(read("package-lock.json").version).toBe(entry.version);
+    expect(read("package-lock.json").packages[""].version).toBe(entry.version);
   });
 
   it("Antigravity manifesti resmi şemayı gösterir", () => {

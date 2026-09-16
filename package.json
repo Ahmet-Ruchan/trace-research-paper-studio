@@ -1,6 +1,6 @@
 {
   "name": "research-paper",
-  "version": "0.2.0",
+  "version": "0.15.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "trace:agent": "node plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs",
-    "check": "npm run build:artifacts && node scripts/check-artifacts.mjs && npm run lint && npm run test && npm run build",
+    "check": "node scripts/set-version.mjs --check && npm run build:artifacts && node scripts/check-artifacts.mjs && npm run lint && npm run test && npm run build",
+    "version:set": "node scripts/set-version.mjs",
+    "test:e2e": "playwright test",
     "build:viewer": "node scripts/build-viewer.mjs",
     "check:artifacts": "node scripts/check-artifacts.mjs",
     "build:validator": "node scripts/build-plugin-validator.mjs",
@@ -28,6 +30,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { KeyRound, Lock, RefreshCw, Server, Sparkles, Undo2, Unlock, X } from "lucide-react";
+import { Gauge, KeyRound, Lock, RefreshCw, Server, Sparkles, Undo2, Unlock, X } from "lucide-react";
 import { IntegrityError, describeValidationError } from "@/lib/generation-validation";
 import { readGenerationStream, type GenerationProgress } from "@/lib/generation-events";
 import { DEFAULT_LOCAL_ENDPOINT } from "@/lib/local-endpoint";
@@ -15,8 +15,10 @@ import {
 } from "@/lib/model-providers";
 import type { RevisionReason } from "@/lib/project-revisions";
 import type { DeepReportSection, ResearchProject, StorySection } from "@/lib/schema";
+import type { ProbeVerdict } from "@/lib/model-probe";
 import {
   MAX_REGENERATION_INSTRUCTION,
+  buildSectionRegenerationPrompt,
   findSection,
   spliceSection,
   type ClaimPolicy,
@@ -58,6 +60,12 @@ type Phase =
   | { name: "review"; section: RegeneratedSection; evidenceFingerprint: string }
   | { name: "failed"; message: string };
 
+type ProbeState =
+  | { name: "idle" }
+  | { name: "running" }
+  | { name: "done"; verdict: ProbeVerdict; message: string }
+  | { name: "failed"; message: string };
+
 type RegeneratorProps = {
   project: ResearchProject;
   target: SectionTarget;
@@ -73,10 +81,15 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
   const [claimPolicy, setClaimPolicy] = useState<ClaimPolicy>("locked");
   const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [applyIssues, setApplyIssues] = useState<string[]>([]);
+  const [probe, setProbe] = useState<ProbeState>({ name: "idle" });
   const controller = useRef<AbortController | undefined>(undefined);
+  const probeController = useRef<AbortController | undefined>(undefined);
   const provider = getProvider(assignment.provider)!;
 
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => () => {
+    controller.current?.abort();
+    probeController.current?.abort();
+  }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && phase.name !== "running") onClose();
@@ -88,6 +101,54 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
   function chooseProvider(id: ProviderId) {
     setAssignment({ provider: id, model: defaultModelByProvider[id] });
     setApiKey("");
+    setProbe({ name: "idle" });
+  }
+
+  function chooseModel(model: string) {
+    setAssignment({ provider: provider.id, model });
+    setProbe({ name: "idle" });
+  }
+
+  /**
+   * Bölümü göndermeden önce modelin hızını ölçer. Yerel bir modelle yapılan
+   * gerçek denemede istek on beş dakika sessizce bekleyip zaman aşımına
+   * uğradı; bunu önceden söylemenin tek yolu kısa bir deneme.
+   */
+  async function testModel() {
+    const selection = resolveProviderModel(assignment.provider, assignment.model);
+    if (!selection) {
+      setProbe({ name: "failed", message: "The model name is not valid for this provider." });
+      return;
+    }
+    if (!provider.local && !apiKey.trim()) {
+      setProbe({ name: "failed", message: `${provider.keyLabel} is required.` });
+      return;
+    }
+    probeController.current?.abort();
+    const abort = new AbortController();
+    probeController.current = abort;
+    setProbe({ name: "running" });
+    try {
+      const promptCharacters = buildSectionRegenerationPrompt(project, target, { claimPolicy, instruction }).length;
+      const response = await fetch("/api/models/probe", {
+        method: "POST",
+        signal: abort.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignment: selection, apiKey, promptCharacters }),
+      });
+      const body = (await response.json().catch(() => undefined)) as
+        | { ok: true; verdict: ProbeVerdict; message: string }
+        | { ok: false; error: string }
+        | undefined;
+      if (!body) throw new Error("The model test returned no answer.");
+      if (!body.ok) throw new Error(body.error);
+      setProbe({ name: "done", verdict: body.verdict, message: body.message });
+    } catch (caught) {
+      if (abort.signal.aborted) return;
+      setProbe({ name: "failed", message: caught instanceof Error ? caught.message : "The model could not be tested." });
+    } finally {
+      if (probeController.current === abort) probeController.current = undefined;
+    }
   }
 
   async function run() {
@@ -215,7 +276,7 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
                       aria-label="Model"
                       list={`regen-models-${provider.id}`}
                       value={assignment.model}
-                      onChange={(event) => setAssignment({ provider: provider.id, model: event.target.value })}
+                      onChange={(event) => chooseModel(event.target.value)}
                       spellCheck={false}
                     />
                     <datalist id={`regen-models-${provider.id}`}>
@@ -223,7 +284,7 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
                     </datalist>
                   </>
                 ) : (
-                  <select aria-label="Model" value={assignment.model} onChange={(event) => setAssignment({ provider: provider.id, model: event.target.value })}>
+                  <select aria-label="Model" value={assignment.model} onChange={(event) => chooseModel(event.target.value)}>
                     {provider.models.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.note}</option>)}
                   </select>
                 )}
@@ -234,7 +295,10 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
                   type={provider.local ? "text" : "password"}
                   aria-label={provider.keyLabel}
                   value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
+                  onChange={(event) => {
+                    setApiKey(event.target.value);
+                    setProbe({ name: "idle" });
+                  }}
                   placeholder={provider.local ? DEFAULT_LOCAL_ENDPOINT : provider.keyLabel}
                   autoComplete="off"
                   spellCheck={false}
@@ -245,9 +309,15 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
               Only this section is sent to the model, with the locked evidence as its sole source. The PDF is not needed, so a local model works too. The key is used for this request and never stored.
             </p>
 
+            {probe.name === "running" && <p className="regen-probe" role="status">Testing the model with a short request…</p>}
+            {probe.name === "done" && <p className={`regen-probe probe-${probe.verdict}`} role="status">{probe.message}</p>}
+            {probe.name === "failed" && <p className="regen-probe probe-too-slow" role="alert">{probe.message}</p>}
             {phase.name === "failed" && <p className="regen-error" role="alert">{phase.message}</p>}
 
             <footer className="regen-actions">
+              <button className="regen-secondary regen-test" disabled={probe.name === "running"} onClick={() => { void testModel(); }}>
+                <Gauge size={14} /> {probe.name === "running" ? "Testing…" : "Test model"}
+              </button>
               <button className="regen-secondary" onClick={onClose}>Cancel</button>
               <button className="regen-primary" onClick={() => { void run(); }}><RefreshCw size={14} /> Regenerate</button>
             </footer>

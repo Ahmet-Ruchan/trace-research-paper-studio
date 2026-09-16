@@ -1225,11 +1225,13 @@ async function deliver(args) {
   // Bağımsız sayfadaki "Open in Studio" köprüsü. Stüdyo ayaktaysa doğrudan
   // adres, değilse onu ayağa kaldıran komut gömülür — kullanıcı hangi durumda
   // olduğunu sayfadan görür, tarayıcı hata ekranından değil.
+  // `surface: "local"`: JSON dosyası bu sitenin yanında duruyor, sayfa da
+  // kendini yayınlanmış bir bağlantı gibi değil yerel stüdyo gibi adlandırıyor.
   const studio = appUrl
-    ? { url: appUrl }
+    ? { url: appUrl, surface: "local" }
     : app.command
-      ? { command: app.command, directory: app.appRoot }
-      : {};
+      ? { command: app.command, directory: app.appRoot, surface: "local" }
+      : { surface: "local" };
   const html = readFileSync(templatePath, "utf8")
     .replace("__TRACE_PROJECT_JSON__", () => serializedProject)
     .replace("__TRACE_VIEW_MODE__", () => (args.mode === "story" ? "story" : "lab"))
