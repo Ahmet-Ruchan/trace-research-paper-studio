@@ -34,7 +34,18 @@ running on the coding agent you already use, with no second API key.
 
 ---
 
-## New in 0.15
+## What's new
+
+**0.16**
+
+| | |
+| --- | --- |
+| **[Test model](#rewrite-one-section-without-touching-the-evidence)** | Before regenerating a section, send the chosen model a short request and see how long a section would take and whether it fits the time limit. A local model that would have timed out after fifteen minutes is flagged in about a minute and a half. |
+| **Published pages say what they are** | A shared link is labelled *Published story*, an exported file *Standalone copy*. Downloading the project JSON works from both, from the data embedded in the page. |
+| **Browser tests** | Eight Playwright tests drive the studio in a real browser on every push, covering the regenerate, history, template and publish panels. |
+| **One command for the version** | `npm run version:set -- <version>` writes the version into the package and every plugin manifest, and `npm run check` fails when they drift. |
+
+**0.15**
 
 | | |
 | --- | --- |
@@ -43,7 +54,7 @@ running on the coding agent you already use, with no second API key.
 | **[Narrative templates](#reuse-a-structure-that-worked)** | Save a story's structure and reuse it on the next paper. Two templates are built in. |
 | **[Publish a link](#publish-a-story-with-a-link-you-control)** | Share a frozen copy at `/p/<id>`. Choose what goes out, unpublish at any time, or let the link expire. |
 
-All four work from your agent too. Ask it to rewrite a section, use a template or publish a link.
+All of these work from your agent too. Ask it to rewrite a section, use a template or publish a link.
 
 ---
 
@@ -147,7 +158,8 @@ did, so only the wording changes. You can also let it choose again from the clai
 collected, but it can never add a new fact. It goes through the same integrity checks as a
 full generation, and you see the current and proposed versions side by side before anything
 is replaced. The section request carries only the locked evidence, never the PDF, so a local
-model can do this too.
+model can do this too. **Test model** sends a short request first and tells you how long a section
+would take on that model, and whether it fits the time limit, before you wait for it.
 
 ![Regenerate a section](docs/images/regenerate.jpg)
 
@@ -463,6 +475,8 @@ npm run test             # vitest
 npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
+npm run test:e2e         # browser tests against the production build (run after build)
+npm run version:set -- 0.16.0  # write one version into the package and every plugin manifest
 ```
 
 <details>
