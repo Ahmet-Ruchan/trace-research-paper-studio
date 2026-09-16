@@ -1,20 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Download, FileJson, FlaskConical, Home, LayoutTemplate, MoreHorizontal, Plus, Share2 } from "lucide-react";
+import { BookOpen, Download, FileJson, FlaskConical, Globe, History, Home, LayoutTemplate, Plus, Share2 } from "lucide-react";
 import { buildStandaloneStory } from "@/lib/export-story";
 import { claimHash, parseDeepLink, sectionHash } from "@/lib/deep-link";
 import {
   generationStages,
   initialGenerationProgress,
-  isGenerationStreamEvent,
+  readGenerationStream,
   type GenerationProgress,
 } from "@/lib/generation-events";
 import { stringsFor } from "@/visuals";
+import type { RevisionReason } from "@/lib/project-revisions";
 import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
 import { loadSampleProject } from "@/lib/sample-project";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
 import { EvidenceDrawer } from "./evidence-drawer";
+import { HistoryPanel } from "./history-panel";
+import { PublishPanel } from "./publish-panel";
 import { LabView } from "./lab-view";
 import { CompareView } from "./compare-view";
 import { LibraryView } from "./library-view";
@@ -62,7 +65,16 @@ export function AppShell() {
   const [hydrated, setHydrated] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<GenerationProgress>(initialGenerationProgress);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const generationController = useRef<AbortController | undefined>(undefined);
+  /**
+   * Bir sonraki otomatik kaydın nedeni. Kayıt yarım saniye gecikmeli çalıştığı
+   * için neden değişiklikle birlikte bir kenara yazılıyor; yeniden üretim ya da
+   * geri yükleme "edit" sayılırsa on dakikalık birleştirmeye takılır ve önceki
+   * hâl geçmişte hiç görünmeyebilirdi.
+   */
+  const saveReason = useRef<RevisionReason>("edit");
   const checkpointCount = useRef(0);
 
   /**
@@ -95,7 +107,7 @@ export function AppShell() {
       const issue = parsed.error.issues[0];
       throw new Error(`Invalid Trace project schema: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`);
     }
-    await saveLibraryProject(parsed.data);
+    await saveLibraryProject(parsed.data, { reason: "agent" });
     setProjects((current) => [parsed.data, ...current.filter((item) => item.id !== parsed.data.id)]);
     setProject(parsed.data);
     setMode("lab");
@@ -164,7 +176,7 @@ export function AppShell() {
               (item) => item.id === legacy.id,
             );
             if (!existing || existing.updatedAt < legacy.updatedAt) {
-              await saveLibraryProject(legacy);
+              await saveLibraryProject(legacy, { reason: "import" });
             }
           } catch {
             // yoksayılır; anahtar aşağıda zaten temizleniyor
@@ -181,7 +193,9 @@ export function AppShell() {
     if (!project || !hydrated || screen !== "workspace") return;
     const timer = window.setTimeout(() => {
       const updated = { ...project, updatedAt: new Date().toISOString() };
-      void saveLibraryProject(updated).then(() => {
+      const reason = saveReason.current;
+      saveReason.current = "edit";
+      void saveLibraryProject(updated, { reason }).then(() => {
         setProjects((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
       });
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -255,6 +269,7 @@ export function AppShell() {
       form.set("language", options.language);
       form.set("audience", options.audience);
       form.set("depth", options.depth);
+      if (options.template) form.set("template", JSON.stringify(options.template));
       if (savedCheckpoint) form.set("checkpoint", savedCheckpoint);
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -274,41 +289,26 @@ export function AppShell() {
 
       if (contentType.includes("application/x-ndjson")) {
         if (!response.body) throw new Error("The generation stream could not be started.");
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          buffer += decoder.decode(value, { stream: !done });
-          const lines = buffer.split("\n");
-          buffer = done ? "" : (lines.pop() ?? "");
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            const event: unknown = JSON.parse(line);
-            if (!isGenerationStreamEvent(event)) continue;
-            if (event.type === "progress") setGenerationProgress(event);
-            if (event.type === "checkpoint") {
-              window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(event.checkpoint));
-              checkpointCount.current = event.completed.length;
-            }
-            if (event.type === "error") throw new Error(event.error);
-            if (event.type === "result") {
-              window.localStorage.removeItem(CHECKPOINT_KEY);
-              checkpointCount.current = 0;
-              projectData = event.project;
-              responseWarnings = event.warnings;
-              setGenerationProgress({
-                stage: "finalize",
-                progress: 100,
-                title: "Research workspace ready.",
-                detail: "Evidence map and StorySpec built successfully.",
-              });
-            }
+        await readGenerationStream(response.body, (event) => {
+          if (event.type === "progress") setGenerationProgress(event);
+          if (event.type === "checkpoint") {
+            window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(event.checkpoint));
+            checkpointCount.current = event.completed.length;
           }
-          if (done) break;
-        }
+          if (event.type === "error") throw new Error(event.error);
+          if (event.type === "result") {
+            window.localStorage.removeItem(CHECKPOINT_KEY);
+            checkpointCount.current = 0;
+            projectData = event.project;
+            responseWarnings = event.warnings;
+            setGenerationProgress({
+              stage: "finalize",
+              progress: 100,
+              title: "Research workspace ready.",
+              detail: "Evidence map and StorySpec built successfully.",
+            });
+          }
+        });
       } else {
         const data = (await response.json()) as {
           project?: unknown;
@@ -357,6 +357,11 @@ export function AppShell() {
       setLoadingSample(false);
     }
   }
+  function changeProject(next: ResearchProject, reason?: RevisionReason) {
+    if (reason) saveReason.current = reason;
+    setProject(next);
+  }
+
   function newProject() {
     window.localStorage.removeItem(CHECKPOINT_KEY);
     setProject(undefined); setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]); setScreen("home");
@@ -400,7 +405,7 @@ export function AppShell() {
       const path = issue?.path.join(".") || "root";
       throw new Error(`Invalid Trace project schema: ${path} · ${issue?.message ?? "unknown error"}`);
     }
-    await saveLibraryProject(parsed.data);
+    await saveLibraryProject(parsed.data, { reason: "import" });
     setProjects((current) => [parsed.data, ...current.filter((item) => item.id !== parsed.data.id)]);
     setProject(parsed.data);
     setMode("lab");
@@ -459,17 +464,39 @@ export function AppShell() {
           <button title={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>
           <button title={t.library} onClick={() => setScreen("library")}><BookOpen size={16} /><span>{t.library}</span></button>
           <button title="Download the project JSON" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
+          <button title="Publish a shareable link" onClick={() => setPublishOpen(true)}><Globe size={16} /><span>Publish</span></button>
           <button className="export-button" onClick={() => download(`${slug}.html`, buildStandaloneStory(project), "text/html")}><Download size={16} /> Export</button>
           <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
-          <button className="icon-button" title="Coming soon" disabled><MoreHorizontal size={17} /></button>
+          <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
         </div>
       </header>
       {warnings.length > 0 && <div className="warning-strip">{warnings.length} supporting sources could not be read; the analysis was completed with the rest.<button onClick={() => setWarnings([])}>Dismiss</button></div>}
       <div className="workspace-content">
-        {mode === "lab" && <LabView project={project} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} />}
-        {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={setProject} onPreview={() => setMode("preview")} />}
+        {mode === "lab" && <LabView project={project} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} />}
+        {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
         {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
       </div>
+      {publishOpen && <PublishPanel project={project} onClose={() => setPublishOpen(false)} />}
+      {historyOpen && (
+        <HistoryPanel
+          project={project}
+          onRestore={async (restored) => {
+            /**
+             * Geri yükleme otomatik kayda bırakılmıyor: o yarım saniye gecikmeli
+             * ve geçmiş paneli hemen yeniden açılırsa "geri yüklemeden önce"
+             * kaydını henüz görmüyordu. Kayıt beklenip sonra ekrana yansıtılıyor;
+             * ardından gelen otomatik kayıt içerik aynı olduğu için iz bırakmaz.
+             */
+            const stamped = { ...restored, updatedAt: new Date().toISOString() };
+            await saveLibraryProject(stamped, { reason: "restore" });
+            setProjects((current) => [stamped, ...current.filter((item) => item.id !== stamped.id)]);
+            setProject(stamped);
+            setSelectedClaimId(undefined);
+            setHistoryOpen(false);
+          }}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
       {mode === "preview" && selectedClaim && <div className="drawer-overlay" onClick={() => setSelectedClaimId(undefined)}><div onClick={(event) => event.stopPropagation()}><EvidenceDrawer claim={selectedClaim} evidence={project.evidence} fileUrl={fileUrl} onClose={() => setSelectedClaimId(undefined)} /></div></div>}
     </div>
   );

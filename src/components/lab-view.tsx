@@ -13,11 +13,13 @@ import {
   Lightbulb,
   ListChecks,
   Quote,
+  RefreshCw,
   ShieldCheck,
   Sigma,
   SlidersHorizontal,
   TriangleAlert,
 } from "lucide-react";
+import type { RevisionReason } from "@/lib/project-revisions";
 import type { Claim, ResearchProject } from "@/lib/schema";
 import { claimHash, elementId, parseDeepLink, scrollToDeepLink } from "@/lib/deep-link";
 import { foldForSearch } from "@/lib/search-text";
@@ -35,12 +37,15 @@ import {
   QuizView,
 } from "@/visuals";
 import { EvidenceDrawer } from "./evidence-drawer";
+import { useSectionRegeneration } from "./section-regenerator";
 
 type LabViewProps = {
   project: ResearchProject;
   fileUrl?: string;
   selectedClaimId?: string;
   onClaimSelect: (claimId?: string) => void;
+  /** Verilmezse rapor bölümleri salt okunur; yeniden üretim düğmesi görünmez. */
+  onProjectChange?: (project: ResearchProject, reason?: RevisionReason) => void;
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
@@ -60,8 +65,9 @@ const reportKindLabels = {
   implication: "Implication",
 } as const;
 
-export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: LabViewProps) {
+export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange }: LabViewProps) {
   const t = stringsFor(project.language);
+  const regeneration = useSectionRegeneration(project, onProjectChange);
   // Kalıcı bir bağlantıyla gelindiyse doğrudan kanıt defteri açılıyor: iddia
   // sağdaki çekmecede zaten görünür, ama bağlantıyı gönderen kişi listedeki
   // yerini de göstermek istemiştir.
@@ -207,11 +213,23 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
               <div><span>Deep report · {project.deepReport.readingTime}</span><h2>{project.deepReport.title}</h2></div>
               <p>{project.deepReport.dek}</p>
             </header>
+            {regeneration.undoBar}
             <div className="report-sections">
               {project.deepReport.sections.map((item, index) => (
                 <article className={`report-section report-${item.kind}`} key={item.id}>
                   <header>
-                    <span>{String(index + 1).padStart(2, "0")} · {reportKindLabels[item.kind]}</span>
+                    <span>
+                      {String(index + 1).padStart(2, "0")} · {reportKindLabels[item.kind]}
+                      {regeneration.enabled && (
+                        <button
+                          className="regen-trigger"
+                          onClick={() => regeneration.open({ kind: "report", sectionId: item.id })}
+                          title="Rewrite this section with a model; the evidence stays locked"
+                        >
+                          <RefreshCw size={12} /> Regenerate
+                        </button>
+                      )}
+                    </span>
                     <h3>{item.title}</h3>
                     <p>{item.summary}</p>
                   </header>
@@ -424,6 +442,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect }: La
         fileUrl={fileUrl}
         persistent
       />
+      {regeneration.panel}
     </div>
     </LanguageProvider>
   );

@@ -1,3 +1,4 @@
+import type { RevisionReason, RevisionSummary } from "./project-revisions";
 import { researchProjectSchema, type ResearchProject } from "./schema";
 
 const DATABASE_NAME = "trace-research-studio";
@@ -58,8 +59,12 @@ async function libraryRequest<T>(input: string, init?: RequestInit) {
   return body;
 }
 
-async function saveToDisk(project: ResearchProject) {
-  await libraryRequest<{ ok: boolean }>(LIBRARY_ENDPOINT, {
+type SaveOptions = { reason?: RevisionReason; label?: string };
+
+async function saveToDisk(project: ResearchProject, options: SaveOptions = {}) {
+  const query = new URLSearchParams({ reason: options.reason ?? "edit" });
+  if (options.label) query.set("label", options.label);
+  await libraryRequest<{ ok: boolean }>(`${LIBRARY_ENDPOINT}?${query}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
@@ -77,7 +82,7 @@ export async function listLibraryProjects() {
   for (const project of legacy) {
     const existing = projects.get(project.id);
     if (!existing || existing.updatedAt < project.updatedAt) {
-      await saveToDisk(project);
+      await saveToDisk(project, { reason: "import" });
       projects.set(project.id, project);
     }
   }
@@ -86,9 +91,9 @@ export async function listLibraryProjects() {
   return [...projects.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
-export async function saveLibraryProject(project: ResearchProject) {
+export async function saveLibraryProject(project: ResearchProject, options: SaveOptions = {}) {
   const validated = researchProjectSchema.parse(project);
-  await saveToDisk(validated);
+  await saveToDisk(validated, options);
   await removeLegacyProject(validated.id).catch(() => undefined);
 }
 
@@ -97,4 +102,28 @@ export async function deleteLibraryProject(projectId: string) {
     method: "DELETE",
   });
   await removeLegacyProject(projectId).catch(() => undefined);
+}
+
+const REVISIONS_ENDPOINT = "/api/library/revisions";
+
+export async function listLibraryRevisions(projectId: string) {
+  const body = await libraryRequest<{ revisions: RevisionSummary[] }>(
+    `${REVISIONS_ENDPOINT}?id=${encodeURIComponent(projectId)}`,
+  );
+  return body.revisions;
+}
+
+export async function loadLibraryRevision(projectId: string, revisionId: string) {
+  const body = await libraryRequest<{ revision: RevisionSummary; project: unknown }>(
+    `${REVISIONS_ENDPOINT}?id=${encodeURIComponent(projectId)}&revision=${encodeURIComponent(revisionId)}`,
+  );
+  return { revision: body.revision, project: researchProjectSchema.parse(body.project) };
+}
+
+export async function markLibraryRevision(projectId: string, label?: string) {
+  const body = await libraryRequest<{ revision: RevisionSummary }>(
+    `${REVISIONS_ENDPOINT}?id=${encodeURIComponent(projectId)}`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }) },
+  );
+  return body.revision;
 }

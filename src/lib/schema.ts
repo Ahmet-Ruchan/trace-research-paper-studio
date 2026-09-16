@@ -549,6 +549,66 @@ export const applicationGuideSchema = z.object({
   whenNotToUse: z.array(z.string()).min(1).max(5),
 });
 
+/* ------------------------------------------------------------------ *
+ * Anlatı şablonu — bkz. narrative-templates.ts
+ *
+ * Şema burada, çünkü proje şablonun bir kopyasını taşıyor; şablon modülü ise
+ * bütünlük denetimine bağlı ve oradan buraya içe aktarma bir döngü kurardı.
+ * ------------------------------------------------------------------ */
+
+export const visualTypes = [
+  "metric",
+  "flow",
+  "comparison",
+  "concept",
+  "layers",
+  "quote",
+  "architecture",
+  "equation",
+  "timeline",
+  "matrix",
+  "infographic",
+] as const;
+export type VisualType = (typeof visualTypes)[number];
+
+export const claimKinds = [
+  "reported-result",
+  "author-interpretation",
+  "method",
+  "background",
+  "limitation",
+] as const satisfies readonly Claim["kind"][];
+
+export const reportKinds = [
+  "contribution",
+  "mechanism",
+  "experiment",
+  "critique",
+  "reproduction",
+  "implication",
+] as const satisfies readonly DeepReport["sections"][number]["kind"][];
+
+
+export const templateSlotSchema = z.object({
+  purpose: z.string().trim().min(1).max(160),
+  visual: z.enum(visualTypes),
+  claimKinds: z.array(z.enum(claimKinds)).max(3),
+});
+export type TemplateSlot = z.infer<typeof templateSlotSchema>;
+
+export const narrativeTemplateSchema = z.object({
+  version: z.literal(1),
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "template id must be lowercase kebab-case"),
+  name: z.string().trim().min(1).max(80),
+  description: z.string().max(400).default(""),
+  createdAt: z.string(),
+  builtIn: z.boolean().optional(),
+  source: z.object({ projectId: z.string(), title: z.string().max(300) }).optional(),
+  story: z.array(templateSlotSchema).min(5).max(8),
+  report: z.array(z.enum(reportKinds)).min(6).max(9).optional(),
+});
+export type NarrativeTemplate = z.infer<typeof narrativeTemplateSchema>;
+
 export const generationResultSchema = z.object({
   evidence: paperEvidenceSchema,
   story: storySpecSchema,
@@ -570,6 +630,8 @@ export const researchProjectSchema = generationResultSchema.extend({
   interactives: z.array(interactiveSchema).max(8).optional(),
   applicationGuide: applicationGuideSchema.optional(),
   figures: z.array(figureSchema).max(6).optional(),
+  /** Anlatı bu şablona göre üretildiyse onun kopyası; yeniden üretim ve doğrulama yapıyı buradan korur. */
+  template: narrativeTemplateSchema.optional(),
   generation: z.object({
     provider: z.string(),
     model: z.string(),

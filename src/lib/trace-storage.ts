@@ -6,12 +6,36 @@ import {
   readFile,
   readdir,
   rename,
+  rm,
   rmdir,
   stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { researchProjectSchema, type ResearchProject } from "./schema";
+import {
+  isRevisionFileName,
+  revisionFileName,
+  revisionId,
+  revisionIdPattern,
+  revisionRecordSchema,
+  revisionsToPrune,
+  shouldSnapshot,
+  summarizeRevision,
+  type RevisionReason,
+  type RevisionRecord,
+  type RevisionSummary,
+} from "./project-revisions";
+import { findBuiltInTemplate, templateIssues } from "./narrative-templates";
+import {
+  projectContentFingerprint,
+  projectForPublication,
+  publicationIdPattern,
+  publicationRecordSchema,
+  summarizePublication,
+  type PublicationRecord,
+  type PublicationSettings,
+} from "./publications";
+import { narrativeTemplateSchema, researchProjectSchema, type NarrativeTemplate, type ResearchProject } from "./schema";
 
 export const TRACE_ACCENT_PALETTE = [
   "#2563EB",
@@ -187,8 +211,20 @@ export async function allocatePaperAccent(paperIdentity: string): Promise<PaperA
   }
 }
 
+function projectFileStem(projectId: string) {
+  return `project-${createHash("sha256").update(projectId).digest("hex").slice(0, 24)}`;
+}
+
 function projectFileName(projectId: string) {
-  return `project-${createHash("sha256").update(projectId).digest("hex").slice(0, 24)}.trace.json`;
+  return `${projectFileStem(projectId)}.trace.json`;
+}
+
+/**
+ * Revizyonlar projenin yanında değil kendi dizininde: kütüphane listesi
+ * `*.trace.json` dosyalarını tarıyor ve eski sürümler orada görünmemeli.
+ */
+export function projectRevisionDirectory(projectId: string) {
+  return join(traceLibraryDirectory(), "revisions", projectFileStem(projectId));
 }
 
 export async function listStoredProjects() {
@@ -209,17 +245,305 @@ export async function listStoredProjects() {
   return projects.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
-export async function saveStoredProject(project: ResearchProject) {
+async function revisionIds(projectId: string) {
+  try {
+    const entries = await readdir(projectRevisionDirectory(projectId), { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && isRevisionFileName(entry.name))
+      .map((entry) => entry.name.slice(0, -".revision.json".length))
+      .sort();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function writeRevision(project: unknown, projectId: string, reason: RevisionReason, label?: string) {
+  const savedAt = new Date().toISOString();
+  const record: RevisionRecord = {
+    version: 1,
+    id: revisionId(savedAt, reason, randomUUID().replace(/-/g, "")),
+    projectId,
+    savedAt,
+    reason,
+    ...(label?.trim() ? { label: label.trim() } : {}),
+    project,
+  };
+  const directory = projectRevisionDirectory(projectId);
+  await atomicWrite(join(directory, revisionFileName(record.id)), `${JSON.stringify(record)}\n`);
+  for (const stale of revisionsToPrune(await revisionIds(projectId))) {
+    await unlink(join(directory, revisionFileName(stale))).catch(() => undefined);
+  }
+  return record;
+}
+
+async function readStoredProjectFile(projectId: string) {
+  try {
+    return JSON.parse(await readFile(join(traceLibraryDirectory(), projectFileName(projectId)), "utf8")) as unknown;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined;
+    throw error;
+  }
+}
+
+export type SaveOptions = { reason?: RevisionReason; label?: string };
+
+export async function saveStoredProject(project: ResearchProject, options: SaveOptions = {}) {
   const validated = researchProjectSchema.parse(project);
+  const reason = options.reason ?? "edit";
+  const previous = await readStoredProjectFile(validated.id);
+  const newest = (await revisionIds(validated.id)).at(-1);
+  const newestRevisionAt = newest ? await readRevisionSavedAt(validated.id, newest) : undefined;
+  if (shouldSnapshot({ previous, next: validated, reason, newestRevisionAt, now: new Date().toISOString() })) {
+    await writeRevision(previous, validated.id, reason, options.label);
+  }
   const path = join(traceLibraryDirectory(), projectFileName(validated.id));
   await atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`);
   return path;
 }
 
+async function readRevisionSavedAt(projectId: string, id: string) {
+  try {
+    const record = revisionRecordSchema.parse(JSON.parse(await readFile(join(projectRevisionDirectory(projectId), revisionFileName(id)), "utf8")));
+    return record.savedAt;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Kaydedilmiş hâlin şu anki kopyasını elle bir sürüm olarak işaretler. */
+export async function createProjectRevision(projectId: string, label?: string) {
+  const current = await readStoredProjectFile(projectId);
+  if (current === undefined) return undefined;
+  const record = await writeRevision(current, projectId, "manual", label);
+  return summarizeRevision(record, researchProjectSchema.parse(current));
+}
+
+export async function listProjectRevisions(projectId: string): Promise<RevisionSummary[]> {
+  const summaries: RevisionSummary[] = [];
+  for (const id of (await revisionIds(projectId)).reverse()) {
+    const loaded = await readProjectRevision(projectId, id).catch(() => undefined);
+    if (loaded) summaries.push(loaded.summary);
+  }
+  return summaries;
+}
+
+export async function readProjectRevision(projectId: string, id: string) {
+  if (!revisionIdPattern.test(id)) return undefined;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await readFile(join(projectRevisionDirectory(projectId), revisionFileName(id)), "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+  const record = revisionRecordSchema.safeParse(raw);
+  if (!record.success || record.data.projectId !== projectId) return undefined;
+  // Eski bir sürüm bugünkü şemaya uymayabilir; o zaman listede görünmez
+  // ama dosya silinmez — kullanıcının verisi.
+  const project = researchProjectSchema.safeParse(record.data.project);
+  if (!project.success) return undefined;
+  return { summary: summarizeRevision(record.data, project.data), project: project.data };
+}
+
 export async function deleteStoredProject(projectId: string) {
   const path = join(traceLibraryDirectory(), projectFileName(projectId));
+  // Kütüphaneden kaldırmak projenin geçmişini de kaldırır; yetim revizyonlar
+  // hiçbir arayüzden görünmeyen, silinemeyen kopyalar olarak kalırdı.
+  await rm(projectRevisionDirectory(projectId), { recursive: true, force: true });
+  // Silinen bir projenin paylaşılmış bağlantıları da kapanmalı; yazar
+  // projeyi kaldırdığında onun dışarıda okunmaya devam etmesini beklemez.
+  for (const publication of await listPublications(projectId)) {
+    await deletePublication(publication.id);
+  }
   try {
     await unlink(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Anlatı şablonları — ~/.trace/templates
+ *
+ * Kütüphane gibi makineye ait: Codex, Claude Code, Antigravity ve stüdyo aynı
+ * şablonları görüyor. Hazır şablonlar kodda duruyor, burada değil.
+ * ------------------------------------------------------------------ */
+
+export function traceTemplateDirectory() {
+  return process.env.TRACE_TEMPLATE_DIR
+    ? resolve(process.env.TRACE_TEMPLATE_DIR)
+    : join(traceDataDirectory(), "templates");
+}
+
+function templatePath(id: string) {
+  // Kimlik şemayla kebab-case'e kısıtlı; yine de yol üretmeden önce doğrulanıyor.
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) throw new Error("The template id is not valid.");
+  return join(traceTemplateDirectory(), `${id}.template.json`);
+}
+
+export async function listStoredTemplates() {
+  const directory = traceTemplateDirectory();
+  let names: string[] = [];
+  try {
+    names = await readdir(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const templates: NarrativeTemplate[] = [];
+  for (const name of names) {
+    if (!name.endsWith(".template.json")) continue;
+    try {
+      const parsed = narrativeTemplateSchema.safeParse(JSON.parse(await readFile(join(directory, name), "utf8")));
+      if (parsed.success) templates.push({ ...parsed.data, builtIn: false });
+    } catch {
+      // Bozuk bir dosya ötekileri gizlememeli.
+    }
+  }
+  return templates.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export async function saveStoredTemplate(input: unknown) {
+  const template = { ...narrativeTemplateSchema.parse(input), builtIn: false };
+  if (findBuiltInTemplate(template.id)) throw new Error("That id belongs to a built-in template; choose another name.");
+  const issues = templateIssues(template);
+  if (issues.length) throw new Error(`The template cannot be used: ${issues.join("; ")}.`);
+  await atomicWrite(templatePath(template.id), `${JSON.stringify(template, null, 2)}\n`);
+  return template;
+}
+
+export async function deleteStoredTemplate(id: string) {
+  try {
+    await unlink(templatePath(id));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Yayınlar — ~/.trace/publications
+ * ------------------------------------------------------------------ */
+
+export function tracePublicationDirectory() {
+  return process.env.TRACE_PUBLICATION_DIR
+    ? resolve(process.env.TRACE_PUBLICATION_DIR)
+    : join(traceDataDirectory(), "publications");
+}
+
+function publicationFile(id: string) {
+  if (!publicationIdPattern.test(id)) throw new Error("The publication id is not valid.");
+  return join(tracePublicationDirectory(), `${id}.publication.json`);
+}
+
+/** Kütüphanedeki kaydedilmiş hâl; yayın her zaman diske yazılmış sürümden alınır. */
+export async function readStoredProject(projectId: string) {
+  const raw = await readStoredProjectFile(projectId);
+  const parsed = researchProjectSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
+
+export async function readPublication(id: string): Promise<PublicationRecord | undefined> {
+  if (!publicationIdPattern.test(id)) return undefined;
+  try {
+    const parsed = publicationRecordSchema.safeParse(JSON.parse(await readFile(publicationFile(id), "utf8")));
+    return parsed.success ? parsed.data : undefined;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined;
+    throw error;
+  }
+}
+
+async function writePublication(record: PublicationRecord) {
+  await atomicWrite(publicationFile(record.id), `${JSON.stringify(record)}\n`);
+}
+
+export async function listPublications(projectId?: string) {
+  let names: string[] = [];
+  try {
+    names = await readdir(tracePublicationDirectory());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const now = new Date().toISOString();
+  const summaries = [];
+  for (const name of names) {
+    const match = /^([a-f0-9]{20})\.publication\.json$/.exec(name);
+    if (!match) continue;
+    const record = await readPublication(match[1]).catch(() => undefined);
+    if (record && (!projectId || record.projectId === projectId)) summaries.push(summarizePublication(record, now));
+  }
+  return summaries.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function createPublication(projectId: string, settings: PublicationSettings) {
+  const project = await readStoredProject(projectId);
+  if (!project) return undefined;
+  const now = new Date().toISOString();
+  const record: PublicationRecord = {
+    version: 1,
+    // 80 bit rastgelelik: bağlantı tek erişim denetimi, tahmin edilememeli.
+    id: randomUUID().replace(/-/g, "").slice(0, 20),
+    projectId,
+    title: project.story.title,
+    createdAt: now,
+    updatedAt: now,
+    publishedFrom: project.updatedAt,
+    contentFingerprint: projectContentFingerprint(project),
+    status: "live",
+    settings,
+    project: projectForPublication(project, settings.include),
+  };
+  await writePublication(record);
+  return summarizePublication(record, now);
+}
+
+export type PublicationPatch = {
+  status?: PublicationRecord["status"];
+  settings?: PublicationSettings;
+  /** Kopyayı kütüphanedeki güncel sürümle yenile. */
+  refresh?: boolean;
+};
+
+export async function updatePublication(id: string, patch: PublicationPatch) {
+  const record = await readPublication(id);
+  if (!record) return undefined;
+  const now = new Date().toISOString();
+  const settings = patch.settings ?? record.settings;
+  let source: ResearchProject | undefined;
+  if (patch.refresh) {
+    source = await readStoredProject(record.projectId);
+    if (!source) throw new Error("The project is no longer in the library, so this publication cannot be updated.");
+  } else if (patch.settings) {
+    // Denetim değişince kopya YENİDEN süzülmeli; ama yazarın yayından sonra
+    // yaptığı düzenlemeler bu yolla sızmamalı. Kaynak, yayındaki içerik —
+    // çıkarılmış bir blok ancak "güncelle" ile geri gelebilir.
+    source = researchProjectSchema.parse(record.project);
+  }
+  const next: PublicationRecord = {
+    ...record,
+    updatedAt: now,
+    status: patch.status ?? record.status,
+    settings,
+    ...(source
+      ? {
+          title: source.story.title,
+          publishedFrom: patch.refresh ? source.updatedAt : record.publishedFrom,
+          contentFingerprint: patch.refresh ? projectContentFingerprint(source) : record.contentFingerprint,
+          project: projectForPublication(source, settings.include),
+        }
+      : {}),
+  };
+  await writePublication(next);
+  return summarizePublication(next, now);
+}
+
+export async function deletePublication(id: string) {
+  try {
+    await unlink(publicationFile(id));
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;

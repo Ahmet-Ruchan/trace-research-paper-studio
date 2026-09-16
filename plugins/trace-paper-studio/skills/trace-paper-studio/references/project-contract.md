@@ -17,6 +17,7 @@ Required fields:
 - `deepReport`: recommended
 - `technicalAppendix`: recommended
 - `generation`: `{ "provider": "native-agent", "model": "<host/model>" }`
+- `template`: only when `job.json` has a `template`. Copy that object without its `storyInstructions`, `reportInstructions` and `note` fields.
 
 ### Language
 
@@ -114,6 +115,17 @@ Supported visual shapes:
 - `infographic`: 3–6 `items: [{ label, detail, badge }]`
 
 Use at least three distinct visual types and at least one of `architecture`, `equation`, `timeline`, `matrix`, or `infographic`.
+
+### Narrative template
+
+When the project has a `template`, it fixes the structure and `validate` enforces it:
+
+- The story has exactly as many sections as `template.story`, in the same order.
+- Each section's `visual.type` equals its slot's `visual`. A `comparison` or `metric` slot may use another visual only when `evidence.metrics` is empty.
+- Each section cites at least one claim of a kind listed in its slot's `claimKinds`, when the evidence has claims of that kind.
+- When `template.report` is present, the deep report has exactly those section kinds, in that order.
+
+The slot's `purpose` describes the section's job. Every fact still comes from the evidence.
 
 ## Deep report
 

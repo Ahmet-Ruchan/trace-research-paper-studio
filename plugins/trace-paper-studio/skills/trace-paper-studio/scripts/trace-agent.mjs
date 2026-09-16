@@ -2,13 +2,37 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomInt, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, openSync, readFileSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateProjectObject } from "./generated/validator.mjs";
+import {
+  buildSectionBrief,
+  builtInTemplates,
+  defaultPublicationInclude,
+  expiryFromDays,
+  projectContentFingerprint,
+  projectForPublication,
+  publicationPath,
+  publicationRecordSchema,
+  expectedSectionCounts,
+  findBuiltInTemplate,
+  narrativeTemplateSchema,
+  templateFromProject,
+  templateIssues,
+  templateReportInstructions,
+  templateStoryInstructions,
+  isRevisionFileName,
+  revisionFileName,
+  revisionId,
+  revisionRecordSchema,
+  revisionsToPrune,
+  shouldSnapshot,
+  spliceSectionObject,
+  validateProjectObject,
+} from "./generated/validator.mjs";
 import { extractFigures } from "./lib/figures.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -25,6 +49,85 @@ const ACCENT_LOCK_STALE_MS = 30_000;
 
 function traceDataDirectory() {
   return process.env.TRACE_DATA_DIR ? resolve(process.env.TRACE_DATA_DIR) : join(homedir(), ".trace");
+}
+
+function traceTemplateDirectory() {
+  return process.env.TRACE_TEMPLATE_DIR ? resolve(process.env.TRACE_TEMPLATE_DIR) : join(traceDataDirectory(), "templates");
+}
+
+/**
+ * Şablon üç yoldan gelebilir: hazır bir şablonun kimliği, stüdyoda ya da
+ * `save-template` ile kaydedilmiş bir şablonun kimliği, veya bir dosya yolu.
+ * Hangisi olursa olsun uygulamanın şemasından ve tutarlılık kuralından geçer;
+ * kurallarla çelişen bir şablon ajanı kesin reddedilecek bir anlatıya yöneltir.
+ */
+function resolveTemplate(value) {
+  let candidate = findBuiltInTemplate(value);
+  if (!candidate && /^[a-z0-9][a-z0-9-]{0,63}$/.test(value)) {
+    const stored = join(traceTemplateDirectory(), `${value}.template.json`);
+    if (existsSync(stored)) candidate = JSON.parse(readFileSync(stored, "utf8"));
+  }
+  if (!candidate && existsSync(resolve(value))) candidate = JSON.parse(readFileSync(resolve(value), "utf8"));
+  if (!candidate) {
+    throw new Error(`No narrative template "${value}". Run "templates" to list the available ones.`);
+  }
+  const parsed = narrativeTemplateSchema.safeParse(candidate);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new Error(`The template "${value}" is not valid: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`);
+  }
+  const problems = templateIssues(parsed.data);
+  if (problems.length) throw new Error(`The template "${value}" cannot be used: ${problems.join("; ")}.`);
+  return parsed.data;
+}
+
+function listTemplates() {
+  const saved = [];
+  try {
+    for (const name of readdirSync(traceTemplateDirectory())) {
+      if (!name.endsWith(".template.json")) continue;
+      try {
+        const parsed = narrativeTemplateSchema.safeParse(JSON.parse(readFileSync(join(traceTemplateDirectory(), name), "utf8")));
+        if (parsed.success) saved.push({ ...parsed.data, builtIn: false });
+      } catch {
+        // Bozuk bir dosya ötekileri gizlememeli.
+      }
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  console.log(JSON.stringify({
+    ok: true,
+    templates: [...builtInTemplates, ...saved].map((template) => ({
+      id: template.id,
+      name: template.name,
+      builtIn: Boolean(template.builtIn),
+      description: template.description,
+      storySections: template.story.length,
+      reportSections: template.report?.length,
+    })),
+  }, null, 2));
+}
+
+function saveTemplateFromProject(args) {
+  if (!args.project) throw new Error("--project <project.trace.json> is required.");
+  if (!args.name) throw new Error('--name "<template name>" is required.');
+  const outcome = validateProjectObject(JSON.parse(readFileSync(resolve(args.project), "utf8")));
+  if (!outcome.ok) {
+    console.error(JSON.stringify({ ok: false, issues: outcome.issues, note: "Only a valid project can become a template." }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const template = { ...templateFromProject(outcome.project, { name: args.name, description: args.description }), builtIn: false };
+  const problems = templateIssues(template);
+  if (problems.length) {
+    console.error(JSON.stringify({ ok: false, issues: problems }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const path = join(traceTemplateDirectory(), `${template.id}.template.json`);
+  atomicWrite(path, `${JSON.stringify(template, null, 2)}\n`);
+  console.log(JSON.stringify({ ok: true, id: template.id, path, storySections: template.story.length, reportSections: template.report?.length }, null, 2));
 }
 
 function traceLibraryDirectory() {
@@ -131,8 +234,55 @@ function projectLibraryFileName(projectId) {
   return `project-${createHash("sha256").update(projectId).digest("hex").slice(0, 24)}.trace.json`;
 }
 
-function persistLibraryProject(project) {
-  const path = join(traceLibraryDirectory(), projectLibraryFileName(project.id));
+/**
+ * Stüdyonun kütüphanesine yazar ve üzerine yazılan sürümü stüdyonun geçmiş
+ * panelinin okuyacağı yere revizyon olarak bırakır. Karar kuralları ve dosya
+ * adı biçimi uygulamanınkiyle aynı kod (paketlenmiş doğrulayıcı): ajanın
+ * yaptığı bir değişiklik de stüdyoda geri alınabilmeli.
+ */
+function persistLibraryProject(project, reason = "agent") {
+  const fileName = projectLibraryFileName(project.id);
+  const path = join(traceLibraryDirectory(), fileName);
+  let previous;
+  try {
+    previous = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    previous = undefined;
+  }
+
+  const revisionDirectory = join(traceLibraryDirectory(), "revisions", fileName.replace(/\.trace\.json$/, ""));
+  let ids = [];
+  try {
+    ids = readdirSync(revisionDirectory)
+      .filter((name) => isRevisionFileName(name))
+      .map((name) => name.slice(0, -".revision.json".length))
+      .sort();
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  let newestRevisionAt;
+  if (ids.length) {
+    try {
+      newestRevisionAt = revisionRecordSchema.parse(
+        JSON.parse(readFileSync(join(revisionDirectory, revisionFileName(ids.at(-1))), "utf8")),
+      ).savedAt;
+    } catch {
+      newestRevisionAt = undefined;
+    }
+  }
+
+  const now = new Date().toISOString();
+  if (shouldSnapshot({ previous, next: project, reason, newestRevisionAt, now })) {
+    const id = revisionId(now, reason, randomUUID().replace(/-/g, ""));
+    atomicWrite(
+      join(revisionDirectory, revisionFileName(id)),
+      `${JSON.stringify({ version: 1, id, projectId: project.id, savedAt: now, reason, project: previous })}\n`,
+    );
+    for (const stale of revisionsToPrune([...ids, id])) {
+      try { unlinkSync(join(revisionDirectory, revisionFileName(stale))); } catch { /* zaten yok */ }
+    }
+  }
+
   atomicWrite(path, `${JSON.stringify(project, null, 2)}\n`);
   return path;
 }
@@ -141,11 +291,18 @@ function usage(exitCode = 0) {
   console.log(`Trace native-agent bridge
 
 Usage:
-  node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep]
+  node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep] [--template <id|path>]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
   node trace-agent.mjs stop --site <site-directory>
+  node trace-agent.mjs section --project <project.trace.json> --target story:<section-id>|report:<section-id>
+                              [--claims locked|open] [--instruction "<what should change>"]
+  node trace-agent.mjs splice --brief <revisions/…brief.json> [--section <section.json>]
+  node trace-agent.mjs templates
+  node trace-agent.mjs publish --project <project.trace.json> [--expires-days 7|30|90]
+                              [--no-report] [--no-appendix] [--no-learning] [--no-figures] [--app-url <http://...>]
+  node trace-agent.mjs save-template --project <project.trace.json> --name "<name>" [--description "<text>"]
 
   --language  Required. BCP-47 tag for the language the analysis prose is
             written in (en, tr, de, pt-BR, …). Pass the language the user is
@@ -156,6 +313,10 @@ Usage:
             it, and collects current metadata (version history, DOI, where it
             was published, citations). If the match is not certain the
             alternatives are reported; choose one with --pick.
+  --template
+            prepare only. A narrative template id (see "templates") or a path
+            to a template JSON. It fixes the story's sections, their visuals
+            and the report order; job.json carries the instructions.
   --strict  Treats the learning blocks (primer, derivations, quiz,
             interactives, application guide) as REQUIRED for the chosen depth.
 
@@ -167,6 +328,21 @@ Usage:
   --app     Root of the Trace repository (default: found automatically,
             TRACE_APP_DIR).
   --app-url Address of a Trace app that is already running (TRACE_APP_URL).
+
+  section   Rewrites ONE story or deep-report section while the evidence stays
+            locked. Writes a brief and a prompt under revisions/ next to the
+            project. Read the prompt, write the section object as JSON to the
+            reported sectionPath, then run splice.
+  --claims  locked (default): the section must cite exactly the claims it
+            cites now. open: it may cite any existing claim, never a new one.
+  splice    Validates the written section with the app's own rules and swaps
+            it into the project. Nothing changes if any check fails. The
+            replaced section is kept as …previous.json.
+
+  publish   Freezes a copy of the project as a shareable link served by the
+            Trace studio at /p/<id>. Blocks can be left out; evidence quotes
+            always stay. Anyone who can reach the studio and has the link can
+            read it. Manage or unpublish it from the studio's Publish panel.
 
 The bridge never calls an LLM API. The active Codex, Claude Code, or Antigravity CLI model reads the prepared paper and writes the project.
 
@@ -189,7 +365,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (key === "no-open" || key === "no-app" || key === "install-app" || key === "strict") {
+    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures"].includes(key)) {
       args[key] = true;
       continue;
     }
@@ -308,6 +484,8 @@ async function prepare(args) {
   const language = args.language;
   const audience = assertChoice(args.audience ?? "student", ["general", "student", "expert"], "--audience");
   const depth = assertChoice(args.depth ?? "standard", ["concise", "standard", "deep"], "--depth");
+  // PDF indirilmeden önce: yanlış bir şablon adı için megabaytlar harcanmasın.
+  const template = args.template ? resolveTemplate(args.template) : undefined;
 
   const { paperPath, jobDirectoryOverride, resolution } = await resolvePaper(args);
   if (!existsSync(paperPath)) throw new Error(`PDF not found: ${paperPath}`);
@@ -385,9 +563,17 @@ async function prepare(args) {
     options: { language, audience, depth },
     presentation,
     targets: {
-      storySections: depth === "concise" ? 5 : depth === "deep" ? 8 : 6,
-      reportSections: depth === "concise" ? 6 : depth === "deep" ? 9 : 7,
+      storySections: expectedSectionCounts({ depth, template }).story,
+      reportSections: expectedSectionCounts({ depth, template }).report,
     },
+    template: template
+      ? {
+          ...template,
+          storyInstructions: templateStoryInstructions(template),
+          reportInstructions: templateReportInstructions(template) || undefined,
+          note: "Follow this structure and copy the template object (without storyInstructions, reportInstructions and note) into the project's top-level template field; validate checks the story against it.",
+        }
+      : undefined,
     resolution: resolution ?? undefined,
   };
   const jobPath = resolve(jobDirectory, "job.json");
@@ -504,6 +690,178 @@ function inspectProject(args, print = true) {
 function validateProject(args) {
   const result = inspectProject(args);
   if (!result.ok) process.exitCode = 1;
+}
+
+/**
+ * Bölüm yeniden üretimi.
+ *
+ * Uygulamada model doğrudan çağrılıyor; burada modeli ajanın kendisi
+ * çalıştırıyor. Köprü iki uçta duruyor: önce kilidi ve istemi yazan bir
+ * özet, sonra ajanın yazdığı bölümü uygulamanın AYNI takma fonksiyonuyla
+ * projeye takan bir adım. Kontrol başarısız olursa proje dosyasına hiç
+ * dokunulmuyor.
+ */
+function readJsonFile(path, label) {
+  if (!existsSync(path)) throw new Error(`${label} not found: ${path}`);
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new Error(`The ${label} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function revisionPaths(projectPath, target) {
+  const directory = join(dirname(projectPath), "revisions");
+  const stem = slugify(target.replace(":", "-"));
+  return {
+    brief: join(directory, `${stem}.brief.json`),
+    prompt: join(directory, `${stem}.prompt.md`),
+    section: join(directory, `${stem}.section.json`),
+    previous: join(directory, `${stem}.previous.json`),
+  };
+}
+
+function prepareSection(args) {
+  if (!args.project) throw new Error("--project <project.trace.json> is required.");
+  if (!args.target) throw new Error("--target story:<section-id> or report:<section-id> is required.");
+  const projectPath = resolve(args.project);
+  const outcome = buildSectionBrief(readJsonFile(projectPath, "project"), args.target, {
+    claimPolicy: args.claims,
+    instruction: args.instruction,
+  });
+  if (!outcome.ok) {
+    console.error(JSON.stringify({ ok: false, issueCount: outcome.issues.length, issues: outcome.issues }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+
+  const paths = revisionPaths(projectPath, outcome.brief.target);
+  atomicWrite(paths.brief, `${JSON.stringify({ ...outcome.brief, projectPath }, null, 2)}\n`);
+  atomicWrite(
+    paths.prompt,
+    `${outcome.brief.prompt}\n\n---\n\nWrite the section object, and nothing else, as JSON to:\n${paths.section}\n\nThen run:\nnode ${SCRIPT_PATH} splice --brief ${paths.brief}\n`,
+  );
+  console.log(JSON.stringify({
+    ok: true,
+    target: outcome.brief.target,
+    claimPolicy: outcome.brief.claimPolicy,
+    evidenceFingerprint: outcome.brief.evidenceFingerprint,
+    briefPath: paths.brief,
+    promptPath: paths.prompt,
+    sectionPath: paths.section,
+    next: `Read ${paths.prompt}, write the section to ${paths.section}, then run splice --brief ${paths.brief}`,
+  }, null, 2));
+}
+
+function applySection(args) {
+  if (!args.brief) throw new Error("--brief <revisions/…brief.json> is required.");
+  const briefPath = resolve(args.brief);
+  const brief = readJsonFile(briefPath, "brief");
+  const projectPath = resolve(args.project ?? brief.projectPath ?? "");
+  const sectionPath = resolve(args.section ?? briefPath.replace(/\.brief\.json$/, ".section.json"));
+  const previousPath = briefPath.replace(/\.brief\.json$/, ".previous.json");
+
+  const outcome = spliceSectionObject(
+    readJsonFile(projectPath, "project"),
+    brief,
+    readJsonFile(sectionPath, "section"),
+  );
+  if (!outcome.ok) {
+    console.error(JSON.stringify({
+      ok: false,
+      projectPath,
+      issueCount: outcome.issues.length,
+      issues: outcome.issues,
+      note: "The project was not changed. Fix the section file and run splice again.",
+    }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+
+  atomicWrite(previousPath, `${JSON.stringify(outcome.previous, null, 2)}\n`);
+  atomicWrite(projectPath, `${JSON.stringify(outcome.project, null, 2)}\n`);
+
+  // Proje daha önce teslim edildiyse stüdyo kütüphanedeki kopyayı okuyor;
+  // o kopya eski kalırsa kullanıcı değişikliği hiç görmez.
+  const libraryPath = join(traceLibraryDirectory(), projectLibraryFileName(outcome.project.id));
+  const libraryUpdated = existsSync(libraryPath);
+  if (libraryUpdated) persistLibraryProject(outcome.project, "regenerate");
+
+  console.log(JSON.stringify({
+    ok: true,
+    projectPath,
+    target: brief.target,
+    previousPath,
+    libraryUpdated,
+    next: `Run deliver --project ${projectPath} to rebuild the standalone site.`,
+  }, null, 2));
+}
+
+/**
+ * Stüdyonun sunacağı bir yayın kaydı yazar. Kayıt biçimi ve süzme kuralları
+ * uygulamanınkiyle aynı kod; stüdyo çalışmıyorsa kayıt yine yazılır ve
+ * stüdyo açıldığında bağlantı çalışır.
+ */
+async function publishProjectLink(args) {
+  if (!args.project) throw new Error("--project <project.trace.json> is required.");
+  const days = args["expires-days"] === undefined ? null : Number(args["expires-days"]);
+  if (days !== null && ![7, 30, 90].includes(days)) throw new Error("--expires-days must be 7, 30 or 90.");
+
+  const validation = inspectProject({ project: args.project }, false);
+  if (!validation.ok) {
+    console.error(JSON.stringify({ ok: false, issues: validation.issues, note: "Only a valid project can be published." }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  // Yayın kütüphanedeki kopyadan türer; stüdyo "güncelle" dediğinde aynı yerden okur.
+  persistLibraryProject(validation.project);
+
+  const include = {
+    ...defaultPublicationInclude,
+    deepReport: !args["no-report"],
+    technicalAppendix: !args["no-appendix"],
+    learning: !args["no-learning"],
+    figures: !args["no-figures"],
+  };
+  const now = new Date().toISOString();
+  const record = publicationRecordSchema.parse({
+    version: 1,
+    id: randomUUID().replace(/-/g, "").slice(0, 20),
+    projectId: validation.project.id,
+    title: validation.project.story.title,
+    createdAt: now,
+    updatedAt: now,
+    publishedFrom: validation.project.updatedAt,
+    contentFingerprint: projectContentFingerprint(validation.project),
+    status: "live",
+    settings: { include, expiresAt: expiryFromDays(days, now) },
+    project: projectForPublication(validation.project, include),
+  });
+  const directory = process.env.TRACE_PUBLICATION_DIR
+    ? resolve(process.env.TRACE_PUBLICATION_DIR)
+    : join(traceDataDirectory(), "publications");
+  atomicWrite(join(directory, `${record.id}.publication.json`), `${JSON.stringify(record)}\n`);
+
+  const path = publicationPath(record.id);
+  let studioUrl;
+  const explicit = args["app-url"] ?? process.env.TRACE_APP_URL;
+  for (const candidate of explicit ? [explicit.replace(/\/+$/, "")] : ["http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:3002"]) {
+    if (await probeTraceApp(candidate)) {
+      studioUrl = candidate;
+      break;
+    }
+  }
+  console.log(JSON.stringify({
+    ok: true,
+    id: record.id,
+    path,
+    url: studioUrl ? `${studioUrl}${path}` : undefined,
+    expiresAt: record.settings.expiresAt,
+    excluded: Object.entries(include).filter(([, on]) => !on).map(([key]) => key),
+    note: studioUrl
+      ? "The link works for anyone who can reach this studio. On localhost that is only this machine."
+      : "No studio is running. The link starts working at <studio address>/p/<id> once the studio runs; deliver starts it.",
+  }, null, 2));
 }
 
 const LOOPBACK_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
@@ -941,6 +1299,11 @@ try {
   else if (command === "deliver") await deliver(args);
   else if (command === "stop") stopServers(args);
   else if (command === "serve") serve(args);
+  else if (command === "section") prepareSection(args);
+  else if (command === "splice") applySection(args);
+  else if (command === "templates") listTemplates();
+  else if (command === "save-template") saveTemplateFromProject(args);
+  else if (command === "publish") await publishProjectLink(args);
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

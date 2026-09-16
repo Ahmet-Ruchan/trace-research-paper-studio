@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRight, BookOpen, Check, Eye, EyeOff, FileText, Link2, LockKeyhole, Plus, Sparkles, Upload, Users, X } from "lucide-react";
 import {
   createSingleModelTeam,
@@ -18,6 +18,9 @@ import {
 } from "@/lib/model-providers";
 import { DEFAULT_LOCAL_ENDPOINT } from "@/lib/local-endpoint";
 import { languageOptions, preferredLanguage, type ProjectLanguage } from "@/lib/preferred-language";
+import { builtInTemplates } from "@/lib/narrative-templates";
+import type { NarrativeTemplate } from "@/lib/schema";
+import { deleteTemplate, listTemplates } from "@/lib/template-library";
 
 export type GenerationOptions = {
   file: File;
@@ -27,6 +30,7 @@ export type GenerationOptions = {
   language: string;
   audience: "general" | "student" | "expert";
   depth: "concise" | "standard" | "deep";
+  template?: NarrativeTemplate;
 };
 
 /** Tarayıcı dili oturum boyunca değişmez; abone olunacak bir olay yok. */
@@ -70,6 +74,26 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
   const [openRouterModels, setOpenRouterModels] = useState<Array<{ id: string; label: string; contextLength?: number }>>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [templates, setTemplates] = useState<NarrativeTemplate[]>(() => [...builtInTemplates]);
+  const [templateId, setTemplateId] = useState("");
+  const template = templates.find((item) => item.id === templateId);
+
+  // Kaydedilmiş şablonlar sunucudan geliyor; ulaşılamazsa hazır şablonlar yine seçilebilir.
+  useEffect(() => {
+    let active = true;
+    listTemplates().then((items) => { if (active) setTemplates(items); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  async function removeTemplate(id: string) {
+    try {
+      await deleteTemplate(id);
+      setTemplates((current) => current.filter((item) => item.id !== id));
+      setTemplateId("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The template could not be removed.");
+    }
+  }
   const assignments = orchestration === "single"
     ? createSingleModelTeam({ provider, model })
     : team;
@@ -133,6 +157,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
       language,
       audience,
       depth,
+      template,
     });
   }
 
@@ -245,7 +270,25 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
             <label>Reader<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="general">General reader</option><option value="student">Student</option><option value="expert">Expert</option></select></label>
             <label>Depth<select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}><option value="concise">Concise · 5 sections</option><option value="standard">Standard · 6 sections</option><option value="deep">Deep · 8 sections</option></select></label>
             <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value)}>{languageChoices.map((choice) => <option key={choice.tag} value={choice.tag}>{choice.label}</option>)}</select></label>
+            <label className="template-field">
+              Narrative template
+              <select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+                <option value="">None · structure follows the depth</option>
+                {templates.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}{item.builtIn ? " · built in" : ""} · {item.story.length} sections</option>
+                ))}
+              </select>
+            </label>
           </div>
+          {template && (
+            <p className="template-note">
+              <span>{template.description || `Saved from ${template.source?.title ?? "a project"}.`}</span>
+              <span>
+                The template sets {template.story.length} story sections{template.report ? ` and ${template.report.length} report sections` : ""}; depth still decides the learning material.
+                {!template.builtIn && <button onClick={() => { void removeTemplate(template.id); }}>Remove template</button>}
+              </span>
+            </p>
+          )}
 
           <section className="orchestration-config">
             <div className="orchestration-heading">

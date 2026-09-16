@@ -1,5 +1,7 @@
 import type { EvidencePassId } from "./evidence-pipeline";
-import type { PaperEvidence } from "./schema";
+import type { NarrativeTemplate, PaperEvidence } from "./schema";
+import { templateReportInstructions, templateStoryInstructions } from "./narrative-templates";
+import { SECTION_BUDGETS } from "./section-budgets";
 
 type PromptOptions = {
   language: string;
@@ -15,12 +17,41 @@ type PromptOptions = {
  * `Intl` her geçerli BCP-47 etiketini adlandırıyor, tanımadığında etiketin
  * kendisini döndürüyor — model "pt-BR" gibi bir etiketi de doğru yorumlar.
  */
-function languageName(tag: string): string {
+export function languageName(tag: string): string {
   try {
     return new Intl.DisplayNames(["en"], { type: "language" }).of(tag) ?? tag;
   } catch {
     return tag;
   }
+}
+
+/**
+ * Tek bir bölüme uygulanan kurallar.
+ *
+ * Hem bütün anlatıyı üreten istemde hem de TEK bölümü yeniden üreten istemde
+ * kullanılıyor. Ayrı yazılsalardı ikisi zamanla ayrışır ve yeniden üretilen
+ * bölüm, ilk üretimin asla kabul etmeyeceği bir görsel taşıyabilirdi.
+ */
+export const STORY_SECTION_RULES = [
+  "Every comparison visual number must exactly match a value in evidence.metrics. Never estimate a bar value.",
+  "Use architecture for systems and data flow, equation for a paper-defined mathematical mechanism, timeline for ordered procedures, matrix for qualitative relationships, and infographic for multi-part takeaways.",
+  "Architecture edge endpoints must match node IDs. Matrix rows must contain exactly one cell per column.",
+  "Conceptual visuals must be explanatory, not presented as measured data.",
+  "Never fabricate attention weights, probabilities, benchmark values, sample counts, dimensions, or percentages as decorative visual data.",
+  "The quote visual is a typographic emphasis device; do not use quotation marks or attribute words to an author unless the exact wording exists in a source excerpt.",
+  "Each body should be one compact paragraph of 2–4 sentences.",
+] as const;
+
+export const REPORT_SECTION_RULES = [
+  "Each summary states the section's central conclusion. Each analysis array contains 2–5 substantial, non-repetitive paragraphs or points.",
+  "Separate what the authors report from what follows analytically. A needs-review claim must be described as uncertain.",
+  "Reproduction sections should turn methods, data, evaluation and assumptions into a practical reading/reproduction checklist without inventing missing implementation details.",
+  "Critique must include evidence-backed limitations and scope boundaries; do not manufacture flaws.",
+  "Implications must remain proportional to the evaluated evidence and must not imply deployment readiness without support.",
+] as const;
+
+export function bulletList(lines: readonly string[]) {
+  return lines.map((line) => `- ${line}`).join("\n");
 }
 
 export function buildEvidencePrompt(options: PromptOptions) {
@@ -89,40 +120,33 @@ export function buildEvidencePassPrompt(options: PromptOptions, passId: Evidence
   return `${base}\n\n${passInstructions[passId]}\n\nReturn only the schema-compliant object for this task. Keep the output focused; completeness inside this task matters more than repeating general context.`;
 }
 
-/**
- * Derinliğe göre bölüm bütçeleri. Prompt bunları hedef olarak veriyor,
- * bütünlük denetimi de aynı sayıyı üst sınır olarak uyguluyor; tek yerde
- * durmazsa üretim kendi doğrulamasına takılır.
- */
-export const SECTION_BUDGETS = {
-  story: { concise: 5, standard: 6, deep: 8 },
-  deepReport: { concise: 6, standard: 7, deep: 9 },
-} as const;
+export { SECTION_BUDGETS } from "./section-budgets";
 
 export function buildStoryPrompt(
   evidence: PaperEvidence,
-  options: Omit<PromptOptions, "webContext"> & { accent?: string },
+  options: Omit<PromptOptions, "webContext"> & { accent?: string; template?: NarrativeTemplate },
 ) {
-  const targetSections = SECTION_BUDGETS.story[options.depth];
+  const targetSections = options.template?.story.length ?? SECTION_BUDGETS.story[options.depth];
+  // Şablon yapıyı veriyor; varsayılan yay yalnızca şablon yokken geçerli.
+  const structure = options.template
+    ? templateStoryInstructions(options.template)
+    : `Produce exactly ${targetSections} sequential sections.`;
+  const arc = options.template
+    ? "- Keep the template's order; it replaces the default arc."
+    : "- Build an arc: problem → mechanism/method → important findings → limitations → meaning.";
 
   return `You are the narrative director and visualization planner of an evidence-first research system.
 
 Create a single-page scrollytelling StorySpec using ONLY the evidence JSON below. You cannot add facts. Every section must cite existing claim IDs. The renderer supports these visual types: metric, flow, comparison, concept, layers, quote, architecture, equation, timeline, matrix, infographic.
 
 Editorial rules:
-- Produce exactly ${targetSections} sequential sections.
+- ${structure}
 - Write all reader-facing text in ${languageName(options.language)}.
 - Adapt explanations for audience "${options.audience}".
-- Build an arc: problem → mechanism/method → important findings → limitations → meaning.
+${arc}
 - Do not exaggerate novelty, causality, generality, or real-world impact.
 - Include at least one section focused on method and one on limitations.
-- Every comparison visual number must exactly match a value in evidence.metrics. Never estimate a bar value.
-- Use architecture for systems and data flow, equation for a paper-defined mathematical mechanism, timeline for ordered procedures, matrix for qualitative relationships, and infographic for multi-part takeaways.
-- Architecture edge endpoints must match node IDs. Matrix rows must contain exactly one cell per column.
-- Conceptual visuals must be explanatory, not presented as measured data.
-- Never fabricate attention weights, probabilities, benchmark values, sample counts, dimensions, or percentages as decorative visual data.
-- The quote visual is a typographic emphasis device; do not use quotation marks or attribute words to an author unless the exact wording exists in a source excerpt.
-- Each body should be one compact paragraph of 2–4 sentences.
+${bulletList(STORY_SECTION_RULES)}
 - indexLabel must be a two-digit sequence such as 01.
 - accent must be exactly ${options.accent ?? "a restrained six-digit hex color suitable on warm off-white"}.
 - Do not use unsupported visual types and do not output code.
@@ -135,21 +159,18 @@ Return only schema-compliant structured data.`;
 
 export function buildDeepReportPrompt(
   evidence: PaperEvidence,
-  options: Omit<PromptOptions, "webContext">,
+  options: Omit<PromptOptions, "webContext"> & { template?: NarrativeTemplate },
 ) {
-  const targetSections = SECTION_BUDGETS.deepReport[options.depth];
+  const targetSections = options.template?.report?.length ?? SECTION_BUDGETS.deepReport[options.depth];
+  const order = options.template?.report ? `\n- ${templateReportInstructions(options.template)}` : "";
   return `You are the senior research analyst of an evidence-first paper studio.
 
 Create a rigorous DeepReport using ONLY the evidence JSON below. Every analytical section must cite existing claim IDs. Do not add outside knowledge, speculate beyond the evidence, or hide uncertainty.
 
 Requirements:
 - Produce exactly ${targetSections} sections in ${languageName(options.language)} for audience "${options.audience}".
-- Cover contribution, mechanism, experiment, critique, reproduction, and implication at least once. Additional sections may revisit the most important kind.
-- Each summary states the section's central conclusion. Each analysis array contains 2–5 substantial, non-repetitive paragraphs or points.
-- Separate what the authors report from what follows analytically. A needs-review claim must be described as uncertain.
-- Reproduction sections should turn methods, data, evaluation and assumptions into a practical reading/reproduction checklist without inventing missing implementation details.
-- Critique must include evidence-backed limitations and scope boundaries; do not manufacture flaws.
-- Implications must remain proportional to the evaluated evidence and must not imply deployment readiness without support.
+- Cover contribution, mechanism, experiment, critique, reproduction, and implication at least once. Additional sections may revisit the most important kind.${order}
+${bulletList(REPORT_SECTION_RULES)}
 - IDs must be unique kebab-case. readingTime is a concise reader-facing estimate.
 - End with 3–8 open questions that the evidence does not resolve. Phrase them as questions, never as facts.
 

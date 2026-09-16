@@ -1,4 +1,5 @@
 import { deleteStoredProject, listStoredProjects, saveStoredProject } from "@/lib/trace-storage";
+import { MAX_REVISION_LABEL, revisionReasonSchema } from "@/lib/project-revisions";
 import { researchProjectSchema } from "@/lib/schema";
 
 export const runtime = "nodejs";
@@ -39,7 +40,14 @@ export async function PUT(request: Request) {
         { status: 400 },
       );
     }
-    await saveStoredProject(parsed.data);
+    // Kaydın nedeni revizyon alınıp alınmayacağını belirliyor; bilinmeyen bir
+    // neden sessizce "edit" sayılmıyor, çünkü o zaman büyük bir değişiklik
+    // on dakikalık birleştirmeye takılıp geçmişte hiç iz bırakmayabilirdi.
+    const url = new URL(request.url);
+    const reason = revisionReasonSchema.safeParse(url.searchParams.get("reason") ?? "edit");
+    if (!reason.success) return noStore({ error: "Unknown save reason." }, { status: 400 });
+    const label = url.searchParams.get("label")?.slice(0, MAX_REVISION_LABEL) || undefined;
+    await saveStoredProject(parsed.data, { reason: reason.data, label });
     return noStore({ ok: true });
   } catch (error) {
     if (error instanceof SyntaxError) return noStore({ error: "The request is not valid JSON." }, { status: 400 });

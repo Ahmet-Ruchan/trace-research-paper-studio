@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API.
+description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section of an existing Trace project with its evidence locked, to generate with or save a narrative template, and to publish a shareable link to a project.
 ---
 
 # Trace Paper Studio
@@ -112,6 +112,49 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 - Do not execute generated paper code, access credentials, make network changes, or perform destructive actions.
 - Keep authored assets inside the job directory unless the user names another destination. `deliver` additionally maintains its managed project copy under `~/.trace/library`; do not create other copies elsewhere.
 - Treat the generated `.trace.json` as a first-class deliverable. Never delete or replace it after building the local site.
+
+## Narrative templates
+
+A template fixes a story's structure: how many sections, in what order, each with its visual and the kinds of claims it leans on, plus the order of report sections. It carries no text.
+
+- When the user asks for a structure by name ("use my reading-group template", "make it a results briefing"), run `node scripts/trace-agent.mjs templates` and pass the matching id to `prepare --template <id>`. A path to a template JSON also works. If nothing matches, say so and list what exists. Do not invent a structure and call it their template.
+- With a template, `job.json` carries `template.storyInstructions` and `template.reportInstructions`. Follow them instead of the depth's default section counts, which `targets` already reflects. Copy the template into the project's top-level `template` field as the note in `job.json` says. `validate` then holds the story to it.
+- When the user wants to reuse a finished project's structure, run `node scripts/trace-agent.mjs save-template --project "<project.trace.json>" --name "<name>"`. The studio lists the same templates.
+
+## Sharing a link
+
+When the user asks for a link they can send someone, run:
+
+```bash
+node scripts/trace-agent.mjs publish --project "<project.trace.json>"
+```
+
+- Leave blocks out only when the user asks: `--no-report`, `--no-appendix`, `--no-learning`, `--no-figures`. Evidence quotes always stay.
+- Add `--expires-days 7|30|90` when the user wants the link to stop working.
+- Report `url` when it is present, and pass on `note` in the user's language. A studio on `localhost` means the link only works on this machine. Do not describe it as public unless the studio is deployed somewhere others can reach.
+- The user manages, updates or unpublishes the link from the studio's **Publish** panel. Publishing is an outward-facing action, so do it only when the user asked for a shareable link.
+
+## Revising one section
+
+When the user asks to rewrite, shorten, or rethink one story section or one deep report section of an existing project, do not rewrite the project by hand and do not rerun `prepare`. The evidence is locked. Only that section changes.
+
+```bash
+node scripts/trace-agent.mjs section --project "<project.trace.json>" --target story:<section-id> --instruction "<what the user asked for>"
+```
+
+- `--target` is `story:<id>` or `report:<id>`. The ids are in the project JSON.
+- `--claims locked` is the default. The section must cite exactly the claims it cites now. Use `--claims open` only when the user wants the section to rest on different evidence. Even then it may cite existing claims only.
+- Pass the user's request through `--instruction` in their own words. It is at most 600 characters.
+
+Then read the `promptPath` it reports and follow it. Write only the section object as JSON to `sectionPath`, and run:
+
+```bash
+node scripts/trace-agent.mjs splice --brief "<briefPath>"
+```
+
+If the project has a `template`, the prompt includes the section's slot, and `splice` keeps the section's visual and claim kinds in that slot.
+
+`splice` runs the app's own integrity checks. If it returns `ok: false`, the project file was not touched. Fix every listed issue in the section file and run `splice` again. Do not edit the project JSON directly to get around a lock. When it succeeds, run `deliver` again so the standalone site shows the new section. The studio's library copy is refreshed by `splice` itself. The version it replaced stays in the studio's version history, so the user can restore it.
 
 ## Resume behavior
 

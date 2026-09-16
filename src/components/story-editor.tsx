@@ -1,15 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Eye, GripVertical, Link2, PencilLine } from "lucide-react";
+import { Eye, GripVertical, LayoutTemplate, Link2, PencilLine, RefreshCw } from "lucide-react";
+import type { RevisionReason } from "@/lib/project-revisions";
 import type { ResearchProject, StorySection } from "@/lib/schema";
+import { LanguageProvider } from "@/visuals";
 import { VisualRenderer } from "./visual-renderer";
 import { EvidenceDrawer } from "./evidence-drawer";
+import { useSectionRegeneration } from "./section-regenerator";
+import { TemplateDialog } from "./template-dialog";
 
 type StoryEditorProps = {
   project: ResearchProject;
   fileUrl?: string;
-  onProjectChange: (project: ResearchProject) => void;
+  onProjectChange: (project: ResearchProject, reason?: RevisionReason) => void;
   onPreview: () => void;
 };
 
@@ -21,6 +25,8 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
     [project.story.sections, selectedId],
   );
   const claim = project.evidence.claims.find((item) => item.id === claimId);
+  const regeneration = useSectionRegeneration(project, onProjectChange);
+  const [templateOpen, setTemplateOpen] = useState(false);
 
   function updateSection(patch: Partial<StorySection>) {
     const now = new Date().toISOString();
@@ -36,7 +42,10 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
     });
   }
 
+  // Görseller dili bağlamdan okuyor; sağlayıcı olmadan Türkçeye düşüp
+  // İngilizce bir projede "DESIGN" yerine "DESİGN" yazıyordu.
   return (
+    <LanguageProvider language={project.language}>
     <div className="editor-layout">
       <aside className="story-outline">
         <div className="outline-header">
@@ -55,7 +64,10 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
           </button>
         ))}
         <button className="preview-shortcut" onClick={onPreview}>
-          <Eye size={15} /> Tam ekran preview
+          <Eye size={15} /> Full-screen preview
+        </button>
+        <button className="preview-shortcut template-shortcut" onClick={() => setTemplateOpen(true)}>
+          <LayoutTemplate size={15} /> Save as template
         </button>
       </aside>
 
@@ -65,7 +77,15 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
             <div className="editor-section-meta">
               <span><PencilLine size={14} /> Section {selected.indexLabel}</span>
               <span>{selected.visual.type} visual</span>
+              <button
+                className="regen-trigger"
+                onClick={() => regeneration.open({ kind: "story", sectionId: selected.id })}
+                title="Rewrite this section with a model; the evidence stays locked"
+              >
+                <RefreshCw size={13} /> Regenerate
+              </button>
             </div>
+            {regeneration.undoBar}
             <div className="editor-fields">
               <label>
                 Kicker
@@ -113,6 +133,9 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
         </div>
       </aside>
 
+      {regeneration.panel}
+      {templateOpen && <TemplateDialog project={project} onClose={() => setTemplateOpen(false)} />}
+
       {claim && (
         <div className="drawer-overlay" onClick={() => setClaimId(undefined)}>
           <div onClick={(event) => event.stopPropagation()}>
@@ -126,6 +149,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
         </div>
       )}
     </div>
+    </LanguageProvider>
   );
 }
 
