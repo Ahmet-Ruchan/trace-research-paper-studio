@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadExampleProject } from "./example-fixture";
+import { isThinSection } from "./evidence-health";
 import { IntegrityError } from "./generation-validation";
 import type { ResearchProject, StorySection } from "./schema";
 import {
@@ -269,5 +270,135 @@ describe("regeneration prompt", () => {
     const project = fresh();
     const prompt = buildSectionRegenerationPrompt(project, { kind: "story", sectionId: "story-problem" }, { claimPolicy: "open" });
     expect(prompt).toContain("Previous section: none — this is the first section.");
+  });
+});
+
+describe("learning items", () => {
+  const find = <T,>(items: T[] | undefined, id: string, key: keyof T = "id" as keyof T) => {
+    const item = items?.find((candidate) => candidate[key] === id);
+    if (!item) throw new Error(`fixture has no ${id}`);
+    return structuredClone(item);
+  };
+
+  it("parses every learning target", () => {
+    for (const kind of ["primer", "quiz", "derivation", "equation"] as const) {
+      expect(parseSectionTarget(`${kind}:x`)).toEqual({ kind, sectionId: "x" });
+    }
+  });
+
+  it("rewrites one quiz question and keeps the rest of the quiz", () => {
+    const project = fresh();
+    const question = find(project.quiz?.questions, "q-core");
+    question.prompt = "What does the Transformer drop that earlier translation models relied on?";
+    const next = spliceSection(project, { kind: "quiz", sectionId: "q-core" }, question, { claimPolicy: "locked", now: "2026-09-16T00:00:00.000Z" });
+    expect(next.quiz!.questions.find((item) => item.id === "q-core")!.prompt).toBe(question.prompt);
+    expect(next.quiz!.questions.filter((item) => item.id !== "q-core")).toEqual(project.quiz!.questions.filter((item) => item.id !== "q-core"));
+    expect(next.evidence).toBe(project.evidence);
+  });
+
+  it("refuses a quiz question the quiz rules reject", () => {
+    const project = fresh();
+    const question = find(project.quiz?.questions, "q-core");
+    question.options = question.options.map((option) => ({ ...option, correct: true }));
+    const issues = issuesOf(() => spliceSection(project, { kind: "quiz", sectionId: "q-core" }, question, { claimPolicy: "locked" }));
+    expect(issues.join(" ")).toMatch(/exactly one correct option/);
+  });
+
+  it("refuses a primer concept that depends on a concept that does not exist", () => {
+    const project = fresh();
+    const concept = find(project.primer?.concepts, "softmax");
+    concept.prerequisiteIds = ["dot-product", "made-up"];
+    const issues = issuesOf(() => spliceSection(project, { kind: "primer", sectionId: "softmax" }, concept, { claimPolicy: "locked" }));
+    expect(issues.join(" ")).toMatch(/unknown prerequisite made-up/);
+  });
+
+  it("keeps a derivation attached to its equation", () => {
+    const project = fresh();
+    const derivation = find(project.derivations, "deriv-scaling");
+    derivation.equationId = "eq-ffn";
+    const issues = issuesOf(() => spliceSection(project, { kind: "derivation", sectionId: "deriv-scaling" }, derivation, { claimPolicy: "locked" }));
+    expect(issues.join(" ")).toMatch(/equationId must stay "eq-scaled-dot-product"/);
+  });
+
+  it("rewrites an equation's explanation and refuses a new equation id", () => {
+    const project = fresh();
+    const equation = find(project.technicalAppendix?.equations, "eq-ffn");
+    equation.explanation = "Each position passes through the same two-layer network on its own.";
+    const next = spliceSection(project, { kind: "equation", sectionId: "eq-ffn" }, equation, { claimPolicy: "locked" });
+    expect(next.technicalAppendix!.equations.find((item) => item.id === "eq-ffn")!.explanation).toBe(equation.explanation);
+
+    const renamed = { ...equation, id: "eq-renamed" };
+    expect(issuesOf(() => spliceSection(project, { kind: "equation", sectionId: "eq-ffn" }, renamed, { claimPolicy: "locked" })).join(" "))
+      .toMatch(/id must stay "eq-ffn"/);
+  });
+
+  it("locks the claims of a learning item the same way", () => {
+    const project = fresh();
+    const question = find(project.quiz?.questions, "q-core");
+    question.claimIds = [project.evidence.claims.find((claim) => !question.claimIds.includes(claim.id))!.id];
+    expect(issuesOf(() => spliceSection(project, { kind: "quiz", sectionId: "q-core" }, question, { claimPolicy: "locked" })).join(" "))
+      .toMatch(/claims are locked/);
+    expect(() => spliceSection(project, { kind: "quiz", sectionId: "q-core" }, question, { claimPolicy: "open" })).not.toThrow();
+  });
+
+  it("names the item, its neighbours and the rules in the prompt", () => {
+    const project = fresh();
+    const prompt = buildSectionRegenerationPrompt(project, { kind: "primer", sectionId: "dot-product" }, { claimPolicy: "locked" });
+    expect(prompt).toContain("revising ONE concept of an existing primer of prerequisite concepts");
+    expect(prompt).toContain("Previous concept: none — this is the first concept.");
+    expect(prompt).toContain("Next concept: Softmax");
+    expect(prompt).toContain("prerequisiteIds may only name other concept IDs");
+    expect(prompt).toContain('Keep id "dot-product".');
+    // Başka kavramlar buna dayanıyor; model konuyu değiştirmemeli.
+    expect(prompt).toMatch(/Other concepts build on this one \(.*Softmax/);
+    expect(prompt).toContain("Return only the schema-compliant object for this one concept.");
+
+    const equation = buildSectionRegenerationPrompt(project, { kind: "equation", sectionId: "eq-scaled-dot-product" }, { claimPolicy: "open" });
+    expect(equation).toContain("must stay mathematically the same");
+  });
+
+  it("says which block is missing", () => {
+    const project = fresh();
+    delete project.quiz;
+    expect(issuesOf(() => sectionObligations(project, { kind: "quiz", sectionId: "q-core" }, "locked")))
+      .toEqual(["This project has no quiz to regenerate a question of"]);
+  });
+});
+
+describe("strengthening a thin section", () => {
+  const thinTarget = () => {
+    const project = fresh();
+    const section = project.story.sections.find((item) => isThinSection(item.claimIds, project.evidence.claims).thin)
+      ?? project.story.sections[0];
+    // Örnekte ince bölüm yoksa bir tane oluştur: tek, doğrulanmış bir iddia.
+    section.claimIds = section.claimIds.slice(0, 1);
+    return { project, target: { kind: "story" as const, sectionId: section.id }, section: structuredClone(section) };
+  };
+
+  it("cannot be combined with locked claims or used on learning items", () => {
+    const { project, target } = thinTarget();
+    expect(issuesOf(() => sectionObligations(project, target, "locked", "strengthen")).join(" ")).toMatch(/cannot be locked/);
+    expect(issuesOf(() => sectionObligations(project, { kind: "quiz", sectionId: "q-core" }, "open", "strengthen")).join(" "))
+      .toMatch(/Only story and report sections/);
+  });
+
+  it("tells the model how thin the section is and what it must reach", () => {
+    const { project, target } = thinTarget();
+    const prompt = buildSectionRegenerationPrompt(project, target, { claimPolicy: "open", goal: "strengthen" });
+    expect(prompt).toMatch(/This section is thin: it rests on 1 claim, [01] of them verified\. Cite at least 2 claims/);
+    expect(prompt).toContain("narrow the text to what the cited claims support");
+  });
+
+  it("rejects a rewrite that is still thin and accepts one that is not", () => {
+    const { project, target, section } = thinTarget();
+    const stillThin = { ...section, body: `${section.body} Rewritten.` };
+    expect(issuesOf(() => spliceSection(project, target, stillThin, { claimPolicy: "open", goal: "strengthen" })).join(" "))
+      .toMatch(/still rests on too little evidence: 1 claim/);
+
+    const verified = project.evidence.claims.filter((claim) => claim.confidence === "verified").map((claim) => claim.id);
+    const others = project.story.sections.flatMap((item) => item.id === section.id ? [] : item.claimIds);
+    const strengthened = { ...stillThin, claimIds: [...new Set([...section.claimIds, ...verified.slice(0, 2), ...others.slice(0, 1)])] };
+    expect(isThinSection(strengthened.claimIds, project.evidence.claims).thin).toBe(false);
+    expect(() => spliceSection(project, target, strengthened, { claimPolicy: "open", goal: "strengthen" })).not.toThrow();
   });
 });

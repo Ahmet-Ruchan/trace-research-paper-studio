@@ -75,9 +75,39 @@ describe("what changed between two versions", () => {
     to.deepReport!.sections[5] = { ...to.deepReport!.sections[5], analysis: ["One.", "Two."] };
 
     const changes = describeProjectChanges(from, to);
-    expect(changes).toContainEqual({ area: "story", summary: "Story section text and claims changed", subject: from.story.sections[3].title });
-    expect(changes).toContainEqual({ area: "report", summary: "Report section analysis changed", subject: from.deepReport!.sections[5].title });
+    expect(changes).toContainEqual({
+      area: "story",
+      summary: "Story section text and claims changed",
+      subject: from.story.sections[3].title,
+      // Metin farkı yalnızca metin alanları için; iddia listesi özet cümlesinde kalıyor.
+      texts: [{ field: "text", before: from.story.sections[3].body, after: "New text" }],
+    });
+    expect(changes).toContainEqual(expect.objectContaining({ area: "report", summary: "Report section analysis changed", subject: from.deepReport!.sections[5].title }));
+    const analysis = changes.find((change) => change.summary === "Report section analysis changed")!.texts!;
+    expect(analysis).toEqual([{ field: "analysis", before: from.deepReport!.sections[5].analysis.join("\n\n"), after: "One.\n\nTwo." }]);
     expect(changes.some((change) => change.area === "evidence")).toBe(false);
+  });
+
+  it("names the learning item that changed instead of the whole block", () => {
+    const from = fresh();
+    const to = fresh();
+    to.quiz!.questions[0] = { ...to.quiz!.questions[0], prompt: "A sharper question?" };
+    to.primer!.concepts[1] = { ...to.primer!.concepts[1], intuition: "A new intuition." };
+    to.technicalAppendix!.equations[2] = { ...to.technicalAppendix!.equations[2], explanation: "A new explanation." };
+
+    const changes = describeProjectChanges(from, to);
+    expect(changes).toContainEqual({
+      area: "learning",
+      summary: "Quiz question prompt changed",
+      subject: "A sharper question?",
+      texts: [{ field: "prompt", before: from.quiz!.questions[0].prompt, after: "A sharper question?" }],
+    });
+    expect(changes.map((change) => change.summary)).toEqual(expect.arrayContaining([
+      "Primer concept intuition changed",
+      "Equation explanation changed",
+    ]));
+    expect(changes.map((change) => change.summary)).not.toContain("Quiz changed");
+    expect(changes.map((change) => change.summary)).not.toContain("Technical appendix changed");
   });
 
   it("counts claims added, removed and edited", () => {

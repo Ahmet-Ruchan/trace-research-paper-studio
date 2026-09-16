@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useStrings } from "../language-context";
 import type { Derivation } from "@/lib/schema";
 import { MathText } from "../math";
@@ -7,7 +7,7 @@ import { MathText } from "../math";
  * Adım adım türetim. Adımlar tek tek açılır: okuyucu bir sonraki satırı
  * görmeden önce kendi türetmeyi deneyebilir.
  */
-export function DerivationView({ derivation }: { derivation: Derivation }) {
+export function DerivationView({ derivation, action }: { derivation: Derivation; action?: ReactNode }) {
   const t = useStrings();
   const [revealed, setRevealed] = useState(1);
   const total = derivation.steps.length;
@@ -20,6 +20,7 @@ export function DerivationView({ derivation }: { derivation: Derivation }) {
         <p className="derivation-goal">
           <strong>{t.goal}</strong> {derivation.goal}
         </p>
+        {action}
       </header>
 
       <ol className="derivation-steps">

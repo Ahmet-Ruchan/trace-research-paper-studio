@@ -86,6 +86,20 @@ function collectReferencedClaimIds(value: unknown, into: Set<string>): void {
   }
 }
 
+/**
+ * "İnce" bölüm: tek bir iddiaya dayanıyor ya da dayandığı iddiaların hiçbiri
+ * doğrulanmamış. Panel ve "kanıtı güçlendir" yeniden üretimi aynı tanımı
+ * kullanıyor; biri ince deyip öteki güçlendirilmiş saymasın.
+ */
+export const MIN_SECTION_CLAIMS = 2;
+
+export function isThinSection(claimIds: readonly string[], claims: readonly Claim[]) {
+  const byId = new Map(claims.map((claim) => [claim.id, claim]));
+  const linked = claimIds.map((id) => byId.get(id)).filter((claim): claim is Claim => Boolean(claim));
+  const verifiedCount = linked.filter((claim) => claim.confidence === "verified").length;
+  return { claimCount: linked.length, verifiedCount, thin: linked.length < MIN_SECTION_CLAIMS || verifiedCount === 0 };
+}
+
 function tally(claims: readonly Claim[]): ClaimTally {
   const verified = claims.filter((claim) => claim.confidence === "verified").length;
   return {
@@ -98,7 +112,6 @@ function tally(claims: readonly Claim[]): ClaimTally {
 
 export function evidenceHealth(project: ResearchProject): EvidenceHealth {
   const { claims, sources, metrics, glossary } = project.evidence;
-  const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const sourceById = new Map(sources.map((source) => [source.id, source]));
 
   const referenced = new Set<string>();
@@ -164,16 +177,7 @@ export function evidenceHealth(project: ResearchProject): EvidenceHealth {
       area: "report" as const,
       claimIds: section.claimIds,
     })),
-  ].map(({ claimIds, ...section }) => {
-    const linked = claimIds.map((id) => claimById.get(id)).filter((claim): claim is Claim => Boolean(claim));
-    const verifiedCount = linked.filter((claim) => claim.confidence === "verified").length;
-    return {
-      ...section,
-      claimCount: linked.length,
-      verifiedCount,
-      thin: linked.length <= 1 || verifiedCount === 0,
-    };
-  });
+  ].map(({ claimIds, ...section }) => ({ ...section, ...isThinSection(claimIds, claims) }));
 
   return {
     claims: tally(claims),

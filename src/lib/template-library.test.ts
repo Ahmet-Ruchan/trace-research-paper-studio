@@ -61,6 +61,29 @@ describe("template library", () => {
     expect(await listStoredTemplates()).toEqual([]);
   });
 
+  it("replaces a saved template when it is edited under the same id", async () => {
+    const template = templateFromProject(loadExampleProject(), { name: "Reading group" });
+    await PUT(new Request(url, { method: "PUT", body: JSON.stringify(template) }));
+
+    const edited = {
+      ...template,
+      name: "Reading group, revised",
+      updatedAt: "2026-09-17T00:00:00.000Z",
+      story: [template.story[1], template.story[0], ...template.story.slice(2)].map((slot, index) => (index === 0 ? { ...slot, purpose: "Open with the architecture" } : slot)),
+    };
+    expect((await PUT(new Request(url, { method: "PUT", body: JSON.stringify(edited) }))).status).toBe(200);
+
+    const stored = await listStoredTemplates();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ id: template.id, name: "Reading group, revised", createdAt: template.createdAt, updatedAt: "2026-09-17T00:00:00.000Z" });
+    expect(stored[0].story[0].purpose).toBe("Open with the architecture");
+
+    // Düzenleme de aynı kurallardan geçiyor: yöntem yuvası kaldırılırsa kayıt reddedilir.
+    const broken = { ...edited, story: edited.story.map((slot) => ({ ...slot, claimKinds: slot.claimKinds.filter((kind) => kind !== "method") })) };
+    expect((await PUT(new Request(url, { method: "PUT", body: JSON.stringify(broken) }))).status).toBe(400);
+    expect((await listStoredTemplates())[0].name).toBe("Reading group, revised");
+  });
+
   it("refuses unusable templates, built-in ids and unsafe ids", async () => {
     const template = templateFromProject(loadExampleProject(), { name: "Flat" });
     const flat = { ...template, story: template.story.map((slot) => ({ ...slot, visual: "concept" })) };

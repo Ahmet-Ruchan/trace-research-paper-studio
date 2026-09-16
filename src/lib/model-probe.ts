@@ -1,4 +1,7 @@
 import { z } from "zod";
+import type { GenerationTaskRole } from "./model-providers";
+import type { NarrativeTemplate, ResearchProject } from "./schema";
+import { SECTION_BUDGETS, expectedSectionCounts } from "./section-budgets";
 
 /**
  * "Modeli dene": seçilen modelin bir bölümü süre sınırı içinde yazıp
@@ -79,6 +82,57 @@ export function estimateSection(
   };
 }
 
+/**
+ * Makalenin kendisi istemde kaç karakter yer tutar. PDF'in metni tarayıcıda
+ * okunmuyor; 12-15 sayfalık tipik bir makalenin metni bu kadar. Kaba ama
+ * yönü doğru: bulut modelleri için okuma süresi zaten tahminin küçük kısmı.
+ */
+export const PDF_PROMPT_CHARACTERS = 60_000;
+
+export type ProbeStage = {
+  id: GenerationTaskRole;
+  /** Tahmin cümlesinin öznesi: "The deep report should take about 40 s." */
+  label: string;
+  promptCharacters: number;
+  outputCharacters: number;
+};
+
+/**
+ * Tam üretimde her görevin EN AĞIR tek isteği. Süre sınırı istek başına
+ * uygulanıyor; bu yüzden toplam süre değil, en uzun istek hüküm veriyor.
+ *
+ * Sayılar örnek projeden ölçüldü (bkz. model-probe.test.ts; test, istemler
+ * büyüyüp bu sayılar eskirse kırılıyor). Anlatı ve rapor çıktısı bölüm
+ * sayısıyla ölçekleniyor; şablon varsa sayıyı şablon belirliyor.
+ */
+export function generationStageProfiles(options: {
+  depth: ResearchProject["depth"];
+  template?: NarrativeTemplate;
+}): Record<GenerationTaskRole, ProbeStage> {
+  const counts = expectedSectionCounts(options);
+  return {
+    evidence: { id: "evidence", label: "Reading the paper", promptCharacters: 2_800 + PDF_PROMPT_CHARACTERS, outputCharacters: 10_000 },
+    technical: { id: "technical", label: "The method and results pass", promptCharacters: 2_800 + PDF_PROMPT_CHARACTERS, outputCharacters: 11_000 },
+    report: {
+      id: "report",
+      label: "The deep report",
+      promptCharacters: 34_000,
+      outputCharacters: Math.round(17_000 * counts.report / SECTION_BUDGETS.deepReport.standard),
+    },
+    visual: {
+      id: "visual",
+      label: "The visual story",
+      promptCharacters: 34_000,
+      outputCharacters: Math.round(18_500 * counts.story / SECTION_BUDGETS.story.standard),
+    },
+  };
+}
+
+/** Birden fazla tahminden hükmü veren: en uzun süren. */
+export function slowestEstimate<T extends { estimateSeconds: number }>(estimates: T[]): T | undefined {
+  return estimates.reduce<T | undefined>((slowest, item) => (!slowest || item.estimateSeconds > slowest.estimateSeconds ? item : slowest), undefined);
+}
+
 export function formatDuration(seconds: number) {
   if (seconds < 90) return `${Math.max(1, Math.round(seconds))} s`;
   const minutes = Math.round(seconds / 60);
@@ -87,11 +141,14 @@ export function formatDuration(seconds: number) {
 }
 
 /** Arayüzün göstereceği tek cümle. */
-export function describeProbe(result: Pick<ProbeResult, "firstChunkMs" | "estimateSeconds" | "limitSeconds" | "verdict">) {
+export function describeProbe(
+  result: Pick<ProbeResult, "firstChunkMs" | "estimateSeconds" | "limitSeconds" | "verdict">,
+  subject = "A section",
+) {
   const answered = `Answered in ${(result.firstChunkMs / 1000).toFixed(1)} s.`;
   const estimate = formatDuration(result.estimateSeconds);
   const limit = formatDuration(result.limitSeconds);
-  if (result.verdict === "fast") return `${answered} A section should take about ${estimate}.`;
-  if (result.verdict === "slow") return `${answered} A section should take about ${estimate}, close to the ${limit} limit.`;
-  return `${answered} A section would take about ${estimate}, longer than the ${limit} limit. Pick a faster model.`;
+  if (result.verdict === "fast") return `${answered} ${subject} should take about ${estimate}.`;
+  if (result.verdict === "slow") return `${answered} ${subject} should take about ${estimate}, close to the ${limit} limit.`;
+  return `${answered} ${subject} would take about ${estimate}, longer than the ${limit} limit. Pick a faster model.`;
 }

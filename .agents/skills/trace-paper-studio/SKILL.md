@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Converts research-paper PDFs into evidence-grounded Trace projects using the active agent model. Use for deep paper analysis, interactive StorySpec creation, technical appendices, .trace.json validation, rewriting one section with the evidence locked, narrative templates, or publishing a shareable link, without external LLM API calls.
+description: Converts research-paper PDFs into evidence-grounded Trace projects using the active agent model. Use for deep paper analysis, interactive StorySpec creation, technical appendices, .trace.json validation, rewriting one section or learning item with the evidence locked, strengthening thin sections, narrative templates, or publishing a shareable link, without external LLM API calls.
 ---
 
 # Trace Paper Studio

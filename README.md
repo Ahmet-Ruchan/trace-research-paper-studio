@@ -36,6 +36,16 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
+**0.17**
+
+| | |
+| --- | --- |
+| **[Regenerate learning items](#rewrite-one-section-without-touching-the-evidence)** | The evidence lock now covers the learning layer too. Rewrite one primer concept, quiz question, derivation or technical-appendix equation on its own, with its own rules checked. |
+| **[Strengthen thin sections](#see-where-the-evidence-is-thin)** | The evidence health panel has a **Strengthen** button on every thin section. The rewrite must cite at least two claims, one of them verified, or it is refused. |
+| **[See what changed, word by word](#go-back-to-any-earlier-version)** | Version history shows the text itself: the older version struck through, the current one highlighted, with only the context around each change. |
+| **[Edit templates](#reuse-a-structure-that-worked)** | Change a saved template's sections, order, visuals, claim kinds and report order, with the rules checked as you type. Built-in templates can be customized as a copy. |
+| **Test models before a full analysis** | The analysis screen sends each chosen model a short request and estimates how long its longest step would take, before the PDF is sent. |
+
 **0.16**
 
 | | |
@@ -143,6 +153,16 @@ collected claims the narrative never used, and which sections rest on a single c
 is computed from the project's own data — no model is asked, so a shared `.trace.json` reports
 the same numbers offline.
 
+In the studio, every thin section has a **Strengthen** button. It rewrites that section so it
+cites at least two existing claims, one of them verified. If the rewrite is still thin, it is
+refused. Where the evidence does not back a sentence, the model narrows the sentence instead.
+
+![Strengthen a thin section](docs/images/strengthen.jpg)
+
+```text
+Strengthen the thin sections of my Trace project using the Trace plugin.
+```
+
 ### Compare two papers without being told which one wins
 
 Pick two projects from the library and Trace lines them up: the same benchmark under the same
@@ -159,20 +179,30 @@ collected, but it can never add a new fact. It goes through the same integrity c
 full generation, and you see the current and proposed versions side by side before anything
 is replaced. The section request carries only the locked evidence, never the PDF, so a local
 model can do this too. **Test model** sends a short request first and tells you how long a section
-would take on that model, and whether it fits the time limit, before you wait for it.
+would take on that model, and whether it fits the time limit, before you wait for it. The
+analysis screen has the same check for a whole analysis: **Test models** estimates the longest
+step of every model you assigned, before the PDF is sent.
+
+The same lock works on the learning layer. A primer concept, a quiz question, a derivation or an
+equation in the technical appendix can each be rewritten on its own. Each keeps its own rules: a
+quiz question needs the right number of correct options, a derivation stays attached to its
+equation, and a concept other concepts build on keeps its subject.
 
 ![Regenerate a section](docs/images/regenerate.jpg)
 
 ```text
 Rewrite the limitations section of my Trace project, shorter, using the Trace plugin.
+Make the first quiz question of my Trace project harder using the Trace plugin.
 ```
 
 ### Go back to any earlier version
 
 Every regenerated section, restore and import keeps the version it replaced. While you edit,
 Trace keeps a snapshot every ten minutes. You can also name a version yourself. The history panel
-shows what has changed since each version: which story and report sections, which claims and
-which learning blocks. Restoring is itself a change, so a restore can be undone too. Changes an
+shows what has changed since each version: which story and report sections, which claims, and
+which primer concepts, quiz questions, derivations and equations. Open **Show the text** on a
+change to see it word by word, with the older version struck through and the current one
+highlighted. Restoring is itself a change, so a restore can be undone too. Changes an
 agent makes through the plugin land in the same history.
 
 ![Version history](docs/images/history.jpg)
@@ -184,8 +214,12 @@ the kinds of claims it rests on, plus the order of the deep report. The template
 Pick it when you analyse the next paper, or ask your agent to use it. Two templates are built in:
 *Method walkthrough* and *Results briefing*. A template is checked against the integrity rules
 before anything is generated, so a structure that could never pass is refused up front.
+Saved templates can be edited later: add, remove or reorder sections, and change each one's
+purpose, visual and claim kinds. The rules are checked as you edit. Built-in templates stay as
+they are, and **Customize a copy** saves your own version. Projects already analysed with a
+template keep their own copy of it.
 
-![Save a narrative template](docs/images/templates.jpg)
+![Edit a narrative template](docs/images/templates.jpg)
 
 ```text
 Explain Denoising Diffusion Probabilistic Models as a results briefing using the Trace plugin.
@@ -388,7 +422,9 @@ at `/examples/`, and any `.trace.json` imports through **Library → Trace JSON*
 
 **Workspaces:** `Lab` inspects the evidence, `Story` edits the narrative, `Preview` is the
 reading experience. **Regenerate** on a story section, or on a deep report section in `Lab`,
-rewrites only that section against the locked evidence. The history button in the header opens
+rewrites only that section against the locked evidence. The same button appears on primer
+concepts, quiz questions, derivations and equations, and **Strengthen** in the evidence health
+panel rewrites a thin section with more evidence. The history button in the header opens
 earlier versions of the project. **Save as template** in `Story` keeps the structure for the next
 paper.
 
@@ -433,6 +469,9 @@ npm run trace:agent -- deliver --project ".trace/jobs/paper/paper.trace.json"
 # write the section, then splice it in with the app's own checks
 npm run trace:agent -- section --project ".trace/jobs/paper/paper.trace.json" --target story:<section-id>
 npm run trace:agent -- splice --brief ".trace/jobs/paper/revisions/story-<section-id>.brief.json"
+# Targets also cover primer:<id>, quiz:<id>, derivation:<id> and equation:<id>.
+# validate lists thinSections; --goal strengthen rewrites one with more evidence
+npm run trace:agent -- section --project ".trace/jobs/paper/paper.trace.json" --target story:<section-id> --goal strengthen
 
 # Narrative templates: list them, generate with one, save one from a project
 npm run trace:agent -- templates
@@ -476,7 +515,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.16.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.17.0  # write one version into the package and every plugin manifest
 ```
 
 <details>
@@ -568,8 +607,9 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), the
 paper's own figures placed beside the prose that argues them, the evidence health panel,
-side-by-side comparison of two projects, section-level regeneration with evidence locking,
-project version history, reusable narrative templates, shareable publications with
+side-by-side comparison of two projects, section-level regeneration with evidence locking (story, report and learning items),
+strengthening thin sections, project version history with word-level diffs, editable narrative
+templates, model speed tests before generation, shareable publications with
 publication controls,
 per-claim and per-section permalinks, arXiv resolution
 from a paper's name, local library, exports, the native plugin for Codex / Claude Code /

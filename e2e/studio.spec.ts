@@ -100,6 +100,70 @@ test.describe("section regeneration", () => {
     }).toContain("regenerate");
   });
 
+  test("rewrites one quiz question in the practice tab", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-quiz"));
+    const question = project.quiz!.questions[0];
+    const rewritten = { ...question, prompt: "Rewritten question from the end-to-end model?" };
+
+    await page.route("**/api/regenerate", async (route) => {
+      const body = route.request().postDataJSON() as { target: { kind: string; sectionId: string } };
+      expect(body.target).toEqual({ kind: "quiz", sectionId: question.id });
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/x-ndjson" },
+        body: `${JSON.stringify({ type: "section", target: body.target, section: rewritten, evidenceFingerprint: evidenceFingerprint(project.evidence) })}\n`,
+      });
+    });
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav button", { hasText: "Learn & Try" }).click();
+    await page.locator(".quiz-question").first().locator(".regen-trigger").click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Regenerate quiz question" })).toBeVisible();
+    await dialog.getByLabel("Gemini API key").fill("test-key");
+    await dialog.getByRole("button", { name: "Regenerate", exact: true }).click();
+
+    await expect(page.locator(".regen-preview").nth(1)).toContainText("Rewritten question from the end-to-end model?");
+    await page.getByRole("button", { name: "Use this version" }).click();
+    await expect(page.locator(".quiz-prompt").first()).toContainText("Rewritten question from the end-to-end model?");
+    await expect(page.locator(".regen-undo")).toContainText("Quiz question regenerated");
+  });
+
+  test("strengthens a thin section from the evidence health panel", async ({ page, request }) => {
+    const project = projectNamed("e2e-strengthen");
+    const thin = project.story.sections[1];
+    thin.claimIds = thin.claimIds.slice(0, 1);
+    await seed(request, project);
+
+    const verified = project.evidence.claims.filter((claim) => claim.confidence === "verified" && claim.id !== thin.claimIds[0]);
+    const strengthened = { ...thin, body: "Now backed by more of the paper.", claimIds: [...thin.claimIds, verified[0].id, verified[1].id] };
+    await page.route("**/api/regenerate", async (route) => {
+      const body = route.request().postDataJSON() as { goal: string; claimPolicy: string; target: { kind: string; sectionId: string } };
+      expect(body).toMatchObject({ goal: "strengthen", claimPolicy: "open", target: { kind: "story", sectionId: thin.id } });
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/x-ndjson" },
+        body: `${JSON.stringify({ type: "section", target: body.target, section: strengthened, evidenceFingerprint: evidenceFingerprint(project.evidence) })}\n`,
+      });
+    });
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav button", { hasText: "Evidence health" }).click();
+    const row = page.locator(".health-thin li", { hasText: thin.title });
+    await row.getByRole("button", { name: "Strengthen" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Strengthen the evidence of a story section" })).toBeVisible();
+    await expect(dialog.locator(".regen-strengthen")).toContainText("rests on 1 claim");
+    await expect(dialog.getByRole("radio").first()).toBeDisabled();
+    await dialog.getByLabel("Gemini API key").fill("test-key");
+    await dialog.getByRole("button", { name: "Regenerate", exact: true }).click();
+    await page.getByRole("button", { name: "Use this version" }).click();
+
+    // Bölüm artık ince değil: panel onu listeden çıkarmalı.
+    await expect(page.locator(".health-thin li", { hasText: thin.title })).toHaveCount(0);
+  });
+
   test("tells the user how fast the chosen model is before sending the section", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-probe"));
     await page.route("**/api/models/probe", async (route) => {
@@ -123,6 +187,42 @@ test.describe("section regeneration", () => {
   });
 });
 
+test.describe("analysis setup", () => {
+  test("tests each model once and reports its slowest step before the PDF is sent", async ({ page }) => {
+    const requests: Array<{ stages: Array<{ id: string }> }> = [];
+    await page.route("**/api/models/probe", async (route) => {
+      const body = route.request().postDataJSON() as { stages: Array<{ id: string; label: string }> };
+      requests.push(body);
+      await route.fulfill({
+        json: {
+          ok: true,
+          verdict: "slow",
+          message: "Answered in 2.0 s. The visual story should take about 95 s, close to the 2 min limit.",
+          stages: body.stages.map((stage, index) => ({ id: stage.id, label: stage.label, estimateSeconds: 40 + index * 18, limitSeconds: 120, verdict: "fast" })),
+        },
+      });
+    });
+
+    await page.goto("/");
+    await page.getByPlaceholder("Gemini API key").fill("test-key");
+    await page.getByRole("button", { name: "Test models" }).click();
+
+    const row = page.locator(".team-probe-list > li");
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveClass(/probe-slow/);
+    await expect(row).toContainText("Evidence, Technical, Report, Visual");
+    await expect(row).toContainText("close to the 2 min limit");
+    await expect(row.locator(".team-probe-stages")).toContainText("The deep report: about");
+    // Tek model dört görevi yapıyor: tek istek, dört tahmin.
+    expect(requests).toHaveLength(1);
+    expect(requests[0].stages.map((stage) => stage.id)).toEqual(["evidence", "technical", "report", "visual"]);
+
+    // Seçim değişince eski hüküm kaybolmalı.
+    await page.getByRole("combobox", { name: "Depth" }).selectOption("deep");
+    await expect(row).toHaveCount(0);
+  });
+});
+
 test.describe("version history", () => {
   test("lists a restore immediately when the panel is reopened", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-history"));
@@ -134,6 +234,13 @@ test.describe("version history", () => {
     await page.getByRole("button", { name: "Version history" }).click();
     await page.locator(".history-list button").first().click();
     await expect(page.locator(".history-changes")).toContainText("Story section text changed");
+    // Neyin değiştiği kelime düzeyinde: eski metin üstü çizili, şimdiki vurgulu.
+    await page.getByText("Show the text").first().click();
+    const diff = page.locator(".history-diff-field").first();
+    // Tamamen yeniden yazılmış metin tek parça görünmeli, ortak küçük kelimelerde bölünmemeli.
+    await expect(diff.locator("ins")).toHaveCount(1);
+    await expect(diff.locator("ins")).toContainText("A version that will be undone.");
+    await expect(diff.locator("del")).toHaveCount(1);
     await page.getByRole("button", { name: "Restore this version" }).click();
 
     // Hemen yeniden aç: geri yükleme otomatik kayda bırakılsaydı liste eski kalırdı.
@@ -203,5 +310,65 @@ test.describe("narrative templates", () => {
 
     await page.goto("/");
     await expect(page.locator("select option", { hasText: "End-to-end reading group" })).toHaveCount(1);
+  });
+
+  test("edits a saved template and keeps its rules while editing", async ({ page, request }) => {
+    const created = await request.put("/api/templates", {
+      data: {
+        ...(await (await request.get("/api/templates")).json()).templates[0],
+        id: "e2e-editable",
+        name: "Editable group",
+        builtIn: false,
+      },
+    });
+    expect(created.ok()).toBe(true);
+
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Narrative template" }).selectOption("e2e-editable");
+    await page.getByRole("button", { name: "Edit template" }).click();
+    const dialog = page.getByRole("dialog");
+
+    // Kural canlı: yöntem türü her yuvadan kaldırılırsa kayıt kapanıyor.
+    const methodChips = dialog.locator(".template-kinds button.active", { hasText: "method" });
+    const count = await methodChips.count();
+    for (let index = 0; index < count; index += 1) await methodChips.first().click();
+    await expect(dialog.getByRole("alert")).toContainText("One section must draw on method claims");
+    await expect(dialog.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    await page.getByRole("button", { name: "Edit template" }).click();
+    await dialog.getByLabel("Template name").fill("Edited group");
+    await dialog.getByLabel("Purpose of section 2").fill("Open with the mechanism");
+    await dialog.getByRole("button", { name: "Move section 2 up" }).click();
+    await expect(dialog.getByLabel("Purpose of section 1")).toHaveValue("Open with the mechanism");
+    await dialog.getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog).toContainText("Edited group is saved");
+    await dialog.getByRole("button", { name: "Done" }).click();
+
+    const { templates } = (await (await request.get("/api/templates")).json()) as { templates: Array<{ id: string; name: string; story: Array<{ purpose: string }> }> };
+    const stored = templates.filter((item) => item.id === "e2e-editable");
+    expect(stored).toHaveLength(1);
+    expect(stored[0].name).toBe("Edited group");
+    expect(stored[0].story[0].purpose).toBe("Open with the mechanism");
+    await expect(page.getByRole("combobox", { name: "Narrative template" })).toHaveValue("e2e-editable");
+  });
+
+  test("customizes a copy of a built-in template without changing it", async ({ page, request }) => {
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Narrative template" }).selectOption("method-walkthrough");
+    await page.getByRole("button", { name: "Customize a copy" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel("Template name")).toHaveValue("Method walkthrough (copy)");
+    await dialog.getByRole("button", { name: "Add a section" }).click();
+    await dialog.getByLabel("Purpose of section 7").fill("Close with what to try next");
+    await dialog.getByRole("button", { name: "Save template" }).click();
+    await expect(dialog).toContainText("is saved");
+
+    const { templates } = (await (await request.get("/api/templates")).json()) as { templates: Array<{ id: string; name: string; builtIn?: boolean; story: unknown[] }> };
+    const builtIn = templates.find((item) => item.id === "method-walkthrough")!;
+    const copy = templates.find((item) => item.name === "Method walkthrough (copy)")!;
+    expect(builtIn.story).toHaveLength(6);
+    expect(copy.builtIn).toBe(false);
+    expect(copy.story).toHaveLength(7);
   });
 });

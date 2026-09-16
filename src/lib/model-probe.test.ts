@@ -1,6 +1,19 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { POST } from "@/app/api/models/probe/route";
-import { EXPECTED_SECTION_CHARACTERS, describeProbe, estimateSection, formatDuration } from "./model-probe";
+import {
+  EXPECTED_SECTION_CHARACTERS,
+  PDF_PROMPT_CHARACTERS,
+  describeProbe,
+  estimateSection,
+  formatDuration,
+  generationStageProfiles,
+  slowestEstimate,
+} from "./model-probe";
+import { builtInTemplates } from "./narrative-templates";
+import { buildDeepReportPrompt, buildEvidencePassPrompt, buildStoryPrompt } from "./prompts";
+import type { ResearchProject } from "./schema";
 
 const LOCAL_LIMIT = 15 * 60 * 1000;
 const CLOUD_LIMIT = 120 * 1000;
@@ -53,6 +66,45 @@ describe("model speed estimate", () => {
   });
 });
 
+describe("full analysis estimate", () => {
+  const example = JSON.parse(
+    readFileSync(join(process.cwd(), "public/examples/attention-is-all-you-need.en.trace.json"), "utf8"),
+  ) as ResearchProject;
+  const options = { language: "en", audience: "student", depth: "standard", webContext: "" } as const;
+  const near = (actual: number, expected: number) => {
+    expect(actual).toBeGreaterThan(expected * 0.6);
+    expect(actual).toBeLessThan(expected * 1.6);
+  };
+
+  it("uses request sizes that still match the real prompts and outputs", () => {
+    // Profiller örnek projeden ölçüldü; istemler büyürse bu test eskiyen sayıyı yakalar.
+    const profiles = generationStageProfiles({ depth: "standard" });
+    near(profiles.evidence.promptCharacters - PDF_PROMPT_CHARACTERS, buildEvidencePassPrompt(options, "overview").length);
+    near(profiles.technical.promptCharacters - PDF_PROMPT_CHARACTERS, buildEvidencePassPrompt(options, "results").length);
+    near(profiles.visual.promptCharacters, buildStoryPrompt(example.evidence, { ...options, accent: example.story.accent }).length);
+    near(profiles.report.promptCharacters, buildDeepReportPrompt(example.evidence, options).length);
+    near(profiles.visual.outputCharacters, JSON.stringify(example.story).length);
+    near(profiles.report.outputCharacters, JSON.stringify(example.deepReport).length);
+    near(profiles.technical.outputCharacters, JSON.stringify(example.technicalAppendix).length);
+  });
+
+  it("grows the writing estimate with the number of sections", () => {
+    const concise = generationStageProfiles({ depth: "concise" });
+    const deep = generationStageProfiles({ depth: "deep" });
+    expect(deep.visual.outputCharacters).toBeGreaterThan(concise.visual.outputCharacters);
+    const template = builtInTemplates[0];
+    expect(generationStageProfiles({ depth: "deep", template }).visual.outputCharacters)
+      .toBe(Math.round(18_500 * template.story.length / 6));
+  });
+
+  it("lets the slowest request decide", () => {
+    expect(slowestEstimate([{ id: "a", estimateSeconds: 4 }, { id: "b", estimateSeconds: 90 }, { id: "c", estimateSeconds: 20 }])?.id).toBe("b");
+    expect(slowestEstimate([])).toBeUndefined();
+    expect(describeProbe({ firstChunkMs: 800, estimateSeconds: 50, limitSeconds: 120, verdict: "fast" }, "The deep report"))
+      .toBe("Answered in 0.8 s. The deep report should take about 50 s.");
+  });
+});
+
 describe("model test endpoint", () => {
   const post = (body: unknown) => POST(new Request("http://127.0.0.1/api/models/probe", { method: "POST", body: JSON.stringify(body) }));
 
@@ -62,5 +114,12 @@ describe("model test endpoint", () => {
     expect((await post({ assignment: { provider: "local", model: "qwen3:8b" }, apiKey: "http://example.com:11434/v1" })).status).toBe(400);
     const response = await post({ assignment: { provider: "openai", model: "gpt-5.6-terra" } });
     expect((await response.json()).error).toBe("OpenAI API key is required.");
+  });
+
+  it("rejects malformed stage lists before contacting any provider", async () => {
+    const assignment = { provider: "openai", model: "gpt-5.6-terra" };
+    expect((await post({ assignment, apiKey: "k", stages: [{ id: "visual", label: "x", promptCharacters: 1, outputCharacters: 0 }] })).status).toBe(400);
+    const tooMany = Array.from({ length: 9 }, () => ({ id: "visual", label: "x", promptCharacters: 1, outputCharacters: 1 }));
+    expect((await post({ assignment, apiKey: "k", stages: tooMany })).status).toBe(400);
   });
 });

@@ -7,6 +7,7 @@ import {
   describeProbe,
   estimateSection,
   probeOutputSchema,
+  slowestEstimate,
 } from "@/lib/model-probe";
 import { getProvider, resolveProviderModel } from "@/lib/model-providers";
 import {
@@ -25,6 +26,17 @@ const requestSchema = z.object({
   apiKey: z.string().max(4_096).default(""),
   /** Gerçek bölüm isteminin uzunluğu; tahmin buna göre ölçekleniyor. */
   promptCharacters: z.number().int().min(0).max(2_000_000).default(20_000),
+  /**
+   * Tam üretim için: aynı model birden fazla göreve atanmışsa tek ölçümle
+   * her görevin en ağır isteği ayrı ayrı tahmin ediliyor. Verilirse hüküm en
+   * uzun sürecek istekten çıkıyor.
+   */
+  stages: z.array(z.object({
+    id: z.string().min(1).max(40),
+    label: z.string().min(1).max(80),
+    promptCharacters: z.number().int().min(0).max(2_000_000),
+    outputCharacters: z.number().int().min(1).max(500_000),
+  })).max(8).optional(),
 });
 
 /**
@@ -90,10 +102,22 @@ export async function POST(request: Request) {
       outputCharacters,
       probePromptCharacters: prompt.length,
     };
-    const estimate = estimateSection(measurement, {
-      promptCharacters: input.promptCharacters,
-      limitMs: requestTimeoutMs(assignment.provider),
-    });
+    const limitMs = requestTimeoutMs(assignment.provider);
+    if (input.stages?.length) {
+      const stages = input.stages.map((stage) => ({
+        id: stage.id,
+        label: stage.label,
+        ...estimateSection(measurement, {
+          promptCharacters: stage.promptCharacters,
+          limitMs,
+          expectedOutputCharacters: stage.outputCharacters,
+        }),
+      }));
+      const slowest = slowestEstimate(stages)!;
+      const result = { ok: true as const, ...measurement, ...slowest, stages };
+      return Response.json({ ...result, message: describeProbe(result, slowest.label) });
+    }
+    const estimate = estimateSection(measurement, { promptCharacters: input.promptCharacters, limitMs });
     const result = { ok: true as const, ...measurement, ...estimate };
     return Response.json({ ...result, message: describeProbe(result) });
   } catch (error) {
@@ -109,7 +133,8 @@ export async function POST(request: Request) {
         probePromptCharacters: prompt.length,
         estimateSeconds: null,
         limitSeconds,
-        message: `The model did not finish a short test within ${PROBE_TIMEOUT_MS / 1000} s. A section would almost certainly exceed the limit. Pick a faster model.`,
+        stages: input.stages?.map((stage) => ({ id: stage.id, label: stage.label, estimateSeconds: null, limitSeconds, verdict: "too-slow" })),
+        message: `The model did not finish a short test within ${PROBE_TIMEOUT_MS / 1000} s. ${input.stages ? "A full analysis" : "A section"} would almost certainly exceed the limit. Pick a faster model.`,
       });
     }
     console.error("Trace model probe failed", { fallbackProvider: assignment.provider, fallbackModel: assignment.model, ...safeDiagnostic(error) });

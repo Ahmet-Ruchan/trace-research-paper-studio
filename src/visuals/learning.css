@@ -299,3 +299,8 @@
 .story-section h2:focus-within .permalink,
 .viewer-story-section h2:hover .permalink,
 .viewer-story-section h2:focus-within .permalink { opacity: 1; }
+@media (min-width: 761px) {
+  .health-thin li:has(.health-strengthen) { grid-template-columns: 62px 1fr auto auto; }
+}
+.health-strengthen { justify-self: start; padding: 4px 9px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font-size: 10px; white-space: nowrap; }
+.health-strengthen:hover { border-color: var(--accent); color: var(--accent); }

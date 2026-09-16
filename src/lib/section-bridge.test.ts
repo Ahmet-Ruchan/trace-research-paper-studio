@@ -74,6 +74,20 @@ describe("section bridge", () => {
     expect(bridge("validate", "--project", projectPath).status).toBe(0);
   });
 
+  it("revises a quiz question through the same two commands", () => {
+    const prepared = bridge("section", "--project", projectPath, "--target", "quiz:q-core");
+    expect(prepared.status).toBe(0);
+    expect(readFileSync(String(prepared.json.promptPath), "utf8")).toContain("revising ONE question of an existing comprehension quiz");
+
+    const briefPath = String(prepared.json.briefPath);
+    writeSection(briefPath, { prompt: "Which component does the Transformer drop entirely?" });
+    expect(bridge("splice", "--brief", briefPath).status).toBe(0);
+    const project = JSON.parse(readFileSync(projectPath, "utf8"));
+    expect(project.quiz.questions.find((item: { id: string }) => item.id === "q-core").prompt)
+      .toBe("Which component does the Transformer drop entirely?");
+    expect(bridge("validate", "--project", projectPath).status).toBe(0);
+  });
+
   it("leaves the project byte-identical when the section breaks a lock", () => {
     const prepared = bridge("section", "--project", projectPath, "--target", "story:story-tradeoff");
     const briefPath = String(prepared.json.briefPath);
@@ -130,5 +144,30 @@ describe("section bridge", () => {
     const policy = bridge("section", "--project", projectPath, "--target", "story:story-tradeoff", "--claims", "loose");
     expect(policy.status).toBe(1);
     expect(JSON.stringify(policy.json.issues)).toMatch(/--claims must be/);
+  });
+});
+
+describe("strengthening through the bridge", () => {
+  it("lists thin sections and refuses a rewrite that stays thin", () => {
+    const project = loadExampleProject();
+    const thin = project.story.sections[1];
+    thin.claimIds = thin.claimIds.slice(0, 1);
+    writeFileSync(projectPath, JSON.stringify(project, null, 2));
+
+    const validated = bridge("validate", "--project", projectPath);
+    const targets = (validated.json.thinSections as Array<{ target: string }>).map((item) => item.target);
+    expect(targets).toContain(`story:${thin.id}`);
+
+    const prepared = bridge("section", "--project", projectPath, "--target", `story:${thin.id}`, "--goal", "strengthen");
+    expect(prepared.status).toBe(0);
+    expect(prepared.json.claimPolicy).toBe("open");
+    const briefPath = String(prepared.json.briefPath);
+
+    const before = hash(projectPath);
+    writeSection(briefPath, { body: "Still resting on one claim." });
+    const refused = bridge("splice", "--brief", briefPath);
+    expect(refused.status).toBe(1);
+    expect(JSON.stringify(refused.json.issues)).toMatch(/still rests on too little evidence/);
+    expect(hash(projectPath)).toBe(before);
   });
 });

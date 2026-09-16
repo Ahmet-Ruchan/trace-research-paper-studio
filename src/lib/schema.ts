@@ -602,6 +602,8 @@ export const narrativeTemplateSchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(400).default(""),
   createdAt: z.string(),
+  /** Kayıtlı bir şablon sonradan düzenlendiyse. */
+  updatedAt: z.string().optional(),
   builtIn: z.boolean().optional(),
   source: z.object({ projectId: z.string(), title: z.string().max(300) }).optional(),
   story: z.array(templateSlotSchema).min(5).max(8),

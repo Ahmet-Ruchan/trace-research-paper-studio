@@ -37,6 +37,7 @@ import {
   QuizView,
 } from "@/visuals";
 import { EvidenceDrawer } from "./evidence-drawer";
+import type { SectionKind } from "@/lib/section-regeneration";
 import { useSectionRegeneration } from "./section-regenerator";
 
 type LabViewProps = {
@@ -68,6 +69,18 @@ const reportKindLabels = {
 export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange }: LabViewProps) {
   const t = stringsFor(project.language);
   const regeneration = useSectionRegeneration(project, onProjectChange);
+  /** Öğrenme katmanı öğeleri için aynı tetikleyici; görüntüleyicide hiç çizilmiyor. */
+  const regenerateButton = (kind: SectionKind, id: string, noun: string) => regeneration.enabled ? (
+    <span className="learning-regen">
+      <button
+        className="regen-trigger"
+        onClick={() => regeneration.open({ kind, sectionId: id })}
+        title={`Rewrite this ${noun} with a model; the evidence stays locked`}
+      >
+        <RefreshCw size={12} /> Regenerate
+      </button>
+    </span>
+  ) : null;
   // Kalıcı bir bağlantıyla gelindiyse doğrudan kanıt defteri açılıyor: iddia
   // sağdaki çekmecede zaten görünür, ama bağlantıyı gönderen kişi listedeki
   // yerini de göstermek istemiştir.
@@ -284,7 +297,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
           <section className="lab-block">
             <div className="block-title"><ShieldCheck size={16} /> {t.healthHeading}</div>
             <p className="section-intro">{t.healthIntro}</p>
-            <EvidenceHealthView project={project} onClaimSelect={onClaimSelect} />
+            {regeneration.undoBar}
+            <EvidenceHealthView
+              project={project}
+              onClaimSelect={onClaimSelect}
+              onStrengthen={regeneration.enabled
+                ? (item) => regeneration.open({ kind: item.area, sectionId: item.id }, { goal: "strengthen" })
+                : undefined}
+            />
           </section>
         )}
 
@@ -309,6 +329,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
               <h2>{project.technicalAppendix.title}</h2>
               <p>{project.technicalAppendix.overview}</p>
             </header>
+            {regeneration.undoBar}
 
             {project.technicalAppendix.equations.length > 0 && <section className="technical-section">
               <div className="block-title"><Code2 size={16} /> Equations and mechanisms</div>
@@ -323,7 +344,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                     <p>{equation.explanation}</p>
                     <dl>{equation.variables.map((variable) => <div key={variable.symbol}><dt>{variable.symbol}</dt><dd>{variable.meaning}</dd></div>)}</dl>
                     <TechnicalClaimLinks claimIds={equation.claimIds} project={project} onClaimSelect={onClaimSelect} />
-                    {derivation ? <DerivationView derivation={derivation} /> : null}
+                    {regenerateButton("equation", equation.id, "equation")}
+                    {derivation ? <DerivationView derivation={derivation} action={regenerateButton("derivation", derivation.id, "derivation")} /> : null}
                   </article>
                 );
               })}</div>
@@ -403,17 +425,19 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "primer" && project.primer && (
           <section className="lab-block">
-            <PrimerView primer={project.primer} />
+            {regeneration.undoBar}
+            <PrimerView primer={project.primer} renderAction={(id) => regenerateButton("primer", id, "concept")} />
           </section>
         )}
 
         {section === "practice" && (
           <section className="lab-block">
+            {regeneration.undoBar}
             {project.derivations?.length ? (
               <>
                 <div className="block-title"><Sigma size={16} /> {t.derivationsHeading}</div>
                 {project.derivations.map((derivation) => (
-                  <DerivationView derivation={derivation} key={derivation.id} />
+                  <DerivationView derivation={derivation} key={derivation.id} action={regenerateButton("derivation", derivation.id, "derivation")} />
                 ))}
               </>
             ) : null}
@@ -427,7 +451,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
               </>
             ) : null}
 
-            {project.quiz ? <QuizView quiz={project.quiz} claims={project.evidence.claims} /> : null}
+            {project.quiz ? <QuizView quiz={project.quiz} claims={project.evidence.claims} renderAction={(id) => regenerateButton("quiz", id, "question")} /> : null}
 
             {project.applicationGuide ? (
               <ApplicationGuideView guide={project.applicationGuide} />

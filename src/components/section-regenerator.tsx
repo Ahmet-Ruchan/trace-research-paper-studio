@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gauge, KeyRound, Lock, RefreshCw, Server, Sparkles, Undo2, Unlock, X } from "lucide-react";
+import { Gauge, KeyRound, Lock, RefreshCw, Server, ShieldPlus, Sparkles, Undo2, Unlock, X } from "lucide-react";
+import { MIN_SECTION_CLAIMS, isThinSection } from "@/lib/evidence-health";
 import { IntegrityError, describeValidationError } from "@/lib/generation-validation";
 import { readGenerationStream, type GenerationProgress } from "@/lib/generation-events";
 import { DEFAULT_LOCAL_ENDPOINT } from "@/lib/local-endpoint";
@@ -14,17 +15,22 @@ import {
   type ProviderId,
 } from "@/lib/model-providers";
 import type { RevisionReason } from "@/lib/project-revisions";
-import type { DeepReportSection, ResearchProject, StorySection } from "@/lib/schema";
+import type { DeepReportSection, Derivation, PrimerConcept, QuizQuestion, ResearchProject, StorySection, TechnicalAppendix } from "@/lib/schema";
 import type { ProbeVerdict } from "@/lib/model-probe";
+import { requestModelProbe } from "@/lib/model-probe-client";
 import {
   MAX_REGENERATION_INSTRUCTION,
   buildSectionRegenerationPrompt,
   findSection,
+  sectionKindInfo,
+  sectionTitle,
   spliceSection,
   type ClaimPolicy,
   type RegeneratedSection,
+  type RegenerationGoal,
   type SectionTarget,
 } from "@/lib/section-regeneration";
+import { MathText } from "@/visuals";
 import { VisualRenderer } from "./visual-renderer";
 
 /**
@@ -45,7 +51,7 @@ function rememberedAssignment(): ModelAssignment | undefined {
 }
 
 function initialAssignment(project: ResearchProject, target: SectionTarget): ModelAssignment {
-  const role = target.kind === "story" ? "visual" : "report";
+  const role = sectionKindInfo(target.kind).taskRole;
   const used = project.generation?.assignments?.[role];
   return (
     rememberedAssignment() ??
@@ -69,16 +75,19 @@ type ProbeState =
 type RegeneratorProps = {
   project: ResearchProject;
   target: SectionTarget;
+  goal?: RegenerationGoal;
   onApply: (next: ResearchProject, previous: RegeneratedSection) => void;
   onClose: () => void;
 };
 
-export function SectionRegenerator({ project, target, onApply, onClose }: RegeneratorProps) {
+export function SectionRegenerator({ project, target, goal = "revise", onApply, onClose }: RegeneratorProps) {
   const current = useMemo(() => findSection(project, target), [project, target]);
   const [assignment, setAssignment] = useState<ModelAssignment>(() => initialAssignment(project, target));
   const [apiKey, setApiKey] = useState("");
   const [instruction, setInstruction] = useState("");
-  const [claimPolicy, setClaimPolicy] = useState<ClaimPolicy>("locked");
+  // Güçlendirmek başka iddialara dayanmak demek; kilit bu hedefte anlamsız.
+  const [claimPolicy, setClaimPolicy] = useState<ClaimPolicy>(goal === "strengthen" ? "open" : "locked");
+  const strengthen = goal === "strengthen";
   const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [applyIssues, setApplyIssues] = useState<string[]>([]);
   const [probe, setProbe] = useState<ProbeState>({ name: "idle" });
@@ -129,20 +138,9 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
     probeController.current = abort;
     setProbe({ name: "running" });
     try {
-      const promptCharacters = buildSectionRegenerationPrompt(project, target, { claimPolicy, instruction }).length;
-      const response = await fetch("/api/models/probe", {
-        method: "POST",
-        signal: abort.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignment: selection, apiKey, promptCharacters }),
-      });
-      const body = (await response.json().catch(() => undefined)) as
-        | { ok: true; verdict: ProbeVerdict; message: string }
-        | { ok: false; error: string }
-        | undefined;
-      if (!body) throw new Error("The model test returned no answer.");
-      if (!body.ok) throw new Error(body.error);
-      setProbe({ name: "done", verdict: body.verdict, message: body.message });
+      const promptCharacters = buildSectionRegenerationPrompt(project, target, { claimPolicy, instruction, goal }).length;
+      const answer = await requestModelProbe({ assignment: selection, apiKey, promptCharacters }, abort.signal);
+      setProbe({ name: "done", verdict: answer.verdict, message: answer.message });
     } catch (caught) {
       if (abort.signal.aborted) return;
       setProbe({ name: "failed", message: caught instanceof Error ? caught.message : "The model could not be tested." });
@@ -180,7 +178,7 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
         method: "POST",
         signal: abort.signal,
         headers: { "Content-Type": "application/json", Accept: "application/x-ndjson, application/json" },
-        body: JSON.stringify({ project, target, claimPolicy, instruction, assignment: selection, apiKey }),
+        body: JSON.stringify({ project, target, claimPolicy, goal, instruction, assignment: selection, apiKey }),
       });
       if (!response.ok || !response.body) {
         const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
@@ -214,6 +212,7 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
       const next = spliceSection(project, target, phase.section, {
         claimPolicy,
         expectedFingerprint: phase.evidenceFingerprint,
+        goal,
       });
       onApply(next, current);
     } catch (error) {
@@ -222,28 +221,39 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
   }
 
   if (!current) return null;
-  const title = target.kind === "story" ? "Regenerate story section" : "Regenerate report section";
+  const { label, noun } = sectionKindInfo(target.kind);
+  const title = strengthen ? `Strengthen the evidence of a ${label}` : `Regenerate ${label}`;
+  const health = strengthen ? isThinSection(current.claimIds, project.evidence.claims) : undefined;
 
   return (
     <div className="regen-overlay" role="dialog" aria-modal="true" aria-labelledby="regen-title">
       <div className={`regen-panel ${phase.name === "review" ? "wide" : ""}`}>
         <header className="regen-header">
           <div>
-            <span><Sparkles size={13} /> Evidence locked</span>
+            <span>{strengthen ? <><ShieldPlus size={13} /> Evidence health</> : <><Sparkles size={13} /> Evidence locked</>}</span>
             <h2 id="regen-title">{title}</h2>
-            <p lang={project.language}>{current.title}</p>
+            <p lang={project.language}>{sectionTitle(target.kind, current)}</p>
           </div>
           <button className="regen-close" onClick={() => { controller.current?.abort(); onClose(); }} aria-label="Close"><X size={16} /></button>
         </header>
 
         {(phase.name === "form" || phase.name === "failed") && (
           <div className="regen-body">
+            {health && (
+              <p className="regen-note regen-strengthen">
+                This section rests on <b>{health.claimCount} claim{health.claimCount === 1 ? "" : "s"}</b>, {health.verifiedCount} verified.
+                The new version must cite at least {MIN_SECTION_CLAIMS} existing claims, one of them verified, or it is rejected.
+                Where the evidence does not back a sentence, the model narrows the sentence instead.
+              </p>
+            )}
             <fieldset className="regen-policy">
-              <legend>Claims this section rests on</legend>
+              <legend>Claims this {noun} rests on</legend>
               <label className={claimPolicy === "locked" ? "active" : ""}>
-                <input type="radio" name="claim-policy" checked={claimPolicy === "locked"} onChange={() => setClaimPolicy("locked")} />
+                <input type="radio" name="claim-policy" checked={claimPolicy === "locked"} disabled={strengthen} onChange={() => setClaimPolicy("locked")} />
                 <Lock size={14} />
-                <span><b>Keep the same claims</b><small>The wording changes; the {current.claimIds.length} cited claims stay exactly as they are.</small></span>
+                <span><b>Keep the same claims</b><small>{current.claimIds.length
+                  ? `The wording changes; ${current.claimIds.length === 1 ? "the cited claim stays exactly as it is" : `the ${current.claimIds.length} cited claims stay exactly as they are`}.`
+                  : `The wording changes; the ${noun} keeps citing no claims.`}</small></span>
               </label>
               <label className={claimPolicy === "open" ? "active" : ""}>
                 <input type="radio" name="claim-policy" checked={claimPolicy === "open"} onChange={() => setClaimPolicy("open")} />
@@ -258,7 +268,7 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
                 value={instruction}
                 maxLength={MAX_REGENERATION_INSTRUCTION}
                 onChange={(event) => setInstruction(event.target.value)}
-                placeholder="Shorter, with a concrete example from the method. Use a timeline instead of a matrix."
+                placeholder={PLACEHOLDERS[target.kind]}
               />
               <small className="regen-count">{instruction.length}/{MAX_REGENERATION_INSTRUCTION}</small>
             </label>
@@ -306,7 +316,7 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
               </div>
             </div>
             <p className="regen-note">
-              Only this section is sent to the model, with the locked evidence as its sole source. The PDF is not needed, so a local model works too. The key is used for this request and never stored.
+              Only this {noun} is sent to the model, with the locked evidence as its sole source. The PDF is not needed, so a local model works too. The key is used for this request and never stored.
             </p>
 
             {probe.name === "running" && <p className="regen-probe" role="status">Testing the model with a short request…</p>}
@@ -339,8 +349,8 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
         {phase.name === "review" && (
           <div className="regen-body">
             <div className="regen-compare">
-              <SectionPreview label="Current" project={project} section={current} />
-              <SectionPreview label="Proposed" project={project} section={phase.section} baseline={current} />
+              <SectionPreview label="Current" project={project} kind={target.kind} section={current} />
+              <SectionPreview label="Proposed" project={project} kind={target.kind} section={phase.section} baseline={current} />
             </div>
             {applyIssues.length > 0 && (
               <div className="regen-error" role="alert">
@@ -363,37 +373,25 @@ export function SectionRegenerator({ project, target, onApply, onClose }: Regene
 function SectionPreview({
   label,
   project,
+  kind,
   section,
   baseline,
 }: {
   label: string;
   project: ResearchProject;
+  kind: SectionTarget["kind"];
   section: RegeneratedSection;
   baseline?: RegeneratedSection;
 }) {
   const before = new Set(baseline?.claimIds ?? section.claimIds);
   const removed = baseline ? baseline.claimIds.filter((id) => !section.claimIds.includes(id)) : [];
   const claims = new Map(project.evidence.claims.map((claim) => [claim.id, claim]));
-  const isStory = "visual" in section;
 
   return (
     <article className="regen-preview">
       <span className="regen-preview-label">{label}</span>
       <div lang={project.language}>
-        {isStory ? (
-          <>
-            <small>{(section as StorySection).kicker}</small>
-            <h3>{section.title}</h3>
-            <p>{(section as StorySection).body}</p>
-            <div className="regen-visual"><VisualRenderer visual={(section as StorySection).visual} accent={project.story.accent} /></div>
-          </>
-        ) : (
-          <>
-            <h3>{section.title}</h3>
-            <p><b>{(section as DeepReportSection).summary}</b></p>
-            {(section as DeepReportSection).analysis.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
-          </>
-        )}
+        <SectionBody project={project} kind={kind} section={section} />
       </div>
       <ul className="regen-claims">
         {section.claimIds.map((id) => (
@@ -404,6 +402,105 @@ function SectionPreview({
         {removed.map((id) => <li key={id} className="removed" title={claims.get(id)?.statement}>− {id}</li>)}
       </ul>
     </article>
+  );
+}
+
+function capitalize(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const PLACEHOLDERS: Record<SectionTarget["kind"], string> = {
+  story: "Shorter, with a concrete example from the method. Use a timeline instead of a matrix.",
+  report: "Separate what the authors report from what follows. Name the cost of the design.",
+  primer: "Explain it with an everyday analogy before the formal definition.",
+  quiz: "Make the wrong options plausible misreadings of the result, not obvious mistakes.",
+  derivation: "Smaller steps, and say which assumption each step uses.",
+  equation: "Explain every symbol, and say what would change without this term.",
+};
+
+/** Karşılaştırmada gösterilen içerik; okuyucunun göreceği biçime yakın ama sade. */
+function SectionBody({ project, kind, section }: { project: ResearchProject; kind: SectionTarget["kind"]; section: RegeneratedSection }) {
+  if (kind === "story") {
+    const story = section as StorySection;
+    return (
+      <>
+        <small>{story.kicker}</small>
+        <h3>{story.title}</h3>
+        <p>{story.body}</p>
+        <div className="regen-visual"><VisualRenderer visual={story.visual} accent={project.story.accent} /></div>
+      </>
+    );
+  }
+  if (kind === "report") {
+    const report = section as DeepReportSection;
+    return (
+      <>
+        <h3>{report.title}</h3>
+        <p><b>{report.summary}</b></p>
+        {report.analysis.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+      </>
+    );
+  }
+  if (kind === "primer") {
+    const concept = section as PrimerConcept;
+    return (
+      <>
+        <small>{concept.level}</small>
+        <h3>{concept.term}</h3>
+        <p>{concept.intuition}</p>
+        {concept.formal ? <MathText latex={concept.formal} display /> : null}
+        <p><b>Why it matters.</b> {concept.whyItMatters}</p>
+      </>
+    );
+  }
+  if (kind === "quiz") {
+    const question = section as QuizQuestion;
+    return (
+      <>
+        <small>{question.kind}</small>
+        <h3>{question.prompt}</h3>
+        <ul className="regen-options">
+          {question.options.map((option, index) => (
+            <li key={index} className={option.correct ? "correct" : ""}>
+              <b>{option.correct ? "✓" : "·"} {option.label}</b>
+              <span>{option.explanation}</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  }
+  if (kind === "derivation") {
+    const derivation = section as Derivation;
+    return (
+      <>
+        <h3>{derivation.title}</h3>
+        <p><b>{derivation.goal}</b></p>
+        <ol className="regen-steps">
+          {derivation.steps.map((step) => (
+            <li key={step.id}>
+              <MathText latex={step.latex} plain={step.plain} display />
+              <span>{step.rationale}</span>
+            </li>
+          ))}
+        </ol>
+        {derivation.numericExample ? <p><b>Example.</b> {derivation.numericExample.result}</p> : null}
+      </>
+    );
+  }
+  const equation = section as TechnicalAppendix["equations"][number];
+  return (
+    <>
+      <small>{equation.id}</small>
+      <h3>{equation.label}</h3>
+      <MathText latex={equation.latex} plain={equation.expression} display />
+      <p>{equation.explanation}</p>
+      <ul className="regen-options">
+        {equation.variables.map((variable) => (
+          <li key={variable.symbol}><b>{variable.symbol}</b> <span>{variable.meaning}</span></li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -419,31 +516,33 @@ export function useSectionRegeneration(
   project: ResearchProject,
   onProjectChange?: (project: ResearchProject, reason?: RevisionReason) => void,
 ) {
-  const [target, setTarget] = useState<SectionTarget>();
+  const [request, setRequest] = useState<{ target: SectionTarget; goal: RegenerationGoal }>();
+  const target = request?.target;
   const [undo, setUndo] = useState<{ target: SectionTarget; section: RegeneratedSection }>();
   const [undoError, setUndoError] = useState<string>();
 
-  const open = useCallback((next: SectionTarget) => {
+  const open = useCallback((next: SectionTarget, options: { goal?: RegenerationGoal } = {}) => {
     setUndoError(undefined);
-    setTarget(next);
+    setRequest({ target: next, goal: options.goal ?? "revise" });
   }, []);
 
   const panel = target && onProjectChange ? (
     <SectionRegenerator
       project={project}
       target={target}
-      onClose={() => setTarget(undefined)}
+      goal={request?.goal}
+      onClose={() => setRequest(undefined)}
       onApply={(next, previous) => {
         onProjectChange(next, "regenerate");
         setUndo({ target, section: previous });
-        setTarget(undefined);
+        setRequest(undefined);
       }}
     />
   ) : null;
 
   const undoBar = undo && onProjectChange ? (
     <div className="regen-undo" role="status">
-      <span>{undoError ?? "Section regenerated against the locked evidence."}</span>
+      <span>{undoError ?? `${capitalize(sectionKindInfo(undo.target.kind).label)} regenerated against the locked evidence.`}</span>
       <button
         onClick={() => {
           try {

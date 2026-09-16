@@ -9,8 +9,10 @@ import {
   describeProjectChanges,
   type RevisionReason,
   type RevisionSummary,
+  type TextChange,
 } from "@/lib/project-revisions";
 import type { ResearchProject } from "@/lib/schema";
+import { diffWords, withContext } from "@/lib/text-diff";
 
 const reasonLabels: Record<RevisionReason, string> = {
   edit: "Before edits",
@@ -156,11 +158,20 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
                   ) : (
                     <>
                       <span className="history-caption">Changed since this version</span>
+                      <p className="history-legend">
+                        <del>Struck through</del> is what this version says; <ins>highlighted</ins> is what the project says now. Restoring brings back the struck text.
+                      </p>
                       <ul className="history-changes">
                         {changes.map((change, index) => (
                           <li key={`${change.summary}-${change.subject ?? ""}-${index}`} className={`change-${change.area}`}>
                             <span>{change.summary}</span>
                             {change.subject && <small lang={project.language}>{change.subject}</small>}
+                            {change.texts && (
+                              <details className="history-diff">
+                                <summary>Show the text</summary>
+                                {change.texts.map((text) => <TextDiff key={text.field} change={text} language={project.language} />)}
+                              </details>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -188,6 +199,26 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Bir metin alanının kelime farkı. Silinen ve eklenen parçalar ekran
+ * okuyucularda da ayrışsın diye `del` ve `ins` öğeleri kullanılıyor.
+ */
+function TextDiff({ change, language }: { change: TextChange; language: string }) {
+  const segments = useMemo(() => withContext(diffWords(change.before, change.after)), [change.before, change.after]);
+  return (
+    <div className="history-diff-field">
+      <span>{change.field}</span>
+      <p lang={language}>
+        {segments.map((segment, index) => (
+          segment.type === "removed" ? <del key={index}>{segment.text}</del>
+            : segment.type === "added" ? <ins key={index}>{segment.text}</ins>
+              : <span key={index} className={segment.elided ? "history-elided" : undefined}>{segment.text}</span>
+        ))}
+      </p>
     </div>
   );
 }

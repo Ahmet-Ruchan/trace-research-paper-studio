@@ -138,6 +138,7 @@ export type Strings = {
   healthThin: string;
   healthThinNote: string;
   healthSectionClaims: (verified: number, total: number) => string;
+  healthStrengthen: string;
   healthAreaStory: string;
   healthAreaReport: string;
   healthUnused: string;
@@ -276,6 +277,7 @@ const en: Strings = {
   healthThinNote:
     "A section is thin when it hangs on a single claim, or when none of the claims under it are verified. That is not necessarily wrong — but it is where to look first.",
   healthSectionClaims: (verified, total) => `${verified}/${total} verified`,
+  healthStrengthen: "Strengthen",
   healthAreaStory: "Story",
   healthAreaReport: "Report",
   healthUnused: "Collected but unused",

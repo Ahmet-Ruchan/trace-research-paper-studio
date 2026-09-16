@@ -21,6 +21,8 @@ import { languageOptions, preferredLanguage, type ProjectLanguage } from "@/lib/
 import { builtInTemplates } from "@/lib/narrative-templates";
 import type { NarrativeTemplate } from "@/lib/schema";
 import { deleteTemplate, listTemplates } from "@/lib/template-library";
+import { TeamProbe } from "./team-probe";
+import { TemplateEditor } from "./template-editor";
 
 export type GenerationOptions = {
   file: File;
@@ -76,6 +78,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
   const [error, setError] = useState<string>();
   const [templates, setTemplates] = useState<NarrativeTemplate[]>(() => [...builtInTemplates]);
   const [templateId, setTemplateId] = useState("");
+  const [editing, setEditing] = useState<{ template: NarrativeTemplate; copy: boolean }>();
   const template = templates.find((item) => item.id === templateId);
 
   // Kaydedilmiş şablonlar sunucudan geliyor; ulaşılamazsa hazır şablonlar yine seçilebilir.
@@ -285,7 +288,14 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
               <span>{template.description || `Saved from ${template.source?.title ?? "a project"}.`}</span>
               <span>
                 The template sets {template.story.length} story sections{template.report ? ` and ${template.report.length} report sections` : ""}; depth still decides the learning material.
-                {!template.builtIn && <button onClick={() => { void removeTemplate(template.id); }}>Remove template</button>}
+                {template.builtIn
+                  ? <button onClick={() => setEditing({ template, copy: true })}>Customize a copy</button>
+                  : (
+                    <>
+                      <button onClick={() => setEditing({ template, copy: false })}>Edit template</button>
+                      <button onClick={() => { void removeTemplate(template.id); }}>Remove template</button>
+                    </>
+                  )}
               </span>
             </p>
           )}
@@ -368,12 +378,30 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
               <p className="provider-hint" key={item.id}><strong>{item.label}.</strong> {item.hint}</p>
             ))}
             {usedProviders.some((item) => item.id === "openrouter") && <div className="openrouter-catalog-row"><span>The catalogue lists only <code>text-only output + structured output</code> models, which are the ones safe for the Trace canvas. Image input may be supported; image-output models are excluded from StorySpec generation.</span><button onClick={loadOpenRouterModels} disabled={modelsLoading}>{modelsLoading ? "Loading…" : "Load compatible models"}</button></div>}
+            <TeamProbe assignments={assignments} apiKeys={apiKeys} depth={depth} template={template} />
             <p className="key-note">Keys are sent to the backend proxy for this generation request only; nothing is stored in the browser or in the project.</p>
           </section>
           {error && <p className="form-error">{error}</p>}
           <button className="primary-action" onClick={submit}>Analyse paper <ArrowRight size={17} /></button>
         </div>
       </section>
+
+      {editing && (
+        <TemplateEditor
+          initial={editing.template}
+          initialName={editing.copy ? `${editing.template.name} (copy)` : editing.template.name}
+          mode={editing.copy ? "create" : "edit"}
+          heading={editing.copy ? `Customize ${editing.template.name}` : `Edit ${editing.template.name}`}
+          intro={editing.copy
+            ? "Built-in templates stay as they are. Your copy is saved next to your own templates."
+            : "Change the order, purpose, visual and claim kinds of each section. Projects already analysed with this template keep their own copy."}
+          onSaved={(saved) => {
+            setTemplates((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+            setTemplateId(saved.id);
+          }}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
 
       <section className="landing-proof"><span>PDF</span><i /><span>Evidence graph</span><i /><span>StorySpec</span><i /><span>Interactive web</span></section>
     </main>

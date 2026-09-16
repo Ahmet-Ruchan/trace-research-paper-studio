@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { GenerationProgress, GenerationStreamEvent } from "@/lib/generation-events";
 import { IntegrityError } from "@/lib/generation-validation";
 import { resolveLocalEndpoint } from "@/lib/local-endpoint";
-import { getProvider, resolveProviderModel, type GenerationTaskRole } from "@/lib/model-providers";
+import { getProvider, resolveProviderModel } from "@/lib/model-providers";
 import { researchProjectSchema } from "@/lib/schema";
 import {
   MAX_REGENERATION_INSTRUCTION,
@@ -10,6 +10,9 @@ import {
   claimPolicySchema,
   evidenceFingerprint,
   findSection,
+  regenerationGoalSchema,
+  sectionKindInfo,
+  sectionObligations,
   sectionSchemaFor,
   sectionTargetSchema,
   spliceSection,
@@ -41,6 +44,7 @@ const requestSchema = z.object({
   project: z.unknown(),
   target: sectionTargetSchema,
   claimPolicy: claimPolicySchema,
+  goal: regenerationGoalSchema.default("revise"),
   instruction: z.string().max(MAX_REGENERATION_INSTRUCTION).default(""),
   assignment: z.object({ provider: z.string(), model: z.string() }),
   apiKey: z.string().max(4_096).default(""),
@@ -96,7 +100,14 @@ function parseInput(raw: unknown) {
   }
   const { target } = parsed.data;
   if (!findSection(project.data, target)) {
-    throw new RequestError(`There is no ${target.kind} section with id "${target.sectionId}" in this project.`, 404);
+    throw new RequestError(`There is no ${sectionKindInfo(target.kind).label} with id "${target.sectionId}" in this project.`, 404);
+  }
+
+  try {
+    sectionObligations(project.data, target, parsed.data.claimPolicy, parsed.data.goal);
+  } catch (error) {
+    if (error instanceof IntegrityError) throw new RequestError(error.issues.join("; "), 400);
+    throw error;
   }
 
   const assignment = resolveProviderModel(parsed.data.assignment.provider, parsed.data.assignment.model);
@@ -123,6 +134,7 @@ function parseInput(raw: unknown) {
     project: project.data,
     target,
     claimPolicy: parsed.data.claimPolicy,
+    goal: parsed.data.goal,
     instruction: parsed.data.instruction,
     assignment,
     apiKey,
@@ -135,12 +147,12 @@ async function runRegeneration(
   emit: (event: GenerationStreamEvent) => void,
 ) {
   const { project, target, claimPolicy, assignment } = input;
-  const taskRole: GenerationTaskRole = target.kind === "story" ? "visual" : "report";
-  const label = target.kind === "story" ? "story section" : "report section";
+  const { taskRole, label, noun, schemaName } = sectionKindInfo(target.kind);
   const fingerprint = evidenceFingerprint(project.evidence);
   const schema = sectionSchemaFor(target.kind);
   const prompt = buildSectionRegenerationPrompt(project, target, {
     claimPolicy,
+    goal: input.goal,
     instruction: input.instruction,
   });
 
@@ -177,7 +189,7 @@ async function runRegeneration(
       stage: "story",
       progress: 10,
       title: `Preparing the ${label}.`,
-      detail: "The evidence is locked; only this section will be rewritten.",
+      detail: `The evidence is locked; only this ${noun} will be rewritten.`,
     });
 
     providerRuntime = await prepareProviderRuntime(
@@ -199,7 +211,7 @@ async function runRegeneration(
         runtimeForRequest.generateStructured({
           prompt: feedback ? `${prompt}\n\nVALIDATION FEEDBACK:\n${feedback}` : prompt,
           schema,
-          schemaName: target.kind === "story" ? "trace_story_section" : "trace_report_section",
+          schemaName,
           maxOutputTokens: MAX_OUTPUT_TOKENS,
           includeDocument: false,
           signal,
@@ -221,6 +233,7 @@ async function runRegeneration(
           claimPolicy,
           expectedFingerprint: fingerprint,
           rejectUnchanged: true,
+          goal: input.goal,
         });
       },
       onStructureRetry: (attempt, issues) =>
@@ -246,7 +259,7 @@ async function runRegeneration(
     progress({
       stage: "story",
       progress: 100,
-      title: "The section passed the evidence check.",
+      title: `The ${noun} passed the evidence check.`,
       detail: "Review it before it replaces the current version.",
     });
     emit({ type: "section", target, section, evidenceFingerprint: fingerprint });
@@ -285,7 +298,7 @@ export async function POST(request: Request) {
           ...safeDiagnostic(error),
         });
         const message = error instanceof IntegrityError || error instanceof z.ZodError
-          ? "The regenerated section failed the evidence check on both attempts. Nothing was changed; try again, or relax the claim lock."
+          ? `The regenerated ${sectionKindInfo(input.target.kind).noun} failed the evidence check on both attempts. Nothing was changed; try again, or relax the claim lock.`
           : publicError(error, request.signal.aborted, input.assignment.provider);
         emit({ type: "error", error: message });
       } finally {

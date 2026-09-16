@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useStrings } from "../language-context";
 import type { Primer } from "@/lib/schema";
 import { MathText } from "../math";
@@ -8,7 +8,8 @@ import { MathText } from "../math";
  * dayanan kavramdan önce gelir. Böylece okuyucu listeyi baştan sona takip
  * edebilir.
  */
-export function PrimerView({ primer }: { primer: Primer }) {
+/** `renderAction` stüdyoda kavram başına bir eylem (yeniden üretim) ekler; görüntüleyici vermez. */
+export function PrimerView({ primer, renderAction }: { primer: Primer; renderAction?: (conceptId: string) => ReactNode }) {
   const t = useStrings();
   const [openId, setOpenId] = useState<string | null>(primer.concepts[0]?.id ?? null);
   const ordered = orderByPrerequisites(primer.concepts);
@@ -49,6 +50,7 @@ export function PrimerView({ primer }: { primer: Primer }) {
                       {t.readFirst} {prerequisites.join(", ")}
                     </p>
                   ) : null}
+                  {renderAction?.(concept.id)}
                 </div>
               ) : null}
             </li>

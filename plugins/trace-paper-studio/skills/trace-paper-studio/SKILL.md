@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section of an existing Trace project with its evidence locked, to generate with or save a narrative template, and to publish a shareable link to a project.
+description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section, primer concept, quiz question, derivation or equation of an existing Trace project with its evidence locked, to generate with or save a narrative template, and to publish a shareable link to a project.
 ---
 
 # Trace Paper Studio
@@ -136,21 +136,23 @@ node scripts/trace-agent.mjs publish --project "<project.trace.json>"
 
 ## Revising one section
 
-When the user asks to rewrite, shorten, or rethink one story section or one deep report section of an existing project, do not rewrite the project by hand and do not rerun `prepare`. The evidence is locked. Only that section changes.
+When the user asks to rewrite, shorten, or rethink one part of an existing project, do not rewrite the project by hand and do not rerun `prepare`. The evidence is locked. Only that part changes. A part is a story section, a deep report section, a primer concept, a quiz question, a derivation, or an equation in the technical appendix.
 
 ```bash
 node scripts/trace-agent.mjs section --project "<project.trace.json>" --target story:<section-id> --instruction "<what the user asked for>"
 ```
 
-- `--target` is `story:<id>` or `report:<id>`. The ids are in the project JSON.
-- `--claims locked` is the default. The section must cite exactly the claims it cites now. Use `--claims open` only when the user wants the section to rest on different evidence. Even then it may cite existing claims only.
+- `--target` is `story:<id>`, `report:<id>`, `primer:<concept-id>`, `quiz:<question-id>`, `derivation:<id>` or `equation:<id>`. The ids are in the project JSON.
+- `--claims locked` is the default. The part must cite exactly the claims it cites now. Use `--claims open` only when the user wants the section to rest on different evidence. Even then it may cite existing claims only.
 - Pass the user's request through `--instruction` in their own words. It is at most 600 characters.
 
-Then read the `promptPath` it reports and follow it. Write only the section object as JSON to `sectionPath`, and run:
+Then read the `promptPath` it reports and follow it. Write only that one object as JSON to `sectionPath`, and run:
 
 ```bash
 node scripts/trace-agent.mjs splice --brief "<briefPath>"
 ```
+
+When the user asks to strengthen the evidence, or `validate` lists `thinSections`, pass `--goal strengthen` with one of those targets. A thin section rests on one claim, or on no verified claim. The rewrite must cite at least two existing claims, one of them verified, or `splice` rejects it. This goal implies `--claims open`. Where the evidence does not back a sentence, narrow the sentence instead of citing a claim that does not support it.
 
 If the project has a `template`, the prompt includes the section's slot, and `splice` keeps the section's visual and claim kinds in that slot.
 

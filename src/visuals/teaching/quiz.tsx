@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useStrings } from "../language-context";
 import type { Claim, Quiz } from "@/lib/schema";
 
@@ -12,7 +12,7 @@ type Answers = Record<string, number[]>;
  * proje taşınabilir ve denetlenebilir olmak zorunda; bu bir sınav değil,
  * öğrenme aracıdır.
  */
-export function QuizView({ quiz, claims }: { quiz: Quiz; claims: Claim[] }) {
+export function QuizView({ quiz, claims, renderAction }: { quiz: Quiz; claims: Claim[]; renderAction?: (questionId: string) => ReactNode }) {
   const t = useStrings();
   const [answers, setAnswers] = useState<Answers>({});
   const [checked, setChecked] = useState<Record<string, boolean>>({});
@@ -45,6 +45,7 @@ export function QuizView({ quiz, claims }: { quiz: Quiz; claims: Claim[] }) {
                 <span className="quiz-index">{String(index + 1).padStart(2, "0")}</span>
                 {question.prompt}
               </p>
+              {renderAction?.(question.id)}
 
               <ul className="quiz-options">
                 {question.options.map((option, optionIndex) => {

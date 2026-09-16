@@ -16,9 +16,12 @@ import type { ResearchProject } from "@/lib/schema";
 export function EvidenceHealthView({
   project,
   onClaimSelect,
+  onStrengthen,
 }: {
   project: ResearchProject;
   onClaimSelect?: (claimId: string) => void;
+  /** Stüdyo verir: ince bölümü daha fazla kanıtla yeniden yazdırır. Görüntüleyici vermez. */
+  onStrengthen?: (section: { area: "story" | "report"; id: string }) => void;
 }) {
   const t = useStrings();
   const health = evidenceHealth(project);
@@ -95,6 +98,11 @@ export function EvidenceHealthView({
                 <span className="health-thin-count">
                   {t.healthSectionClaims(section.verifiedCount, section.claimCount)}
                 </span>
+                {onStrengthen ? (
+                  <button type="button" className="health-strengthen" onClick={() => onStrengthen({ area: section.area, id: section.id })}>
+                    {t.healthStrengthen}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

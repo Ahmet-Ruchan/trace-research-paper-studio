@@ -12,6 +12,7 @@ import {
   buildSectionBrief,
   builtInTemplates,
   defaultPublicationInclude,
+  evidenceHealth,
   expiryFromDays,
   projectContentFingerprint,
   projectForPublication,
@@ -296,8 +297,8 @@ Usage:
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
   node trace-agent.mjs stop --site <site-directory>
-  node trace-agent.mjs section --project <project.trace.json> --target story:<section-id>|report:<section-id>
-                              [--claims locked|open] [--instruction "<what should change>"]
+  node trace-agent.mjs section --project <project.trace.json> --target <kind>:<id>
+                              [--claims locked|open] [--goal revise|strengthen] [--instruction "<what should change>"]
   node trace-agent.mjs splice --brief <revisions/…brief.json> [--section <section.json>]
   node trace-agent.mjs templates
   node trace-agent.mjs publish --project <project.trace.json> [--expires-days 7|30|90]
@@ -329,12 +330,17 @@ Usage:
             TRACE_APP_DIR).
   --app-url Address of a Trace app that is already running (TRACE_APP_URL).
 
-  section   Rewrites ONE story or deep-report section while the evidence stays
-            locked. Writes a brief and a prompt under revisions/ next to the
-            project. Read the prompt, write the section object as JSON to the
-            reported sectionPath, then run splice.
+  section   Rewrites ONE part of a project while the evidence stays locked:
+            story:<id>, report:<id>, primer:<concept-id>, quiz:<question-id>,
+            derivation:<id> or equation:<technical-appendix-equation-id>.
+            Writes a brief and a prompt under revisions/ next to the project.
+            Read the prompt, write the object as JSON to the reported
+            sectionPath, then run splice.
   --claims  locked (default): the section must cite exactly the claims it
             cites now. open: it may cite any existing claim, never a new one.
+  --goal    strengthen: for a thin story or report section (see thinSections
+            in validate). The rewrite must cite at least two claims, one of
+            them verified, or splice rejects it. Implies --claims open.
   splice    Validates the written section with the app's own rules and swaps
             it into the project. Nothing changes if any check fails. The
             replaced section is kept as …previous.json.
@@ -676,6 +682,11 @@ function inspectProject(args, print = true) {
       quizQuestions: project.quiz?.questions.length ?? 0,
       applicationGuide: Boolean(project.applicationGuide),
     },
+    // Tek iddiaya ya da yalnızca doğrulanmamış iddialara dayanan bölümler;
+    // `section --goal strengthen` bunları daha fazla kanıtla yeniden yazdırır.
+    thinSections: evidenceHealth(project).sections
+      .filter((section) => section.thin)
+      .map((section) => ({ target: `${section.area}:${section.id}`, title: section.title, claims: section.claimCount, verified: section.verifiedCount })),
     project,
   };
 
@@ -723,11 +734,12 @@ function revisionPaths(projectPath, target) {
 
 function prepareSection(args) {
   if (!args.project) throw new Error("--project <project.trace.json> is required.");
-  if (!args.target) throw new Error("--target story:<section-id> or report:<section-id> is required.");
+  if (!args.target) throw new Error("--target <kind>:<id> is required, e.g. story:<section-id>, report:<section-id> or quiz:<question-id>.");
   const projectPath = resolve(args.project);
   const outcome = buildSectionBrief(readJsonFile(projectPath, "project"), args.target, {
     claimPolicy: args.claims,
     instruction: args.instruction,
+    goal: args.goal,
   });
   if (!outcome.ok) {
     console.error(JSON.stringify({ ok: false, issueCount: outcome.issues.length, issues: outcome.issues }, null, 2));
@@ -745,6 +757,7 @@ function prepareSection(args) {
     ok: true,
     target: outcome.brief.target,
     claimPolicy: outcome.brief.claimPolicy,
+    goal: outcome.brief.goal,
     evidenceFingerprint: outcome.brief.evidenceFingerprint,
     briefPath: paths.brief,
     promptPath: paths.prompt,
