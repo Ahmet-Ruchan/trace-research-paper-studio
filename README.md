@@ -34,6 +34,19 @@ running on the coding agent you already use, with no second API key.
 
 ---
 
+## New in 0.15
+
+| | |
+| --- | --- |
+| **[Regenerate one section](#rewrite-one-section-without-touching-the-evidence)** | Rewrite a single story or report section. The evidence stays locked, and nothing changes until you accept the new version. |
+| **[Version history](#go-back-to-any-earlier-version)** | Every regeneration, restore and import keeps the version it replaced. See what changed and restore it. |
+| **[Narrative templates](#reuse-a-structure-that-worked)** | Save a story's structure and reuse it on the next paper. Two templates are built in. |
+| **[Publish a link](#publish-a-story-with-a-link-you-control)** | Share a frozen copy at `/p/<id>`. Choose what goes out, unpublish at any time, or let the link expire. |
+
+All four work from your agent too. Ask it to rewrite a section, use a template or publish a link.
+
+---
+
 ## The problem
 
 Summarising a paper takes seconds. Trusting the summary takes hours.
@@ -126,6 +139,61 @@ unit, the same term defined twice, each side's limitations. It never says which 
 that would be interpretation. Every number carries the page it came from and both sources stay
 visible.
 
+### Rewrite one section without touching the evidence
+
+Don't like one section of the story or the deep report? Regenerate just that section. The
+evidence stays locked. By default the new version must cite exactly the claims the old one
+did, so only the wording changes. You can also let it choose again from the claims already
+collected, but it can never add a new fact. It goes through the same integrity checks as a
+full generation, and you see the current and proposed versions side by side before anything
+is replaced. The section request carries only the locked evidence, never the PDF, so a local
+model can do this too.
+
+![Regenerate a section](docs/images/regenerate.jpg)
+
+```text
+Rewrite the limitations section of my Trace project, shorter, using the Trace plugin.
+```
+
+### Go back to any earlier version
+
+Every regenerated section, restore and import keeps the version it replaced. While you edit,
+Trace keeps a snapshot every ten minutes. You can also name a version yourself. The history panel
+shows what has changed since each version: which story and report sections, which claims and
+which learning blocks. Restoring is itself a change, so a restore can be undone too. Changes an
+agent makes through the plugin land in the same history.
+
+![Version history](docs/images/history.jpg)
+
+### Reuse a structure that worked
+
+Save a story's structure as a template: the order of its sections, the visual each one uses and
+the kinds of claims it rests on, plus the order of the deep report. The template carries no text.
+Pick it when you analyse the next paper, or ask your agent to use it. Two templates are built in:
+*Method walkthrough* and *Results briefing*. A template is checked against the integrity rules
+before anything is generated, so a structure that could never pass is refused up front.
+
+![Save a narrative template](docs/images/templates.jpg)
+
+```text
+Explain Denoising Diffusion Probabilistic Models as a results briefing using the Trace plugin.
+```
+
+### Publish a story with a link you control
+
+**Publish** freezes a copy of the project behind an unguessable link that the Trace server itself
+serves at `/p/<id>`. Later edits stay private until you update the link. You choose whether the
+deep report, the technical appendix, the learning layer and the paper's own figures go out. The
+evidence quotes always do, because a claim without its page is not something a reader can check.
+You can unpublish a link, publish it again, let it expire after 7, 30 or 90 days, or delete it.
+Removing the project closes its links too. An unpublished, expired and never-existing link all
+return the same page, and the page asks search engines not to index it.
+
+The link works for anyone who can reach that server. When the studio runs on your machine, that is
+only you. When it is deployed somewhere public, it is everyone who has the link.
+
+![Publish a story](docs/images/publish.jpg)
+
 ### Send someone a link to one claim
 
 Every claim and every story section has its own anchor, in the studio and in the portable
@@ -174,6 +242,23 @@ agy plugin install trace-research-paper-studio/plugins/trace-paper-studio
 Confirm with `agy plugin list`, then restart the CLI or open a new session.
 Do not have the CLI yet? `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 
+### Already installed? Update
+
+```bash
+# Claude Code
+claude plugin marketplace update trace-research-tools
+claude plugin update trace-paper-studio@trace-research-tools --scope user
+
+# Codex
+codex plugin marketplace upgrade trace-research-tools
+
+# Antigravity CLI: pull, then reinstall from the same directory
+git -C trace-research-paper-studio pull
+agy plugin install trace-research-paper-studio/plugins/trace-paper-studio
+```
+
+Restart the agent afterwards so it loads the new skill.
+
 **Requirements:** Node.js 20+, and `pdftotext` (from Poppler) for page-accurate extraction.
 Without it the agent falls back to its own PDF reader.
 
@@ -190,6 +275,14 @@ Explain Attention Is All You Need using the Trace plugin.
 
 ```text
 Take this paper and give me the output using the Trace plugin: ./paper.pdf
+```
+
+```text
+Rewrite section 4 of that Trace project so it names the quadratic cost plainly.
+```
+
+```text
+Publish a link to it without the paper's figures, expiring in 30 days.
 ```
 
 When it finishes, the browser is already open — both the self-contained site and the full
@@ -265,7 +358,9 @@ configuration.
 The plugin is one way in. The web app adds generation with your own provider keys, an editable
 narrative, and a local library. Projects are stored as files under `~/.trace/library`, shared by
 Codex, Claude Code, Antigravity and every Trace Studio launch directory. Existing browser-only
-projects migrate there automatically; removing a Library item removes its stored file.
+projects migrate there automatically; removing a Library item removes its stored file and its
+version history. Earlier versions live under `~/.trace/library/revisions`, saved templates under
+`~/.trace/templates`.
 
 ```bash
 git clone https://github.com/Ahmet-Ruchan/trace-research-paper-studio.git
@@ -280,7 +375,10 @@ English or Turkish, chosen from your browser language. Both files also ship as p
 at `/examples/`, and any `.trace.json` imports through **Library → Trace JSON**.
 
 **Workspaces:** `Lab` inspects the evidence, `Story` edits the narrative, `Preview` is the
-reading experience.
+reading experience. **Regenerate** on a story section, or on a deep report section in `Lab`,
+rewrites only that section against the locked evidence. The history button in the header opens
+earlier versions of the project. **Save as template** in `Story` keeps the structure for the next
+paper.
 
 <details>
 <summary><b>Model providers</b></summary>
@@ -318,6 +416,19 @@ npm run trace:agent -- prepare --paper "paper.pdf" --language en --depth deep
 # --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"
 npm run trace:agent -- deliver --project ".trace/jobs/paper/paper.trace.json"
+
+# Rewrite one section with the evidence locked: write a brief, let the agent
+# write the section, then splice it in with the app's own checks
+npm run trace:agent -- section --project ".trace/jobs/paper/paper.trace.json" --target story:<section-id>
+npm run trace:agent -- splice --brief ".trace/jobs/paper/revisions/story-<section-id>.brief.json"
+
+# Narrative templates: list them, generate with one, save one from a project
+npm run trace:agent -- templates
+npm run trace:agent -- prepare --arxiv 1706.03762 --language en --depth deep --template method-walkthrough
+npm run trace:agent -- save-template --project ".trace/jobs/paper/paper.trace.json" --name "Reading group"
+
+# Publish a shareable link, served by the studio at /p/<id>
+npm run trace:agent -- publish --project ".trace/jobs/paper/paper.trace.json" --no-figures --expires-days 30
 ```
 
 With `--title`, the command reports which paper it matched, the runner-up candidates and a
@@ -429,6 +540,9 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
 - Provider keys are used only for the active request and never appear in exports.
 - Verified paper claims require an excerpt and a visible page number.
 - Comparison visuals may only use numeric values already recorded in evidence.
+- A publication is a filtered copy: blocks the author leaves out are removed from the served file,
+  not hidden. Pages are sent with a strict Content-Security-Policy, `frame-ancestors 'none'`,
+  `no-store` and `noindex`, and a missing, unpublished or expired link is indistinguishable.
 
 > No extraction system replaces reading the original paper. Trace makes checking it faster and
 > more visible; it does not remove the need for it.
@@ -440,7 +554,10 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), the
 paper's own figures placed beside the prose that argues them, the evidence health panel,
-side-by-side comparison of two projects, per-claim and per-section permalinks, arXiv resolution
+side-by-side comparison of two projects, section-level regeneration with evidence locking,
+project version history, reusable narrative templates, shareable publications with
+publication controls,
+per-claim and per-section permalinks, arXiv resolution
 from a paper's name, local library, exports, the native plugin for Codex / Claude Code /
 Antigravity CLI, and generation through Gemini, OpenAI, Claude, OpenRouter and a local model
 server (Ollama, LM Studio, llama.cpp).
@@ -450,7 +567,7 @@ local servers have no file-upload endpoint and most open-weight models cannot se
 all, so those stages refuse it rather than quietly working without the paper. Only a loopback
 address is accepted — the request leaves the Trace server, and "local model" means this machine.
 
-Not there yet: hosted publishing, accounts, or cloud-synced persistence.
+Not there yet: accounts, access control beyond an unguessable link, or cloud-synced persistence.
 
 *Attention Is All You Need* ships fully enriched in `public/examples/`, in English and Turkish,
 serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
@@ -469,9 +586,9 @@ the two from mixing.
 
 - [x] Local and open-weight provider adapters
 - [x] Side-by-side paper comparison
-- [ ] Section-level regeneration with evidence locking
-- [ ] Project revisions and reusable narrative templates
-- [ ] Shareable hosted stories with publication controls
+- [x] Section-level regeneration with evidence locking
+- [x] Project revisions and reusable narrative templates
+- [x] Shareable hosted stories with publication controls
 - [ ] Team review, annotations and claim approval
 
 ---

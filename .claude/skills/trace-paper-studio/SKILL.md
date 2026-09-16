@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Converts research-paper PDFs into evidence-grounded Trace projects using the active Claude Code model. Use for deep paper analysis, interactive StorySpec creation, technical appendices, or .trace.json validation without external LLM API calls.
+description: Converts research-paper PDFs into evidence-grounded Trace projects using the active Claude Code model. Use for deep paper analysis, interactive StorySpec creation, technical appendices, .trace.json validation, rewriting one section with the evidence locked, narrative templates, or publishing a shareable link, without external LLM API calls.
 ---
 
 # Trace Paper Studio
