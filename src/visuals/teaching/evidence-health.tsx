@@ -68,6 +68,16 @@ export function EvidenceHealthView({
           }
           ratio={health.excerpts.checked && health.excerpts.total ? health.excerpts.located / health.excerpts.total : 0}
         />
+        {/* Hiç inceleme yapılmamış projede bu kutu gösterilmez: "0/31" bir eksiklik gibi
+            okunurdu, oysa inceleme isteğe bağlı bir adım. */}
+        {health.reviews.approved + health.reviews.rejected > 0 ? (
+          <Stat
+            value={`${health.reviews.approved + health.reviews.rejected}/${health.claims.total}`}
+            label={t.healthReviewed}
+            note={t.healthReviewedNote(health.reviews.approved, health.reviews.rejected, health.reviews.pending)}
+            ratio={health.claims.total ? (health.reviews.approved + health.reviews.rejected) / health.claims.total : 0}
+          />
+        ) : null}
       </div>
 
       {onCheckQuotes ? (

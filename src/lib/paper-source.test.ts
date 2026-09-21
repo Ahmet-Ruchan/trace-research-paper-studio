@@ -224,8 +224,26 @@ describe("fetchFirstAvailablePdf", () => {
 });
 
 describe("OpenReview", () => {
+  it("doğrulama istenince makaleyi OpenAlex'ten tanır ve arXiv kopyasına yönelir", async () => {
+    mockFetch([
+      { match: "https://api2.openreview.net", status: 403, body: { name: "ChallengeRequiredError" } },
+      { match: "https://api.openreview.net", status: 403, body: { name: "ChallengeRequiredError" } },
+      {
+        match: "https://api.openalex.org/works?filter=locations.landing_page_url",
+        body: { results: [{ id: "https://openalex.org/W7", title: "An Image is Worth 16x16 Words", locations: [{ landing_page_url: "https://arxiv.org/abs/2010.11929" }, { pdf_url: "https://openreview.net/pdf?id=YicbFdNTTy" }] }] },
+      },
+    ]);
+    const entry = await resolveIdentifier("https://openreview.net/forum?id=YicbFdNTTy");
+    expect(entry).toMatchObject({ origin: "openreview", title: "An Image is Worth 16x16 Words", arxivId: "2010.11929" });
+    // OpenReview'ın kendi PDF'i doğrulamanın arkasında; aday olmaz.
+    expect(entry.pdfCandidates).toEqual(["https://arxiv.org/pdf/2010.11929"]);
+  });
+
   it("tarayıcı doğrulamasını aşmaya çalışmaz, ne yapılacağını söyler", async () => {
-    mockFetch([{ match: "https://api", status: 403, body: { name: "ChallengeRequiredError" } }]);
+    mockFetch([
+      { match: "https://api.openalex.org/", body: { results: [] } },
+      { match: "https://api", status: 403, body: { name: "ChallengeRequiredError" } },
+    ]);
     await expect(resolveIdentifier("openreview:YicbFdNTTy")).rejects.toThrow(/does not bypass[\s\S]*--paper/);
   });
 });

@@ -510,3 +510,63 @@ test.describe("quote check", () => {
     }).toEqual([67, "needs-review"]);
   });
 });
+
+test.describe("claim review", () => {
+  test("records a person's decision, keeps it apart from the model's confidence, and flags the sections that used a rejected claim", async ({ page, request }) => {
+    const project = projectNamed("e2e-review");
+    delete project.claimReviews;
+    await seed(request, project);
+    const used = project.story.sections[0].claimIds[0];
+    const usedClaim = project.evidence.claims.find((claim) => claim.id === used)!;
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav button", { hasText: "Review" }).click();
+    const card = page.locator(".review-card", { hasText: usedClaim.statement });
+    // İsim girilmeden karar verilemez: kimin baktığı kaydın parçası.
+    await expect(card.getByRole("button", { name: "Reject" })).toBeDisabled();
+    await page.getByPlaceholder("Your name").fill("Ada");
+    await card.getByPlaceholder("Note (optional): what you saw on the page").fill("The table says otherwise.");
+    await card.getByRole("button", { name: "Reject" }).click();
+
+    await expect(page.locator(".health-block", { hasText: "still rest on a rejected claim" })).toContainText(project.story.sections[0].title);
+    await expect(page.locator(".health-stat", { hasText: "rejected" }).first()).toContainText("1");
+
+    await expect.poll(async () => {
+      const saved = (await (await request.get("/api/library")).json()) as { projects: ResearchProject[] };
+      const stored = saved.projects.find((item) => item.id === project.id);
+      return [stored?.claimReviews?.[used]?.status, stored?.claimReviews?.[used]?.by, stored?.evidence.claims.find((claim) => claim.id === used)?.confidence];
+    }).toEqual(["rejected", "Ada", usedClaim.confidence]);
+  });
+});
+
+test.describe("ask the evidence", () => {
+  test("shows the claims an answer rests on, and says when the evidence does not cover a question", async ({ page, request }) => {
+    const project = projectNamed("e2e-ask");
+    await seed(request, project);
+    const cited = project.evidence.claims[0];
+    let calls = 0;
+    await page.route("**/api/ask", async (route) => {
+      const body = route.request().postDataJSON() as { question: string; apiKey: string };
+      expect(body.apiKey).toBe("test-key");
+      calls += 1;
+      await route.fulfill({
+        json: calls === 1
+          ? { answerable: true, answer: "It relies on attention alone.", claimIds: [cited.id], model: "gemini-3.7-flash" }
+          : { answerable: false, answer: "The collected evidence says nothing about training cost in dollars.", claimIds: [], model: "gemini-3.7-flash" },
+      });
+    });
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav button", { hasText: "Ask" }).click();
+    await page.getByLabel("Gemini API key").fill("test-key");
+    await page.getByLabel("Your question about the paper").fill("What does the model rely on?");
+    await page.getByRole("main").getByRole("button", { name: "Ask", exact: true }).click();
+    await expect(page.locator(".ask-list > li").first()).toContainText("It relies on attention alone.");
+    await page.locator(".ask-claims button").first().click();
+    await expect(page.locator(".evidence-drawer h3")).toHaveText(cited.statement);
+
+    await page.getByLabel("Your question about the paper").fill("How many dollars did training cost?");
+    await page.getByRole("main").getByRole("button", { name: "Ask", exact: true }).click();
+    await expect(page.locator(".ask-list > li").first()).toContainText("Not covered by the collected evidence");
+  });
+});

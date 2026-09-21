@@ -13,6 +13,7 @@ export {
 export { expectedSectionCounts } from "./section-budgets";
 export { evidenceHealth } from "./evidence-health";
 export { applyExcerptCheck, splitPages } from "./paper-text";
+export { ankiCards, buildAnkiDeck } from "./anki-export";
 export {
   defaultPublicationInclude,
   expiryFromDays,

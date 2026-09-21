@@ -118,6 +118,21 @@ describe("splicing a story section", () => {
     expect(() => spliceSection(project, storyTarget, reclaimed, { claimPolicy: "open" })).not.toThrow();
   });
 
+  it("never lets a rewrite cite a claim a reviewer rejected", () => {
+    const project = fresh();
+    const current = storySection(project, "story-tradeoff");
+    const reclaimed = { ...current, body: "Different support.", claimIds: ["claim-limitation-01", "claim-result-04"] };
+    project.claimReviews = { "claim-result-04": { status: "rejected", by: "Ada", at: "2026-09-22T10:00:00.000Z" } };
+
+    expect(issuesOf(() => spliceSection(project, storyTarget, reclaimed, { claimPolicy: "open" })).join(" "))
+      .toMatch(/reviewer rejected claim-result-04/);
+    expect(buildSectionRegenerationPrompt(project, storyTarget, { claimPolicy: "open", instruction: "" }))
+      .toMatch(/Do not cite these claims; a reviewer rejected them: claim-result-04/);
+    // Kilitliyken iddialar zaten değişemez; yönerge yalnızca serbest seçimde anlamlı.
+    expect(buildSectionRegenerationPrompt(project, storyTarget, { claimPolicy: "locked", instruction: "" }))
+      .not.toMatch(/reviewer rejected/);
+  });
+
   it("never lets an open section cite a claim that does not exist", () => {
     const project = fresh();
     const current = storySection(project, "story-tradeoff");

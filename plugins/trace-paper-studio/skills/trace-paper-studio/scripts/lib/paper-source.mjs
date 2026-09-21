@@ -804,13 +804,44 @@ export async function fetchOpenReviewById(id) {
     };
   }
   // OpenReview programla gelen isteklere bir tarayıcı doğrulaması sorabiliyor.
-  // Bu bilinçli bir engel; aşılmaz, kullanıcıya ne yapacağı söylenir.
+  // Bu bilinçli bir engel ve aşılmaz. Ama makalenin KİM olduğunu başka bir
+  // dizinden öğrenmek engeli aşmak değil: OpenAlex bazı OpenReview sayfalarını
+  // tanıyor ve makalenin arXiv kopyası oradan indirilebiliyor.
   if (challenged) {
+    const known = await optional(() => findOpenAlexByLandingPage(`https://openreview.net/forum?id=${id}`));
+    if (known) return { ...known, openReviewId: id, viaOpenAlex: true };
     throw new SourceError(
       `OpenReview asked for a browser check, which Trace does not bypass. Open https://openreview.net/pdf?id=${id} in your browser, save the PDF and pass it with --paper — or give the paper's title, since most OpenReview papers are also on arXiv.`,
     );
   }
   throw new SourceError(`No public OpenReview submission found: ${id}`);
+}
+
+/** Bir açılış sayfası adresinden OpenAlex kaydını bulur; yoksa `undefined`. */
+export async function findOpenAlexByLandingPage(landingPageUrl) {
+  const url =
+    "https://api.openalex.org/works?" +
+    new URLSearchParams({
+      filter: `locations.landing_page_url:${landingPageUrl}`,
+      "per-page": "1",
+      select: "id,doi,title,publication_date,publication_year,authorships,primary_location,best_oa_location,locations,open_access,abstract_inverted_index",
+    });
+  const work = (await (await request(url)).json())?.results?.[0];
+  if (!work?.title) return undefined;
+  const doi = work.doi ? String(work.doi).replace(/^https?:\/\/doi\.org\//i, "") : undefined;
+  return {
+    origin: "openreview",
+    openAlexId: work.id,
+    doi: doi && !/^10\.48550\//i.test(doi) ? doi : undefined,
+    arxivId: openAlexArxivId(work),
+    title: work.title,
+    summary: openAlexAbstract(work),
+    authors: (work.authorships ?? []).map((authorship) => authorship.author?.display_name).filter(Boolean),
+    published: work.publication_date ?? String(work.publication_year ?? ""),
+    venue: work.primary_location?.source?.display_name,
+    absUrl: landingPageUrl,
+    oaPdfUrls: openAlexPdfUrls(work),
+  };
 }
 
 /** Unpaywall bir e-posta ister; kullanıcı vermediyse hiç çağrılmaz. */
@@ -893,7 +924,13 @@ export async function resolveIdentifier(identifier) {
     }
     case "openreview": {
       const record = await fetchOpenReviewById(parsed.id);
-      return withPdfCandidates(record, [record.repositoryPdfUrl]);
+      // Doğrulama istendiyse OpenReview'ın kendi PDF'i de kapalıdır; arXiv kopyası denenir.
+      return withPdfCandidates(
+        record,
+        record.viaOpenAlex
+          ? [record.arxivId ? `https://arxiv.org/pdf/${record.arxivId}` : undefined, ...(record.oaPdfUrls ?? []).filter((url) => !/openreview\.net/.test(url))]
+          : [record.repositoryPdfUrl],
+      );
     }
     default:
       throw new SourceError("A paper title is searched, not resolved; use searchPapers.");

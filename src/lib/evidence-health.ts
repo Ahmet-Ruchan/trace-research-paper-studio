@@ -72,6 +72,8 @@ export type ExcerptStatus = {
 export type EvidenceHealth = {
   claims: ClaimTally;
   excerpts: ExcerptStatus;
+  /** Bir insanın karar verdiği iddialar; `confidence`'tan ve alıntı denetiminden ayrı bir işaret. */
+  reviews: { approved: number; rejected: number; pending: number };
   /** Makaleden gelen ve dış bağlamdan (arXiv, Semantic Scholar…) gelen iddialar. */
   grounding: { fromPaper: number; fromWeb: number };
   pages: PageCoverage;
@@ -128,6 +130,18 @@ function tally(claims: readonly Claim[]): ClaimTally {
     needsReview: claims.length - verified,
     verifiedRatio: claims.length ? verified / claims.length : 0,
   };
+}
+
+function reviewTally(project: ResearchProject): EvidenceHealth["reviews"] {
+  const reviews = project.claimReviews ?? {};
+  let approved = 0;
+  let rejected = 0;
+  // Yalnızca hâlâ var olan iddialar sayılır; silinmiş bir iddianın kararı sayıyı şişirmesin.
+  for (const claim of project.evidence.claims) {
+    if (reviews[claim.id]?.status === "approved") approved += 1;
+    if (reviews[claim.id]?.status === "rejected") rejected += 1;
+  }
+  return { approved, rejected, pending: project.evidence.claims.length - approved - rejected };
 }
 
 function excerptStatus(project: ResearchProject): ExcerptStatus {
@@ -228,6 +242,7 @@ export function evidenceHealth(project: ResearchProject): EvidenceHealth {
   return {
     claims: tally(claims),
     excerpts: excerptStatus(project),
+    reviews: reviewTally(project),
     grounding: { fromPaper, fromWeb },
     pages: { cited, first, last, gaps },
     sources: sourceUsage,

@@ -36,14 +36,17 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**0.19**
+**0.20**
 
 | | |
 | --- | --- |
-| **[Every quote checked against its page](#check-every-quote-against-its-page)** | Trace now looks for each quote in the text of the page it cites, whichever model wrote it. A claim whose quotes cannot be found is kept but marked needs-review, and the project records what was checked. Works for a new analysis, for an imported project (give it the PDF) and from your agent (`verify`). |
-| **[Run it on a server](#run-it-on-a-server)** | A Dockerfile with Poppler included, a compose file and a Railway config. Set `TRACE_ACCESS_PASSWORD` and the whole studio sits behind a password, while published links stay open. |
+| **[See the quote on the page](#check-every-quote-against-its-page)** | **Show on the page** in the evidence drawer renders the cited page and marks the quoted words on it, across line breaks and hyphenation. If the words are not there, it says so and still shows the page. |
+| **[A person reviews the claims](#let-a-person-review-the-claims)** | A review queue orders the claims by where a mistake is most likely. Approve or reject each one under your name. The decision is stored apart from the model's confidence, and a rewrite can no longer cite a rejected claim. |
+| **[Ask the evidence](#ask-the-evidence)** | Ask a question about the paper. The model sees only the collected claims, must name the ones it used, and says so when they do not cover the question. |
+| **[Flashcards for Anki](#study-it-with-anki)** | Primer concepts, quiz questions and glossary terms as an Anki import file, each card with its quote and page. |
+| **OpenReview links** | When OpenReview asks for a browser check, Trace looks the paper up on OpenAlex instead and downloads its arXiv copy when there is one. |
 
-The quote check works from your agent too; ask it to verify your Trace project.
+Flashcards also work from your agent (`anki`). Reviewing claims is for people only: an agent cannot approve one.
 
 ---
 
@@ -176,6 +179,10 @@ and which ones were not found, without the PDF. A project that was never checked
 showing a pass. A missing quote is not always an invented one: tables, equations and scanned pages
 do not survive text extraction, which is why the claim is kept for you to look at.
 
+**Show on the page** in the evidence drawer goes one step further: it renders the cited page and
+marks the quoted words on it, so you read the sentence in its place instead of searching a page for
+it. When the words are not on that page it says so and shows the page anyway.
+
 It runs during every new analysis. For a project you imported, **Check the quotes against the PDF**
 in the evidence health panel asks for the PDF; if almost nothing matches, it assumes the wrong file
 and changes nothing. The shipped *Attention Is All You Need* example was checked against the arXiv
@@ -183,6 +190,37 @@ PDF: all 67 quotes were found.
 
 ```text
 Verify the quotes of my Trace project against the PDF using the Trace plugin.
+```
+
+### Let a person review the claims
+
+A model says how sure it is, and a program can check that a quote is on its page. Neither can say
+that the quote actually supports the claim. **Review** in the studio is where a person does that. The
+queue puts first the claims whose quote was not found, then the ones the model was unsure about, then
+the ones the narrative uses. You approve or reject each under your name, with an optional note.
+
+A decision never changes the model's own `confidence`; it is stored next to it, so "the model was
+sure" and "someone looked at the page" stay two different things. A rejected claim stays in the
+ledger. Trace shows which sections still rest on it, and a rewrite of those sections is not allowed
+to cite it again. Reviews are part of the `.trace.json`, so they travel with the project. An agent
+cannot write them.
+
+### Ask the evidence
+
+Ask a question in the **Ask** tab. The model answering has not read the paper: it sees only the
+claims, metrics and glossary collected in the project, must list the claims it used, and each one
+opens its quote and page. When the collected evidence does not cover the question, the answer says
+that instead of filling the gap from general knowledge. Claims a reviewer rejected are not shown to
+the model. Because no PDF is sent, a local model can answer too. Nothing is saved.
+
+### Study it with Anki
+
+**Anki** in the studio downloads an import file with one card per primer concept, quiz question and
+glossary term. The back of every card carries the quote and the page it rests on. In Anki, choose
+File → Import; the file sets the deck, the note type and the tags itself.
+
+```text
+Make Anki flashcards from my Trace project using the Trace plugin.
 ```
 
 ### Compare two papers without being told which one wins
@@ -514,6 +552,9 @@ npm run trace:agent -- prepare --source https://aclanthology.org/2020.acl-main.1
 # Check every quote against its page and record the result in the project
 npm run trace:agent -- verify --project "paper.trace.json" --paper "paper.pdf"
 
+# Flashcards for Anki
+npm run trace:agent -- anki --project "paper.trace.json"
+
 # The citation graph of a project, a DOI or a title
 npm run trace:agent -- graph --project "paper.trace.json"
 
@@ -665,6 +706,9 @@ the server.
 - Every quote is searched for on the page it cites, for every provider. A claim whose quotes are not
   found cannot stay verified, and the check never upgrades a claim. A PDF uploaded for a re-check is
   read in a temporary directory and deleted; if almost no quote matches, nothing is changed.
+- A reviewer's decision lives at the project root, not inside the claim, so no model output schema
+  can produce an "approved" claim. The question in **Ask** is passed to the model as data, and an
+  answer that cites an unknown or rejected claim is refused.
 - `TRACE_ACCESS_PASSWORD` puts the studio and its API behind one shared password, compared in
   constant time. It is not an account system: published links and the health check stay open.
 - A context source that returns an unreliable record is dropped rather than trusted.
@@ -689,7 +733,8 @@ the server.
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
-mechanical check of every quote against its page, a Docker image with optional password protection,
+mechanical check of every quote against its page with the quote marked on the page image, a claim
+review queue, questions answered from the collected evidence only, Anki flashcards, a Docker image with optional password protection,
 side-by-side comparison of two projects, section-level regeneration with evidence locking (story, report and learning items),
 strengthening thin sections, project version history with word-level diffs, editable narrative
 templates, model speed tests before generation, shareable publications with
@@ -736,7 +781,8 @@ the two from mixing.
 - [x] Shareable hosted stories with publication controls
 - [x] Papers beyond arXiv, literature maps, citation graphs and fully local analysis
 - [x] Quotes checked against the page text; Docker image and password protection
-- [ ] Team review, annotations and claim approval
+- [x] Claim review by a person, quotes shown on the page, evidence-locked questions, Anki export
+- [ ] Team review with accounts and shared annotations
 
 ---
 

@@ -11,7 +11,9 @@ import { fileURLToPath } from "node:url";
 import {
   buildSectionBrief,
   builtInTemplates,
+  ankiCards,
   applyExcerptCheck,
+  buildAnkiDeck,
   defaultPublicationInclude,
   evidenceHealth,
   splitPages,
@@ -297,6 +299,7 @@ Usage:
   node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id> | --doi <doi> | --source <link or id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep] [--template <id|path>]
   node trace-agent.mjs graph (--project <project.trace.json> | --doi <doi> | --title "<paper name>" | --source <link or id>) [--limit <n>]
   node trace-agent.mjs verify --project <project.trace.json> [--paper <paper.pdf> | --pages <paper.pages.txt>]
+  node trace-agent.mjs anki --project <project.trace.json> [--out <deck.anki.txt>]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
@@ -332,6 +335,8 @@ Usage:
             claim none of whose quotes can be found becomes needs-review;
             nothing is ever upgraded. Run it after writing the project and
             before validate and deliver. Needs pdftotext.
+  anki      Writes an Anki import file: primer concepts, quiz questions and
+            glossary terms, each card carrying its quote and page.
   graph     Prints the paper's citation graph from OpenAlex: the most-cited
             works it builds on and the most-cited works that cite it. Every
             node carries an "identifier" that prepare --source accepts.
@@ -837,6 +842,29 @@ function verifyProject(args) {
     note: check.unlocated.length
       ? "Open each notFound item on its page. Fix an excerpt you paraphrased by copying the exact words, then run verify again; leave a claim needs-review when its support really is a table, figure or equation that text extraction cannot read. Run validate afterwards: a section may have become thin."
       : "Every quote was found on the page it cites.",
+  }, null, 2));
+}
+
+/**
+ * Anki destesi: primer kavramları, quiz soruları ve sözlük, her kartın
+ * arkasında dayandığı alıntı ve sayfayla. Stüdyodaki düğmeyle aynı kod.
+ */
+function exportAnki(args) {
+  const inspected = inspectProject(args, false);
+  if (!inspected.ok) {
+    console.error(JSON.stringify({ ok: false, projectPath: inspected.projectPath, issues: inspected.issues }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const cards = ankiCards(inspected.project);
+  if (!cards.length) throw new Error("This project has no primer, quiz or glossary to make cards from.");
+  const outPath = resolve(args.out ?? inspected.projectPath.replace(/(\.trace)?\.json$/i, "") + ".anki.txt");
+  atomicWrite(outPath, buildAnkiDeck(inspected.project));
+  console.log(JSON.stringify({
+    ok: true,
+    deckPath: outPath,
+    cards: cards.length,
+    note: "In Anki: File → Import, pick this file. The deck name, note type and tags are set by the file's header lines.",
   }, null, 2));
 }
 
@@ -1463,6 +1491,7 @@ try {
   else if (command === "publish") await publishProjectLink(args);
   else if (command === "graph") await citationGraph(args);
   else if (command === "verify") verifyProject(args);
+  else if (command === "anki") exportAnki(args);
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

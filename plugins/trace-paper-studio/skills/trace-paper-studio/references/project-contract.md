@@ -189,6 +189,16 @@ Optional. `node scripts/trace-agent.mjs verify --project <path>` searches for ev
 - Do not author or edit this block, and do not set a claim back to `verified` after `verify` lowered it. Fix the excerpt (copy the exact words from `paper.pages.txt`) and run `verify` again.
 - A project without this block is shown as "quotes not checked", not as passing.
 
+## `claimReviews` — written by a person, never by an agent
+
+Optional. A map from claim id to a human reviewer's decision, made in the studio's Review queue:
+
+```json
+{ "result-bleu-en-de": { "status": "approved", "by": "Ada", "at": "2026-09-22T10:00:00.000Z", "note": "Checked Table 2." } }
+```
+
+`status` is `approved` or `rejected`. It lives at the project root, not inside the claim, so that a model can never produce "approved" claims. It does not change `confidence`. Leave the block exactly as you found it. A section rewritten with `--claims open` may not cite a rejected claim.
+
 # Learning layer
 
 Five optional root blocks turn a summary into something the reader can learn from and experiment with. Which ones are **required** depends on `depth`:

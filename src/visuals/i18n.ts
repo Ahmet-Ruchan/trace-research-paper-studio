@@ -152,6 +152,8 @@ export type Strings = {
   healthQuotesCheck: string;
   healthQuotesRecheck: string;
   healthQuotesPage: (page?: number) => string;
+  healthReviewed: string;
+  healthReviewedNote: (approved: number, rejected: number, pending: number) => string;
   // Kalıcı bağlantı
   permalinkTitle: string;
 };
@@ -305,6 +307,9 @@ const en: Strings = {
   healthQuotesCheck: "Check the quotes against the PDF",
   healthQuotesRecheck: "Check again with the PDF",
   healthQuotesPage: (page) => (page ? `p. ${page}` : "no page"),
+  healthReviewed: "claims reviewed by a person",
+  healthReviewedNote: (approved, rejected, pending) =>
+    `${approved} approved, ${rejected} rejected${pending ? `, ${pending} not looked at yet` : ""}. A person's decision is kept apart from the model's own confidence.`,
   permalinkTitle: "Copy a link to this",
 };
 

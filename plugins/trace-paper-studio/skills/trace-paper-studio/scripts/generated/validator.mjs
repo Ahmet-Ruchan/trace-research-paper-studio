@@ -1934,6 +1934,115 @@ function handleIntersectionResults(result, left, right) {
 	result.value = merged.data;
 	return result;
 }
+const $ZodRecord = /*@__PURE__*/ $constructor("$ZodRecord", (inst, def) => {
+	$ZodType.init(inst, def);
+	inst._zod.parse = (payload, ctx) => {
+		const input = payload.value;
+		if (!isPlainObject(input)) {
+			payload.issues.push({
+				expected: "record",
+				code: "invalid_type",
+				input,
+				inst
+			});
+			return payload;
+		}
+		const proms = [];
+		const values = def.keyType._zod.values;
+		if (values) {
+			payload.value = {};
+			const recordKeys = /* @__PURE__ */ new Set();
+			for (const key of values) if (typeof key === "string" || typeof key === "number" || typeof key === "symbol") {
+				recordKeys.add(typeof key === "number" ? key.toString() : key);
+				const keyResult = def.keyType._zod.run({
+					value: key,
+					issues: []
+				}, ctx);
+				if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+				if (keyResult.issues.length) {
+					payload.issues.push({
+						code: "invalid_key",
+						origin: "record",
+						issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+						input: key,
+						path: [key],
+						inst
+					});
+					continue;
+				}
+				const outKey = keyResult.value;
+				const result = def.valueType._zod.run({
+					value: input[key],
+					issues: []
+				}, ctx);
+				if (result instanceof Promise) proms.push(result.then((result) => {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}));
+				else {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}
+			}
+			let unrecognized;
+			for (const key in input) if (!recordKeys.has(key)) {
+				unrecognized = unrecognized ?? [];
+				unrecognized.push(key);
+			}
+			if (unrecognized && unrecognized.length > 0) payload.issues.push({
+				code: "unrecognized_keys",
+				input,
+				inst,
+				keys: unrecognized
+			});
+		} else {
+			payload.value = {};
+			for (const key of Reflect.ownKeys(input)) {
+				if (key === "__proto__") continue;
+				if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
+				let keyResult = def.keyType._zod.run({
+					value: key,
+					issues: []
+				}, ctx);
+				if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+				if (typeof key === "string" && number$1.test(key) && keyResult.issues.length) {
+					const retryResult = def.keyType._zod.run({
+						value: Number(key),
+						issues: []
+					}, ctx);
+					if (retryResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+					if (retryResult.issues.length === 0) keyResult = retryResult;
+				}
+				if (keyResult.issues.length) {
+					if (def.mode === "loose") payload.value[key] = input[key];
+					else payload.issues.push({
+						code: "invalid_key",
+						origin: "record",
+						issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+						input: key,
+						path: [key],
+						inst
+					});
+					continue;
+				}
+				const result = def.valueType._zod.run({
+					value: input[key],
+					issues: []
+				}, ctx);
+				if (result instanceof Promise) proms.push(result.then((result) => {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[keyResult.value] = result.value;
+				}));
+				else {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[keyResult.value] = result.value;
+				}
+			}
+		}
+		if (proms.length) return Promise.all(proms).then(() => payload);
+		return payload;
+	};
+});
 const $ZodEnum = /*@__PURE__*/ $constructor("$ZodEnum", (inst, def) => {
 	$ZodType.init(inst, def);
 	const values = getEnumValues(def.entries);
@@ -3219,6 +3328,39 @@ const intersectionProcessor = (schema, ctx, json, params) => {
 	const isSimpleIntersection = (val) => "allOf" in val && Object.keys(val).length === 1;
 	json.allOf = [...isSimpleIntersection(a) ? a.allOf : [a], ...isSimpleIntersection(b) ? b.allOf : [b]];
 };
+const recordProcessor = (schema, ctx, _json, params) => {
+	const json = _json;
+	const def = schema._zod.def;
+	json.type = "object";
+	const keyType = def.keyType;
+	const patterns = keyType._zod.bag?.patterns;
+	if (def.mode === "loose" && patterns && patterns.size > 0) {
+		const valueSchema = process$1(def.valueType, ctx, {
+			...params,
+			path: [
+				...params.path,
+				"patternProperties",
+				"*"
+			]
+		});
+		json.patternProperties = {};
+		for (const pattern of patterns) json.patternProperties[pattern.source] = valueSchema;
+	} else {
+		if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") json.propertyNames = process$1(def.keyType, ctx, {
+			...params,
+			path: [...params.path, "propertyNames"]
+		});
+		json.additionalProperties = process$1(def.valueType, ctx, {
+			...params,
+			path: [...params.path, "additionalProperties"]
+		});
+	}
+	const keyValues = keyType._zod.values;
+	if (keyValues) {
+		const validKeyValues = [...keyValues].filter((v) => typeof v === "string" || typeof v === "number");
+		if (validKeyValues.length > 0) json.required = validKeyValues;
+	}
+};
 const nullableProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
 	const inner = process$1(def.innerType, ctx, params);
@@ -3917,6 +4059,27 @@ function intersection(left, right) {
 		type: "intersection",
 		left,
 		right
+	});
+}
+const ZodRecord = /*@__PURE__*/ $constructor("ZodRecord", (inst, def) => {
+	$ZodRecord.init(inst, def);
+	ZodType.init(inst, def);
+	inst._zod.processJSONSchema = (ctx, json, params) => recordProcessor(inst, ctx, json, params);
+	inst.keyType = def.keyType;
+	inst.valueType = def.valueType;
+});
+function record(keyType, valueType, params) {
+	if (!valueType || !valueType._zod) return new ZodRecord({
+		type: "record",
+		keyType: string(),
+		valueType: keyType,
+		...normalizeParams(valueType)
+	});
+	return new ZodRecord({
+		type: "record",
+		keyType,
+		valueType,
+		...normalizeParams(params)
 	});
 }
 const ZodEnum = /*@__PURE__*/ $constructor("ZodEnum", (inst, def) => {
@@ -4727,6 +4890,21 @@ const excerptCheckSchema = object({
 		page: number().int().positive().optional()
 	})).max(400)
 });
+/**
+* Bir insanın bir iddia hakkındaki kararı.
+*
+* İddianın İÇİNDE değil, projenin kökünde ve iddia kimliğiyle tutuluyor:
+* `claimSchema` modellere verilen yapılandırılmış çıktı şemasının parçası ve
+* orada bir "review" alanı, modelin kendi iddialarını "onaylanmış" olarak
+* üretmesine kapı açardı. `confidence` modelin beyanı, `excerptCheck` bir
+* programın sonucu, bu ise bir kişinin hükmü — üçü ayrı kalır.
+*/
+const claimReviewSchema = object({
+	status: _enum(["approved", "rejected"]),
+	by: string().min(1).max(80),
+	at: string(),
+	note: string().max(600).optional()
+});
 const researchProjectSchema = generationResultSchema.extend({
 	version: literal(1),
 	id: string(),
@@ -4752,6 +4930,7 @@ const researchProjectSchema = generationResultSchema.extend({
 	applicationGuide: applicationGuideSchema.optional(),
 	figures: array(figureSchema).max(6).optional(),
 	excerptCheck: excerptCheckSchema.optional(),
+	claimReviews: record(string(), claimReviewSchema).optional(),
 	/** Anlatı bu şablona göre üretildiyse onun kopyası; yeniden üretim ve doğrulama yapıyı buradan korur. */
 	template: narrativeTemplateSchema.optional(),
 	generation: object({
@@ -5709,6 +5888,20 @@ function tally(claims) {
 		verifiedRatio: claims.length ? verified / claims.length : 0
 	};
 }
+function reviewTally(project) {
+	const reviews = project.claimReviews ?? {};
+	let approved = 0;
+	let rejected = 0;
+	for (const claim of project.evidence.claims) {
+		if (reviews[claim.id]?.status === "approved") approved += 1;
+		if (reviews[claim.id]?.status === "rejected") rejected += 1;
+	}
+	return {
+		approved,
+		rejected,
+		pending: project.evidence.claims.length - approved - rejected
+	};
+}
 function excerptStatus(project) {
 	const check = project.excerptCheck;
 	if (!check) return {
@@ -5795,6 +5988,7 @@ function evidenceHealth(project) {
 	return {
 		claims: tally(claims),
 		excerpts: excerptStatus(project),
+		reviews: reviewTally(project),
 		grounding: {
 			fromPaper,
 			fromWeb
@@ -5924,6 +6118,72 @@ function applyExcerptCheck(project, pages) {
 		downgraded,
 		downgradedIds: output.claims.filter((claim) => claim.confidence !== before.get(claim.id)).map((claim) => claim.id)
 	};
+}
+
+//#endregion
+//#region src/lib/anki-export.ts
+/**
+* Projeyi Anki'nin içe aktardığı sekmeyle ayrılmış metne çevirir.
+*
+* Anki'nin kendi `.apkg` biçimi bir SQLite veritabanı; onu üretmek bir
+* bağımlılık ve bir saldırı yüzeyi demek. Düz metin içe aktarma ise Anki'nin
+* belgelenmiş yolu: baştaki `#` satırları ayırıcıyı, desteyi ve etiket
+* sütununu söylüyor, kullanıcı dosyayı sürükleyip bırakıyor.
+*
+* Her kartın arkasında dayandığı alıntı ve sayfa duruyor: aralıklı tekrar bir
+* cümleyi ezberletir, kaynağı ezberletmez — kart onu her seferinde göstermeli.
+*/
+const escapeHtml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+/** Sekme ve satır sonu alan ayırıcılarıdır; metnin içinde kalamazlar. */
+const field = (html) => html.replace(/\t/g, " ").replace(/\r?\n/g, "<br>");
+const tag = (value) => value.trim().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}_:-]/gu, "") || "trace";
+function sourceLine(project, claimIds) {
+	const reference = project.evidence.claims.find((item) => claimIds.includes(item.id))?.sourceRefs[0];
+	if (!reference) return "";
+	return `<br><br><small>“${escapeHtml(reference.excerpt)}”${reference.page ? ` — p. ${reference.page}` : ""}</small>`;
+}
+function ankiCards(project) {
+	const cards = [];
+	for (const concept of project.primer?.concepts ?? []) cards.push({
+		front: `${escapeHtml(concept.term)}<br><small>What is it, and why does this paper need it?</small>`,
+		back: escapeHtml(concept.intuition) + (concept.formal ? `<br><br>\\[${escapeHtml(concept.formal)}\\]` : "") + `<br><br><b>Why this paper needs it:</b> ${escapeHtml(concept.whyItMatters)}` + sourceLine(project, concept.claimIds),
+		tags: ["primer", concept.level]
+	});
+	for (const question of project.quiz?.questions ?? []) {
+		const correct = question.options.filter((option) => option.correct);
+		cards.push({
+			front: `${escapeHtml(question.prompt)}<ul>${question.options.map((option) => `<li>${escapeHtml(option.label)}</li>`).join("")}</ul>`,
+			back: correct.map((option) => `<b>${escapeHtml(option.label)}</b><br>${escapeHtml(option.explanation)}`).join("<br><br>") + sourceLine(project, question.claimIds),
+			tags: ["quiz", question.kind]
+		});
+	}
+	for (const item of project.evidence.glossary) cards.push({
+		front: escapeHtml(item.term),
+		back: escapeHtml(item.definition) + (item.sourceRef ? `<br><br><small>“${escapeHtml(item.sourceRef.excerpt)}”${item.sourceRef.page ? ` — p. ${item.sourceRef.page}` : ""}</small>` : ""),
+		tags: ["glossary"]
+	});
+	return cards;
+}
+function buildAnkiDeck(project) {
+	const deck = `Trace::${project.evidence.paper.title.replace(/::/g, " - ").replace(/[\t\r\n]/g, " ").trim()}`;
+	const paperTag = tag(project.evidence.paper.title).slice(0, 60);
+	const header = [
+		"#separator:tab",
+		"#html:true",
+		"#notetype:Basic",
+		`#deck:${deck}`,
+		"#tags column:3"
+	];
+	const rows = ankiCards(project).map((card) => [
+		field(card.front),
+		field(card.back),
+		[
+			"trace",
+			paperTag,
+			...card.tags
+		].map(tag).join(" ")
+	].join("	"));
+	return `${[...header, ...rows].join("\n")}\n`;
 }
 
 //#endregion
@@ -6526,6 +6786,8 @@ function sectionObligations(project, target, claimPolicy, goal = "revise") {
 	const obligations = [];
 	const claims = new Map(project.evidence.claims.map((claim) => [claim.id, claim]));
 	if (claimPolicy === "locked") obligations.push(current.claimIds.length ? `Cite exactly these claim IDs and no others: ${current.claimIds.join(", ")}.` : "Cite no claims; claimIds stays empty.");
+	const rejected = rejectedClaimIds(project);
+	if (claimPolicy === "open" && rejected.length) obligations.push(`Do not cite these claims; a reviewer rejected them: ${rejected.join(", ")}.`);
 	if (target.kind === "story") {
 		const others = project.story.sections.filter((section) => section.id !== target.sectionId);
 		const otherKinds = new Set(others.flatMap((section) => section.claimIds.map((id) => claims.get(id)?.kind)));
@@ -6581,6 +6843,11 @@ function neighbours(project, target) {
 * Kilit bu görünümden etkilenmez: takma adımı her zaman TAM kanıta karşı
 * denetliyor ve mühür tam kanıtın mührü.
 */
+/** Bir insanın "desteklenmiyor" dediği iddialar; projede hâlâ var olanlarla sınırlı. */
+function rejectedClaimIds(project) {
+	const reviews = project.claimReviews ?? {};
+	return project.evidence.claims.filter((claim) => reviews[claim.id]?.status === "rejected").map((claim) => claim.id);
+}
 function sectionEvidenceView(evidence) {
 	return {
 		paper: {
@@ -6674,6 +6941,11 @@ function spliceSection(project, target, candidate, options) {
 	}
 	if (section.id !== current.id) issues.push(`The ${spec.noun} id must stay "${current.id}"; received "${section.id}"`);
 	if (options.claimPolicy === "locked" && !sameSet(section.claimIds, current.claimIds)) issues.push(`The claims are locked: cite exactly ${current.claimIds.join(", ") || "no claims"}; received ${section.claimIds.join(", ") || "none"}`);
+	if (options.claimPolicy === "open") {
+		const rejected = new Set(rejectedClaimIds(project));
+		const cited = section.claimIds.filter((id) => rejected.has(id));
+		if (cited.length) issues.push(`A reviewer rejected ${cited.join(", ")}; the ${spec.noun} must not cite ${cited.length === 1 ? "it" : "them"}`);
+	}
 	if (options.rejectUnchanged && canonicalJson(section) === canonicalJson(current)) issues.push(`The regenerated ${spec.noun} is identical to the current one`);
 	for (const locked of spec.lockedFields(current)) {
 		const received = section[locked.field];
@@ -6834,4 +7106,4 @@ function spliceSectionObject(input, rawBrief, section, options = {}) {
 }
 
 //#endregion
-export { applyExcerptCheck, buildSectionBrief, builtInTemplates, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, findBuiltInTemplate, isRevisionFileName, narrativeTemplateSchema, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, shouldSnapshot, spliceSectionObject, splitPages, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildSectionBrief, builtInTemplates, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, findBuiltInTemplate, isRevisionFileName, narrativeTemplateSchema, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, shouldSnapshot, spliceSectionObject, splitPages, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

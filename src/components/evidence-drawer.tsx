@@ -1,12 +1,16 @@
 "use client";
 
-import { Check, ExternalLink, FileText, X } from "lucide-react";
-import type { Claim, PaperEvidence } from "@/lib/schema";
+import { useState } from "react";
+import { Check, ExternalLink, FileText, ScanSearch, X } from "lucide-react";
+import type { Claim, ClaimReview, PaperEvidence } from "@/lib/schema";
 import { useStrings } from "@/visuals";
+import { ExcerptOnPage } from "./excerpt-on-page";
 
 type EvidenceDrawerProps = {
   claim?: Claim;
   evidence: PaperEvidence;
+  /** Bir insanın bu iddia hakkındaki kararı, varsa. */
+  review?: ClaimReview;
   fileUrl?: string;
   onClose?: () => void;
   persistent?: boolean;
@@ -20,8 +24,9 @@ const kindLabels: Record<Claim["kind"], string> = {
   limitation: "Limitation",
 };
 
-export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent = false }: EvidenceDrawerProps) {
+export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, persistent = false }: EvidenceDrawerProps) {
   const t = useStrings();
+  const [onPage, setOnPage] = useState<{ page: number; excerpt: string }>();
   return (
     <aside className={`evidence-drawer ${persistent ? "is-persistent" : ""}`} aria-label="Evidence detail">
       <div className="drawer-header">
@@ -49,6 +54,12 @@ export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent =
             </span>
             <small>{kindLabels[claim.kind]}</small>
           </div>
+          {review && (
+            <p className={`claim-reviewed is-${review.status}`}>
+              {review.status === "approved" ? "Approved" : "Rejected"} by {review.by}
+              {review.note ? ` — ${review.note}` : ""}
+            </p>
+          )}
 
           <h3>{claim.statement}</h3>
 
@@ -68,6 +79,15 @@ export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent =
                   <blockquote>“{reference.excerpt}”</blockquote>
                   <div className="reference-source">
                     <span>{source?.title ?? reference.sourceId}</span>
+                    {source?.type === "paper" && fileUrl && reference.page && (
+                      <button
+                        className="reference-locate"
+                        onClick={() => setOnPage({ page: reference.page!, excerpt: reference.excerpt })}
+                        title="Show this quote on the page"
+                      >
+                        <ScanSearch size={13} /> Show on the page
+                      </button>
+                    )}
                     {href && (
                       <a href={href} target="_blank" rel="noreferrer" aria-label="Open source">
                         <ExternalLink size={14} />
@@ -80,6 +100,7 @@ export function EvidenceDrawer({ claim, evidence, fileUrl, onClose, persistent =
           </div>
         </div>
       )}
+      {onPage && fileUrl && <ExcerptOnPage fileUrl={fileUrl} page={onPage.page} excerpt={onPage.excerpt} onClose={() => setOnPage(undefined)} />}
     </aside>
   );
 }

@@ -76,17 +76,19 @@ type RegeneratorProps = {
   project: ResearchProject;
   target: SectionTarget;
   goal?: RegenerationGoal;
+  /** Reddedilmiş bir iddiaya dayanan bölüm yeniden yazılırken kilit baştan açık gelir. */
+  claimPolicy?: ClaimPolicy;
   onApply: (next: ResearchProject, previous: RegeneratedSection) => void;
   onClose: () => void;
 };
 
-export function SectionRegenerator({ project, target, goal = "revise", onApply, onClose }: RegeneratorProps) {
+export function SectionRegenerator({ project, target, goal = "revise", claimPolicy: initialClaimPolicy, onApply, onClose }: RegeneratorProps) {
   const current = useMemo(() => findSection(project, target), [project, target]);
   const [assignment, setAssignment] = useState<ModelAssignment>(() => initialAssignment(project, target));
   const [apiKey, setApiKey] = useState("");
   const [instruction, setInstruction] = useState("");
   // Güçlendirmek başka iddialara dayanmak demek; kilit bu hedefte anlamsız.
-  const [claimPolicy, setClaimPolicy] = useState<ClaimPolicy>(goal === "strengthen" ? "open" : "locked");
+  const [claimPolicy, setClaimPolicy] = useState<ClaimPolicy>(initialClaimPolicy ?? (goal === "strengthen" ? "open" : "locked"));
   const strengthen = goal === "strengthen";
   const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [applyIssues, setApplyIssues] = useState<string[]>([]);
@@ -516,14 +518,14 @@ export function useSectionRegeneration(
   project: ResearchProject,
   onProjectChange?: (project: ResearchProject, reason?: RevisionReason) => void,
 ) {
-  const [request, setRequest] = useState<{ target: SectionTarget; goal: RegenerationGoal }>();
+  const [request, setRequest] = useState<{ target: SectionTarget; goal: RegenerationGoal; claimPolicy?: ClaimPolicy }>();
   const target = request?.target;
   const [undo, setUndo] = useState<{ target: SectionTarget; section: RegeneratedSection }>();
   const [undoError, setUndoError] = useState<string>();
 
-  const open = useCallback((next: SectionTarget, options: { goal?: RegenerationGoal } = {}) => {
+  const open = useCallback((next: SectionTarget, options: { goal?: RegenerationGoal; claimPolicy?: ClaimPolicy } = {}) => {
     setUndoError(undefined);
-    setRequest({ target: next, goal: options.goal ?? "revise" });
+    setRequest({ target: next, goal: options.goal ?? "revise", claimPolicy: options.claimPolicy });
   }, []);
 
   const panel = target && onProjectChange ? (
@@ -531,6 +533,7 @@ export function useSectionRegeneration(
       project={project}
       target={target}
       goal={request?.goal}
+      claimPolicy={request?.claimPolicy}
       onClose={() => setRequest(undefined)}
       onApply={(next, previous) => {
         onProjectChange(next, "regenerate");

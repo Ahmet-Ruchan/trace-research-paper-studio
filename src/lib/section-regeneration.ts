@@ -423,6 +423,12 @@ export function sectionObligations(
       : "Cite no claims; claimIds stays empty.");
   }
 
+  // Bir insanın reddettiği iddia, serbest seçimde modele teklif edilmez.
+  const rejected = rejectedClaimIds(project);
+  if (claimPolicy === "open" && rejected.length) {
+    obligations.push(`Do not cite these claims; a reviewer rejected them: ${rejected.join(", ")}.`);
+  }
+
   if (target.kind === "story") {
     const others = project.story.sections.filter((section) => section.id !== target.sectionId);
     const otherKinds = new Set(others.flatMap((section) => section.claimIds.map((id) => claims.get(id)?.kind)));
@@ -510,6 +516,12 @@ function neighbours(project: ResearchProject, target: SectionTarget) {
  * Kilit bu görünümden etkilenmez: takma adımı her zaman TAM kanıta karşı
  * denetliyor ve mühür tam kanıtın mührü.
  */
+/** Bir insanın "desteklenmiyor" dediği iddialar; projede hâlâ var olanlarla sınırlı. */
+export function rejectedClaimIds(project: ResearchProject): string[] {
+  const reviews = project.claimReviews ?? {};
+  return project.evidence.claims.filter((claim) => reviews[claim.id]?.status === "rejected").map((claim) => claim.id);
+}
+
 export function sectionEvidenceView(evidence: PaperEvidence) {
   return {
     paper: { title: evidence.paper.title, year: evidence.paper.year, venue: evidence.paper.venue },
@@ -647,6 +659,11 @@ export function spliceSection(
   if (section.id !== current.id) issues.push(`The ${spec.noun} id must stay "${current.id}"; received "${section.id}"`);
   if (options.claimPolicy === "locked" && !sameSet(section.claimIds, current.claimIds)) {
     issues.push(`The claims are locked: cite exactly ${current.claimIds.join(", ") || "no claims"}; received ${section.claimIds.join(", ") || "none"}`);
+  }
+  if (options.claimPolicy === "open") {
+    const rejected = new Set(rejectedClaimIds(project));
+    const cited = section.claimIds.filter((id) => rejected.has(id));
+    if (cited.length) issues.push(`A reviewer rejected ${cited.join(", ")}; the ${spec.noun} must not cite ${cited.length === 1 ? "it" : "them"}`);
   }
   if (options.rejectUnchanged && canonicalJson(section) === canonicalJson(current)) {
     issues.push(`The regenerated ${spec.noun} is identical to the current one`);

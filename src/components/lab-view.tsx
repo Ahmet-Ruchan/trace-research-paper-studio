@@ -12,12 +12,14 @@ import {
   Image as ImageIcon,
   Lightbulb,
   ListChecks,
+  MessageCircleQuestion,
   Quote,
   RefreshCw,
   ShieldCheck,
   Sigma,
   SlidersHorizontal,
   TriangleAlert,
+  UserCheck,
 } from "lucide-react";
 import type { RevisionReason } from "@/lib/project-revisions";
 import type { Claim, ResearchProject } from "@/lib/schema";
@@ -37,6 +39,8 @@ import {
   QuizView,
 } from "@/visuals";
 import { EvidenceDrawer } from "./evidence-drawer";
+import { ReviewPanel } from "./review-panel";
+import { AskPanel } from "./ask-panel";
 import type { SectionKind } from "@/lib/section-regeneration";
 import { useSectionRegeneration } from "./section-regenerator";
 
@@ -47,6 +51,8 @@ type LabViewProps = {
   onClaimSelect: (claimId?: string) => void;
   /** Verilmezse rapor bölümleri salt okunur; yeniden üretim düğmesi görünmez. */
   onProjectChange?: (project: ResearchProject, reason?: RevisionReason) => void;
+  /** Alıntı denetimi için verilen PDF; içe aktarılmış projede alıntıları sayfada göstermeyi de açar. */
+  onPaperFile?: (file: File) => void;
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
@@ -66,7 +72,7 @@ const reportKindLabels = {
   implication: "Implication",
 } as const;
 
-export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange }: LabViewProps) {
+export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile }: LabViewProps) {
   const t = stringsFor(project.language);
   const regeneration = useSectionRegeneration(project, onProjectChange);
   /** Öğrenme katmanı öğeleri için aynı tetikleyici; görüntüleyicide hiç çizilmiyor. */
@@ -115,6 +121,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
           ),
         },
       }, "verify");
+      onPaperFile?.(file);
       const missing = data.excerptCheck.unlocated.length;
       setQuoteCheck({
         message: missing
@@ -177,6 +184,9 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
     { id: "claims", label: "Claims", icon: Quote },
     { id: "health", label: t.navHealth, icon: ShieldCheck },
+    { id: "ask", label: "Ask", icon: MessageCircleQuestion },
+    // İnceleme projeyi değiştiriyor; salt okunur görünümde kuyruk gösterilmez.
+    ...(onProjectChange ? [{ id: "review", label: "Review", icon: UserCheck }] : []),
     { id: "method", label: "Method", icon: FlaskConical },
     ...(project.technicalAppendix ? [{ id: "technical", label: "Technical", icon: Code2 }] : []),
     { id: "metrics", label: "Metrics", icon: Gauge },
@@ -330,6 +340,34 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {section === "ask" && (
+          <section className="lab-block">
+            <div className="block-title"><MessageCircleQuestion size={16} /> Ask the evidence</div>
+            <p className="section-intro">
+              The model answering here has not read the paper. It sees only the claims, metrics and glossary collected in this
+              project, must name the claims it used, and says so when they do not cover your question. Nothing is saved.
+            </p>
+            <AskPanel project={project} onClaimSelect={onClaimSelect} />
+          </section>
+        )}
+
+        {section === "review" && onProjectChange && (
+          <section className="lab-block">
+            <div className="block-title"><UserCheck size={16} /> Claim review</div>
+            <p className="section-intro">
+              A model says how sure it is, and a program can check that a quote is on its page. Neither can say that the quote
+              actually supports the claim. That takes a person: open the claim, look at the page, decide.
+            </p>
+            {regeneration.undoBar}
+            <ReviewPanel
+              project={project}
+              onProjectChange={onProjectChange}
+              onClaimSelect={onClaimSelect}
+              onRewrite={regeneration.enabled ? (item) => regeneration.open({ kind: item.area, sectionId: item.id }, { claimPolicy: "open" }) : undefined}
+            />
           </section>
         )}
 
@@ -515,6 +553,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
       <EvidenceDrawer
         claim={selectedClaim}
+        review={selectedClaim ? project.claimReviews?.[selectedClaim.id] : undefined}
         evidence={project.evidence}
         fileUrl={fileUrl}
         persistent

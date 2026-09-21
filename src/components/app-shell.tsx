@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Download, FileJson, FlaskConical, Globe, History, Home, LayoutTemplate, Network, Plus, Share2 } from "lucide-react";
+import { BookOpen, Download, FileJson, FlaskConical, Globe, GraduationCap, History, Home, LayoutTemplate, Network, Plus, Share2 } from "lucide-react";
+import { buildAnkiDeck } from "@/lib/anki-export";
 import { buildStandaloneStory } from "@/lib/export-story";
 import { claimHash, parseDeepLink, sectionHash } from "@/lib/deep-link";
 import {
@@ -387,6 +388,8 @@ export function AppShell() {
 
   function openProject(nextProject: ResearchProject) {
     setPaperLookup(undefined);
+    // Önceki projenin PDF'i bu projenin alıntılarını gösteremez.
+    if (nextProject.id !== project?.id) setFileUrl(undefined);
     setProject(nextProject);
     setMode("lab");
     setScreen("workspace");
@@ -483,11 +486,14 @@ export function AppShell() {
           <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}><Share2 size={15} /> Preview</button>
         </nav>
         <div className="workspace-actions">
-          <button title={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>
-          <button title={t.library} onClick={() => setScreen("library")}><BookOpen size={16} /><span>{t.library}</span></button>
-          <button title="Download the project JSON" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
-          <button title="Citation graph: what this paper builds on and what cites it" onClick={() => setCitationsOpen(true)}><Network size={16} /><span>Citations</span></button>
-          <button title="Publish a shareable link" onClick={() => setPublishOpen(true)}><Globe size={16} /><span>Publish</span></button>
+          <button title={t.home} aria-label={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>
+          <button title={t.library} aria-label={t.library} onClick={() => setScreen("library")}><BookOpen size={16} /><span>{t.library}</span></button>
+          <button title="Download the project JSON" aria-label="JSON" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
+          {(project.quiz || project.primer || project.evidence.glossary.length > 0) && (
+            <button title="Download flashcards for Anki: primer concepts, quiz questions and glossary, each with its quote and page" aria-label="Anki" onClick={() => download(`${slug}.anki.txt`, buildAnkiDeck(project), "text/plain")}><GraduationCap size={16} /><span>Anki</span></button>
+          )}
+          <button title="Citation graph: what this paper builds on and what cites it" aria-label="Citations" onClick={() => setCitationsOpen(true)}><Network size={16} /><span>Citations</span></button>
+          <button title="Publish a shareable link" aria-label="Publish" onClick={() => setPublishOpen(true)}><Globe size={16} /><span>Publish</span></button>
           <button className="export-button" onClick={() => download(`${slug}.html`, buildStandaloneStory(project), "text/html")}><Download size={16} /> Export</button>
           <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
           <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
@@ -495,7 +501,7 @@ export function AppShell() {
       </header>
       {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
       <div className="workspace-content">
-        {mode === "lab" && <LabView project={project} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} />}
+        {mode === "lab" && <LabView project={project} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} />}
         {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
         {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
       </div>
@@ -521,7 +527,7 @@ export function AppShell() {
           onClose={() => setHistoryOpen(false)}
         />
       )}
-      {mode === "preview" && selectedClaim && <div className="drawer-overlay" onClick={() => setSelectedClaimId(undefined)}><div onClick={(event) => event.stopPropagation()}><EvidenceDrawer claim={selectedClaim} evidence={project.evidence} fileUrl={fileUrl} onClose={() => setSelectedClaimId(undefined)} /></div></div>}
+      {mode === "preview" && selectedClaim && <div className="drawer-overlay" onClick={() => setSelectedClaimId(undefined)}><div onClick={(event) => event.stopPropagation()}><EvidenceDrawer claim={selectedClaim} review={project.claimReviews?.[selectedClaim.id]} evidence={project.evidence} fileUrl={fileUrl} onClose={() => setSelectedClaimId(undefined)} /></div></div>}
     </div>
   );
 }
