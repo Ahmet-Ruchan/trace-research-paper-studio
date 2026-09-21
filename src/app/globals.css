@@ -64,6 +64,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .input-with-icon svg { color: var(--muted); }
 .input-with-icon input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font-size: 12px; }
 .input-with-icon button { width: 42px; height: 100%; display: grid; place-items: center; border: 0; border-left: 1px solid var(--line); background: transparent; cursor: pointer; }
+.paper-finder { display: grid; gap: 8px; margin-top: 12px; }
+.paper-finder-status { margin: 0; color: var(--muted); font-size: 10.5px; }
+.paper-candidates { display: grid; gap: 6px; max-height: 232px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.paper-candidates li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.paper-candidates li > div { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.paper-candidates strong { font-size: 11.5px; font-weight: 550; line-height: 1.4; }
+.paper-candidates small { color: var(--muted); font-size: 9.5px; line-height: 1.5; }
+.paper-candidates .paper-candidate-note { color: var(--ink-soft); }
+.paper-candidates a { color: var(--accent); }
+.paper-candidates button { flex-shrink: 0; padding: 6px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 10.5px; cursor: pointer; }
+.paper-candidates button[disabled] { opacity: .4; cursor: not-allowed; }
 .source-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 220px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 20px; color: var(--muted); font-size: 10px; }
 .source-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-chip button { display: grid; place-items: center; border: 0; background: none; padding: 0; cursor: pointer; }
@@ -582,3 +593,43 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .history-elided { color: var(--muted); padding: 0 4px; }
 .regen-policy label:has(input:disabled) { opacity: .45; cursor: default; }
+
+/* --- Atıf grafiği --------------------------------------------------- */
+.citation-summary { margin: 0 0 12px; color: var(--ink-soft); font-size: 11px; line-height: 1.7; }
+.citation-summary strong { color: var(--ink); font-weight: 650; }
+.citation-summary a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); }
+.citation-map { display: block; width: 100%; height: auto; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.citation-map path { fill: none; stroke: var(--line); stroke-width: 1; }
+.citation-map path.is-focused { stroke: var(--accent); stroke-width: 1.6; }
+.citation-node circle { fill: var(--surface-2); stroke: var(--ink-soft); stroke-width: 1; }
+.citation-node text { fill: var(--ink-soft); font-size: 9px; }
+.citation-node.is-focused circle { fill: var(--accent); stroke: var(--accent); }
+.citation-node.is-focused text { fill: var(--ink); }
+.citation-center { fill: var(--accent); }
+.citation-center-label { fill: var(--ink); font-size: 10px; font-weight: 600; }
+.citation-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.citation-columns h3 { margin: 0 0 10px; color: var(--muted); font-size: 9.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
+.citation-columns ol { display: grid; gap: 6px; max-height: 40vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.citation-columns li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.citation-columns li.is-focused { border-color: var(--accent); }
+.citation-columns li > div { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.citation-columns li a { color: var(--ink); font-size: 11.5px; line-height: 1.4; text-decoration: none; }
+.citation-columns li a:hover { text-decoration: underline; }
+.citation-columns li small { color: var(--muted); font-size: 9.5px; line-height: 1.5; }
+.citation-columns li button { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 10px; cursor: pointer; }
+@media (max-width: 760px) { .citation-columns { grid-template-columns: 1fr; } }
+
+/* --- Literatür haritası --------------------------------------------- */
+.map-timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin: 16px 0 0; padding: 0; list-style: none; }
+.map-timeline li { display: grid; grid-template-rows: auto 1fr; gap: 10px; }
+.map-year { padding-bottom: 8px; border-bottom: 1px solid var(--line-dark); font: 400 22px/1 Georgia, serif; }
+.map-spark { display: block; width: 100%; height: auto; margin: 12px 0 6px; }
+.map-spark polyline { fill: none; stroke: var(--line-dark); stroke-width: 1.2; }
+.map-spark circle { fill: var(--accent); }
+.map-spark text { fill: var(--ink-soft); font-size: 9px; font-weight: 650; }
+.map-values { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.map-values td { padding: 6px 8px 6px 0; border-top: 1px solid var(--line); color: var(--ink-soft); line-height: 1.55; vertical-align: top; }
+.map-values td:nth-child(-n+4) { white-space: nowrap; }
+.map-values b { color: var(--ink); font: 400 14px/1.2 Georgia, serif; }
+.compare-terms.map-terms article > div { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.compare-lists.map-lists { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }

@@ -21,6 +21,8 @@ import {
 } from "@/lib/generation-validation";
 import { buildDeepReportPrompt, buildEvidencePassPrompt, buildStoryPrompt, buildTechnicalAppendixPrompt } from "@/lib/prompts";
 import { expectedSectionCounts } from "@/lib/section-budgets";
+import { downgradeUnlocatedClaims, renderPaperText } from "@/lib/paper-text";
+import { extractPaperPages } from "@/lib/server/paper-text-extract";
 import {
   findBuiltInTemplate,
   narrativeTemplateSchema,
@@ -35,6 +37,7 @@ import {
   generationTaskRoles,
   documentTaskRoles,
   providerReadsDocuments,
+  providerReadsPaperAsText,
   resolveProviderModel,
   type GenerationTaskRole,
   type ModelTeam,
@@ -396,6 +399,22 @@ async function runPipeline(
         : "The PDF passed file validation before analysis.",
     });
 
+    /**
+     * PDF'i alamayan (yerel) bir model makaleyi okuyan bir aşamadaysa metin
+     * ŞİMDİ çıkarılır: `pdftotext` yoksa ya da PDF bir taramaysa kullanıcı bunu
+     * diğer aşamaların ücretini ödemeden önce öğrenmeli.
+     */
+    const readsAsText = documentTaskRoles.some((role) => providerReadsPaperAsText(input.assignments[role].provider));
+    const paperPages = readsAsText ? await extractPaperPages(input.file, signal) : undefined;
+    if (paperPages) {
+      progress({
+        stage: "document",
+        progress: 14,
+        title: "Extracted the paper's text for the local model.",
+        detail: `${paperPages.length} pages · page boundaries kept, so every claim still points at a page.`,
+      });
+    }
+
     const webResultPromise = loadWebSources(input.urls);
     const fingerprintPromise = inputFingerprint(input);
     const [webResult, fingerprint] = await Promise.all([webResultPromise, fingerprintPromise]);
@@ -460,6 +479,9 @@ async function runPipeline(
         : "evidence";
       const assignment = input.assignments[taskRole];
       const providerRuntime = await getRuntime(taskRole);
+      const paperText = paperPages && providerReadsPaperAsText(assignment.provider)
+        ? renderPaperText(paperPages, passId)
+        : undefined;
       const schema = evidencePassSchemas[passId];
       const prompt = buildEvidencePassPrompt(
         {
@@ -475,7 +497,9 @@ async function runPipeline(
         stage: "evidence",
         progress: evidenceHighWater,
         title: `Extracting ${evidencePassLabels[passId]}.`,
-        detail: `${completed}/4 stages complete · waiting for the structured stream`,
+        detail: paperText?.omitted.length
+          ? `${completed}/4 stages complete · pages ${paperText.omitted.join(", ")} did not fit the local model's context and were left out of this stage`
+          : `${completed}/4 stages complete · waiting for the structured stream`,
       });
 
       try {
@@ -490,6 +514,7 @@ async function runPipeline(
               schemaName: `trace_evidence_${passId}`,
               maxOutputTokens: tokenLimits[passId],
               includeDocument: true,
+              documentText: paperText?.text,
               signal,
               onChunk: (characters) => {
                 markProviderActivity();
@@ -528,7 +553,18 @@ async function runPipeline(
             }),
         });
 
-        setCheckpointPart(checkpoint, passId, output);
+        /**
+         * Metin elimizdeyken her alıntı sayfasında aranır. Bulunamayan alıntıya
+         * dayanan iddia silinmez ama "verified" kalamaz: küçük bir yerel model
+         * kulağa doğru gelen bir alıntı uydurabiliyor.
+         */
+        const checked = paperPages && paperText ? downgradeUnlocatedClaims(output, paperPages) : undefined;
+        if (checked?.downgraded) {
+          warnings.push(
+            `${evidencePassLabels[passId]}: ${checked.downgraded} claim(s) quote text that could not be found on the cited page, so they were marked needs-review.`,
+          );
+        }
+        setCheckpointPart(checkpoint, passId, checked?.output ?? output);
         completed += 1;
         evidenceHighWater = Math.max(evidenceHighWater, 27 + completed * 8.5);
         emit({ type: "checkpoint", checkpoint, completed: completedPasses(checkpoint) });

@@ -372,3 +372,103 @@ test.describe("narrative templates", () => {
     expect(copy.story).toHaveLength(7);
   });
 });
+
+/**
+ * Kapsamı genişleten üç ekran. Ağa giden iki uç (`/api/resolve`,
+ * `/api/citations`) taklit ediliyor: korunan şey OpenAlex'in cevabı değil,
+ * stüdyonun onu nasıl gösterdiği ve bir sonraki adıma nasıl taşıdığı.
+ */
+test.describe("wider coverage", () => {
+  test("finds a paper by DOI and loads its PDF into the upload box", async ({ page }) => {
+    await page.route("**/api/resolve**", async (route) => {
+      if (route.request().method() === "POST") {
+        return route.fulfill({ contentType: "application/pdf", body: Buffer.from("%PDF-1.7 e2e") });
+      }
+      expect(new URL(route.request().url()).searchParams.get("q")).toBe("10.1101/2021.10.04.463034");
+      await route.fulfill({
+        json: {
+          candidates: [
+            { origin: "biorxiv", title: "Protein complex prediction with AlphaFold-Multimer", authors: ["R. Evans"], year: "2022", pdfUrls: ["https://www.biorxiv.org/content/x.full.pdf"], blockedPdfUrls: [] },
+            { origin: "openalex", title: "A paywalled follow-up", authors: [], pdfUrls: [], blockedPdfUrls: ["https://publisher.example/x.pdf"] },
+          ],
+        },
+      });
+    });
+
+    await page.goto("/?new=1");
+    await page.getByLabel("Find a paper by title, DOI, arXiv id or link").fill("10.1101/2021.10.04.463034");
+    await page.getByRole("button", { name: "Find the paper" }).click();
+
+    const candidates = page.locator(".paper-candidates li");
+    await expect(candidates).toHaveCount(2);
+    await expect(candidates.nth(0)).toContainText("bioRxiv");
+    // İndirilemeyen aday seçilemez ama kullanıcıya nereden alacağı söylenir.
+    await expect(candidates.nth(1).getByRole("button", { name: "Use this" })).toBeDisabled();
+    await expect(candidates.nth(1).getByRole("link", { name: "Get the PDF yourself" })).toHaveAttribute("href", "https://publisher.example/x.pdf");
+
+    await candidates.nth(0).getByRole("button", { name: "Use this" }).click();
+    await expect(page.locator(".drop-zone.has-file")).toContainText("protein-complex-prediction-with-alphafold-multimer.pdf");
+  });
+
+  test("maps three papers in year order and keeps two as a side-by-side", async ({ page, request }) => {
+    for (const [id, year] of [["e2e-map-late", "2021"], ["e2e-map-early", "2014"], ["e2e-map-mid", "2017"]] as const) {
+      const project = projectNamed(id);
+      project.evidence.paper = { ...project.evidence.paper, title: `Map paper ${year}`, year };
+      await seed(request, project);
+    }
+
+    await page.goto("/?library=1");
+    for (const year of ["2021", "2014"]) {
+      await page.locator(".library-card", { hasText: `Map paper ${year}` }).locator(".library-select").click();
+    }
+    await expect(page.getByRole("button", { name: "Compare" })).toBeEnabled();
+    await page.locator(".library-card", { hasText: "Map paper 2017" }).locator(".library-select").click();
+    await page.getByRole("button", { name: "Map 3 papers" }).click();
+
+    await expect(page.getByRole("heading", { name: "3 papers, in the order they appeared." })).toBeVisible();
+    await expect(page.locator(".map-year")).toHaveText(["2014", "2017", "2021"]);
+    // Üçü de aynı örnekten türediği için her ölçüt üç makalede de izlenir.
+    await expect(page.locator(".map-values").first().locator("tr")).toHaveCount(3);
+  });
+
+  test("opens the citation graph and hands a cited work to the paper search", async ({ page, request }) => {
+    await seed(request, projectNamed("e2e-citations"));
+    const node = (openAlexId: string, title: string, year: number, extra = {}) => ({
+      openAlexId, title, year, citationCount: 1200, authors: ["A. Author"], authorCount: 5, url: "https://example.org", pdfAvailable: true, identifier: "arxiv:2010.11929", ...extra,
+    });
+    await page.route("**/api/citations", (route) =>
+      route.fulfill({
+        json: {
+          ok: true,
+          retrievedAt: "2026-09-01T00:00:00.000Z",
+          source: "OpenAlex",
+          paper: node("W1", "Attention Is All You Need", 2017),
+          referenceCount: 28,
+          citedByCount: 7608,
+          references: [node("W2", "Adam: A Method for Stochastic Optimization", 2015, { identifier: "arxiv:1412.6980" })],
+          citedBy: [node("W3", "An Image is Worth 16x16 Words", 2020)],
+          note: "n",
+          openAlexUrl: "https://openalex.org/W1",
+        },
+      }),
+    );
+    let lookedUp: URLSearchParams | undefined;
+    await page.route("**/api/resolve**", (route) => {
+      lookedUp = new URL(route.request().url()).searchParams;
+      return route.fulfill({ json: { candidates: [
+        { origin: "arxiv", title: "An Image is Worth 16x16 Words", authors: [], pdfUrls: ["https://arxiv.org/pdf/2010.11929"], blockedPdfUrls: [] },
+        { origin: "arxiv", title: "Another Image Paper", authors: [], pdfUrls: ["https://arxiv.org/pdf/2101.00001"], blockedPdfUrls: [] },
+      ] } });
+    });
+
+    await openStory(page, "e2e-citations");
+    await page.getByRole("button", { name: "Citations" }).click();
+    await expect(page.locator(".citation-summary")).toContainText("7,608 citing works");
+    await expect(page.locator(".citation-map .citation-node")).toHaveCount(2);
+
+    await page.locator(".citation-columns li", { hasText: "16x16" }).getByRole("button", { name: "Analyse" }).click();
+    await expect(page.locator(".paper-candidates li")).toHaveCount(2);
+    expect(lookedUp?.get("q")).toBe("arxiv:2010.11929");
+    expect(lookedUp?.get("expect")).toBe("An Image is Worth 16x16 Words");
+  });
+});

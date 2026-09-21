@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Download, FileJson, FlaskConical, Globe, History, Home, LayoutTemplate, Plus, Share2 } from "lucide-react";
+import { BookOpen, Download, FileJson, FlaskConical, Globe, History, Home, LayoutTemplate, Network, Plus, Share2 } from "lucide-react";
 import { buildStandaloneStory } from "@/lib/export-story";
 import { claimHash, parseDeepLink, sectionHash } from "@/lib/deep-link";
 import {
@@ -19,7 +19,9 @@ import { EvidenceDrawer } from "./evidence-drawer";
 import { HistoryPanel } from "./history-panel";
 import { PublishPanel } from "./publish-panel";
 import { LabView } from "./lab-view";
+import { CitationPanel } from "./citation-panel";
 import { CompareView } from "./compare-view";
+import { LiteratureMapView } from "./literature-map-view";
 import { LibraryView } from "./library-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
@@ -53,7 +55,9 @@ export function AppShell() {
   const [project, setProject] = useState<ResearchProject>();
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [screen, setScreen] = useState<AppScreen>("home");
-  const [comparison, setComparison] = useState<[ResearchProject, ResearchProject]>();
+  const [comparison, setComparison] = useState<ResearchProject[]>();
+  const [citationsOpen, setCitationsOpen] = useState(false);
+  const [paperLookup, setPaperLookup] = useState<{ query: string; expectTitle?: string }>();
   const [initialTeam, setInitialTeam] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("lab");
   const [fileUrl, setFileUrl] = useState<string>();
@@ -328,6 +332,7 @@ export function AppShell() {
       setProjects((current) => [nextProject, ...current.filter((item) => item.id !== nextProject.id)]);
       await saveLibraryProject(nextProject);
       setWarnings(responseWarnings);
+      setPaperLookup(undefined);
       setMode("lab");
       setScreen("workspace");
     } catch (caught) {
@@ -364,10 +369,24 @@ export function AppShell() {
 
   function newProject() {
     window.localStorage.removeItem(CHECKPOINT_KEY);
-    setProject(undefined); setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]); setScreen("home");
+    setProject(undefined); setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]); setPaperLookup(undefined); setScreen("home");
+  }
+
+  /**
+   * Atıf grafiğindeki bir makaleyi analiz etmek: yükleme ekranı o makale
+   * aranmış hâlde açılır. Beklenen başlık da gidiyor, çünkü grafikteki kimlik
+   * OpenAlex'in eşleştirmesine dayanıyor ve başka bir makaleyi gösterebiliyor.
+   */
+  function analyseFromGraph(node: { identifier: string; title: string }) {
+    window.localStorage.removeItem(CHECKPOINT_KEY);
+    setCitationsOpen(false);
+    setPaperLookup({ query: node.identifier, expectTitle: node.title });
+    setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]);
+    setScreen("home");
   }
 
   function openProject(nextProject: ResearchProject) {
+    setPaperLookup(undefined);
     setProject(nextProject);
     setMode("lab");
     setScreen("workspace");
@@ -417,7 +436,10 @@ export function AppShell() {
   const t = stringsFor(project?.language);
 
   if (!hydrated) return <div className="boot-screen"><span>trace</span></div>;
-  if (screen === "compare" && comparison) {
+  if (screen === "compare" && comparison && comparison.length > 2) {
+    return <LiteratureMapView projects={comparison} onBack={() => setScreen("library")} onOpen={openProject} />;
+  }
+  if (screen === "compare" && comparison?.length === 2) {
     return (
       <CompareView
         left={comparison[0]}
@@ -436,15 +458,15 @@ export function AppShell() {
         onHome={() => setScreen("home")}
         onNew={newProject}
         onImport={importProject}
-        onCompare={(left, right) => {
-          setComparison([left, right]);
+        onCompare={(chosen) => {
+          setComparison(chosen);
           setScreen("compare");
         }}
       />
     );
   }
   if (screen === "home" || !project) {
-    return <><Onboarding onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>;
+    return <><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>;
   }
 
   const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);
@@ -464,19 +486,21 @@ export function AppShell() {
           <button title={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>
           <button title={t.library} onClick={() => setScreen("library")}><BookOpen size={16} /><span>{t.library}</span></button>
           <button title="Download the project JSON" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
+          <button title="Citation graph: what this paper builds on and what cites it" onClick={() => setCitationsOpen(true)}><Network size={16} /><span>Citations</span></button>
           <button title="Publish a shareable link" onClick={() => setPublishOpen(true)}><Globe size={16} /><span>Publish</span></button>
           <button className="export-button" onClick={() => download(`${slug}.html`, buildStandaloneStory(project), "text/html")}><Download size={16} /> Export</button>
           <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
           <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
         </div>
       </header>
-      {warnings.length > 0 && <div className="warning-strip">{warnings.length} supporting sources could not be read; the analysis was completed with the rest.<button onClick={() => setWarnings([])}>Dismiss</button></div>}
+      {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
       <div className="workspace-content">
         {mode === "lab" && <LabView project={project} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} />}
         {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
         {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
       </div>
       {publishOpen && <PublishPanel project={project} onClose={() => setPublishOpen(false)} />}
+      {citationsOpen && <CitationPanel project={project} onAnalyse={analyseFromGraph} onClose={() => setCitationsOpen(false)} />}
       {historyOpen && (
         <HistoryPanel
           project={project}

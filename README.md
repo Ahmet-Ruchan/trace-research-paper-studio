@@ -36,35 +36,16 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**0.17**
+**0.18**
 
 | | |
 | --- | --- |
-| **[Regenerate learning items](#rewrite-one-section-without-touching-the-evidence)** | The evidence lock now covers the learning layer too. Rewrite one primer concept, quiz question, derivation or technical-appendix equation on its own, with its own rules checked. |
-| **[Strengthen thin sections](#see-where-the-evidence-is-thin)** | The evidence health panel has a **Strengthen** button on every thin section. The rewrite must cite at least two claims, one of them verified, or it is refused. |
-| **[See what changed, word by word](#go-back-to-any-earlier-version)** | Version history shows the text itself: the older version struck through, the current one highlighted, with only the context around each change. |
-| **[Edit templates](#reuse-a-structure-that-worked)** | Change a saved template's sections, order, visuals, claim kinds and report order, with the rules checked as you type. Built-in templates can be customized as a copy. |
-| **Test models before a full analysis** | The analysis screen sends each chosen model a short request and estimates how long its longest step would take, before the PDF is sent. |
+| **[Papers beyond arXiv](#start-from-a-doi-or-a-repository-link)** | Give a DOI or a link from bioRxiv, medRxiv, PubMed Central, ACL Anthology or OpenReview. Trace looks for the open-access copy and downloads only from a short list of repositories. The studio has the same search: no PDF needed there either. |
+| **[Literature map](#line-up-more-than-two-papers)** | Pick three to six projects and see them in year order: the same benchmark tracked across papers, the same term defined differently, each paper's limits. Still no verdict, and every number keeps its page. |
+| **[Citation graph](#see-what-a-paper-builds-on-and-what-built-on-it)** | The most-cited works a paper builds on and the most-cited works that cite it, from OpenAlex. Any of them can be analysed from there. |
+| **[Fully local analysis](#the-full-application)** | A local model can now run the two stages that read the paper. It reads the text extracted from the PDF, page by page, and every quote it gives is checked against that page. |
 
-**0.16**
-
-| | |
-| --- | --- |
-| **[Test model](#rewrite-one-section-without-touching-the-evidence)** | Before regenerating a section, send the chosen model a short request and see how long a section would take and whether it fits the time limit. A local model that would have timed out after fifteen minutes is flagged in about a minute and a half. |
-| **Published pages say what they are** | A shared link is labelled *Published story*, an exported file *Standalone copy*. Downloading the project JSON works from both, from the data embedded in the page. |
-| **Browser tests** | Eight Playwright tests drive the studio in a real browser on every push, covering the regenerate, history, template and publish panels. |
-| **One command for the version** | `npm run version:set -- <version>` writes the version into the package and every plugin manifest, and `npm run check` fails when they drift. |
-
-**0.15**
-
-| | |
-| --- | --- |
-| **[Regenerate one section](#rewrite-one-section-without-touching-the-evidence)** | Rewrite a single story or report section. The evidence stays locked, and nothing changes until you accept the new version. |
-| **[Version history](#go-back-to-any-earlier-version)** | Every regeneration, restore and import keeps the version it replaced. See what changed and restore it. |
-| **[Narrative templates](#reuse-a-structure-that-worked)** | Save a story's structure and reuse it on the next paper. Two templates are built in. |
-| **[Publish a link](#publish-a-story-with-a-link-you-control)** | Share a frozen copy at `/p/<id>`. Choose what goes out, unpublish at any time, or let the link expire. |
-
-All of these work from your agent too. Ask it to rewrite a section, use a template or publish a link.
+Papers beyond arXiv and the citation graph work from your agent too. The literature map and local analysis are in the studio.
 
 ---
 
@@ -109,6 +90,26 @@ flowchart LR
 Trace finds the paper on arXiv, downloads it, gathers what is publicly known about it (version
 history, DOI, the venue it was published in, citation counts), reads it page by page, and opens
 a finished local site in your browser.
+
+### Start from a DOI or a repository link
+
+Not every field lives on arXiv. Give a DOI, or a link or id from bioRxiv, medRxiv, PubMed Central,
+ACL Anthology or OpenReview, and Trace looks for the open-access copy: the arXiv version when one
+exists, then the repository's own PDF, Europe PMC's open-access archive, and the open-access
+locations OpenAlex lists. A title that arXiv cannot match with certainty is searched on OpenAlex too.
+
+```text
+Explain 10.1101/2021.10.04.463034 using the Trace plugin.
+Explain https://aclanthology.org/2020.acl-main.1 using the Trace plugin.
+```
+
+Trace downloads only from that short list of repositories, never from a publisher's site. When the
+only open copy lives somewhere else, it tells you where, and you pass the PDF yourself. OpenReview
+and the PubMed Central website may ask for a browser check; Trace does not try to get around it. For
+PubMed Central it uses the open-access archive EBI publishes for programs; for OpenReview it asks
+you for the PDF or the title. Set `UNPAYWALL_EMAIL` to let Trace ask Unpaywall as well.
+
+The studio has the same search under the upload box: type a title, a DOI, an arXiv id or a link.
 
 ---
 
@@ -169,6 +170,30 @@ Pick two projects from the library and Trace lines them up: the same benchmark u
 unit, the same term defined twice, each side's limitations. It never says which paper is right —
 that would be interpretation. Every number carries the page it came from and both sources stay
 visible.
+
+### Line up more than two papers
+
+Pick three to six projects and the comparison becomes a literature map. The papers are put in year
+order and lettered. A benchmark that two or more of them report under the same name and unit is
+tracked across them, each value with its page. Terms that recur with different definitions are shown
+side by side, and so is what each paper says it cannot do. A value that grows over the years is not
+presented as progress: the dataset, the setup and which direction is better are things the papers
+say. Like the two-paper view, it is computed from the `.trace.json` files alone.
+
+### See what a paper builds on, and what built on it
+
+**Citations** in the studio opens the paper's citation graph: the most-cited works it references on
+one side, the most-cited works that cite it on the other, from OpenAlex. This is context, not
+evidence. None of it comes from the paper's pages and the counts change, so it is fetched when you
+open it, shown with the date, and never written into the project. A paper that OpenAlex cannot match
+by DOI is matched by exact title only; a graph for the wrong paper would be worse than none.
+
+**Analyse** on any work looks it up and loads its PDF into the upload screen. From an agent, the
+same graph is in `context.json` after `prepare`, and on its own:
+
+```text
+Show me the citation graph of my Trace project using the Trace plugin.
+```
 
 ### Rewrite one section without touching the evidence
 
@@ -461,6 +486,13 @@ npm run trace:agent -- prepare --title "attention is all you need" --language en
 npm run trace:agent -- prepare --arxiv 1706.03762 --language en --depth deep
 npm run trace:agent -- prepare --paper "paper.pdf" --language en --depth deep
 
+# Or from a DOI, or a bioRxiv / medRxiv / PubMed Central / ACL Anthology / OpenReview link or id
+npm run trace:agent -- prepare --doi 10.1101/2021.10.04.463034 --language en
+npm run trace:agent -- prepare --source https://aclanthology.org/2020.acl-main.1 --language en
+
+# The citation graph of a project, a DOI or a title
+npm run trace:agent -- graph --project "paper.trace.json"
+
 # --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"
 npm run trace:agent -- deliver --project ".trace/jobs/paper/paper.trace.json"
@@ -584,7 +616,13 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
   evaluated on a restricted AST — never `eval` or `new Function`.
 - Paper resolution reaches an allowlisted set of hosts over HTTPS only, verifies every redirect
   against that allowlist, caps the download while streaming, and checks the `%PDF-` signature.
-  Downloaded files are never executed.
+  Downloaded files are never executed. The list holds arXiv, the metadata APIs and a few
+  open-access repositories, and no publisher sites. The studio's paper search goes through the same
+  module, so a PDF address sent by a browser passes the same checks.
+- A repository that asks for a browser check is not worked around. The PubMed Central archive is
+  unpacked in memory with its uncompressed size capped.
+- When a local model reads extracted text, a claim whose quote is not found on its page cannot stay
+  verified.
 - A context source that returns an unreliable record is dropped rather than trusted.
 - LaTeX is rendered to MathML and passed through a tag and attribute allowlist.
 - Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,
@@ -611,15 +649,23 @@ side-by-side comparison of two projects, section-level regeneration with evidenc
 strengthening thin sections, project version history with word-level diffs, editable narrative
 templates, model speed tests before generation, shareable publications with
 publication controls,
-per-claim and per-section permalinks, arXiv resolution
-from a paper's name, local library, exports, the native plugin for Codex / Claude Code /
+per-claim and per-section permalinks, resolution from a paper's name, DOI or repository link
+(arXiv, bioRxiv, medRxiv, PubMed Central, ACL Anthology), literature maps of up to six projects,
+citation graphs, local library, exports, the native plugin for Codex / Claude Code /
 Antigravity CLI, and generation through Gemini, OpenAI, Claude, OpenRouter and a local model
 server (Ollama, LM Studio, llama.cpp).
 
-A local model runs the report and visual stages. It cannot run the two stages that read the PDF:
-local servers have no file-upload endpoint and most open-weight models cannot see a document at
-all, so those stages refuse it rather than quietly working without the paper. Only a loopback
-address is accepted — the request leaves the Trace server, and "local model" means this machine.
+A local model can run every stage, so an analysis can stay on your machine from start to finish.
+Local servers have no file-upload endpoint and most open-weight models cannot see a document, so in
+the two stages that read the paper a local model gets the text extracted from the PDF (`pdftotext`,
+from Poppler), with page boundaries kept. If the paper does not fit the model's context, each stage
+gets the pages that matter to it and is told which pages it did not see. Because the text is at
+hand, every quote is searched for on the page it cites; a claim whose quote cannot be found is kept
+but marked needs-review. Figures, layout and some equations are lost on this path, and a scanned PDF
+is refused. A cloud provider still gets the PDF itself. Give the model a 32K context or more; set
+`TRACE_LOCAL_PAPER_CHARS` to change how much text a stage may receive (default 60,000 characters).
+Only a loopback address is accepted — the request leaves the Trace server, and "local model" means
+this machine.
 
 Not there yet: accounts, access control beyond an unguessable link, or cloud-synced persistence.
 
@@ -643,6 +689,7 @@ the two from mixing.
 - [x] Section-level regeneration with evidence locking
 - [x] Project revisions and reusable narrative templates
 - [x] Shareable hosted stories with publication controls
+- [x] Papers beyond arXiv, literature maps, citation graphs and fully local analysis
 - [ ] Team review, annotations and claim approval
 
 ---

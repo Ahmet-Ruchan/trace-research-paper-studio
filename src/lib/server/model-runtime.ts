@@ -60,6 +60,11 @@ export type StructuredGeneration = {
   schemaName: string;
   maxOutputTokens: number;
   includeDocument: boolean;
+  /**
+   * PDF'i alamayan sağlayıcılar için makalenin sayfa metni. `includeDocument`
+   * doğruyken bu da yoksa istek reddedilir: makalesiz bir kanıt aşaması olmaz.
+   */
+  documentText?: string;
   signal: AbortSignal;
   onChunk: (receivedCharacters: number, chunks: number) => void;
 };
@@ -613,9 +618,9 @@ export async function prepareProviderRuntime(
      * çalışıyor. Adres `resolveLocalEndpoint` ile zaten geri-döngüye
      * kısıtlanmış durumda.
      *
-     * Belge YOK: yerel sunucularda dosya yükleme uçnoktası yok. Bu durum
-     * isteğin başında reddediliyor; buraya bir belge isteği gelirse bu bir
-     * program hatasıdır, sessizce belgesiz devam etmek değil.
+     * Dosya YOK: yerel sunucularda dosya yükleme uçnoktası yok. Makaleyi okuyan
+     * aşamalarda sayfa metni istemin sonuna ekleniyor; metin de gelmemişse bu
+     * bir program hatasıdır, sessizce makalesiz devam etmek değil.
      */
     const endpoint = input.apiKey;
     await assertLocalServerReachable(endpoint, input.model, signal);
@@ -636,12 +641,14 @@ export async function prepareProviderRuntime(
         schemaName,
         maxOutputTokens,
         includeDocument,
+        documentText,
         signal: requestSignal,
         onChunk,
       }) => {
-        if (includeDocument) {
-          throw new Error("A local model cannot be given the PDF; this stage should never have reached it.");
+        if (includeDocument && !documentText) {
+          throw new Error("A local model reads the paper as text, but no page text was supplied to this stage.");
         }
+        const content = includeDocument ? `${requestPrompt}\n\n${documentText}` : requestPrompt;
         const response = await fetch(localUrl(endpoint, "/chat/completions"), {
           method: "POST",
           signal: AbortSignal.any([requestSignal, AbortSignal.timeout(LOCAL_MODEL_TIMEOUT_MS)]),
@@ -653,7 +660,7 @@ export async function prepareProviderRuntime(
           },
           body: JSON.stringify({
             model: input.model,
-            messages: [{ role: "user", content: requestPrompt }],
+            messages: [{ role: "user", content }],
             temperature: 0.4,
             /**
              * Bulut için hesaplanmış bütçe burada yetmiyor. Yerel düşünen

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Plus, Search, Trash2 } from "lucide-react";
+import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
 
@@ -12,7 +13,8 @@ type LibraryViewProps = {
   onHome: () => void;
   onNew: () => void;
   onImport: (file: File) => Promise<void>;
-  onCompare: (left: ResearchProject, right: ResearchProject) => void;
+  /** İki proje yan yana karşılaştırılır; üç ve fazlası literatür haritasına gider. */
+  onCompare: (projects: ResearchProject[]) => void;
 };
 
 function formatDate(value: string) {
@@ -30,17 +32,17 @@ function generationLabel(project: ResearchProject) {
 export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const [query, setQuery] = useState("");
   /**
-   * Karşılaştırma için seçim. Tam olarak iki proje: üç sütun ekrana sığmıyor
-   * ve "hangisi daha iyi" sorusu zaten ikili bir soru. Üçüncüye tıklamak en
-   * eski seçimi düşürüyor — kullanıcıyı önce bir şeyin işaretini kaldırmaya
-   * zorlamak, bir kısıtı iş yüküne çevirmek olurdu.
+   * Karşılaştırma için seçim. İki proje yan yana iki sütuna sığıyor; üç ve
+   * fazlası sütun değil zaman çizgisi olarak (literatür haritası) gösteriliyor.
+   * Sınırı aşan tıklama en eski seçimi düşürüyor — kullanıcıyı önce bir şeyin
+   * işaretini kaldırmaya zorlamak, bir kısıtı iş yüküne çevirmek olurdu.
    */
   const [selected, setSelected] = useState<string[]>([]);
   function toggleSelected(projectId: string) {
     setSelected((current) =>
       current.includes(projectId)
         ? current.filter((item) => item !== projectId)
-        : [...current, projectId].slice(-2),
+        : [...current, projectId].slice(-MAX_MAP_PAPERS),
     );
   }
   const chosen = selected
@@ -100,12 +102,12 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
           <Columns2 size={16} />
           <span>
             {chosen.map((project) => project.evidence.paper.title).join("  ·  ")}
-            {chosen.length === 1 ? "  ·  pick one more" : ""}
+            {chosen.length === 1 ? "  ·  pick one more" : chosen.length < MAX_MAP_PAPERS ? `  ·  add up to ${MAX_MAP_PAPERS} for a literature map` : ""}
           </span>
           <div>
             <button className="text-button" onClick={() => setSelected([])}>Clear</button>
-            <button className="library-open" disabled={chosen.length < 2} onClick={() => chosen.length === 2 && onCompare(chosen[0], chosen[1])}>
-              Compare <ArrowRight size={15} />
+            <button className="library-open" disabled={chosen.length < 2} onClick={() => chosen.length >= 2 && onCompare(chosen)}>
+              {chosen.length > 2 ? `Map ${chosen.length} papers` : "Compare"} <ArrowRight size={15} />
             </button>
           </div>
         </div>

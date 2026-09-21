@@ -1,7 +1,7 @@
 {
   "name": "trace-paper-studio",
-  "version": "0.17.0",
-  "description": "Name a paper or hand over a PDF: Trace finds it on arXiv, grounds every claim in a page and quote, and builds a local interactive site with primers, step-by-step derivations, live equation playgrounds and an evidence-linked quiz. Rewrite one section, quiz question or derivation with the evidence locked, strengthen thin sections, reuse and edit story templates, and publish a shareable link.",
+  "version": "0.18.0",
+  "description": "Name a paper or hand over a PDF: Trace finds it on arXiv or by DOI (bioRxiv, medRxiv, PubMed Central, ACL Anthology), grounds every claim in a page and quote, and builds a local interactive site with primers, step-by-step derivations, live equation playgrounds and an evidence-linked quiz. Rewrite one section, quiz question or derivation with the evidence locked, strengthen thin sections, reuse and edit story templates, and publish a shareable link.",
   "author": {
     "name": "Ahmet Ruchan",
     "url": "https://github.com/Ahmet-Ruchan"
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Trace Paper Studio",
     "shortDescription": "Papers you can read, verify and play with.",
-    "longDescription": "Name a paper or hand over a PDF. Trace resolves it on arXiv, reads it page by page, and grounds every claim in an exact quote. The result is a portable .trace.json and a local interactive site: prerequisite primers, step-by-step derivations, live playgrounds that run the paper's own equations, a mechanism simulation, sortable result tables, an evidence-linked quiz and an application guide. Afterwards you can rewrite one section, primer concept, quiz question, derivation or equation with the evidence locked, strengthen sections that rest on too little evidence, keep and edit a story's structure as a reusable template, and publish a shareable link with publication controls. Uses the active Codex model \u2014 no separate LLM API key.",
+    "longDescription": "Name a paper or hand over a PDF. Trace resolves it on arXiv or from a DOI or open-access repository link, reads it page by page, and grounds every claim in an exact quote. The result is a portable .trace.json and a local interactive site: prerequisite primers, step-by-step derivations, live playgrounds that run the paper's own equations, a mechanism simulation, sortable result tables, an evidence-linked quiz and an application guide. Afterwards you can rewrite one section, primer concept, quiz question, derivation or equation with the evidence locked, strengthen sections that rest on too little evidence, keep and edit a story's structure as a reusable template, and publish a shareable link with publication controls. Uses the active Codex model \u2014 no separate LLM API key.",
     "developerName": "Ahmet Ruchan",
     "category": "Productivity",
     "capabilities": [

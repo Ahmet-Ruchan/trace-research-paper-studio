@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowRight, BookOpen, Check, Eye, EyeOff, FileText, Link2, LockKeyhole, Plus, Sparkles, Upload, Users, X } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Eye, EyeOff, FileText, Link2, LockKeyhole, Plus, Search, Sparkles, Upload, Users, X } from "lucide-react";
 import {
   createSingleModelTeam,
   defaultModelByProvider,
@@ -21,6 +21,7 @@ import { languageOptions, preferredLanguage, type ProjectLanguage } from "@/lib/
 import { builtInTemplates } from "@/lib/narrative-templates";
 import type { NarrativeTemplate } from "@/lib/schema";
 import { deleteTemplate, listTemplates } from "@/lib/template-library";
+import { downloadCandidate, findPapers, originLabels, type PaperCandidate } from "@/lib/paper-lookup";
 import { TeamProbe } from "./team-probe";
 import { TemplateEditor } from "./template-editor";
 
@@ -47,12 +48,17 @@ type OnboardingProps = {
   onLibrary: () => void;
   libraryCount: number;
   initialTeam?: boolean;
+  /** Atıf grafiğinden "bunu analiz et" ile gelindiğinde aranacak makale. */
+  initialLookup?: { query: string; expectTitle?: string };
 };
 
-export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, initialTeam = false, sampleBusy = false }: OnboardingProps) {
+export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, initialTeam = false, sampleBusy = false, initialLookup }: OnboardingProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File>();
   const [dragging, setDragging] = useState(false);
+  const [lookup, setLookup] = useState(initialLookup?.query ?? "");
+  const [lookupBusy, setLookupBusy] = useState<"search" | "download">();
+  const [candidates, setCandidates] = useState<PaperCandidate[]>();
   const [sourceInput, setSourceInput] = useState("");
   const [sources, setSources] = useState<string[]>([]);
   const [apiKeys, setApiKeys] = useState<Partial<Record<ProviderId, string>>>({});
@@ -117,6 +123,53 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
     }
     setFile(nextFile);
   }
+
+  /**
+   * PDF'i olmayan kullanıcı: başlık, DOI, arXiv kimliği ya da depo bağlantısı.
+   * Tek ve indirilebilir bir aday varsa doğrudan alınır; birden çok aday
+   * varsa seçim kullanıcıya bırakılır — yanlış makaleyi analiz etmek,
+   * bir tık fazladan çok daha pahalı.
+   */
+  async function runLookup(query = lookup, expectTitle?: string) {
+    const value = query.trim();
+    if (value.length < 3) return setError("Enter a paper title, DOI, arXiv id or link.");
+    setError(undefined);
+    setCandidates(undefined);
+    setLookupBusy("search");
+    try {
+      const found = await findPapers(value, expectTitle);
+      if (!found.length) throw new Error("No paper was found for that. Try the full title or a DOI.");
+      if (found.length === 1 && found[0].pdfUrls.length) return await takeCandidate(found[0]);
+      setCandidates(found);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The paper could not be looked up.");
+    } finally {
+      setLookupBusy(undefined);
+    }
+  }
+
+  async function takeCandidate(candidate: PaperCandidate) {
+    setError(undefined);
+    setLookupBusy("download");
+    try {
+      acceptFile(await downloadCandidate(candidate));
+      setCandidates(undefined);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The PDF could not be downloaded.");
+    } finally {
+      setLookupBusy(undefined);
+    }
+  }
+
+  // Atıf grafiğinden gelen istek sayfa açılır açılmaz aranır.
+  const ranInitialLookup = useRef(false);
+  useEffect(() => {
+    if (!initialLookup || ranInitialLookup.current) return;
+    ranInitialLookup.current = true;
+    const timer = window.setTimeout(() => { void runLookup(initialLookup.query, initialLookup.expectTitle); }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLookup]);
 
   function addSource() {
     const value = sourceInput.trim();
@@ -255,6 +308,44 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
             )}
           </div>
 
+          {!file && (
+            <div className="paper-finder">
+              <div className="input-with-icon">
+                <Search size={16} />
+                <input
+                  value={lookup}
+                  onChange={(event) => setLookup(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && !lookupBusy && void runLookup()}
+                  placeholder="No PDF? Paper title, DOI, arXiv id or link"
+                  aria-label="Find a paper by title, DOI, arXiv id or link"
+                />
+                <button onClick={() => { void runLookup(); }} disabled={Boolean(lookupBusy)} aria-label="Find the paper"><ArrowRight size={16} /></button>
+              </div>
+              {lookupBusy && <p className="paper-finder-status">{lookupBusy === "search" ? "Searching arXiv and the open-access repositories…" : "Downloading the open-access PDF…"}</p>}
+              {candidates && (
+                <ul className="paper-candidates">
+                  {candidates.map((candidate, index) => (
+                    <li key={`${candidate.origin}-${candidate.title}-${index}`}>
+                      <div>
+                        <strong>{candidate.title}</strong>
+                        <small>
+                          {[candidate.authors.slice(0, 3).join(", "), candidate.year, candidate.venue, originLabels[candidate.origin] ?? candidate.origin].filter(Boolean).join(" · ")}
+                        </small>
+                        {!candidate.pdfUrls.length && (
+                          <small className="paper-candidate-note">
+                            No open-access copy on a source Trace downloads from.{" "}
+                            {(candidate.blockedPdfUrls[0] ?? candidate.url) && <a href={candidate.blockedPdfUrls[0] ?? candidate.url} target="_blank" rel="noreferrer">Get the PDF yourself</a>} and drop it above.
+                          </small>
+                        )}
+                      </div>
+                      <button disabled={!candidate.pdfUrls.length || Boolean(lookupBusy)} onClick={() => { void takeCandidate(candidate); }}>Use this</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <div className="source-entry">
             <div className="input-with-icon">
               <Link2 size={16} />
@@ -315,8 +406,8 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
                   /* Tek model dört işi birden yapıyor; biri makaleyi okumak.
                      PDF'i alamayan sağlayıcı burada seçilemez — ama model
                      ekibinde yazı ve görsel işlerine atanabilir. */
-                  <option key={item.id} value={item.id} disabled={item.readsDocuments === false}>
-                    {item.label}{item.readsDocuments === false ? " · model team only" : ""}
+                  <option key={item.id} value={item.id} disabled={!providerReadsDocuments(item.id)}>
+                    {item.label}{!providerReadsDocuments(item.id) ? " · model team only" : item.readsPaperAsText ? " · reads the paper as text" : ""}
                   </option>
                 ))}</select></div>
                 <ModelPicker assignment={{ provider, model }} onChange={(assignment) => { setProvider(assignment.provider); setModel(assignment.model); }} openRouterModels={openRouterModels} inputId="single" />
@@ -339,10 +430,11 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
                           updateTeamAssignment(task.id, { provider: nextProvider, model: defaultModelByProvider[nextProvider] });
                         }}>{providerCatalog.map((item) => {
                           const needsDocument = documentTaskRoles.includes(task.id);
-                          const blocked = needsDocument && item.readsDocuments === false;
+                          const blocked = needsDocument && !providerReadsDocuments(item.id);
+                          const asText = needsDocument && item.readsPaperAsText;
                           return (
                             <option key={item.id} value={item.id} disabled={blocked}>
-                              {item.label}{blocked ? " · cannot read the PDF" : ""}
+                              {item.label}{blocked ? " · cannot read the PDF" : asText ? " · reads the paper as text" : ""}
                             </option>
                           );
                         })}</select>

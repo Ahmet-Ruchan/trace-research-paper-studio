@@ -84,12 +84,12 @@ const CLAIM_KINDS: Claim["kind"][] = [
  * duyarsız `foldForSearch` ile yapılıyor — Türkçe yerelinde "I" harfi
  * "ı"ya düşüyor ve İngilizce etiketler birbirini bulamıyordu.
  */
-function metricKey(label: string, unit: string) {
+export function metricKey(label: string, unit: string) {
   const normalize = (value: string) => foldForSearch(value).replace(/[^a-z0-9]+/g, "");
   return `${normalize(label)}|${normalize(unit)}`;
 }
 
-function summarize(project: ResearchProject): ProjectSummary {
+export function summarize(project: ResearchProject): ProjectSummary {
   const claimMix = Object.fromEntries(CLAIM_KINDS.map((kind) => [kind, 0])) as ClaimMix;
   for (const claim of project.evidence.claims) claimMix[claim.kind] += 1;
 

@@ -292,7 +292,8 @@ function usage(exitCode = 0) {
   console.log(`Trace native-agent bridge
 
 Usage:
-  node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep] [--template <id|path>]
+  node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id> | --doi <doi> | --source <link or id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep] [--template <id|path>]
+  node trace-agent.mjs graph (--project <project.trace.json> | --doi <doi> | --title "<paper name>" | --source <link or id>) [--limit <n>]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
@@ -310,10 +311,22 @@ Usage:
             writing to you in — the bridge cannot see the conversation, so it
             has no safe default to guess. There is no list of allowed
             languages; only the tag format is checked.
-  --title   When the user has no PDF: searches arXiv for the paper, downloads
-            it, and collects current metadata (version history, DOI, where it
-            was published, citations). If the match is not certain the
+  --title   When the user has no PDF: searches arXiv for the paper, and OpenAlex
+            too when arXiv has no certain match. Downloads it and collects
+            current metadata (version history, DOI, where it was published,
+            citations, citation graph). If the match is not certain the
             alternatives are reported; choose one with --pick.
+  --doi     A DOI. The open-access copy is looked for on arXiv, bioRxiv,
+            medRxiv, Europe PMC, ACL Anthology and the open-access locations
+            OpenAlex lists (and Unpaywall, when UNPAYWALL_EMAIL is set).
+  --source  A link or id from arXiv, doi.org, bioRxiv, medRxiv, PubMed Central
+            (PMC1234567), ACL Anthology (2020.acl-main.1) or OpenReview
+            (openreview:<id>). Trace downloads only from these hosts; a paper
+            whose only open copy lives elsewhere is reported with its link so
+            the user can download it and pass --paper.
+  graph     Prints the paper's citation graph from OpenAlex: the most-cited
+            works it builds on and the most-cited works that cite it. Every
+            node carries an "identifier" that prepare --source accepts.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -406,31 +419,40 @@ function assertChoice(value, choices, label) {
 async function resolvePaper(args) {
   if (args.paper) return { paperPath: resolve(args.paper), resolution: null };
 
-  const query = args.title ?? args.arxiv;
-  if (!query) throw new Error("One of --paper <file.pdf>, --title \"<paper name>\" or --arxiv <id> is required.");
+  // Kimlikle gelen her şey (arXiv, DOI, depo bağlantısı) aynı yoldan çözülür.
+  const identifier = args.arxiv ?? args.doi ?? args.source;
+  if (!identifier && !args.title) {
+    throw new Error(
+      "One of --paper <file.pdf>, --title \"<paper name>\", --arxiv <id>, --doi <doi> or --source <link or id> is required.",
+    );
+  }
 
-  const { searchArxiv, fetchArxivById, rankByTitle, downloadPdf, collectContext } = await import(
-    "./lib/paper-source.mjs"
-  );
+  const { parseIdentifier, resolveIdentifier, searchPapers, isConfidentMatch, downloadFirstAvailable, collectContext } =
+    await import("./lib/paper-source.mjs");
 
   let chosen;
   let candidates = [];
-  if (args.arxiv) {
-    chosen = await fetchArxivById(args.arxiv);
+  let matchedBy = "title-search";
+  // `--source`a başlık yazan kullanıcı da cevap almalı; hata almak yerine aranır.
+  const parsed = identifier ? parseIdentifier(identifier) : undefined;
+  if (parsed && parsed.kind !== "title") {
+    chosen = await resolveIdentifier(parsed);
+    matchedBy = `${parsed.kind}-id`;
   } else {
-    const results = await searchArxiv(args.title, 8);
-    if (!results.length) throw new Error(`No arXiv result for: "${args.title}"`);
-    candidates = rankByTitle(results, args.title);
+    const title = args.title ?? parsed.id;
+    candidates = await searchPapers(title, 8);
+    if (!candidates.length) throw new Error(`No paper found on arXiv or OpenAlex for: "${title}"`);
     const index = args.pick ? Number(args.pick) - 1 : 0;
     chosen = candidates[index];
     if (!chosen) throw new Error(`--pick ${args.pick} is out of range (${candidates.length} candidates).`);
   }
 
-  const directory = resolve(args.out ?? `.trace/jobs/${slugify(chosen.title ?? chosen.arxivId)}`);
+  const name = slugify(chosen.title ?? chosen.arxivId ?? chosen.doi ?? "paper");
+  const directory = resolve(args.out ?? `.trace/jobs/${name}`);
   mkdirSync(directory, { recursive: true });
-  const paperPath = join(directory, `${slugify(chosen.title ?? chosen.arxivId)}.pdf`);
+  const paperPath = join(directory, `${name}.pdf`);
 
-  const download = await downloadPdf(chosen.pdfUrl, paperPath);
+  const download = await downloadFirstAvailable(chosen, paperPath);
   const context = await collectContext(chosen);
   writeFileSync(join(directory, "context.json"), `${JSON.stringify(context, null, 2)}\n`, "utf8");
 
@@ -438,31 +460,66 @@ async function resolvePaper(args) {
     paperPath,
     jobDirectoryOverride: directory,
     resolution: {
-      matchedBy: args.arxiv ? "arxiv-id" : "title-search",
+      matchedBy,
+      origin: chosen.origin,
       arxivId: chosen.arxivId,
+      doi: chosen.doi,
       title: chosen.title,
       matchScore: chosen.matchScore,
       pdfUrl: download.url,
       sizeBytes: download.sizeBytes,
+      // Önce denenip başarısız olan adresler; ajan neden ikinci kopyanın
+      // kullanıldığını kullanıcıya söyleyebilsin.
+      pdfAttempts: download.attempts.length ? download.attempts : undefined,
       contextPath: join(directory, "context.json"),
+      citationGraph: context.citationGraph?.ok
+        ? { references: context.citationGraph.references.length, citedBy: context.citationGraph.citedBy.length }
+        : undefined,
       // Eşleşme kesin değilse agent kullanıcıya doğrulatabilsin diye
       // alternatifler her zaman raporlanır.
       alternatives: candidates.slice(0, 5).map((entry, index) => ({
         pick: index + 1,
+        origin: entry.origin,
         arxivId: entry.arxivId,
+        doi: entry.doi,
         title: entry.title,
         matchScore: entry.matchScore,
+        pdfAvailable: entry.pdfAvailable !== false,
       })),
-      // Güven, yakın eşleşmeyle YETİNMEZ. "denoising diffusion probabilistic
-      // models" aramasında üç türev makale 0.889'da berabere kalıp orijinali
-      // hiç listeye girmiyordu; 0.85 eşiği bunu "kesin" sayıyordu. Artık hem
-      // neredeyse birebir başlık hem de ikinciye açık fark aranıyor.
-      confident: args.arxiv
-        ? true
-        : (chosen.matchScore ?? 0) >= 0.95 &&
-          (chosen.matchScore ?? 0) - (candidates[1]?.matchScore ?? 0) >= 0.05,
+      // Güven ölçütü `isConfidentMatch` içinde; kimlikle çözülen kayıt kesindir.
+      confident: matchedBy === "title-search" ? isConfidentMatch(candidates) && chosen === candidates[0] : true,
     },
   };
+}
+
+/**
+ * Bir makalenin atıf grafiği: dayandığı ve onu izleyen çalışmalar.
+ *
+ * `prepare` bunu zaten context.json'a yazıyor; bu komut daha önce üretilmiş
+ * bir proje ya da yalnızca merak edilen bir makale için. Her düğümün
+ * `identifier` alanı doğrudan `prepare --source` ile analiz edilebilir.
+ */
+async function citationGraph(args) {
+  const { parseIdentifier, resolveIdentifier } = await import("./lib/paper-source.mjs");
+  const { fetchCitationGraph } = await import("./lib/citation-graph.mjs");
+  let lookup;
+  if (args.project) {
+    const project = readJsonFile(resolve(args.project), "project");
+    lookup = { doi: project.evidence?.paper?.doi, title: project.evidence?.paper?.title, authors: project.evidence?.paper?.authors };
+  } else {
+    const identifier = args.doi ?? args.source ?? args.title;
+    if (!identifier) throw new Error("graph needs one of --project <project.trace.json>, --doi <doi>, --title \"<paper name>\" or --source <link or id>.");
+    const parsed = parseIdentifier(identifier);
+    if (parsed.kind === "doi") lookup = { doi: parsed.id };
+    else if (parsed.kind === "title") lookup = { title: parsed.id };
+    else {
+      // arXiv kimliği ya da depo bağlantısı: grafik başlık ve yazarla eşleştirilir.
+      const entry = await resolveIdentifier(parsed);
+      lookup = { doi: entry.doi, title: entry.title, authors: entry.authors };
+    }
+  }
+  const limit = args.limit ? Math.max(1, Math.min(25, Number(args.limit) || 12)) : 12;
+  console.log(JSON.stringify(await fetchCitationGraph(lookup, { limit }), null, 2));
 }
 
 async function prepare(args) {
@@ -1319,6 +1376,7 @@ try {
   else if (command === "templates") listTemplates();
   else if (command === "save-template") saveTemplateFromProject(args);
   else if (command === "publish") await publishProjectLink(args);
+  else if (command === "graph") await citationGraph(args);
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

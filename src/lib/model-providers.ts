@@ -35,6 +35,12 @@ export type ProviderDefinition = {
    * göremiyor, dolayısıyla makaleyi OKUYAN aşamalar onlara verilemez.
    */
   readsDocuments?: boolean;
+  /**
+   * PDF'in kendisini alamayan ama sayfa metnini okuyabilen sağlayıcı. Yerel
+   * sunucular böyle: makale sunucuda metne çevrilip isteme ekleniyor, alıntılar
+   * da o metne karşı denetleniyor (bkz. `paper-text.ts`).
+   */
+  readsPaperAsText?: boolean;
   hint?: string;
 };
 
@@ -87,7 +93,8 @@ export const providerCatalog: readonly ProviderDefinition[] = [
     local: true,
     freeformModel: true,
     readsDocuments: false,
-    hint: "Ollama, LM Studio or llama.cpp on this machine. Nothing leaves it, and no key is needed — but a local model cannot read the PDF, so the Evidence and Technical stages still need a provider that can.",
+    readsPaperAsText: true,
+    hint: "Ollama, LM Studio or llama.cpp on this machine. Nothing leaves it, and no key is needed. A local model cannot open the PDF, so on the Evidence and Technical stages it reads the text extracted from it (needs pdftotext from Poppler): figures and layout are lost, and every quote is checked against the page text. Give the model a context window of 32K tokens or more.",
     models: [
       { id: "qwen3:8b", label: "qwen3:8b", note: "Ollama" },
       { id: "llama3.1:8b", label: "llama3.1:8b", note: "Ollama" },
@@ -111,7 +118,14 @@ export const defaultModelByProvider: Record<ProviderId, string> = {
 export const documentTaskRoles: readonly GenerationTaskRole[] = ["evidence", "technical"];
 
 export function providerReadsDocuments(providerId: string): boolean {
-  return getProvider(providerId)?.readsDocuments !== false;
+  const provider = getProvider(providerId);
+  return provider?.readsDocuments !== false || provider?.readsPaperAsText === true;
+}
+
+/** Makaleyi dosya olarak değil, çıkarılmış sayfa metni olarak okuyan sağlayıcı. */
+export function providerReadsPaperAsText(providerId: string): boolean {
+  const provider = getProvider(providerId);
+  return provider?.readsDocuments === false && provider?.readsPaperAsText === true;
 }
 
 export const generationTaskCatalog: ReadonlyArray<{

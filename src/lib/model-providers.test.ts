@@ -6,6 +6,7 @@ import {
   getProviderForModel,
   providerCatalog,
   providerReadsDocuments,
+  providerReadsPaperAsText,
   recommendedModelTeam,
   resolveProviderModel,
 } from "./model-providers";
@@ -63,8 +64,13 @@ describe("model provider catalog", () => {
     expect(getProviderForModel("openrouter/auto")).toBeUndefined();
   });
 
-  it("marks the local provider as unable to read documents", () => {
-    expect(providerReadsDocuments("local")).toBe(false);
+  it("lets the local provider run document stages, but only as page text", () => {
+    // Yerel model PDF'i alamıyor; makaleyi çıkarılmış sayfa metni olarak okuyor.
+    expect(providerReadsDocuments("local")).toBe(true);
+    expect(providerReadsPaperAsText("local")).toBe(true);
+    expect(providerReadsPaperAsText("gemini")).toBe(false);
+    expect(providerReadsPaperAsText("openrouter")).toBe(false);
+    expect(providerReadsPaperAsText("nonexistent")).toBe(false);
     expect(providerReadsDocuments("gemini")).toBe(true);
     expect(providerReadsDocuments("openrouter")).toBe(true);
     // Bilinmeyen bir sağlayıcı kimliği okuyabilir sayılır: bu bayrak bir

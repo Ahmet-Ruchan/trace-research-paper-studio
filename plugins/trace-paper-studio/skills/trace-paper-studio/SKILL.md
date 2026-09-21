@@ -24,6 +24,11 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    # The user gave an arXiv id, writing in Turkish:
    node scripts/trace-agent.mjs prepare --arxiv 1706.03762 --language tr --depth deep
 
+   # The user gave a DOI, or a bioRxiv / medRxiv / PubMed Central / ACL Anthology /
+   # OpenReview link or id:
+   node scripts/trace-agent.mjs prepare --doi 10.1101/2021.10.04.463034 --language en
+   node scripts/trace-agent.mjs prepare --source "https://aclanthology.org/2020.acl-main.1" --language en
+
    # The user gave a local file, writing in German:
    node scripts/trace-agent.mjs prepare --paper "<paper.pdf>" --language de --depth deep
    ```
@@ -32,13 +37,17 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
 
    With `--title`, check `resolution` in the output. When `confident` is false, or when the top `alternatives` entries are close in `matchScore`, tell the user which paper you matched and offer the alternatives before spending effort — re-run with `--pick <n>` or `--arxiv <id>` to switch. Beware near-miss titles: "Not All Attention Is All You Need" is a different paper.
 
-2b. When `resolution` is present, read `context.json` from the job directory. It holds arXiv metadata (version history, categories, DOI, journal reference) plus, when the APIs are reachable, the venue where the paper was published and its citation counts.
+   A title that arXiv cannot match with certainty is also searched on OpenAlex; each alternative carries its `origin` and `pdfAvailable`. The bridge downloads only from arXiv and a short list of open-access repositories. When it reports that no open-access PDF could be downloaded, do not fetch the file from a publisher or any other site yourself: pass the message on, including the link it names, and ask the user for the PDF (`--paper`). The same goes for an OpenReview browser check — ask for the PDF or the paper's title. `resolution.pdfAttempts` lists copies that were tried first and failed.
+
+2b. When `resolution` is present, read `context.json` from the job directory. `source` says where the paper was resolved from; for an arXiv paper `arxiv` adds its metadata (version history, categories, DOI, journal reference). When the APIs are reachable it also holds the venue where the paper was published, its citation counts, and `citationGraph`: the most-cited works the paper references and the most-cited works that cite it.
 
    **This context is not the paper.** Never present it as a paper claim:
    - Add each reachable context source to `evidence.sources` as `{ "id": "arxiv" | "semantic-scholar" | "openalex", "type": "web", "title": ..., "url": ... }`.
    - Claims drawn from context cite that source id, with the retrieved value as the `excerpt`. No `page`.
    - Any source with `ok: false` was unreachable. Omit it entirely — do not guess a citation count or a venue.
    - Citation counts are a snapshot; say when they were retrieved.
+
+   - `citationGraph` follows the same rules (source id `openalex`). It lists only the most-cited works on each side, so never write that the paper "cites only" or "is cited only by" them. `node scripts/trace-agent.mjs graph --project <project.trace.json>` prints the graph for an existing project; each node's `identifier` can be passed to `prepare --source` when the user wants that paper analysed next.
 
    Good uses: how the paper was eventually published versus the preprint, how long it kept being revised, how the field received it. These belong in the deep report's `implication` or `contribution` sections, not in claims about what the paper says.
 3. If extraction succeeded, read `paper.pages.txt` in manageable page ranges. Preserve `--- PAGE N ---` boundaries. If it did not, use the host's native PDF-reading tool and keep page numbers explicit.
