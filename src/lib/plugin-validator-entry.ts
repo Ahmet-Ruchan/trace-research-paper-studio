@@ -12,6 +12,7 @@ export {
 } from "./narrative-templates";
 export { expectedSectionCounts } from "./section-budgets";
 export { evidenceHealth } from "./evidence-health";
+export { applyExcerptCheck, splitPages } from "./paper-text";
 export {
   defaultPublicationInclude,
   expiryFromDays,

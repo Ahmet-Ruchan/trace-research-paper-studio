@@ -3086,5 +3086,12 @@
         "claim-method-01"
       ]
     }
-  ]
+  ],
+  "excerptCheck": {
+    "checkedAt": "2026-09-21T22:45:45.120Z",
+    "method": "pdftotext",
+    "pageCount": 15,
+    "checked": 67,
+    "unlocated": []
+  }
 }

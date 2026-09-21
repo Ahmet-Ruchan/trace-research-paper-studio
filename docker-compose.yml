@@ -1,0 +1,17 @@
+# docker compose up --build   →   http://localhost:3000
+services:
+  trace:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Set this whenever the server is reachable by anyone but you. The studio
+      # has no accounts; without it, whoever finds the address can read and
+      # delete the library. Published /p/<id> links stay open either way.
+      TRACE_ACCESS_PASSWORD: ${TRACE_ACCESS_PASSWORD:-}
+    volumes:
+      - trace-data:/data
+    restart: unless-stopped
+
+volumes:
+  trace-data:

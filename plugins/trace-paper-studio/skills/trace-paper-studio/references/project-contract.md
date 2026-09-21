@@ -175,6 +175,20 @@ Never source a picture from the web. A web image cannot be shown to depict *this
 
 ---
 
+## `excerptCheck` — written by `verify`, never by hand
+
+Optional. `node scripts/trace-agent.mjs verify --project <path>` searches for every paper excerpt on the page it cites, in the text extracted from the PDF, and writes this record:
+
+```json
+{ "checkedAt": "2026-09-21T22:45:45.120Z", "method": "pdftotext", "pageCount": 15, "checked": 67,
+  "unlocated": [{ "owner": "claim", "id": "result-bleu-en-de", "page": 8 }] }
+```
+
+- `unlocated` lists only what was **not** found (`owner` is `claim`, `metric` or `glossary`). An empty list means every quote was found.
+- A `verified` claim none of whose paper excerpts were found is changed to `needs-review` by the same command. Nothing is upgraded.
+- Do not author or edit this block, and do not set a claim back to `verified` after `verify` lowered it. Fix the excerpt (copy the exact words from `paper.pages.txt`) and run `verify` again.
+- A project without this block is shown as "quotes not checked", not as passing.
+
 # Learning layer
 
 Five optional root blocks turn a summary into something the reader can learn from and experiment with. Which ones are **required** depends on `depth`:

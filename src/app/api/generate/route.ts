@@ -21,8 +21,8 @@ import {
 } from "@/lib/generation-validation";
 import { buildDeepReportPrompt, buildEvidencePassPrompt, buildStoryPrompt, buildTechnicalAppendixPrompt } from "@/lib/prompts";
 import { expectedSectionCounts } from "@/lib/section-budgets";
-import { downgradeUnlocatedClaims, renderPaperText } from "@/lib/paper-text";
-import { extractPaperPages } from "@/lib/server/paper-text-extract";
+import { applyExcerptCheck, downgradeUnlocatedClaims, renderPaperText } from "@/lib/paper-text";
+import { extractPaperPages, PaperTextError } from "@/lib/server/paper-text-extract";
 import {
   findBuiltInTemplate,
   narrativeTemplateSchema,
@@ -405,8 +405,24 @@ async function runPipeline(
      * diğer aşamaların ücretini ödemeden önce öğrenmeli.
      */
     const readsAsText = documentTaskRoles.some((role) => providerReadsPaperAsText(input.assignments[role].provider));
-    const paperPages = readsAsText ? await extractPaperPages(input.file, signal) : undefined;
-    if (paperPages) {
+    /**
+     * Sayfa metni PDF'i gören sağlayıcılar için de çıkarılır: modele verilmez,
+     * modelin verdiği alıntıları denetlemek için kullanılır. Orada hata ölümcül
+     * değil — denetim bir güvencedir, analizin ön koşulu değil — ama sessiz de
+     * değil: denetlenmeyen proje bunu söyler.
+     */
+    let excerptCheckSkipped: string | undefined;
+    const paperPages = await extractPaperPages(input.file, signal).catch((error: unknown) => {
+      if (readsAsText || signal.aborted) throw error;
+      const reason = error instanceof PaperTextError ? error.reason : "failed";
+      excerptCheckSkipped = {
+        "missing-tool": "Quotes were not checked against the page text: pdftotext (Poppler) is not installed on the server.",
+        "no-text": "Quotes were not checked against the page text: the PDF has no extractable text, it is probably a scan.",
+        failed: "Quotes were not checked against the page text: the text could not be extracted from the PDF.",
+      }[reason];
+      return undefined;
+    });
+    if (paperPages && readsAsText) {
       progress({
         stage: "document",
         progress: 14,
@@ -420,6 +436,7 @@ async function runPipeline(
     const [webResult, fingerprint] = await Promise.all([webResultPromise, fingerprintPromise]);
 
     const { sources: webSources, warnings } = webResult;
+    if (excerptCheckSkipped) warnings.push(excerptCheckSkipped);
     const sourceIds = new Set(["paper", ...webSources.map((source) => source.id)]);
     const webContext = webSources
       .map(
@@ -558,7 +575,7 @@ async function runPipeline(
          * dayanan iddia silinmez ama "verified" kalamaz: küçük bir yerel model
          * kulağa doğru gelen bir alıntı uydurabiliyor.
          */
-        const checked = paperPages && paperText ? downgradeUnlocatedClaims(output, paperPages) : undefined;
+        const checked = paperPages ? downgradeUnlocatedClaims(output, paperPages) : undefined;
         if (checked?.downgraded) {
           warnings.push(
             `${evidencePassLabels[passId]}: ${checked.downgraded} claim(s) quote text that could not be found on the cited page, so they were marked needs-review.`,
@@ -613,7 +630,11 @@ async function runPipeline(
         url: source.url,
       })),
     ];
-    const evidence = mergeEvidenceParts(checkpoint.parts, sources);
+    // Kontrol noktasından gelen aşamalar da denetimden geçsin diye birleşimden
+    // SONRA bir kez daha: rapor ve anlatı bu güven değerlerine göre yazılıyor.
+    const merged = mergeEvidenceParts(checkpoint.parts, sources);
+    const excerptChecked = paperPages ? applyExcerptCheck({ evidence: merged }, paperPages) : undefined;
+    const evidence = excerptChecked?.project.evidence ?? merged;
     validateEvidenceIntegrity(evidence);
 
     progress({
@@ -864,6 +885,7 @@ async function runPipeline(
       story,
       deepReport,
       technicalAppendix,
+      excerptCheck: excerptChecked?.project.excerptCheck,
       template: input.template,
       generation: {
         provider: input.provider,

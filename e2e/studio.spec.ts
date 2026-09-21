@@ -472,3 +472,41 @@ test.describe("wider coverage", () => {
     expect(lookedUp?.get("expect")).toBe("An Image is Worth 16x16 Words");
   });
 });
+
+test.describe("quote check", () => {
+  test("says an unchecked project is unchecked, then records a check made with the PDF", async ({ page, request }) => {
+    const project = projectNamed("e2e-quotes");
+    delete project.excerptCheck;
+    await seed(request, project);
+    const doubted = project.evidence.claims.find((claim) => claim.confidence === "verified")!;
+
+    await page.route("**/api/verify-excerpts", (route) =>
+      route.fulfill({
+        json: {
+          excerptCheck: { checkedAt: "2026-09-01T00:00:00.000Z", method: "pdftotext", pageCount: 15, checked: 67, unlocated: [{ owner: "claim", id: doubted.id, page: 4 }] },
+          downgradedIds: [doubted.id],
+        },
+      }),
+    );
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav button", { hasText: "Evidence health" }).click();
+    // Denetlenmemiş proje "hepsi bulundu" demez.
+    await expect(page.locator(".health-stat", { hasText: "quotes not checked" })).toContainText("—");
+
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Check the quotes against the PDF" }).click();
+    await (await chooser).setFiles({ name: "paper.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7 e2e") });
+
+    await expect(page.locator(".health-stat", { hasText: "quotes found on their page" })).toContainText("66/67");
+    await expect(page.locator(".health-block", { hasText: "Quotes that were not found" })).toContainText(doubted.statement);
+    await expect(page.getByRole("button", { name: "Check again with the PDF" })).toBeVisible();
+
+    // Kayıt kalıcı: sayfa yenilenince de görünür, iddia da needs-review kalır.
+    await expect.poll(async () => {
+      const saved = (await (await request.get("/api/library")).json()) as { projects: ResearchProject[] };
+      const stored = saved.projects.find((item) => item.id === project.id);
+      return [stored?.excerptCheck?.checked, stored?.evidence.claims.find((claim) => claim.id === doubted.id)?.confidence];
+    }).toEqual([67, "needs-review"]);
+  });
+});

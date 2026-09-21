@@ -616,6 +616,31 @@ export const generationResultSchema = z.object({
   story: storySpecSchema,
 });
 
+/**
+ * Alıntıların PDF'in sayfa metnine karşı mekanik denetimi.
+ *
+ * `confidence` modelin kendi beyanı; bu kayıt ise bir programın sonucu: her
+ * alıntı, atıf yaptığı sayfanın çıkarılmış metninde arandı. Yalnızca
+ * BULUNAMAYANLAR yazılıyor — liste boşsa hepsi bulundu demek. Denetim hiç
+ * yapılmadıysa alan yoktur ve panel "denetlenmedi" der; bulundu saymaz.
+ */
+export const excerptCheckSchema = z.object({
+  checkedAt: z.string(),
+  method: z.literal("pdftotext"),
+  pageCount: z.number().int().positive(),
+  /** Makaleye (sayfaya) atıf yapan ve aranan referans sayısı. */
+  checked: z.number().int().nonnegative(),
+  unlocated: z
+    .array(
+      z.object({
+        owner: z.enum(["claim", "metric", "glossary"]),
+        id: z.string(),
+        page: z.number().int().positive().optional(),
+      }),
+    )
+    .max(400),
+});
+
 export const researchProjectSchema = generationResultSchema.extend({
   version: z.literal(1),
   id: z.string(),
@@ -632,6 +657,7 @@ export const researchProjectSchema = generationResultSchema.extend({
   interactives: z.array(interactiveSchema).max(8).optional(),
   applicationGuide: applicationGuideSchema.optional(),
   figures: z.array(figureSchema).max(6).optional(),
+  excerptCheck: excerptCheckSchema.optional(),
   /** Anlatı bu şablona göre üretildiyse onun kopyası; yeniden üretim ve doğrulama yapıyı buradan korur. */
   template: narrativeTemplateSchema.optional(),
   generation: z.object({
@@ -646,6 +672,7 @@ export const researchProjectSchema = generationResultSchema.extend({
   }).optional(),
 });
 
+export type ExcerptCheck = z.infer<typeof excerptCheckSchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type SourceReference = z.infer<typeof sourceReferenceSchema>;
 export type Claim = z.infer<typeof claimSchema>;

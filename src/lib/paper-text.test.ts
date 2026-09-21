@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { exampleProject } from "./example-fixture";
 import {
+  applyExcerptCheck,
+  checkExcerpts,
   downgradeUnlocatedClaims,
   excerptIsOnPage,
   paperTextBudget,
@@ -105,5 +108,56 @@ describe("downgradeUnlocatedClaims", () => {
     expect(checked.output.methods).toEqual(["m"]);
     // Girdi değişmez; kontrol noktası aynı nesneyi paylaşıyor olabilir.
     expect(output.claims[1].confidence).toBe("verified");
+  });
+});
+
+describe("excerptIsOnPage — PDF'i gören modelin alıntısı", () => {
+  it("noktalama, tire ve boşluk farkını tolere eder ama kelime farkını etmez", () => {
+    const pages = ["Multi-head attention allows the model to jointly attend to information\nfrom different representation sub-spaces at different positions ."];
+    expect(excerptIsOnPage(pages, 1, "Multi‑head attention allows the model to jointly attend to information from different representation subspaces")).toBe(true);
+    expect(excerptIsOnPage(pages, 1, "Multi-head attention forces the model to jointly attend to information")).toBe(false);
+  });
+});
+
+describe("checkExcerpts", () => {
+  const pages = ["We train the model for 100,000 steps on eight GPUs.", "The big model reaches 28.4 BLEU on the English-to-German task."];
+  const evidence = {
+    ...exampleProject.evidence,
+    sources: [{ id: "paper", type: "paper" as const, title: "PDF" }, { id: "openalex", type: "web" as const, title: "OpenAlex" }],
+    claims: [
+      claim("method-real", 1, "train the model for 100,000 steps"),
+      claim("method-invented", 1, "trained for three weeks on a TPU pod"),
+      { ...claim("context", 1, "cited 100,000 times"), sourceRefs: [{ sourceId: "openalex", excerpt: "cited 100,000 times" }] },
+    ],
+    metrics: [
+      { id: "bleu", label: "BLEU", value: 28.4, displayValue: "28.4", unit: "BLEU", context: "c", sourceRef: { sourceId: "paper", page: 2, excerpt: "reaches 28.4 BLEU on the English-to-German task" } },
+      { id: "made-up", label: "Latency", value: 3, displayValue: "3 ms", unit: "ms", context: "c", sourceRef: { sourceId: "paper", page: 2, excerpt: "a latency of only three milliseconds" } },
+    ],
+    glossary: [{ term: "BLEU", definition: "d" }],
+  };
+
+  it("yalnızca makaleye yapılan atıfları arar ve bulunamayanları yazar", () => {
+    const check = checkExcerpts(evidence, pages, "2026-01-01T00:00:00.000Z");
+    expect(check).toEqual({
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      method: "pdftotext",
+      pageCount: 2,
+      checked: 4,
+      unlocated: [
+        { owner: "claim", id: "method-invented", page: 1 },
+        { owner: "metric", id: "made-up", page: 2 },
+      ],
+    });
+  });
+
+  it("projeye işlerken iddiayı düşürür, hiçbir şeyi yükseltmez", () => {
+    const result = applyExcerptCheck({ evidence }, pages);
+    expect(result.downgradedIds).toEqual(["method-invented"]);
+    expect(result.project.evidence.claims.map((item) => item.confidence)).toEqual(["verified", "needs-review", "verified"]);
+    expect(result.project.excerptCheck.unlocated).toHaveLength(2);
+
+    const again = applyExcerptCheck({ evidence: result.project.evidence }, pages);
+    expect(again.downgradedIds).toEqual([]);
+    expect(again.project.evidence.claims[1].confidence).toBe("needs-review");
   });
 });

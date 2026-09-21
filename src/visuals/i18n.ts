@@ -143,6 +143,15 @@ export type Strings = {
   healthAreaReport: string;
   healthUnused: string;
   healthUnusedNote: string;
+  healthQuotes: string;
+  healthQuotesNote: (missing: number) => string;
+  healthQuotesUnchecked: string;
+  healthQuotesUncheckedNote: string;
+  healthQuotesMissing: string;
+  healthQuotesMissingNote: (date: string) => string;
+  healthQuotesCheck: string;
+  healthQuotesRecheck: string;
+  healthQuotesPage: (page?: number) => string;
   // Kalıcı bağlantı
   permalinkTitle: string;
 };
@@ -283,6 +292,19 @@ const en: Strings = {
   healthUnused: "Collected but unused",
   healthUnusedNote:
     "These claims are in the evidence ledger and no section, equation or figure refers to them. Often they are the most interesting leftovers.",
+  healthQuotes: "quotes found on their page",
+  healthQuotesNote: (missing) =>
+    missing === 0
+      ? "Every quote was found in the text of the page it cites."
+      : `${missing} quote${missing === 1 ? " was" : "s were"} not found on the cited page.`,
+  healthQuotesUnchecked: "quotes not checked",
+  healthQuotesUncheckedNote: "Nobody has compared the quotes with the PDF's text yet.",
+  healthQuotesMissing: "Quotes that were not found on the cited page",
+  healthQuotesMissingNote: (date) =>
+    `Checked on ${date} against the text extracted from the PDF. A quote can be missing because it was paraphrased or invented, or because it sits in a table, an equation or a scanned page that text extraction cannot read. A claim whose quotes are all missing is marked needs-review; open it and look at the page.`,
+  healthQuotesCheck: "Check the quotes against the PDF",
+  healthQuotesRecheck: "Check again with the PDF",
+  healthQuotesPage: (page) => (page ? `p. ${page}` : "no page"),
   permalinkTitle: "Copy a link to this",
 };
 

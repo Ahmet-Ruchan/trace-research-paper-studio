@@ -85,6 +85,46 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   // sağdaki çekmecede zaten görünür, ama bağlantıyı gönderen kişi listedeki
   // yerini de göstermek istemiştir.
   const [section, setSection] = useState(() => (selectedClaimId ? "claims" : "overview"));
+  const quoteCheckInput = useRef<HTMLInputElement>(null);
+  const [quoteCheck, setQuoteCheck] = useState<{ message: string; failed?: boolean }>();
+
+  /**
+   * Alıntıları PDF'e karşı denetler. İçe aktarılan ya da bir ajanın ürettiği
+   * projede PDF yok, o yüzden kullanıcıdan istenir. Sunucu model çağırmaz;
+   * sonuç projeye yazılır ve alıntısı bulunamayan iddialar needs-review olur.
+   */
+  async function checkQuotes(file: File) {
+    setQuoteCheck({ message: "Comparing every quote with the text of the page it cites…" });
+    try {
+      const form = new FormData();
+      form.set("paper", file);
+      form.set("evidence", JSON.stringify(project.evidence));
+      const response = await fetch("/api/verify-excerpts", { method: "POST", body: form });
+      const data = (await response.json().catch(() => undefined)) as
+        | { excerptCheck?: ResearchProject["excerptCheck"]; downgradedIds?: string[]; error?: string }
+        | undefined;
+      if (!response.ok || !data?.excerptCheck) throw new Error(data?.error ?? "The quotes could not be checked.");
+      const downgraded = new Set(data.downgradedIds ?? []);
+      onProjectChange?.({
+        ...project,
+        excerptCheck: data.excerptCheck,
+        evidence: {
+          ...project.evidence,
+          claims: project.evidence.claims.map((claim) =>
+            downgraded.has(claim.id) ? { ...claim, confidence: "needs-review" as const } : claim,
+          ),
+        },
+      }, "verify");
+      const missing = data.excerptCheck.unlocated.length;
+      setQuoteCheck({
+        message: missing
+          ? `${data.excerptCheck.checked - missing} of ${data.excerptCheck.checked} quotes were found. ${downgraded.size} claim(s) were marked needs-review.`
+          : `All ${data.excerptCheck.checked} quotes were found on the page they cite.`,
+      });
+    } catch (caught) {
+      setQuoteCheck({ failed: true, message: caught instanceof Error ? caught.message : "The quotes could not be checked." });
+    }
+  }
   const selectedClaim = useMemo(
     () => project.evidence.claims.find((claim) => claim.id === selectedClaimId),
     [project.evidence.claims, selectedClaimId],
@@ -298,9 +338,22 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             <div className="block-title"><ShieldCheck size={16} /> {t.healthHeading}</div>
             <p className="section-intro">{t.healthIntro}</p>
             {regeneration.undoBar}
+            <input
+              ref={quoteCheckInput}
+              type="file"
+              accept="application/pdf"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void checkQuotes(file);
+              }}
+            />
+            {quoteCheck && <p className={quoteCheck.failed ? "regen-error" : "health-note"} role="status">{quoteCheck.message}</p>}
             <EvidenceHealthView
               project={project}
               onClaimSelect={onClaimSelect}
+              onCheckQuotes={regeneration.enabled ? () => quoteCheckInput.current?.click() : undefined}
               onStrengthen={regeneration.enabled
                 ? (item) => regeneration.open({ kind: item.area, sectionId: item.id }, { goal: "strengthen" })
                 : undefined}

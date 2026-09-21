@@ -50,8 +50,28 @@ export type SectionHealth = {
   thin: boolean;
 };
 
+/**
+ * Alıntıların sayfa metninde bulunup bulunmadığı — projede kayıtlı denetimden.
+ *
+ * Bu modül PDF'i göremez; denetimi yapan sunucu ya da köprü sonucu
+ * `excerptCheck` olarak yazar. Kayıt yoksa durum "denetlenmedi"dir: bulundu
+ * sayılmaz, çünkü kanıtı olmayan bir güvence bu panelin tam tersine çalışır.
+ */
+export type ExcerptStatus = {
+  checked: boolean;
+  checkedAt?: string;
+  /** Makaleye atıf yapan, aranmış referans sayısı. */
+  total: number;
+  located: number;
+  /** Alıntısı sayfasında bulunamayan iddialar; tıklanıp PDF'te bakılabilir. */
+  unlocatedClaims: Array<{ claim: Claim; page?: number }>;
+  /** Alıntısı bulunamayan metrik ve sözlük girdileri. */
+  unlocatedOther: Array<{ owner: "metric" | "glossary"; label: string; page?: number }>;
+};
+
 export type EvidenceHealth = {
   claims: ClaimTally;
+  excerpts: ExcerptStatus;
   /** Makaleden gelen ve dış bağlamdan (arXiv, Semantic Scholar…) gelen iddialar. */
   grounding: { fromPaper: number; fromWeb: number };
   pages: PageCoverage;
@@ -107,6 +127,32 @@ function tally(claims: readonly Claim[]): ClaimTally {
     verified,
     needsReview: claims.length - verified,
     verifiedRatio: claims.length ? verified / claims.length : 0,
+  };
+}
+
+function excerptStatus(project: ResearchProject): ExcerptStatus {
+  const check = project.excerptCheck;
+  if (!check) return { checked: false, total: 0, located: 0, unlocatedClaims: [], unlocatedOther: [] };
+  const claimById = new Map(project.evidence.claims.map((claim) => [claim.id, claim]));
+  const metricById = new Map(project.evidence.metrics.map((metric) => [metric.id, metric]));
+  const unlocatedClaims: ExcerptStatus["unlocatedClaims"] = [];
+  const unlocatedOther: ExcerptStatus["unlocatedOther"] = [];
+  for (const item of check.unlocated) {
+    if (item.owner === "claim") {
+      const claim = claimById.get(item.id);
+      // Aynı iddianın iki alıntısı da bulunamadıysa bir kez listelenir.
+      if (claim && !unlocatedClaims.some((entry) => entry.claim.id === claim.id)) unlocatedClaims.push({ claim, page: item.page });
+    } else {
+      unlocatedOther.push({ owner: item.owner, label: metricById.get(item.id)?.label ?? item.id, page: item.page });
+    }
+  }
+  return {
+    checked: true,
+    checkedAt: check.checkedAt,
+    total: check.checked,
+    located: Math.max(check.checked - check.unlocated.length, 0),
+    unlocatedClaims,
+    unlocatedOther,
   };
 }
 
@@ -181,6 +227,7 @@ export function evidenceHealth(project: ResearchProject): EvidenceHealth {
 
   return {
     claims: tally(claims),
+    excerpts: excerptStatus(project),
     grounding: { fromPaper, fromWeb },
     pages: { cited, first, last, gaps },
     sources: sourceUsage,

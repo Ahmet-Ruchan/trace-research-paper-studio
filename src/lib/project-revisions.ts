@@ -13,7 +13,7 @@ import type { ResearchProject } from "./schema";
  * öteki "her yazımda" derse geçmiş iki yerden farklı büyür.
  */
 
-export const revisionReasons = ["edit", "regenerate", "restore", "import", "manual", "agent"] as const;
+export const revisionReasons = ["edit", "regenerate", "restore", "import", "manual", "agent", "verify"] as const;
 export type RevisionReason = (typeof revisionReasons)[number];
 export const revisionReasonSchema = z.enum(revisionReasons);
 
@@ -29,7 +29,9 @@ export const EDIT_COALESCE_MS = 10 * 60 * 1000;
 
 export const MAX_REVISION_LABEL = 80;
 
-export const revisionIdPattern = /^\d{8}T\d{9}Z-(edit|regenerate|restore|import|manual|agent)-[0-9a-f]{8}$/;
+// Nedenler listeden türetiliyor: desen elle yazılıyken listeye eklenen yeni bir
+// neden kimlik üretiminde reddediliyor ve kayıt 500 ile düşüyordu.
+export const revisionIdPattern = new RegExp(`^\\d{8}T\\d{9}Z-(${revisionReasons.join("|")})-[0-9a-f]{8}$`);
 
 export const revisionRecordSchema = z.object({
   version: z.literal(1),

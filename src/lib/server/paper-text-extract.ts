@@ -21,6 +21,10 @@ import { splitPages } from "@/lib/paper-text";
  */
 export class PaperTextError extends Error {
   readonly incompatibleModel = true;
+  /** Neden; akış kontrolü mesaj metnine değil buna bakar. */
+  constructor(message: string, readonly reason: "missing-tool" | "no-text" | "failed") {
+    super(message);
+  }
 }
 
 const EXTRACTION_TIMEOUT_MS = 60_000;
@@ -42,10 +46,11 @@ export async function extractPaperPages(file: File, signal?: AbortSignal): Promi
           if (!error) return resolve();
           if ((error as NodeJS.ErrnoException).code === "ENOENT") {
             return reject(new PaperTextError(
-              "A local model reads the paper as text, and that needs pdftotext, which was not found. Install Poppler (macOS: brew install poppler · Debian/Ubuntu: apt install poppler-utils · Windows: choco install poppler) and try again, or assign a cloud provider to the Evidence and Technical stages.",
+              "Reading the paper as text needs pdftotext, which was not found. Install Poppler (macOS: brew install poppler · Debian/Ubuntu: apt install poppler-utils · Windows: choco install poppler) and try again, or assign a cloud provider to the Evidence and Technical stages.",
+              "missing-tool",
             ));
           }
-          reject(new PaperTextError(`The PDF text could not be extracted: ${error.message}`));
+          reject(new PaperTextError(`The PDF text could not be extracted: ${error.message}`, "failed"));
         },
       );
     });
@@ -54,6 +59,7 @@ export async function extractPaperPages(file: File, signal?: AbortSignal): Promi
     if (characters < MIN_USEFUL_CHARACTERS) {
       throw new PaperTextError(
         "This PDF has almost no extractable text — it is probably a scan. A local model cannot read it; assign a cloud provider to the Evidence and Technical stages, which receive the PDF itself.",
+        "no-text",
       );
     }
     return pages;

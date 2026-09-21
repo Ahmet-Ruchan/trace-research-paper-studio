@@ -208,4 +208,34 @@ describe("evidenceHealth", () => {
     expect(health.grounding.fromPaper).toBe(1);
     expect(health.sources.every((source) => source.claimCount === 0)).toBe(true);
   });
+
+  it("alıntı denetimi yapılmamış projeyi bulundu saymaz", () => {
+    const health = evidenceHealth(project());
+    expect(health.excerpts).toEqual({ checked: false, total: 0, located: 0, unlocatedClaims: [], unlocatedOther: [] });
+  });
+
+  it("kayıtlı alıntı denetimini iddialara ve metriklere bağlar", () => {
+    const base = project();
+    const first = base.evidence.claims[0];
+    const health = evidenceHealth({
+      ...base,
+      excerptCheck: {
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        method: "pdftotext",
+        pageCount: 12,
+        checked: 10,
+        unlocated: [
+          { owner: "claim", id: first.id, page: 3 },
+          { owner: "claim", id: first.id, page: 4 },
+          { owner: "claim", id: "deleted-since", page: 5 },
+          { owner: "metric", id: "unknown-metric", page: 8 },
+        ],
+      },
+    });
+    expect(health.excerpts.checked).toBe(true);
+    expect(health.excerpts.located).toBe(6);
+    // Aynı iddia bir kez; artık projede olmayan iddia listelenmez.
+    expect(health.excerpts.unlocatedClaims).toEqual([{ claim: first, page: 3 }]);
+    expect(health.excerpts.unlocatedOther).toEqual([{ owner: "metric", label: "unknown-metric", page: 8 }]);
+  });
 });

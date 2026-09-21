@@ -1,0 +1,14 @@
+.git
+.github
+.next
+node_modules
+test-results
+playwright-report
+e2e
+docs
+.trace
+.trace-en-maps
+*.md
+Dockerfile
+docker-compose.yml
+.env*

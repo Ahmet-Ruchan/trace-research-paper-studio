@@ -36,16 +36,14 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**0.18**
+**0.19**
 
 | | |
 | --- | --- |
-| **[Papers beyond arXiv](#start-from-a-doi-or-a-repository-link)** | Give a DOI or a link from bioRxiv, medRxiv, PubMed Central, ACL Anthology or OpenReview. Trace looks for the open-access copy and downloads only from a short list of repositories. The studio has the same search: no PDF needed there either. |
-| **[Literature map](#line-up-more-than-two-papers)** | Pick three to six projects and see them in year order: the same benchmark tracked across papers, the same term defined differently, each paper's limits. Still no verdict, and every number keeps its page. |
-| **[Citation graph](#see-what-a-paper-builds-on-and-what-built-on-it)** | The most-cited works a paper builds on and the most-cited works that cite it, from OpenAlex. Any of them can be analysed from there. |
-| **[Fully local analysis](#the-full-application)** | A local model can now run the two stages that read the paper. It reads the text extracted from the PDF, page by page, and every quote it gives is checked against that page. |
+| **[Every quote checked against its page](#check-every-quote-against-its-page)** | Trace now looks for each quote in the text of the page it cites, whichever model wrote it. A claim whose quotes cannot be found is kept but marked needs-review, and the project records what was checked. Works for a new analysis, for an imported project (give it the PDF) and from your agent (`verify`). |
+| **[Run it on a server](#run-it-on-a-server)** | A Dockerfile with Poppler included, a compose file and a Railway config. Set `TRACE_ACCESS_PASSWORD` and the whole studio sits behind a password, while published links stay open. |
 
-Papers beyond arXiv and the citation graph work from your agent too. The literature map and local analysis are in the studio.
+The quote check works from your agent too; ask it to verify your Trace project.
 
 ---
 
@@ -162,6 +160,29 @@ refused. Where the evidence does not back a sentence, the model narrows the sent
 
 ```text
 Strengthen the thin sections of my Trace project using the Trace plugin.
+```
+
+### Check every quote against its page
+
+`verified` is what the model says about its own claim. Trace also checks it mechanically: the text
+of every page is extracted from the PDF (`pdftotext`), and each quote is searched for on the page it
+cites, or the page next to it. Differences in spacing, hyphenation, ligatures and punctuation are
+ignored; different words are not. A verified claim none of whose quotes can be found is kept and
+marked needs-review. Nothing is ever upgraded, because a program can tell that a quote is there, not
+that it supports the claim.
+
+The result is written into the project, so a shared `.trace.json` shows that its quotes were checked
+and which ones were not found, without the PDF. A project that was never checked says so instead of
+showing a pass. A missing quote is not always an invented one: tables, equations and scanned pages
+do not survive text extraction, which is why the claim is kept for you to look at.
+
+It runs during every new analysis. For a project you imported, **Check the quotes against the PDF**
+in the evidence health panel asks for the PDF; if almost nothing matches, it assumes the wrong file
+and changes nothing. The shipped *Attention Is All You Need* example was checked against the arXiv
+PDF: all 67 quotes were found.
+
+```text
+Verify the quotes of my Trace project against the PDF using the Trace plugin.
 ```
 
 ### Compare two papers without being told which one wins
@@ -490,6 +511,9 @@ npm run trace:agent -- prepare --paper "paper.pdf" --language en --depth deep
 npm run trace:agent -- prepare --doi 10.1101/2021.10.04.463034 --language en
 npm run trace:agent -- prepare --source https://aclanthology.org/2020.acl-main.1 --language en
 
+# Check every quote against its page and record the result in the project
+npm run trace:agent -- verify --project "paper.trace.json" --paper "paper.pdf"
+
 # The citation graph of a project, a DOI or a title
 npm run trace:agent -- graph --project "paper.trace.json"
 
@@ -610,6 +634,23 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
 
 ---
 
+## Run it on a server
+
+```bash
+docker compose up --build        # http://localhost:3000, library kept in a volume
+```
+
+The image includes Poppler, so the quote check and local-model reading work out of the box. The
+library, templates and published links live in `/data` (`TRACE_DATA_DIR`); mount a volume there.
+`railway.json` builds the same Dockerfile on Railway with `/api/health` as the health check; any
+host that runs a Dockerfile works the same way.
+
+Trace has no accounts. On your own machine that is fine. On a server anyone can reach, set
+`TRACE_ACCESS_PASSWORD`: the studio and its API then ask for that password (HTTP Basic, any user
+name), while `/p/<id>` published links and the health check stay open. Use HTTPS in front of it.
+Provider keys are still typed into the browser by whoever uses the studio and are never stored on
+the server.
+
 ## Security and trust model
 
 - Imported `.trace.json` files are untrusted input. Interactive maths is declarative and
@@ -621,8 +662,11 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
   module, so a PDF address sent by a browser passes the same checks.
 - A repository that asks for a browser check is not worked around. The PubMed Central archive is
   unpacked in memory with its uncompressed size capped.
-- When a local model reads extracted text, a claim whose quote is not found on its page cannot stay
-  verified.
+- Every quote is searched for on the page it cites, for every provider. A claim whose quotes are not
+  found cannot stay verified, and the check never upgrades a claim. A PDF uploaded for a re-check is
+  read in a temporary directory and deleted; if almost no quote matches, nothing is changed.
+- `TRACE_ACCESS_PASSWORD` puts the studio and its API behind one shared password, compared in
+  constant time. It is not an account system: published links and the health check stay open.
 - A context source that returns an unreliable record is dropped rather than trusted.
 - LaTeX is rendered to MathML and passed through a tag and attribute allowlist.
 - Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,
@@ -644,7 +688,8 @@ Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), the
-paper's own figures placed beside the prose that argues them, the evidence health panel,
+paper's own figures placed beside the prose that argues them, the evidence health panel, a
+mechanical check of every quote against its page, a Docker image with optional password protection,
 side-by-side comparison of two projects, section-level regeneration with evidence locking (story, report and learning items),
 strengthening thin sections, project version history with word-level diffs, editable narrative
 templates, model speed tests before generation, shareable publications with
@@ -690,6 +735,7 @@ the two from mixing.
 - [x] Project revisions and reusable narrative templates
 - [x] Shareable hosted stories with publication controls
 - [x] Papers beyond arXiv, literature maps, citation graphs and fully local analysis
+- [x] Quotes checked against the page text; Docker image and password protection
 - [ ] Team review, annotations and claim approval
 
 ---

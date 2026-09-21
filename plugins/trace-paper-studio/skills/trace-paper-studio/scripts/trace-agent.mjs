@@ -11,8 +11,10 @@ import { fileURLToPath } from "node:url";
 import {
   buildSectionBrief,
   builtInTemplates,
+  applyExcerptCheck,
   defaultPublicationInclude,
   evidenceHealth,
+  splitPages,
   expiryFromDays,
   projectContentFingerprint,
   projectForPublication,
@@ -294,6 +296,7 @@ function usage(exitCode = 0) {
 Usage:
   node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id> | --doi <doi> | --source <link or id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep] [--template <id|path>]
   node trace-agent.mjs graph (--project <project.trace.json> | --doi <doi> | --title "<paper name>" | --source <link or id>) [--limit <n>]
+  node trace-agent.mjs verify --project <project.trace.json> [--paper <paper.pdf> | --pages <paper.pages.txt>]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
@@ -324,6 +327,11 @@ Usage:
             (openreview:<id>). Trace downloads only from these hosts; a paper
             whose only open copy lives elsewhere is reported with its link so
             the user can download it and pass --paper.
+  verify    Looks for every quote on the page it cites, in the text extracted
+            from the PDF, and records the result in the project. A verified
+            claim none of whose quotes can be found becomes needs-review;
+            nothing is ever upgraded. Run it after writing the project and
+            before validate and deliver. Needs pdftotext.
   graph     Prints the paper's citation graph from OpenAlex: the most-cited
             works it builds on and the most-cited works that cite it. Every
             node carries an "identifier" that prepare --source accepts.
@@ -741,6 +749,10 @@ function inspectProject(args, print = true) {
     },
     // Tek iddiaya ya da yalnızca doğrulanmamış iddialara dayanan bölümler;
     // `section --goal strengthen` bunları daha fazla kanıtla yeniden yazdırır.
+    // Alıntıların sayfa metnine karşı denetimi; `verify` yazar. Yoksa denetlenmemiştir.
+    excerptCheck: project.excerptCheck
+      ? { checkedAt: project.excerptCheck.checkedAt, checked: project.excerptCheck.checked, notFound: project.excerptCheck.unlocated.length }
+      : "not run — run verify before deliver so the project records that its quotes were found on their pages",
     thinSections: evidenceHealth(project).sections
       .filter((section) => section.thin)
       .map((section) => ({ target: `${section.area}:${section.id}`, title: section.title, claims: section.claimCount, verified: section.verifiedCount })),
@@ -755,6 +767,79 @@ function inspectProject(args, print = true) {
   }
   return result;
 }
+/**
+ * Alıntıları PDF'in sayfa metnine karşı denetler ve sonucu projeye yazar.
+ *
+ * `confidence` ajanın kendi beyanı; bu komut ise mekanik: her alıntı atıf
+ * yaptığı sayfada aranır. Alıntılarının hiçbiri bulunamayan "verified" iddia
+ * "needs-review" olur, hiçbir şey yükseltilmez. Uygulamadaki denetimle AYNI
+ * kod (derlenmiş paket), dolayısıyla stüdyo ile köprü farklı hüküm vermez.
+ *
+ * Metin kaynağı sırayla: --pages, --paper, yoksa projenin yanındaki job.json.
+ */
+function verifyProject(args) {
+  const inspected = inspectProject(args, false);
+  if (!inspected.ok) {
+    console.error(JSON.stringify({ ok: false, projectPath: inspected.projectPath, issues: inspected.issues }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const projectPath = inspected.projectPath;
+
+  let raw;
+  if (args.pages) {
+    // paper.pages.txt işaretli, paper.raw.txt form-feed'li; ikisi de kabul edilir.
+    raw = readFileSync(resolve(args.pages), "utf8").replace(/\n*--- PAGE \d+ ---\n/g, "\f").replace(/^\f/, "");
+  } else {
+    let paperPath = args.paper ? resolve(args.paper) : undefined;
+    const jobPath = join(dirname(projectPath), "job.json");
+    const rawTextPath = join(dirname(projectPath), "paper.raw.txt");
+    if (!paperPath && existsSync(rawTextPath)) raw = readFileSync(rawTextPath, "utf8");
+    if (!paperPath && !raw && existsSync(jobPath)) paperPath = readJsonFile(jobPath, "job").paper?.path;
+    if (!raw) {
+      if (!paperPath || !existsSync(paperPath)) {
+        throw new Error("verify needs the paper: pass --paper <paper.pdf> or --pages <paper.pages.txt>, or keep the project next to its job.json.");
+      }
+      const extraction = spawnSync("pdftotext", ["-layout", "-enc", "UTF-8", paperPath, "-"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      if (extraction.error?.code === "ENOENT") {
+        throw new Error("verify needs pdftotext (Poppler): brew install poppler, apt install poppler-utils or choco install poppler.");
+      }
+      if (extraction.status !== 0) throw new Error(`pdftotext failed: ${(extraction.stderr || "unknown error").trim()}`);
+      raw = extraction.stdout;
+    }
+  }
+
+  const pages = splitPages(raw);
+  if (pages.reduce((sum, page) => sum + page.trim().length, 0) < 1_500) {
+    throw new Error("The PDF has almost no extractable text (probably a scan), so its quotes cannot be checked mechanically.");
+  }
+  const { project, downgradedIds } = applyExcerptCheck(inspected.project, pages);
+  const check = project.excerptCheck;
+  // Yanlış PDF her iddiayı düşürürdü; neredeyse hiçbir şey eşleşmiyorsa dokunulmaz.
+  if (check.checked >= 5 && check.unlocated.length / check.checked > 0.8) {
+    throw new Error(`Only ${check.checked - check.unlocated.length} of ${check.checked} quotes were found. This is probably not the PDF the project was written from; nothing was changed.`);
+  }
+  // Dosyanın KENDİSİ güncellenir, şemadan geçmiş kopyası değil: ayrıştırma
+  // anahtarları yeniden sıralıyor ve ajanın yazdığı biçimi bozuyordu.
+  const onDisk = readJsonFile(projectPath, "project");
+  const downgraded = new Set(downgradedIds);
+  for (const claim of onDisk.evidence.claims) if (downgraded.has(claim.id)) claim.confidence = "needs-review";
+  onDisk.excerptCheck = check;
+  atomicWrite(projectPath, `${JSON.stringify(onDisk, null, 2)}\n`);
+  console.log(JSON.stringify({
+    ok: true,
+    projectPath,
+    pages: pages.length,
+    checked: check.checked,
+    found: check.checked - check.unlocated.length,
+    notFound: check.unlocated,
+    downgradedToNeedsReview: downgradedIds,
+    note: check.unlocated.length
+      ? "Open each notFound item on its page. Fix an excerpt you paraphrased by copying the exact words, then run verify again; leave a claim needs-review when its support really is a table, figure or equation that text extraction cannot read. Run validate afterwards: a section may have become thin."
+      : "Every quote was found on the page it cites.",
+  }, null, 2));
+}
+
 function validateProject(args) {
   const result = inspectProject(args);
   if (!result.ok) process.exitCode = 1;
@@ -1377,6 +1462,7 @@ try {
   else if (command === "save-template") saveTemplateFromProject(args);
   else if (command === "publish") await publishProjectLink(args);
   else if (command === "graph") await citationGraph(args);
+  else if (command === "verify") verifyProject(args);
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

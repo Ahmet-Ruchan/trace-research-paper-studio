@@ -237,7 +237,10 @@
 /* --- Kanıt sağlığı -------------------------------------------------- */
 /* Tek bir "sağlık puanı" yok: birleştirilmiş bir sayı kötü kanıtı iyi
    kanıtla ortalayıp gizlerdi. Üç ayrı ölçü, üç ayrı soru cevaplıyor. */
-.health-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.health-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+.health-check-quotes { margin-top: 12px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); font-size: 11px; cursor: pointer; }
+.health-check-quotes:hover { border-color: var(--accent); }
+.health-unused small { margin-left: 6px; color: var(--muted); font-size: 9.5px; white-space: nowrap; }
 .health-stat { padding: 17px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
 .health-stat strong { display: block; font: 400 27px/1 Georgia, serif; }
 .health-stat > span { display: block; margin-top: 6px; font-size: 9px; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); }

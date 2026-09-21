@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section, primer concept, quiz question, derivation or equation of an existing Trace project with its evidence locked, to generate with or save a narrative template, and to publish a shareable link to a project.
+description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section, primer concept, quiz question, derivation or equation of an existing Trace project with its evidence locked, to generate with or save a narrative template, to publish a shareable link to a project, to check a project's quotes against the text of its PDF, to resolve a paper from a DOI or an open-access repository link, and to show a paper's citation graph.
 ---
 
 # Trace Paper Studio
@@ -70,11 +70,14 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    - `quiz` questions test understanding, not recall of wording. Every option needs an explanation, including the correct one.
    - `applicationGuide` must include `whenNotToUse` grounded in the paper's own limitation claims.
 7. Write the complete JSON to the `outputPath` from `job.json`. Set `story.accent` to `presentation.accent` from the same job exactly. Set `generation.provider` to `native-agent` and `generation.model` to the current host/model when known; otherwise use the host name.
-8. Validate the output:
+8. Check the quotes, then validate the output:
 
    ```bash
+   node scripts/trace-agent.mjs verify --project "<outputPath>"
    node scripts/trace-agent.mjs validate --strict --project "<outputPath>"
    ```
+
+   `verify` looks for every excerpt on the page it cites, in the text extracted from the PDF, and writes the result into the project (`excerptCheck`). A `verified` claim none of whose excerpts can be found becomes `needs-review`; nothing is ever upgraded. For each `notFound` item, open that page: if you paraphrased, replace the excerpt with the exact words and run `verify` again. If the support really is a table, a figure or an equation that text extraction cannot read, leave the claim `needs-review` and describe it as uncertain in the prose. Never edit `excerptCheck` by hand and never restore `verified` yourself. It needs `pdftotext`; when that is missing, say so to the user instead of skipping the step silently.
 
    Fix every reported issue and rerun until `ok: true`. Do not weaken or bypass validation. `--strict` also requires the learning blocks the chosen depth mandates; drop it only when deliberately repairing a project authored before the learning layer existed.
 

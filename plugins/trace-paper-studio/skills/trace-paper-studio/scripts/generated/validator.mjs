@@ -2773,7 +2773,7 @@ function initializeContext(params) {
 		external: params?.external ?? void 0
 	};
 }
-function process(schema, ctx, _params = {
+function process$1(schema, ctx, _params = {
 	path: [],
 	schemaPath: []
 }) {
@@ -2810,7 +2810,7 @@ function process(schema, ctx, _params = {
 		const parent = schema._zod.parent;
 		if (parent) {
 			if (!result.ref) result.ref = parent;
-			process(parent, ctx, params);
+			process$1(parent, ctx, params);
 			ctx.seen.get(parent).isParent = true;
 		}
 	}
@@ -3032,7 +3032,7 @@ const createToJSONSchemaMethod = (schema, processors = {}) => (params) => {
 		...params,
 		processors
 	});
-	process(schema, ctx);
+	process$1(schema, ctx);
 	extractDefs(ctx, schema);
 	return finalize(ctx, schema);
 };
@@ -3044,7 +3044,7 @@ const createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params)
 		io,
 		processors
 	});
-	process(schema, ctx);
+	process$1(schema, ctx);
 	extractDefs(ctx, schema);
 	return finalize(ctx, schema);
 };
@@ -3150,7 +3150,7 @@ const arrayProcessor = (schema, ctx, _json, params) => {
 	if (typeof minimum === "number") json.minItems = minimum;
 	if (typeof maximum === "number") json.maxItems = maximum;
 	json.type = "array";
-	json.items = process(def.element, ctx, {
+	json.items = process$1(def.element, ctx, {
 		...params,
 		path: [...params.path, "items"]
 	});
@@ -3161,7 +3161,7 @@ const objectProcessor = (schema, ctx, _json, params) => {
 	json.type = "object";
 	json.properties = {};
 	const shape = def.shape;
-	for (const key in shape) json.properties[key] = process(shape[key], ctx, {
+	for (const key in shape) json.properties[key] = process$1(shape[key], ctx, {
 		...params,
 		path: [
 			...params.path,
@@ -3179,7 +3179,7 @@ const objectProcessor = (schema, ctx, _json, params) => {
 	if (def.catchall?._zod.def.type === "never") json.additionalProperties = false;
 	else if (!def.catchall) {
 		if (ctx.io === "output") json.additionalProperties = false;
-	} else if (def.catchall) json.additionalProperties = process(def.catchall, ctx, {
+	} else if (def.catchall) json.additionalProperties = process$1(def.catchall, ctx, {
 		...params,
 		path: [...params.path, "additionalProperties"]
 	});
@@ -3187,7 +3187,7 @@ const objectProcessor = (schema, ctx, _json, params) => {
 const unionProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
 	const isExclusive = def.inclusive === false;
-	const options = def.options.map((x, i) => process(x, ctx, {
+	const options = def.options.map((x, i) => process$1(x, ctx, {
 		...params,
 		path: [
 			...params.path,
@@ -3200,7 +3200,7 @@ const unionProcessor = (schema, ctx, json, params) => {
 };
 const intersectionProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
-	const a = process(def.left, ctx, {
+	const a = process$1(def.left, ctx, {
 		...params,
 		path: [
 			...params.path,
@@ -3208,7 +3208,7 @@ const intersectionProcessor = (schema, ctx, json, params) => {
 			0
 		]
 	});
-	const b = process(def.right, ctx, {
+	const b = process$1(def.right, ctx, {
 		...params,
 		path: [
 			...params.path,
@@ -3221,7 +3221,7 @@ const intersectionProcessor = (schema, ctx, json, params) => {
 };
 const nullableProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
-	const inner = process(def.innerType, ctx, params);
+	const inner = process$1(def.innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	if (ctx.target === "openapi-3.0") {
 		seen.ref = def.innerType;
@@ -3230,27 +3230,27 @@ const nullableProcessor = (schema, ctx, json, params) => {
 };
 const nonoptionalProcessor = (schema, ctx, _json, params) => {
 	const def = schema._zod.def;
-	process(def.innerType, ctx, params);
+	process$1(def.innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	seen.ref = def.innerType;
 };
 const defaultProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
-	process(def.innerType, ctx, params);
+	process$1(def.innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	seen.ref = def.innerType;
 	json.default = JSON.parse(JSON.stringify(def.defaultValue));
 };
 const prefaultProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
-	process(def.innerType, ctx, params);
+	process$1(def.innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	seen.ref = def.innerType;
 	if (ctx.io === "input") json._prefault = JSON.parse(JSON.stringify(def.defaultValue));
 };
 const catchProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
-	process(def.innerType, ctx, params);
+	process$1(def.innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	seen.ref = def.innerType;
 	let catchValue;
@@ -3265,20 +3265,20 @@ const pipeProcessor = (schema, ctx, _json, params) => {
 	const def = schema._zod.def;
 	const inIsTransform = def.in._zod.traits.has("$ZodTransform");
 	const innerType = ctx.io === "input" ? inIsTransform ? def.out : def.in : def.out;
-	process(innerType, ctx, params);
+	process$1(innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	seen.ref = innerType;
 };
 const readonlyProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
-	process(def.innerType, ctx, params);
+	process$1(def.innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	seen.ref = def.innerType;
 	json.readOnly = true;
 };
 const optionalProcessor = (schema, ctx, _json, params) => {
 	const def = schema._zod.def;
-	process(def.innerType, ctx, params);
+	process$1(def.innerType, ctx, params);
 	const seen = ctx.seen.get(schema);
 	seen.ref = def.innerType;
 };
@@ -4703,6 +4703,30 @@ const generationResultSchema = object({
 	evidence: paperEvidenceSchema,
 	story: storySpecSchema
 });
+/**
+* Alıntıların PDF'in sayfa metnine karşı mekanik denetimi.
+*
+* `confidence` modelin kendi beyanı; bu kayıt ise bir programın sonucu: her
+* alıntı, atıf yaptığı sayfanın çıkarılmış metninde arandı. Yalnızca
+* BULUNAMAYANLAR yazılıyor — liste boşsa hepsi bulundu demek. Denetim hiç
+* yapılmadıysa alan yoktur ve panel "denetlenmedi" der; bulundu saymaz.
+*/
+const excerptCheckSchema = object({
+	checkedAt: string(),
+	method: literal("pdftotext"),
+	pageCount: number().int().positive(),
+	/** Makaleye (sayfaya) atıf yapan ve aranan referans sayısı. */
+	checked: number().int().nonnegative(),
+	unlocated: array(object({
+		owner: _enum([
+			"claim",
+			"metric",
+			"glossary"
+		]),
+		id: string(),
+		page: number().int().positive().optional()
+	})).max(400)
+});
 const researchProjectSchema = generationResultSchema.extend({
 	version: literal(1),
 	id: string(),
@@ -4727,6 +4751,7 @@ const researchProjectSchema = generationResultSchema.extend({
 	interactives: array(interactiveSchema).max(8).optional(),
 	applicationGuide: applicationGuideSchema.optional(),
 	figures: array(figureSchema).max(6).optional(),
+	excerptCheck: excerptCheckSchema.optional(),
 	/** Anlatı bu şablona göre üretildiyse onun kopyası; yeniden üretim ve doğrulama yapıyı buradan korur. */
 	template: narrativeTemplateSchema.optional(),
 	generation: object({
@@ -5684,6 +5709,39 @@ function tally(claims) {
 		verifiedRatio: claims.length ? verified / claims.length : 0
 	};
 }
+function excerptStatus(project) {
+	const check = project.excerptCheck;
+	if (!check) return {
+		checked: false,
+		total: 0,
+		located: 0,
+		unlocatedClaims: [],
+		unlocatedOther: []
+	};
+	const claimById = new Map(project.evidence.claims.map((claim) => [claim.id, claim]));
+	const metricById = new Map(project.evidence.metrics.map((metric) => [metric.id, metric]));
+	const unlocatedClaims = [];
+	const unlocatedOther = [];
+	for (const item of check.unlocated) if (item.owner === "claim") {
+		const claim = claimById.get(item.id);
+		if (claim && !unlocatedClaims.some((entry) => entry.claim.id === claim.id)) unlocatedClaims.push({
+			claim,
+			page: item.page
+		});
+	} else unlocatedOther.push({
+		owner: item.owner,
+		label: metricById.get(item.id)?.label ?? item.id,
+		page: item.page
+	});
+	return {
+		checked: true,
+		checkedAt: check.checkedAt,
+		total: check.checked,
+		located: Math.max(check.checked - check.unlocated.length, 0),
+		unlocatedClaims,
+		unlocatedOther
+	};
+}
 function evidenceHealth(project) {
 	const { claims, sources, metrics, glossary } = project.evidence;
 	const sourceById = new Map(sources.map((source) => [source.id, source]));
@@ -5736,6 +5794,7 @@ function evidenceHealth(project) {
 	}));
 	return {
 		claims: tally(claims),
+		excerpts: excerptStatus(project),
 		grounding: {
 			fromPaper,
 			fromWeb
@@ -5750,6 +5809,120 @@ function evidenceHealth(project) {
 		sections,
 		unusedClaims: claims.filter((claim) => !referenced.has(claim.id)),
 		usedClaimCount: claims.filter((claim) => referenced.has(claim.id)).length
+	};
+}
+
+//#endregion
+//#region src/lib/paper-text.ts
+/** `pdftotext` sayfaları form-feed ile ayırıyor; sondaki boş parça sayfa değildir. */
+function splitPages(raw) {
+	const pages = raw.split("\f").map((page) => page.replace(/[ \t]+$/gm, "").trimEnd());
+	while (pages.length && !pages[pages.length - 1].trim()) pages.pop();
+	return pages;
+}
+/** Karşılaştırma için: ligatürler, tırnaklar, satır sonu tirelemesi ve boşluklar eşitlenir. */
+function normalizeForMatch(value) {
+	return value.normalize("NFKC").replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, "\"").replace(/[‐-―−]/g, "-").replace(/-\s*\n\s*/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+/**
+* Alıntı belirtilen sayfada (ya da sayfa kırılımına denk geldiyse komşusunda)
+* geçiyor mu? Model alıntıyı "…" ile kısaltmış olabilir; o zaman her parça aranır.
+*/
+function excerptIsOnPage(pages, page, excerpt) {
+	if (!page || page < 1 || page > pages.length) return false;
+	const window = normalizeForMatch([
+		pages[page - 2],
+		pages[page - 1],
+		pages[page]
+	].filter(Boolean).join("\n"));
+	const fragments = normalizeForMatch(excerpt).split(/\s*(?:\.{3}|…|\[\.{3}\])\s*/).filter((fragment) => lettersOnly(fragment).length >= MIN_FRAGMENT_LETTERS);
+	if (!fragments.length) return false;
+	/**
+	* İkinci deneme yalnızca harf ve rakamlara bakıyor. PDF'i GÖREN bir model
+	* alıntıyı sayfadaki görüntüden yazıyor; `pdftotext` ise aynı satırı farklı
+	* boşluk, tire ve noktalama ile çıkarabiliyor (sütunlar, satır sonu tiresi,
+	* üst simgeler). Kelimeler ve sıraları aynıysa alıntı oradadır.
+	*/
+	const compactWindow = lettersOnly(window);
+	return fragments.every((fragment) => window.includes(fragment) || compactWindow.includes(lettersOnly(fragment)));
+}
+const MIN_FRAGMENT_LETTERS = 10;
+const lettersOnly = (value) => value.replace(/[^\p{L}\p{N}]/gu, "");
+/**
+* Alıntısı sayfasında bulunamayan iddia "verified" kalamaz.
+*
+* İddia SİLİNMİYOR: çıkarma hatası da olabilir (tablo, formül, taranmış sayfa)
+* ve kullanıcı PDF'e bakıp kendisi karar verebilmeli. Yalnızca güven düşüyor.
+*/
+function downgradeUnlocatedClaims(output, pages, paperSourceIds = /* @__PURE__ */ new Set(["paper"])) {
+	let downgraded = 0;
+	const claims = output.claims.map((claim) => {
+		if (claim.confidence !== "verified") return claim;
+		const paperRefs = claim.sourceRefs.filter((reference) => paperSourceIds.has(reference.sourceId));
+		if (!paperRefs.length) return claim;
+		if (paperRefs.some((reference) => excerptIsOnPage(pages, reference.page, reference.excerpt))) return claim;
+		downgraded += 1;
+		return {
+			...claim,
+			confidence: "needs-review"
+		};
+	});
+	return {
+		output: {
+			...output,
+			claims
+		},
+		downgraded
+	};
+}
+/**
+* Bütün projenin alıntı denetimi: iddialar, metrikler ve sözlük.
+*
+* Yalnızca makaleye yapılan atıflar aranır; web kaynaklarının metni elimizde
+* değil. Sonuç projeye yazılır, böylece paylaşılan bir `.trace.json` denetimin
+* yapıldığını ve neyin bulunamadığını PDF olmadan da gösterebilir.
+*/
+function checkExcerpts(evidence, pages, checkedAt = (/* @__PURE__ */ new Date()).toISOString()) {
+	const paperSources = new Set(evidence.sources.filter((source) => source.type === "paper").map((source) => source.id));
+	const unlocated = [];
+	let checked = 0;
+	const look = (owner, id, reference) => {
+		if (!reference || !paperSources.has(reference.sourceId)) return;
+		checked += 1;
+		if (!excerptIsOnPage(pages, reference.page, reference.excerpt)) unlocated.push({
+			owner,
+			id,
+			page: reference.page
+		});
+	};
+	for (const claim of evidence.claims) for (const reference of claim.sourceRefs) look("claim", claim.id, reference);
+	for (const metric of evidence.metrics) look("metric", metric.id, metric.sourceRef);
+	for (const item of evidence.glossary) look("glossary", item.term, item.sourceRef);
+	return {
+		checkedAt,
+		method: "pdftotext",
+		pageCount: Math.max(pages.length, 1),
+		checked,
+		unlocated: unlocated.slice(0, 400)
+	};
+}
+/**
+* Denetimi projeye işler: kayıt yazılır ve makaledeki alıntılarının HİÇBİRİ
+* bulunamayan "verified" iddialar "needs-review" olur. Hiçbir şey yükseltilmez —
+* bir program alıntının orada olduğunu söyleyebilir, iddiayı desteklediğini değil.
+*/
+function applyExcerptCheck(project, pages) {
+	const paperSourceIds = new Set(project.evidence.sources.filter((source) => source.type === "paper").map((source) => source.id));
+	const { output, downgraded } = downgradeUnlocatedClaims(project.evidence, pages, paperSourceIds);
+	const before = new Map(project.evidence.claims.map((claim) => [claim.id, claim.confidence]));
+	return {
+		project: {
+			...project,
+			evidence: output,
+			excerptCheck: checkExcerpts(output, pages)
+		},
+		downgraded,
+		downgradedIds: output.claims.filter((claim) => claim.confidence !== before.get(claim.id)).map((claim) => claim.id)
 	};
 }
 
@@ -5909,7 +6082,8 @@ const revisionReasons = [
 	"restore",
 	"import",
 	"manual",
-	"agent"
+	"agent",
+	"verify"
 ];
 const revisionReasonSchema = _enum(revisionReasons);
 /** Proje başına tutulan revizyon sayısı. Her biri projenin tam kopyası. */
@@ -5921,7 +6095,7 @@ const REVISION_LIMIT = 40;
 */
 const EDIT_COALESCE_MS = 6e5;
 const MAX_REVISION_LABEL = 80;
-const revisionIdPattern = /^\d{8}T\d{9}Z-(edit|regenerate|restore|import|manual|agent)-[0-9a-f]{8}$/;
+const revisionIdPattern = new RegExp(`^\\d{8}T\\d{9}Z-(${revisionReasons.join("|")})-[0-9a-f]{8}$`);
 const revisionRecordSchema = object({
 	version: literal(1),
 	id: string().regex(revisionIdPattern),
@@ -6660,4 +6834,4 @@ function spliceSectionObject(input, rawBrief, section, options = {}) {
 }
 
 //#endregion
-export { buildSectionBrief, builtInTemplates, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, findBuiltInTemplate, isRevisionFileName, narrativeTemplateSchema, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, shouldSnapshot, spliceSectionObject, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { applyExcerptCheck, buildSectionBrief, builtInTemplates, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, findBuiltInTemplate, isRevisionFileName, narrativeTemplateSchema, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, shouldSnapshot, spliceSectionObject, splitPages, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

@@ -17,11 +17,14 @@ export function EvidenceHealthView({
   project,
   onClaimSelect,
   onStrengthen,
+  onCheckQuotes,
 }: {
   project: ResearchProject;
   onClaimSelect?: (claimId: string) => void;
   /** Stüdyo verir: ince bölümü daha fazla kanıtla yeniden yazdırır. Görüntüleyici vermez. */
   onStrengthen?: (section: { area: "story" | "report"; id: string }) => void;
+  /** Stüdyo verir: kullanıcıdan PDF'i alıp alıntıları sayfa metnine karşı denetler. Görüntüleyici vermez. */
+  onCheckQuotes?: () => void;
 }) {
   const t = useStrings();
   const health = evidenceHealth(project);
@@ -53,7 +56,57 @@ export function EvidenceHealthView({
           note={t.healthInUseNote(health.unusedClaims.length)}
           ratio={health.claims.total ? health.usedClaimCount / health.claims.total : 0}
         />
+        {/* Denetlenmemiş proje "0/0" değil "denetlenmedi" der: kanıtı olmayan
+            bir güvence bu panelin tam tersine çalışırdı. */}
+        <Stat
+          value={health.excerpts.checked ? `${health.excerpts.located}/${health.excerpts.total}` : "—"}
+          label={health.excerpts.checked ? t.healthQuotes : t.healthQuotesUnchecked}
+          note={
+            health.excerpts.checked
+              ? t.healthQuotesNote(health.excerpts.total - health.excerpts.located)
+              : t.healthQuotesUncheckedNote
+          }
+          ratio={health.excerpts.checked && health.excerpts.total ? health.excerpts.located / health.excerpts.total : 0}
+        />
       </div>
+
+      {onCheckQuotes ? (
+        <button type="button" className="health-check-quotes" onClick={onCheckQuotes}>
+          {health.excerpts.checked ? t.healthQuotesRecheck : t.healthQuotesCheck}
+        </button>
+      ) : null}
+
+      {health.excerpts.unlocatedClaims.length || health.excerpts.unlocatedOther.length ? (
+        <section className="health-block">
+          <h4>{t.healthQuotesMissing}</h4>
+          <p className="health-note">
+            {t.healthQuotesMissingNote(
+              new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(
+                // Bulunamayan bir alıntı listeleniyorsa denetim yapılmıştır ve tarihi vardır.
+                new Date(health.excerpts.checkedAt ?? 0),
+              ),
+            )}
+          </p>
+          <ul className="health-unused">
+            {health.excerpts.unlocatedClaims.map(({ claim, page }) => (
+              <li key={claim.id}>
+                {onClaimSelect ? (
+                  <button type="button" onClick={() => onClaimSelect(claim.id)} lang={project.language}>
+                    {claim.statement} <small>{t.healthQuotesPage(page)}</small>
+                  </button>
+                ) : (
+                  <p lang={project.language}>{claim.statement} <small>{t.healthQuotesPage(page)}</small></p>
+                )}
+              </li>
+            ))}
+            {health.excerpts.unlocatedOther.map((item, index) => (
+              <li key={`${item.owner}-${item.label}-${index}`}>
+                <p lang={project.language}>{item.label} <small>{item.owner} · {t.healthQuotesPage(item.page)}</small></p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="health-block">
         <h4>{t.healthGrounding}</h4>

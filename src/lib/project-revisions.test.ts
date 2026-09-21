@@ -6,6 +6,8 @@ import {
   isRevisionFileName,
   revisionFileName,
   revisionId,
+  revisionIdPattern,
+  revisionReasons,
   revisionsToPrune,
   sameProjectContent,
   shouldSnapshot,
@@ -133,5 +135,13 @@ describe("what changed between two versions", () => {
     expect(summaries).toContain("Story section removed");
     expect(summaries).toContain("depth changed");
     expect(describeProjectChanges(to, from).map((change) => change.summary)).toContain("Quiz added");
+  });
+});
+
+describe("revisionId — her kayıt nedeni için", () => {
+  it.each([...revisionReasons])("%s nedeniyle geçerli bir kimlik üretir", (reason) => {
+    const id = revisionId("2026-09-21T22:50:37.384Z", reason, "504e9285e8204685b2832aca0803224c");
+    expect(revisionIdPattern.test(id)).toBe(true);
+    expect(isRevisionFileName(revisionFileName(id))).toBe(true);
   });
 });
