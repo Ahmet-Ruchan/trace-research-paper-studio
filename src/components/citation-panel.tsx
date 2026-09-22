@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ExternalLink, Network, X } from "lucide-react";
+import { ArrowRight, Download, ExternalLink, Network, X } from "lucide-react";
+import { buildBibtex } from "@/lib/exports/bibliography";
 import { loadCitationGraph, type CitationGraph, type GraphNode } from "@/lib/paper-lookup";
 import type { ResearchProject } from "@/lib/schema";
 
@@ -71,6 +72,10 @@ export function CitationPanel({
                 <strong>{graph.citedByCount.toLocaleString("en")}</strong> citing works · retrieved{" "}
                 {new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(graph.retrievedAt))}{" "}
                 · <a href={graph.openAlexUrl} target="_blank" rel="noreferrer">full record on OpenAlex <ExternalLink size={10} /></a>
+                {" · "}
+                <button className="citation-bibtex" onClick={() => downloadBibtex(project, [...graph.references, ...graph.citedBy])}>
+                  <Download size={10} /> BibTeX for the paper and these works
+                </button>
               </p>
               <GraphMap graph={graph} focused={focused} onFocus={setFocused} />
               <div className="citation-columns">
@@ -83,6 +88,17 @@ export function CitationPanel({
       </div>
     </div>
   );
+}
+
+/** Makale ve grafikteki çalışmalar tek bir `.bib` dosyasında; Zotero doğrudan içe aktarıyor. */
+function downloadBibtex(project: ResearchProject, nodes: GraphNode[]) {
+  const content = buildBibtex(project, nodes.map((node) => ({ title: node.title, authors: node.authors, year: node.year, venue: node.venue, doi: node.doi, arxivId: node.arxivId, url: node.url })));
+  const url = URL.createObjectURL(new Blob([content], { type: "application/x-bibtex" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "citation-graph.bib";
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 const byYear = (nodes: GraphNode[]) => [...nodes].sort((a, b) => (a.year ?? 0) - (b.year ?? 0));

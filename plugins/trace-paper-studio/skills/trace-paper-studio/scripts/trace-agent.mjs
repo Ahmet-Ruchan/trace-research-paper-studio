@@ -23,7 +23,9 @@ import {
   publicationPath,
   publicationRecordSchema,
   expectedSectionCounts,
+  exportDefinitions,
   findBuiltInTemplate,
+  findExport,
   narrativeTemplateSchema,
   templateFromProject,
   templateIssues,
@@ -299,6 +301,7 @@ Usage:
   node trace-agent.mjs prepare (--paper <paper.pdf> | --title "<paper name>" | --arxiv <id> | --doi <doi> | --source <link or id>) --language <bcp47> [--pick <n>] [--out <directory>] [--audience general|student|expert] [--depth concise|standard|deep] [--template <id|path>]
   node trace-agent.mjs graph (--project <project.trace.json> | --doi <doi> | --title "<paper name>" | --source <link or id>) [--limit <n>]
   node trace-agent.mjs verify --project <project.trace.json> [--paper <paper.pdf> | --pages <paper.pages.txt>]
+  node trace-agent.mjs export --project <project.trace.json> --format md|html|slides|ipynb|bib|ris|anki [--out <file>]
   node trace-agent.mjs anki --project <project.trace.json> [--out <deck.anki.txt>]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
@@ -335,6 +338,11 @@ Usage:
             claim none of whose quotes can be found becomes needs-review;
             nothing is ever upgraded. Run it after writing the project and
             before validate and deliver. Needs pdftotext.
+  export    Writes the project in another form, next to it unless --out is given:
+            md (Markdown report), html (printable report; print it to get a
+            PDF), slides (one HTML deck), ipynb (the paper's equations as
+            runnable NumPy), bib / ris (the citation), anki (flashcards).
+            Every claim keeps its quote and page. No network, no model.
   anki      Writes an Anki import file: primer concepts, quiz questions and
             glossary terms, each card carrying its quote and page.
   graph     Prints the paper's citation graph from OpenAlex: the most-cited
@@ -866,6 +874,30 @@ function exportAnki(args) {
     cards: cards.length,
     note: "In Anki: File → Import, pick this file. The deck name, note type and tags are set by the file's header lines.",
   }, null, 2));
+}
+
+/**
+ * Projeyi başka bir biçime çevirir: rapor, slayt, defter, kaynakça, kartlar.
+ * Stüdyodaki Export menüsüyle AYNI tablo ve aynı kod; ağ yok, model yok.
+ */
+function exportProject(args) {
+  const formats = exportDefinitions.map((definition) => definition.format);
+  if (!args.format) throw new Error(`--format is required. One of: ${formats.join(", ")}.`);
+  const definition = findExport(args.format);
+  if (!definition) throw new Error(`Unknown --format "${args.format}". One of: ${formats.join(", ")}.`);
+
+  const inspected = inspectProject(args, false);
+  if (!inspected.ok) {
+    console.error(JSON.stringify({ ok: false, projectPath: inspected.projectPath, issues: inspected.issues }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const reason = definition.unavailable?.(inspected.project);
+  if (reason) throw new Error(reason);
+
+  const outPath = resolve(args.out ?? `${inspected.projectPath.replace(/(\.trace)?\.json$/i, "")}.${definition.extension}`);
+  atomicWrite(outPath, definition.build(inspected.project));
+  console.log(JSON.stringify({ ok: true, format: definition.format, label: definition.label, path: outPath, note: definition.description }, null, 2));
 }
 
 function validateProject(args) {
@@ -1492,6 +1524,7 @@ try {
   else if (command === "graph") await citationGraph(args);
   else if (command === "verify") verifyProject(args);
   else if (command === "anki") exportAnki(args);
+  else if (command === "export") exportProject(args);
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

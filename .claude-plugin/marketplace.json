@@ -9,8 +9,8 @@
     {
       "name": "trace-paper-studio",
       "source": "./plugins/trace-paper-studio",
-      "description": "Name a paper or hand over a PDF: Trace finds it on arXiv or by DOI (bioRxiv, medRxiv, PubMed Central, ACL Anthology), grounds every claim in a page and quote, checks each quote against the text of its page, and builds a local interactive site with primers, step-by-step derivations, live equation playgrounds and an evidence-linked quiz. Rewrite one section, quiz question or derivation with the evidence locked, strengthen thin sections, reuse and edit story templates, publish a shareable link, and export Anki flashcards.",
-      "version": "0.20.0",
+      "description": "Name a paper or hand over a PDF: Trace finds it on arXiv or by DOI (bioRxiv, medRxiv, PubMed Central, ACL Anthology), grounds every claim in a page and quote, checks each quote against the text of its page, and builds a local interactive site with primers, step-by-step derivations, live equation playgrounds and an evidence-linked quiz. Rewrite one section, quiz question or derivation with the evidence locked, strengthen thin sections, reuse and edit story templates, publish a shareable link, and export a report, slides, a Jupyter notebook, a citation or Anki flashcards.",
+      "version": "0.21.0",
       "author": {
         "name": "Ahmet Ruchan"
       }

@@ -570,3 +570,28 @@ test.describe("ask the evidence", () => {
     await expect(page.locator(".ask-list > li").first()).toContainText("Not covered by the collected evidence");
   });
 });
+
+test.describe("export menu", () => {
+  test("offers every format, downloads a report that keeps quotes and pages, and disables what the project cannot produce", async ({ page, request }) => {
+    const project = projectNamed("e2e-export");
+    project.interactives = undefined;
+    await seed(request, project);
+    await openStory(page, project.id);
+
+    await page.getByRole("button", { name: "Export" }).click();
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitem")).toHaveCount(8);
+    // Formül oyun alanı olmayan projeden defter üretilemez; seçenek nedenini söyler.
+    await expect(menu.getByRole("menuitem", { name: /Jupyter notebook/ })).toBeDisabled();
+    await expect(menu.getByRole("menuitem", { name: /Jupyter notebook/ })).toContainText("no formula playground");
+
+    const download = page.waitForEvent("download");
+    await menu.getByRole("menuitem", { name: /Markdown report/ }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toBe("attention-is-all-you-need.md");
+    const markdown = readFileSync(await file.path(), "utf8");
+    expect(markdown.startsWith("# Attention Is All You Need")).toBe(true);
+    expect(markdown).toMatch(/> “.+” — p\\?\. \d+/);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  });
+});

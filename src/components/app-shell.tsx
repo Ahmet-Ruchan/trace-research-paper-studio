@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Download, FileJson, FlaskConical, Globe, GraduationCap, History, Home, LayoutTemplate, Network, Plus, Share2 } from "lucide-react";
-import { buildAnkiDeck } from "@/lib/anki-export";
+import { BookOpen, Download, FileJson, FlaskConical, Globe, History, Home, LayoutTemplate, Network, Plus, Share2 } from "lucide-react";
+import { exportDefinitions } from "@/lib/exports";
 import { buildStandaloneStory } from "@/lib/export-story";
 import { claimHash, parseDeepLink, sectionHash } from "@/lib/deep-link";
 import {
@@ -58,6 +58,7 @@ export function AppShell() {
   const [screen, setScreen] = useState<AppScreen>("home");
   const [comparison, setComparison] = useState<ResearchProject[]>();
   const [citationsOpen, setCitationsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [paperLookup, setPaperLookup] = useState<{ query: string; expectTitle?: string }>();
   const [initialTeam, setInitialTeam] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("lab");
@@ -489,12 +490,34 @@ export function AppShell() {
           <button title={t.home} aria-label={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>
           <button title={t.library} aria-label={t.library} onClick={() => setScreen("library")}><BookOpen size={16} /><span>{t.library}</span></button>
           <button title="Download the project JSON" aria-label="JSON" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
-          {(project.quiz || project.primer || project.evidence.glossary.length > 0) && (
-            <button title="Download flashcards for Anki: primer concepts, quiz questions and glossary, each with its quote and page" aria-label="Anki" onClick={() => download(`${slug}.anki.txt`, buildAnkiDeck(project), "text/plain")}><GraduationCap size={16} /><span>Anki</span></button>
-          )}
           <button title="Citation graph: what this paper builds on and what cites it" aria-label="Citations" onClick={() => setCitationsOpen(true)}><Network size={16} /><span>Citations</span></button>
           <button title="Publish a shareable link" aria-label="Publish" onClick={() => setPublishOpen(true)}><Globe size={16} /><span>Publish</span></button>
-          <button className="export-button" onClick={() => download(`${slug}.html`, buildStandaloneStory(project), "text/html")}><Download size={16} /> Export</button>
+          <div className="export-menu">
+            <button className="export-button" aria-haspopup="menu" aria-expanded={exportOpen} onClick={() => setExportOpen((open) => !open)}><Download size={16} /> Export</button>
+            {exportOpen && (
+              <>
+                <button className="export-menu-backdrop" aria-label="Close the export menu" onClick={() => setExportOpen(false)} />
+                <div className="export-menu-list" role="menu">
+                  <button role="menuitem" onClick={() => { setExportOpen(false); download(`${slug}.html`, buildStandaloneStory(project), "text/html"); }}>
+                    <strong>Interactive site</strong><small>The whole story as one self-contained page.</small>
+                  </button>
+                  {exportDefinitions.map((definition) => {
+                    const reason = definition.unavailable?.(project);
+                    return (
+                      <button
+                        role="menuitem"
+                        key={definition.format}
+                        disabled={Boolean(reason)}
+                        onClick={() => { setExportOpen(false); download(`${slug}.${definition.extension}`, definition.build(project), definition.mime); }}
+                      >
+                        <strong>{definition.label}</strong><small>{reason ?? definition.description}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
           <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
           <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
         </div>

@@ -36,17 +36,15 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**0.20**
+**0.21**
 
 | | |
 | --- | --- |
-| **[See the quote on the page](#check-every-quote-against-its-page)** | **Show on the page** in the evidence drawer renders the cited page and marks the quoted words on it, across line breaks and hyphenation. If the words are not there, it says so and still shows the page. |
-| **[A person reviews the claims](#let-a-person-review-the-claims)** | A review queue orders the claims by where a mistake is most likely. Approve or reject each one under your name. The decision is stored apart from the model's confidence, and a rewrite can no longer cite a rejected claim. |
-| **[Ask the evidence](#ask-the-evidence)** | Ask a question about the paper. The model sees only the collected claims, must name the ones it used, and says so when they do not cover the question. |
-| **[Flashcards for Anki](#study-it-with-anki)** | Primer concepts, quiz questions and glossary terms as an Anki import file, each card with its quote and page. |
-| **OpenReview links** | When OpenReview asks for a browser check, Trace looks the paper up on OpenAlex instead and downloads its arXiv copy when there is one. |
+| **[Take it with you](#take-it-with-you)** | One **Export** menu: a Markdown report for Obsidian or Notion, a printable report you save as PDF, a slide deck for a paper club, BibTeX and RIS for Zotero, Anki flashcards, and the interactive site. Every claim keeps its quote and page in all of them. |
+| **[The paper's equations as runnable code](#take-it-with-you)** | A Jupyter notebook generated from the playgrounds: NumPy functions that start at the paper's own values, with the same sweep the playground draws. Translated from the parsed formula, never pasted as text. |
+| **Citations for the whole graph** | The citation graph downloads the paper and the works around it as one `.bib` file. |
 
-Flashcards also work from your agent (`anki`). Reviewing claims is for people only: an agent cannot approve one.
+All formats work from your agent too (`export --format`).
 
 ---
 
@@ -213,9 +211,35 @@ opens its quote and page. When the collected evidence does not cover the questio
 that instead of filling the gap from general knowledge. Claims a reviewer rejected are not shown to
 the model. Because no PDF is sent, a local model can answer too. Nothing is saved.
 
+### Take it with you
+
+**Export** in the studio writes the project in the form you need next. All of it is computed from
+the `.trace.json` alone, with no network and no model, and every claim carries its quote and page
+wherever it goes.
+
+- **Markdown report**: the deep report, method, equations, reported numbers, limitations and the
+  full evidence ledger. Obsidian, Notion and GitHub import it as it is. Each claim shows all three
+  trust marks separately: what the model said, whether the quote was found on its page, and what a
+  reviewer decided.
+- **Printable report (PDF)**: the same report as one page without scripts, laid out for paper.
+  Print it and choose *Save as PDF*.
+- **Slides**: one slide per story section with its first two sentences, the quotes behind it and
+  the paper's figure when the section shares a claim with it. Arrow keys move, **N** shows the full
+  text, printing gives one slide per page.
+- **Jupyter notebook**: each formula playground as NumPy functions that start at the paper's own
+  configuration, plus the sweep the playground draws. The code is generated from the parsed
+  formula, so a project file cannot put arbitrary code into the notebook. A formula that cannot be
+  translated exactly is left out and the notebook says so.
+- **BibTeX / RIS** for Zotero, Mendeley, EndNote and LaTeX.
+- **Anki flashcards** and the **interactive site**.
+
+```text
+Export my Trace project as slides using the Trace plugin.
+```
+
 ### Study it with Anki
 
-**Anki** in the studio downloads an import file with one card per primer concept, quiz question and
+**Export → Anki flashcards** in the studio downloads an import file with one card per primer concept, quiz question and
 glossary term. The back of every card carries the quote and the page it rests on. In Anki, choose
 File → Import; the file sets the deck, the note type and the tags itself.
 
@@ -552,8 +576,8 @@ npm run trace:agent -- prepare --source https://aclanthology.org/2020.acl-main.1
 # Check every quote against its page and record the result in the project
 npm run trace:agent -- verify --project "paper.trace.json" --paper "paper.pdf"
 
-# Flashcards for Anki
-npm run trace:agent -- anki --project "paper.trace.json"
+# Another form of the project: md, html (print to PDF), slides, ipynb, bib, ris, anki
+npm run trace:agent -- export --project "paper.trace.json" --format slides
 
 # The citation graph of a project, a DOI or a title
 npm run trace:agent -- graph --project "paper.trace.json"
@@ -706,6 +730,9 @@ the server.
 - Every quote is searched for on the page it cites, for every provider. A claim whose quotes are not
   found cannot stay verified, and the check never upgrades a claim. A PDF uploaded for a re-check is
   read in a temporary directory and deleted; if almost no quote matches, nothing is changed.
+- Exports escape project text in Markdown, HTML and BibTeX. The printable report has no scripts; the
+  slide deck's only script is fixed navigation code. Notebook code is generated from the parsed
+  formula tree: numbers, declared parameters, arithmetic and a fixed table of NumPy functions.
 - A reviewer's decision lives at the project root, not inside the claim, so no model output schema
   can produce an "approved" claim. The question in **Ask** is passed to the model as data, and an
   answer that cites an unknown or rejected claim is refused.
@@ -734,7 +761,8 @@ Working today: evidence contracts, deep report, technical appendix, eleven visua
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
-review queue, questions answered from the collected evidence only, Anki flashcards, a Docker image with optional password protection,
+review queue, questions answered from the collected evidence only, exports (Markdown and printable
+reports, slides, Jupyter notebook, BibTeX/RIS, Anki flashcards), a Docker image with optional password protection,
 side-by-side comparison of two projects, section-level regeneration with evidence locking (story, report and learning items),
 strengthening thin sections, project version history with word-level diffs, editable narrative
 templates, model speed tests before generation, shareable publications with
@@ -782,6 +810,7 @@ the two from mixing.
 - [x] Papers beyond arXiv, literature maps, citation graphs and fully local analysis
 - [x] Quotes checked against the page text; Docker image and password protection
 - [x] Claim review by a person, quotes shown on the page, evidence-locked questions, Anki export
+- [x] Exports: reports, slides, runnable notebook, citations
 - [ ] Team review with accounts and shared annotations
 
 ---

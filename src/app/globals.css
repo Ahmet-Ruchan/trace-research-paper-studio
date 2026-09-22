@@ -105,8 +105,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .mode-tabs button { display: flex; align-items: center; gap: 7px; padding: 0 13px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; }
 .mode-tabs button.active { background: var(--surface); color: var(--ink); box-shadow: 0 2px 8px rgba(35,31,24,.07); }
 .workspace-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
-.workspace-actions > button { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--line); border-radius: 7px; background: transparent; cursor: pointer; font-size: 9px; }
-.workspace-actions > button:hover { border-color: var(--line-dark); }
+.workspace-actions > button, .export-menu > .export-button { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--line); border-radius: 7px; background: transparent; cursor: pointer; font-size: 9px; }
+.workspace-actions > button:hover, .export-menu > .export-button:hover { border-color: var(--line-dark); }
 .workspace-actions .export-button { border-color: var(--ink); background: var(--ink); color: white; }
 .workspace-content { min-height: calc(100vh - 67px); flex: 1; }
 .warning-strip { min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 6px 20px; background: #fff5dc; border-bottom: 1px solid #e7d5a6; color: #78551b; font-size: 10px; }
@@ -693,3 +693,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .ask-claims button { display: grid; gap: 3px; width: 100%; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink-soft); font-size: 11px; line-height: 1.55; text-align: left; cursor: pointer; }
 .ask-claims button:hover { border-color: var(--accent); }
 .ask-claims small, .ask-model { color: var(--muted); font-size: 9.5px; }
+
+/* --- Dışa aktarma menüsü --------------------------------------------- */
+.export-menu { position: relative; }
+.export-menu-backdrop { position: fixed; inset: 0; z-index: 40; border: 0; background: transparent; cursor: default; }
+.export-menu-list { position: absolute; top: calc(100% + 8px); right: 0; z-index: 41; width: 330px; display: grid; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 18px 50px rgba(25,27,24,.16); }
+.export-menu-list button { display: grid; gap: 2px; padding: 9px 11px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.export-menu-list button:hover:not([disabled]) { background: var(--surface-2); }
+.export-menu-list button[disabled] { opacity: .45; cursor: not-allowed; }
+.export-menu-list strong { font-size: 11.5px; font-weight: 600; }
+.export-menu-list small { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.citation-bibtex { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
