@@ -168,14 +168,21 @@
 .quiz-option label { display: flex; align-items: flex-start; gap: 10px; font-size: var(--text-md); line-height: 1.55; cursor: pointer; }
 .quiz-option input { margin-top: 2px; accent-color: var(--accent); }
 .quiz-option.is-correct { border-color: var(--green); background: color-mix(in srgb, var(--green) 8%, transparent); }
-.quiz-option.is-wrong { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+/* Yanlış şık makalenin rengiyle değil hata rengiyle: açık mavi bir vurgu "yanlış" gibi görünmüyordu. */
+.quiz-option.is-wrong { border-color: var(--danger-edge); background: var(--danger-bg-soft); }
 .quiz-explanation { display: block; margin: 8px 0 0 26px; color: var(--muted); font-size: var(--text-xs); line-height: 1.6; }
 .quiz-check { margin-top: 14px; padding: 9px 16px; border: 0; border-radius: 20px; background: var(--ink); color: var(--on-ink); font-size: var(--text-sm); cursor: pointer; }
 .quiz-check:disabled { opacity: .35; cursor: default; }
 .quiz-verdict { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
 .quiz-verdict strong { display: block; margin-bottom: 8px; font-size: var(--text-md); }
 .quiz-verdict.is-correct strong { color: var(--green); }
-.quiz-verdict.is-wrong strong { color: var(--accent-ink); }
+.quiz-verdict.is-wrong strong { color: var(--danger); }
+.quiz-hint { margin: 0 0 8px; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; }
+.quiz-reread { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 10px 0 0; font-size: var(--text-sm); }
+.quiz-reread span { color: var(--muted); }
+.quiz-reread a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.quiz-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.quiz-reveal { margin-top: 14px; padding: 0; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--muted); font-size: var(--text-sm); cursor: pointer; }
 
 /* --- Uygulama rehberi ---------------------------------------------- */
 .app-guide-head h3 { margin: 0; font: 1.53125rem/1.2 Georgia, serif; }

@@ -50,9 +50,16 @@ export type Strings = {
   result: string;
   // Quiz
   checkAnswer: string;
+  checkAgain: string;
   correct: string;
-  wrong: string;
-  score: (right: number, total: number) => string;
+  correctAfter: (attempts: number) => string;
+  notQuite: string;
+  missingOption: string;
+  tryAgain: string;
+  showAnswer: string;
+  answerShown: string;
+  whereToLook: string;
+  score: (firstTry: number, attempted: number) => string;
   // Uygulama rehberi
   hyperparameters: string;
   pitfalls: string;
@@ -191,9 +198,16 @@ const en: Strings = {
   illustrativeValues: "Illustrative values, not from the paper",
   result: "Result:",
   checkAnswer: "Check answer",
+  checkAgain: "Check again",
   correct: "Correct",
-  wrong: "Incorrect",
-  score: (right, total) => `${right} / ${total} correct`,
+  correctAfter: (attempts) => `Correct on attempt ${attempts}`,
+  notQuite: "Not quite",
+  missingOption: "Everything you picked is right, but another option is right too.",
+  tryAgain: "Try again",
+  showAnswer: "Show the answer",
+  answerShown: "The answer",
+  whereToLook: "Where the paper says it:",
+  score: (firstTry, attempted) => `${firstTry} of ${attempted} right on the first try`,
   hyperparameters: "Choosing hyperparameters",
   pitfalls: "Common pitfalls",
   pitfallCause: "Cause:",

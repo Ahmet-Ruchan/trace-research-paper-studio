@@ -5,6 +5,7 @@ import { evidenceFingerprint } from "../src/lib/section-regeneration";
 import type { ResearchProject } from "../src/lib/schema";
 import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
 import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
+import { readingDrillFor } from "../src/lib/reading-drill";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -1296,6 +1297,58 @@ test.describe("learning layer", () => {
     await expect(simulation.locator(".illustrative-note")).toHaveText("Illustrative values, not from the paper");
     // Makalenin kendi tablosu ve oyun alanları işaretsiz.
     await expect(page.locator("section.playground .illustrative-note, section.explorer .illustrative-note")).toHaveCount(0);
+  });
+
+  test("gives a wrong answer a second chance and says where the paper settles it", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-quiz-retry"));
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Learn & Try" }).click();
+
+    const quiz = page.locator("section.quiz", { hasText: project.quiz!.title });
+    const question = quiz.locator(".quiz-question").nth(1);
+    const source = project.quiz!.questions[1];
+    const wrong = source.options.find((option) => !option.correct)!;
+    const right = source.options.find((option) => option.correct)!;
+    await question.getByText(wrong.label, { exact: true }).click();
+    await question.getByRole("button", { name: "Check answer" }).click();
+
+    // Yanlış: neden yanlış olduğu ve nereye bakılacağı; doğru şık henüz gösterilmiyor.
+    await expect(question.locator(".quiz-verdict")).toContainText("Not quite");
+    await expect(question).toContainText(wrong.explanation);
+    await expect(question.locator(".quiz-option.is-correct")).toHaveCount(0);
+    await expect(question).not.toContainText(right.explanation);
+    const reread = question.locator(".quiz-reread a").first();
+    await expect(reread).toHaveAttribute("href", /^#section-/);
+
+    await question.getByRole("button", { name: "Try again" }).click();
+    await question.getByText(right.label, { exact: true }).click();
+    await question.getByRole("button", { name: "Check again" }).click();
+    await expect(question.locator(".quiz-verdict")).toContainText("Correct on attempt 2");
+    await expect(quiz.locator(".quiz-score")).toHaveText("0 of 1 right on the first try");
+
+    // Bağlantı hikâyenin o bölümüne götürüyor.
+    const target = (await reread.getAttribute("href"))!;
+    await reread.click();
+    await expect(page).toHaveURL(new RegExp(`${target}$`));
+    await expect(page.locator(target)).toBeVisible();
+  });
+
+  test("drills reading the evidence, even for a project without a learning layer", async ({ page, request }) => {
+    const bare = projectNamed("e2e-drill") as Partial<ResearchProject>;
+    for (const block of ["primer", "quiz", "derivations", "interactives", "applicationGuide"] as const) delete bare[block];
+    const project = await seed(request, bare as ResearchProject);
+    const drill = readingDrillFor(project)!;
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Learn & Try" }).click();
+    const section = page.locator("section.quiz", { hasText: "Read it like a reviewer" });
+    await expect(section.locator(".quiz-question")).toHaveCount(drill.questions.length);
+
+    const first = section.locator(".quiz-question").first();
+    await first.getByText(drill.questions[0].options.find((option) => option.correct)!.label, { exact: true }).click();
+    await first.getByRole("button", { name: "Check answer" }).click();
+    await expect(first.locator(".quiz-verdict")).toContainText("Correct");
+    await expect(section.locator(".quiz-score")).toHaveText("1 of 1 right on the first try");
   });
 
   test("shows the teaching role in the model team, able to run on any provider", async ({ page }) => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { claimHash, elementId, parseDeepLink, scrollToDeepLink, sectionHash } from "@/lib/deep-link";
-import type { Claim, ResearchProject } from "@/lib/schema";
+import { readingDrillFor } from "@/lib/reading-drill";
+import type { Claim, Quiz, ResearchProject } from "@/lib/schema";
 import {
   ApplicationGuideView,
   EvidenceHealthView,
@@ -58,8 +59,10 @@ export function ViewerShell({
     practice: t.tabPractice,
     technical: t.tabTechnical,
   };
+  // Kanıttan üretilen okuma alıştırması öğrenme katmanı olmayan projede de var.
+  const drill = useMemo(() => readingDrillFor(project), [project]);
   const hasPractice = Boolean(
-    project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.applicationGuide,
+    project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.applicationGuide || drill,
   );
   const tabs: Tab[] = ["lab", "story", ...(hasPractice ? (["practice"] as Tab[]) : []), ...(project.technicalAppendix ? (["technical"] as Tab[]) : [])];
   /**
@@ -179,7 +182,7 @@ export function ViewerShell({
       <main className="viewer-main">
         {tab === "lab" ? <LabTab project={project} /> : null}
         {tab === "story" ? <StoryTab project={project} /> : null}
-        {tab === "practice" ? <PracticeTab project={project} /> : null}
+        {tab === "practice" ? <PracticeTab project={project} drill={drill} /> : null}
         {tab === "technical" ? <TechnicalTab project={project} /> : null}
       </main>
     </div>
@@ -484,7 +487,7 @@ function StoryTab({ project }: { project: ResearchProject }) {
   );
 }
 
-function PracticeTab({ project }: { project: ResearchProject }) {
+function PracticeTab({ project, drill }: { project: ResearchProject; drill?: Quiz }) {
   const t = useStrings();
   return (
     <div className="viewer-page">
@@ -514,7 +517,13 @@ function PracticeTab({ project }: { project: ResearchProject }) {
 
       {project.quiz ? (
         <section className="viewer-block">
-          <QuizView quiz={project.quiz} claims={project.evidence.claims} />
+          <QuizView quiz={project.quiz} claims={project.evidence.claims} sections={project.story.sections} />
+        </section>
+      ) : null}
+
+      {drill ? (
+        <section className="viewer-block">
+          <QuizView quiz={drill} claims={project.evidence.claims} sections={project.story.sections} />
         </section>
       ) : null}
 

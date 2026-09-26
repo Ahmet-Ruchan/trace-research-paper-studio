@@ -162,8 +162,16 @@ why *this* paper needs it — not a generic definition. LaTeX renders as native 
 
 ### Check whether you actually understood it
 
-Every question is linked to evidence. Get one wrong and it shows you the page and the original
-quote behind the right answer.
+Every question is linked to evidence. Get one wrong and Trace does not give the answer away: it
+says why the option you picked is wrong and links to the part of the story where the paper settles
+it. Try again, or ask for the answer and its page and quote. The score counts what you got right on
+the first try.
+
+**Read it like a reviewer** adds questions no model writes: what kind of statement a claim is (a
+measurement, the authors' interpretation, background, method or a limitation), which sentence of the
+paper it rests on, and which number the paper reports. They are made from the evidence itself, so
+every project has them, even one without a learning layer, and every answer can be checked on its
+page.
 
 ![Evidence-linked quiz](docs/images/quiz.jpg)
 

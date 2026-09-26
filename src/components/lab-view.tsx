@@ -46,6 +46,7 @@ import type { SectionKind } from "@/lib/section-regeneration";
 import { useSectionRegeneration } from "./section-regenerator";
 import { LearningGenerator } from "./learning-generator";
 import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
+import { readingDrillFor } from "@/lib/reading-drill";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -176,11 +177,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
+  // Kanıttan üretilen okuma alıştırması öğrenme katmanı olmayan projede de var.
+  const drill = useMemo(() => readingDrillFor(project), [project]);
   const hasPractice = Boolean(
     project.derivations?.length ||
       project.interactives?.length ||
       project.quiz ||
-      project.applicationGuide,
+      project.applicationGuide ||
+      drill,
   );
 
   const nav = [
@@ -570,7 +574,9 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
               </>
             ) : null}
 
-            {project.quiz ? <QuizView quiz={project.quiz} claims={project.evidence.claims} renderAction={(id) => regenerateButton("quiz", id, "question")} /> : null}
+            {project.quiz ? <QuizView quiz={project.quiz} claims={project.evidence.claims} sections={project.story.sections} renderAction={(id) => regenerateButton("quiz", id, "question")} /> : null}
+
+            {drill ? <QuizView quiz={drill} claims={project.evidence.claims} sections={project.story.sections} /> : null}
 
             {project.applicationGuide ? (
               <ApplicationGuideView guide={project.applicationGuide} />
