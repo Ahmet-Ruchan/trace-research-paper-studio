@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BookOpen, Download, FileJson, FlaskConical, Globe, History, Home, LayoutTemplate, Network, Plus, Share2 } from "lucide-react";
 import { exportDefinitions } from "@/lib/exports";
 import { buildStandaloneStory } from "@/lib/export-story";
@@ -16,6 +16,8 @@ import type { RevisionReason } from "@/lib/project-revisions";
 import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
 import { loadSampleProject } from "@/lib/sample-project";
 import { PendingDeletion } from "@/lib/pending-deletion";
+import { restoreTextSize } from "@/lib/text-size";
+import { restoreTheme } from "@/lib/theme";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { HistoryPanel } from "./history-panel";
@@ -29,7 +31,7 @@ import { ModelRecordView } from "./model-record-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
 import { StoryView } from "./story-view";
-import { TextSizeControl } from "./text-size-control";
+import { DisplayControl } from "./display-control";
 
 type WorkspaceMode = "lab" | "story" | "preview";
 type AppScreen = "home" | "library" | "workspace" | "compare" | "models";
@@ -125,6 +127,14 @@ export function AppShell() {
     setMode("lab");
     setScreen("workspace");
   }
+
+  // Yazı boyutu ve tema kök öğeye HTML okunurken yazılıyor (layout.tsx).
+  // Geliştirmede Strict Mode `<html>`'i yeniden kurarken onları siliyor;
+  // burada boyamadan önce geri yazılıyorlar. Üretimde bir şey değişmiyor.
+  useLayoutEffect(() => {
+    restoreTextSize();
+    restoreTheme();
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -590,7 +600,7 @@ export function AppShell() {
               </>
             )}
           </div>
-          <TextSizeControl />
+          <DisplayControl />
           <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
           <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
         </div>

@@ -1,8 +1,20 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Gauge, Plus, Quote, Search, Tag, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, X } from "lucide-react";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
+import {
+  LIBRARY_LAYOUT_KEY,
+  LIBRARY_SORT_KEY,
+  librarySorts,
+  parseLibraryLayout,
+  parseLibrarySort,
+  readStored,
+  sortLibrary,
+  writeStored,
+  type LibraryLayout,
+  type LibrarySort,
+} from "@/lib/library-order";
 import { buildClaimIndex, excerptAround, highlightSegments, searchClaims, type ClaimHit, type ClaimSearch } from "@/lib/library-search";
 import { MAX_TAG_LENGTH, addTag, hasTag, removeTag, tagCounts, tagKey } from "@/lib/library-tags";
 import { UNDO_WINDOW_MS } from "@/lib/pending-deletion";
@@ -10,7 +22,7 @@ import { listLibraryTags, saveProjectTags } from "@/lib/project-library";
 import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
 import { claimKindLabels } from "./evidence-drawer";
-import { TextSizeControl } from "./text-size-control";
+import { DisplayControl } from "./display-control";
 
 type LibraryViewProps = {
   projects: ResearchProject[];
@@ -57,6 +69,9 @@ function count(value: number, noun: string) {
 export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("papers");
+  // Kütüphane yalnızca istemcide, açılış ekranından sonra çiziliyor; depolama okunabilir.
+  const [sort, setSort] = useState<LibrarySort>(() => readStored(LIBRARY_SORT_KEY, parseLibrarySort));
+  const [layout, setLayout] = useState<LibraryLayout>(() => readStored(LIBRARY_LAYOUT_KEY, parseLibraryLayout));
   /**
    * Karşılaştırma için seçim. İki proje yan yana iki sütuna sığıyor; üç ve
    * fazlası sütun değil zaman çizgisi olarak (literatür haritası) gösteriliyor.
@@ -111,8 +126,9 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
 
   const filtered = useMemo(() => {
     const needle = foldForSearch(query.trim());
-    if (!needle) return inCollection;
-    return inCollection.filter((project) =>
+    const ordered = sortLibrary(inCollection, sort);
+    if (!needle) return ordered;
+    return ordered.filter((project) =>
       foldForSearch(
         [
           project.evidence.paper.title,
@@ -122,7 +138,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
         ].join(" "),
       ).includes(needle),
     );
-  }, [inCollection, query, tags]);
+  }, [inCollection, query, tags, sort]);
 
   const claimIndex = useMemo(() => (scope === "claims" ? buildClaimIndex(inCollection) : []), [scope, inCollection]);
   const claimSearch = useMemo(() => searchClaims(claimIndex, query), [claimIndex, query]);
@@ -163,7 +179,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
   }
 
   const toolbarCount = scope === "papers"
-    ? `${filtered.length} results`
+    ? count(filtered.length, "result")
     : claimSearch.terms.length
       ? `${count(claimSearch.total, "claim")} in ${count(claimSearch.papers, "paper")}`
       : count(claimIndex.length, "claim");
@@ -184,7 +200,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
             setImportError(undefined);
             void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : "Could not import the Trace project."));
           }} />
-          <TextSizeControl />
+          <DisplayControl />
           <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>
           <button className="library-new-button" onClick={onNew}><Plus size={16} /> New paper</button>
@@ -217,6 +233,23 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
             placeholder={scope === "papers" ? "Search title, author, venue or tag" : "Search what your papers claim"}
           />
         </label>
+        {scope === "papers" && (
+          <div className="library-arrange">
+            <label>
+              <span>Sort</span>
+              <select value={sort} onChange={(event) => { const next = parseLibrarySort(event.target.value); setSort(next); writeStored(LIBRARY_SORT_KEY, next); }}>
+                {librarySorts.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+            <div className="library-layout" role="group" aria-label="Layout">
+              {([["grid", "Grid", LayoutGrid], ["list", "List", List]] as const).map(([id, label, Icon]) => (
+                <button key={id} aria-pressed={layout === id} aria-label={label} title={label} onClick={() => { setLayout(id); writeStored(LIBRARY_LAYOUT_KEY, id); }}>
+                  <Icon size={15} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <span>{toolbarCount}</span>
       </section>
 
@@ -265,7 +298,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
       {projects.length > 0 && scope === "claims" ? (
         <ClaimResults search={claimSearch} claimCount={claimIndex.length} paperCount={inCollection.length} collection={collection} onOpenClaim={onOpenClaim} />
       ) : filtered.length ? (
-        <section className="library-grid">
+        <section className={layout === "list" ? "library-grid is-list" : "library-grid"} aria-label="Papers">
           {filtered.map((project, index) => {
             const projectTags = tags.get(project.id) ?? [];
             const editing = editingTags === project.id;

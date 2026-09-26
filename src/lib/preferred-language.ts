@@ -55,9 +55,9 @@ export const COMMON_LANGUAGES = [
   "pl", "ru", "uk", "ar", "hi", "zh", "ja", "ko",
 ] as const;
 
-/** Yaygın diller + kullanıcının kendi dili, İngilizce adlarıyla sıralı. */
-export function languageOptions(current: string): Array<{ tag: string; label: string }> {
-  const tags = new Set<string>([...COMMON_LANGUAGES, current]);
+/** Yaygın diller + kullanıcının kendi dili (ve hatırlanan seçimi), İngilizce adlarıyla sıralı. */
+export function languageOptions(...current: Array<string | undefined>): Array<{ tag: string; label: string }> {
+  const tags = new Set<string>([...COMMON_LANGUAGES, ...current.filter((tag): tag is string => Boolean(tag))]);
   return [...tags]
     .map((tag) => ({ tag, label: languageName(tag) }))
     .sort((a, b) => a.label.localeCompare(b.label, "en"));

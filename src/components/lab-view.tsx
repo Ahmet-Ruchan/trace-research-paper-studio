@@ -199,12 +199,21 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     <div className="lab-layout">
       <nav className="lab-nav" aria-label={t.labSectionsAria}>
         <div className="lab-nav-label">{t.paperMap}</div>
+        {/* Telefonda simge şeridinin yerine: on üç simgenin hangisinin ne olduğu görünmüyordu. */}
+        <label className="lab-nav-select">
+          <span>{t.paperMap}</span>
+          <select value={section} onChange={(event) => setSection(event.target.value)} aria-label="Section">
+            {nav.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        </label>
         {nav.map((item) => {
           const Icon = item.icon;
           return (
             <button
               key={item.id}
               className={section === item.id ? "active" : ""}
+              // Tablette yalnızca simge görünüyor; ad üzerine gelince çıkıyor.
+              title={item.label}
               onClick={() => setSection(item.id)}
             >
               <Icon size={16} />

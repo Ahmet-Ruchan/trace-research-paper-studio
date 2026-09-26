@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowRight, BookOpen, Check, Eye, EyeOff, FileText, Link2, LockKeyhole, Plus, Search, Sparkles, Upload, Users, X } from "lucide-react";
+import { ArrowRight, BookOpen, Check, ChevronDown, Eye, EyeOff, FileText, Link2, LockKeyhole, Plus, Search, Sparkles, Upload, Users, X } from "lucide-react";
 import {
   createSingleModelTeam,
   defaultModelByProvider,
@@ -20,12 +20,13 @@ import { DEFAULT_LOCAL_ENDPOINT } from "@/lib/local-endpoint";
 import { languageOptions, preferredLanguage, type ProjectLanguage } from "@/lib/preferred-language";
 import { builtInTemplates } from "@/lib/narrative-templates";
 import { modelRecord } from "@/lib/model-record";
+import { readSetupPreferences, serializeSetupPreferences, writeSetupPreferences } from "@/lib/setup-preferences";
 import type { NarrativeTemplate, ResearchProject } from "@/lib/schema";
 import { deleteTemplate, listTemplates } from "@/lib/template-library";
 import { downloadCandidate, findPapers, originLabels, type PaperCandidate } from "@/lib/paper-lookup";
 import { QuoteTrackRecord } from "./model-record-view";
 import { TeamProbe } from "./team-probe";
-import { TextSizeControl } from "./text-size-control";
+import { DisplayControl } from "./display-control";
 import { TemplateEditor } from "./template-editor";
 
 export type GenerationOptions = {
@@ -75,23 +76,45 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
   // `useSyncExternalStore` iki tarafa ayrı anlık görüntü vermenin React'teki
   // yolu. Kullanıcı seçimi bunu geçersiz kılar.
   const detectedLanguage = useSyncExternalStore(subscribeNever, readBrowserLanguage, readServerLanguage);
-  const [chosenLanguage, setLanguage] = useState<ProjectLanguage>();
+  // Son analizin seçimleri bu tarayıcıda hatırlanıyor (anahtarlar hariç).
+  // Bileşen yalnızca istemcide, açılıştan sonra çiziliyor; ilk durum doğrudan
+  // depodan okunabiliyor.
+  const [remembered] = useState(readSetupPreferences);
+  const [chosenLanguage, setLanguage] = useState<ProjectLanguage | undefined>(remembered.language);
   const language = chosenLanguage ?? detectedLanguage;
   // Liste kullanıcının kendi dilini de içerir; yaygın diller yalnızca kısayol.
-  const languageChoices = useMemo(() => languageOptions(detectedLanguage), [detectedLanguage]);
-  const [audience, setAudience] = useState<"general" | "student" | "expert">("student");
-  const [depth, setDepth] = useState<"concise" | "standard" | "deep">("standard");
-  const [provider, setProvider] = useState<ProviderId>("gemini");
-  const [model, setModel] = useState(defaultModelByProvider.gemini);
-  const [orchestration, setOrchestration] = useState<"single" | "team">(initialTeam ? "team" : "single");
-  const [team, setTeam] = useState<ModelTeam>(() => structuredClone(recommendedModelTeam));
+  const languageChoices = useMemo(() => languageOptions(detectedLanguage, remembered.language), [detectedLanguage, remembered.language]);
+  const [audience, setAudience] = useState<"general" | "student" | "expert">(remembered.audience ?? "student");
+  const [depth, setDepth] = useState<"concise" | "standard" | "deep">(remembered.depth ?? "standard");
+  const [provider, setProvider] = useState<ProviderId>(remembered.single?.provider ?? "gemini");
+  const [model, setModel] = useState(remembered.single?.model ?? defaultModelByProvider.gemini);
+  const [orchestration, setOrchestration] = useState<"single" | "team">(initialTeam ? "team" : remembered.orchestration ?? "single");
+  const [team, setTeam] = useState<ModelTeam>(() => structuredClone(remembered.team ?? recommendedModelTeam));
   const [openRouterModels, setOpenRouterModels] = useState<Array<{ id: string; label: string; contextLength?: number }>>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [templates, setTemplates] = useState<NarrativeTemplate[]>(() => [...builtInTemplates]);
-  const [templateId, setTemplateId] = useState("");
+  const [templateId, setTemplateId] = useState(remembered.templateId ?? "");
   const [editing, setEditing] = useState<{ template: NarrativeTemplate; copy: boolean }>();
+  // Hatırlanan şablon silinmiş olabilir ya da kayıtlı şablonlar henüz
+  // gelmemiş olabilir: listede olmayan bir kimlik "şablon yok" sayılıyor.
   const template = templates.find((item) => item.id === templateId);
+  const selectedTemplateId = template?.id ?? "";
+  const [moreOpen, setMoreOpen] = useState(Boolean(remembered.templateId));
+
+  // Seçimler değiştikçe yazılıyor. Açılışta hiçbir şey yazılmıyor: bağlantıyla
+  // gelen "model ekibi" (initialTeam) kullanıcının seçimi değil.
+  const setup = useMemo(
+    () => ({ audience, depth, language: chosenLanguage, single: { provider, model }, orchestration, team, templateId: templateId || undefined }),
+    [audience, depth, chosenLanguage, provider, model, orchestration, team, templateId],
+  );
+  const [openingSetup] = useState(() => serializeSetupPreferences(setup));
+  const setupChanged = useRef(false);
+  useEffect(() => {
+    if (!setupChanged.current && serializeSetupPreferences(setup) === openingSetup) return;
+    setupChanged.current = true;
+    writeSetupPreferences(setup);
+  }, [setup, openingSetup]);
 
   // Kaydedilmiş şablonlar sunucudan geliyor; ulaşılamazsa hazır şablonlar yine seçilebilir.
   useEffect(() => {
@@ -262,7 +285,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
           <span><strong>trace</strong><small>research studio</small></span>
         </a>
         <div className="landing-header-actions">
-          <TextSizeControl />
+          <DisplayControl />
           <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> Library <span className="nav-count">{libraryCount}</span></button>
           <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? "Loading example…" : "Open the example project"} <ArrowRight size={15} /></button>
         </div>
@@ -353,50 +376,65 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
             </div>
           )}
 
-          <div className="source-entry">
-            <div className="input-with-icon">
-              <Link2 size={16} />
-              <input value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSource()} placeholder="Optional supporting source URL" />
-              <button onClick={addSource} aria-label="Add source"><Plus size={16} /></button>
-            </div>
-            {sources.map((source) => (
-              <div className="source-chip" key={source}>
-                <span>{new URL(source).hostname}</span>
-                <button onClick={() => setSources((current) => current.filter((item) => item !== source))}><X size={13} /></button>
-              </div>
-            ))}
-          </div>
-
           <div className="config-grid">
             <label>Reader<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="general">General reader</option><option value="student">Student</option><option value="expert">Expert</option></select></label>
             <label>Depth<select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}><option value="concise">Concise · 5 sections</option><option value="standard">Standard · 6 sections</option><option value="deep">Deep · 8 sections</option></select></label>
             <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value)}>{languageChoices.map((choice) => <option key={choice.tag} value={choice.tag}>{choice.label}</option>)}</select></label>
-            <label className="template-field">
-              Narrative template
-              <select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
-                <option value="">None · structure follows the depth</option>
-                {templates.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}{item.builtIn ? " · built in" : ""} · {item.story.length} sections</option>
-                ))}
-              </select>
-            </label>
           </div>
-          {template && (
-            <p className="template-note">
-              <span>{template.description || `Saved from ${template.source?.title ?? "a project"}.`}</span>
-              <span>
-                The template sets {template.story.length} story sections{template.report ? ` and ${template.report.length} report sections` : ""}; depth still decides the learning material.
-                {template.builtIn
-                  ? <button onClick={() => setEditing({ template, copy: true })}>Customize a copy</button>
-                  : (
-                    <>
-                      <button onClick={() => setEditing({ template, copy: false })}>Edit template</button>
-                      <button onClick={() => { void removeTemplate(template.id); }}>Remove template</button>
-                    </>
-                  )}
-              </span>
-            </p>
-          )}
+
+          {/* Çoğu analizde gerekmeyen seçimler kapalı başlıyor; biri seçiliyse
+              (ya da hatırlanıyorsa) açık, özet satırı da ne seçildiğini söylüyor. */}
+          <details className="setup-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
+            <summary>
+              <span>More options</span>
+              <small>{[
+                sources.length ? `${sources.length} supporting source${sources.length === 1 ? "" : "s"}` : "Supporting sources",
+                template ? template.name : "narrative template",
+              ].join(" · ")}</small>
+              <ChevronDown size={15} aria-hidden="true" />
+            </summary>
+            <div className="source-entry">
+              <div className="input-with-icon">
+                <Link2 size={16} />
+                <input value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSource()} placeholder="Optional supporting source URL" />
+                <button onClick={addSource} aria-label="Add source"><Plus size={16} /></button>
+              </div>
+              {sources.map((source) => (
+                <div className="source-chip" key={source}>
+                  <span>{new URL(source).hostname}</span>
+                  <button onClick={() => setSources((current) => current.filter((item) => item !== source))} aria-label={`Remove ${new URL(source).hostname}`}><X size={13} /></button>
+                </div>
+              ))}
+            </div>
+
+            <div className="config-grid">
+              <label className="template-field">
+                Narrative template
+                <select value={selectedTemplateId} onChange={(event) => setTemplateId(event.target.value)}>
+                  <option value="">None · structure follows the depth</option>
+                  {templates.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}{item.builtIn ? " · built in" : ""} · {item.story.length} sections</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {template && (
+              <p className="template-note">
+                <span>{template.description || `Saved from ${template.source?.title ?? "a project"}.`}</span>
+                <span>
+                  The template sets {template.story.length} story sections{template.report ? ` and ${template.report.length} report sections` : ""}; depth still decides the learning material.
+                  {template.builtIn
+                    ? <button onClick={() => setEditing({ template, copy: true })}>Customize a copy</button>
+                    : (
+                      <>
+                        <button onClick={() => setEditing({ template, copy: false })}>Edit template</button>
+                        <button onClick={() => { void removeTemplate(template.id); }}>Remove template</button>
+                      </>
+                    )}
+                </span>
+              </p>
+            )}
+          </details>
 
           <section className="orchestration-config">
             <div className="orchestration-heading">
@@ -480,7 +518,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
             ))}
             {usedProviders.some((item) => item.id === "openrouter") && <div className="openrouter-catalog-row"><span>The catalogue lists only <code>text-only output + structured output</code> models, which are the ones safe for the Trace canvas. Image input may be supported; image-output models are excluded from StorySpec generation.</span><button onClick={loadOpenRouterModels} disabled={modelsLoading}>{modelsLoading ? "Loading…" : "Load compatible models"}</button></div>}
             <TeamProbe assignments={assignments} apiKeys={apiKeys} depth={depth} template={template} />
-            <p className="key-note">Keys are sent to the backend proxy for this generation request only; nothing is stored in the browser or in the project.</p>
+            <p className="key-note">Keys are sent to the backend proxy for this generation request only and are never stored, in the browser or in the project. Your other choices here are remembered in this browser for the next paper.</p>
           </section>
           {error && <p className="form-error">{error}</p>}
           <button className="primary-action" onClick={submit}>Analyse paper <ArrowRight size={17} /></button>
@@ -546,7 +584,7 @@ function ModelPicker({
   }
   return (
     <div className={`model-select ${compact ? "compact" : ""}`}>
-      <select aria-label={`${provider.label} modeli`} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })}>{provider.models.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.note}</option>)}</select>
+      <select aria-label={`${provider.label} model`} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })}>{provider.models.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.note}</option>)}</select>
     </div>
   );
 }

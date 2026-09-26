@@ -25,10 +25,10 @@ export function parseTextSize(value: unknown): TextSize {
 }
 
 /**
- * Sayfa çizilmeden önce çalışan satır içi betik. Seçim React yüklenene kadar
- * beklerse sayfa önce varsayılan boyutta görünüp sonra büyüyordu. Betik
- * yalnızca bilinen değerleri yazıyor; depolama kapalıysa sessizce varsayılanda
- * kalıyor.
+ * Sayfa çizilmeden önce çalışan satır içi betik (`<head>` içinde, HTML
+ * okunurken). Seçim React yüklenene kadar beklerse sayfa önce varsayılan
+ * boyutta görünüp sonra büyüyordu. Betik yalnızca bilinen değerleri yazıyor;
+ * depolama kapalıysa sessizce varsayılanda kalıyor.
  */
 export const textSizeBootScript = `try{var v=localStorage.getItem(${JSON.stringify(TEXT_SIZE_KEY)});if(${JSON.stringify(
   textSizes.filter((size) => size.id !== "default").map((size) => size.id),
@@ -39,10 +39,26 @@ export function currentTextSize(): TextSize {
   return parseTextSize(document.documentElement.getAttribute(TEXT_SIZE_ATTRIBUTE) ?? "default");
 }
 
-export function applyTextSize(size: TextSize) {
+function showTextSize(size: TextSize) {
   const root = document.documentElement;
   if (size === "default") root.removeAttribute(TEXT_SIZE_ATTRIBUTE);
   else root.setAttribute(TEXT_SIZE_ATTRIBUTE, size);
+}
+
+/**
+ * Kayıtlı seçimi kök öğeye yeniden yazar; açılış betiğinin işi. Geliştirmede
+ * Strict Mode `<html>`'i yeniden kurarken betiğin yazdığı özniteliği siliyor.
+ */
+export function restoreTextSize() {
+  try {
+    showTextSize(parseTextSize(window.localStorage.getItem(TEXT_SIZE_KEY)));
+  } catch {
+    // Depolama kapalı: varsayılan boyut.
+  }
+}
+
+export function applyTextSize(size: TextSize) {
+  showTextSize(size);
   try {
     if (size === "default") window.localStorage.removeItem(TEXT_SIZE_KEY);
     else window.localStorage.setItem(TEXT_SIZE_KEY, size);

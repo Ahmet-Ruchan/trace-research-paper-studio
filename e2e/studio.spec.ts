@@ -27,6 +27,11 @@ async function seed(request: APIRequestContext, project: ResearchProject, reason
   return project;
 }
 
+/** Destek kaynakları ve şablon analiz formunda "More options" altında kapalı duruyor. */
+async function openMoreOptions(page: Page) {
+  await page.locator("summary", { hasText: "More options" }).click();
+}
+
 async function openStory(page: Page, projectId: string) {
   await page.goto(`/?project=${projectId}&mode=story`);
   // Önyükleme ekranı yalnızca kütüphane okunduktan sonra kalkıyor; düğme
@@ -223,6 +228,35 @@ test.describe("analysis setup", () => {
     await page.getByRole("combobox", { name: "Depth" }).selectOption("deep");
     await expect(row).toHaveCount(0);
   });
+
+  test("remembers the last choices in this browser, but never a key", async ({ page }) => {
+    await page.goto("/");
+    const more = page.locator("details.setup-more");
+    await expect(more).not.toHaveAttribute("open");
+    await page.getByRole("combobox", { name: "Reader" }).selectOption("expert");
+    await page.getByRole("combobox", { name: "Depth" }).selectOption("deep");
+    await page.getByRole("combobox", { name: "Language" }).selectOption("tr");
+    await page.getByRole("combobox", { name: "Model provider" }).selectOption("anthropic");
+    await page.getByRole("combobox", { name: "Anthropic Claude model" }).selectOption("claude-haiku-4-5");
+    await page.getByPlaceholder("Claude API key").fill("sk-ant-e2e-never-stored");
+    await openMoreOptions(page);
+    await page.getByRole("combobox", { name: "Narrative template" }).selectOption("method-walkthrough");
+
+    await page.reload();
+    await expect(page.getByRole("combobox", { name: "Reader" })).toHaveValue("expert");
+    await expect(page.getByRole("combobox", { name: "Depth" })).toHaveValue("deep");
+    await expect(page.getByRole("combobox", { name: "Language" })).toHaveValue("tr");
+    await expect(page.getByRole("combobox", { name: "Model provider" })).toHaveValue("anthropic");
+    await expect(page.getByRole("combobox", { name: "Anthropic Claude model" })).toHaveValue("claude-haiku-4-5");
+    // Şablon seçiliyse "More options" açık geliyor; özet satırı da adını söylüyor.
+    await expect(more).toHaveAttribute("open");
+    await expect(more.locator("summary")).toContainText("Method walkthrough");
+    await expect(page.getByRole("combobox", { name: "Narrative template" })).toHaveValue("method-walkthrough");
+    await expect(page.getByPlaceholder("Claude API key")).toHaveValue("");
+    const stored = await page.evaluate(() => JSON.stringify({ ...window.localStorage }));
+    expect(stored).toContain("claude-haiku-4-5");
+    expect(stored).not.toContain("sk-ant-e2e-never-stored");
+  });
 });
 
 test.describe("version history", () => {
@@ -326,6 +360,7 @@ test.describe("narrative templates", () => {
     expect(created.ok()).toBe(true);
 
     await page.goto("/");
+    await openMoreOptions(page);
     await page.getByRole("combobox", { name: "Narrative template" }).selectOption("e2e-editable");
     await page.getByRole("button", { name: "Edit template" }).click();
     const dialog = page.getByRole("dialog");
@@ -357,6 +392,7 @@ test.describe("narrative templates", () => {
 
   test("customizes a copy of a built-in template without changing it", async ({ page, request }) => {
     await page.goto("/");
+    await openMoreOptions(page);
     await page.getByRole("combobox", { name: "Narrative template" }).selectOption("method-walkthrough");
     await page.getByRole("button", { name: "Customize a copy" }).click();
     const dialog = page.getByRole("dialog");
@@ -966,6 +1002,18 @@ test.describe("accent colour as text", () => {
     }
   });
 
+  test("keeps every paper colour readable as text in the dark theme", async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem("trace-theme", "dark"));
+    await page.goto("/?library=1");
+    await expect(page.locator(".boot-screen")).toHaveCount(0);
+    for (const accent of ["#e75b37", ...TRACE_ACCENT_PALETTE]) {
+      const ink = await inkFor(page, accent);
+      for (const background of ["#161714", "#1e201c", "#232521"]) {
+        expect(await contrast(page, ink, background), `${accent} → ${ink} on ${background}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   test("draws a pale paper colour's card label in the readable tone", async ({ page, request }) => {
     const project = projectNamed("e2e-pale-accent");
     project.story.accent = "#FACC15";
@@ -978,5 +1026,207 @@ test.describe("accent colour as text", () => {
     expect(await contrast(page, label, surface), label).toBeGreaterThanOrEqual(4.5);
     // Kapaktaki dolgu ise makalenin kendi rengi olarak kalıyor.
     expect(await card.locator(".library-cover").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(250, 204, 21)");
+  });
+});
+
+test.describe("colour themes", () => {
+  const PAPER = { light: "rgb(242, 239, 231)", dark: "rgb(22, 23, 20)" };
+  const paper = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+  /**
+   * Görünür her metnin kendi zeminine karşıtlığı (WCAG AA: 4,5:1, büyük metin
+   * 3:1). Zemin, yarı saydam katmanlar üst üste boyanarak bulunuyor; resim ya
+   * da degrade zeminli, soluk (devre dışı) ve dekoratif metinler sayılmıyor.
+   */
+  function unreadableTexts(page: Page) {
+    return page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d", { willReadFrequently: true })!;
+      const rgba = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = "#000";
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const data = context.getImageData(0, 0, 1, 1).data;
+        return [data[0], data[1], data[2], data[3] / 255];
+      };
+      const luminance = ([r, g, b]: number[]) => [r, g, b]
+        .map((value) => value / 255)
+        .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+        .reduce((sum, c, index) => sum + c * [0.2126, 0.7152, 0.0722][index], 0);
+      const blend = (top: number[], bottom: number[]) => [0, 1, 2].map((index) => top[index] * top[3] + bottom[index] * (1 - top[3])).concat(1);
+      const ground = (element: Element) => {
+        const layers: number[][] = [];
+        for (let current: Element | null = element; current; current = current.parentElement) {
+          const style = getComputedStyle(current);
+          if (style.backgroundImage !== "none" && !style.backgroundImage.startsWith("linear")) return undefined;
+          const color = rgba(style.backgroundColor);
+          if (color[3] > 0) {
+            layers.push(color);
+            if (color[3] >= 1) break;
+          }
+        }
+        let result = rgba(getComputedStyle(document.documentElement).backgroundColor);
+        for (const layer of layers.reverse()) result = blend(layer, result);
+        return result;
+      };
+      const failures = new Set<string>();
+      let checked = 0;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const element = node.parentElement;
+        if (!element || !node.textContent?.trim()) continue;
+        if (element.closest("svg, math, [aria-hidden='true'], .excerpt-page, .figure-frame, .library-cover, .code-sketches, [disabled], .boot-screen")) continue;
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+        if (!box.width || !box.height || style.visibility === "hidden" || parseFloat(style.fontSize) === 0) continue;
+        let opacity = 1;
+        for (let current: Element | null = element; current; current = current.parentElement) opacity *= parseFloat(getComputedStyle(current).opacity);
+        if (opacity < 0.95) continue;
+        const background = ground(element);
+        if (!background) continue;
+        const foreground = blend(rgba(style.color), background);
+        const [high, low] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+        const ratio = (high + 0.05) / (low + 0.05);
+        const size = parseFloat(style.fontSize);
+        const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
+        checked += 1;
+        if (ratio < (large ? 3 : 4.5)) failures.add(`${ratio.toFixed(2)}:1 ${String(element.className || element.tagName).slice(0, 40)} "${node.textContent.trim().slice(0, 28)}"`);
+      }
+      return { checked, failures: [...failures] };
+    });
+  }
+
+  test("switches to dark, keeps it from the first paint on, and back to light", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-dark-theme"));
+    await page.goto(`/?project=${project.id}`);
+    expect(await paper(page)).toBe(PAPER.light);
+
+    await page.getByRole("button", { name: "Text size and theme" }).click();
+    await page.getByRole("menuitemradio", { name: /Dark/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByRole("menu", { name: "Text size and theme" })).toHaveCount(0);
+    expect(await paper(page)).toBe(PAPER.dark);
+
+    // Açılış betiği özniteliği uygulama çizilmeden yazıyor: beyaz bir parlama yok.
+    await page.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        (window as unknown as { themeAtLoad: string | null }).themeAtLoad = document.documentElement.getAttribute("data-theme");
+      });
+    });
+    await page.reload();
+    expect(await page.evaluate(() => (window as unknown as { themeAtLoad: string | null }).themeAtLoad)).toBe("dark");
+    await page.getByRole("button", { name: "Text size and theme" }).click();
+    await expect(page.getByRole("menuitemradio", { name: /Dark/ })).toHaveAttribute("aria-checked", "true");
+    await page.getByRole("menuitemradio", { name: /Light/ }).click();
+    await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.+/);
+    expect(await paper(page)).toBe(PAPER.light);
+    expect(await page.evaluate(() => window.localStorage.getItem("trace-theme"))).toBeNull();
+  });
+
+  test("follows the device when the theme is set to System", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/");
+    // Varsayılan açık tema: cihaz karanlık olsa da kullanıcı seçmeden değişmiyor.
+    expect(await paper(page)).toBe(PAPER.light);
+    await page.getByRole("button", { name: "Text size and theme" }).click();
+    await page.getByRole("menuitemradio", { name: /System/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
+    expect(await paper(page)).toBe(PAPER.dark);
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(await paper(page)).toBe(PAPER.light);
+  });
+
+  for (const theme of ["dark", "light"] as const) {
+    test(`keeps every visible text readable in the ${theme} theme`, async ({ page, request }) => {
+      const project = projectNamed(`e2e-contrast-${theme}`);
+      project.claimReviews = {
+        [project.evidence.claims[0].id]: { status: "approved", by: "Ada", at: "2026-09-01T00:00:00.000Z" },
+        [project.evidence.claims[1].id]: { status: "rejected", by: "Ada", at: "2026-09-01T00:00:00.000Z" },
+      };
+      await seed(request, project);
+      await page.addInitScript((chosen) => { if (chosen !== "light") window.localStorage.setItem("trace-theme", chosen); }, theme);
+      const screens: Array<[string, string?]> = [
+        ["/"],
+        ["/?library=1"],
+        [`/?project=${project.id}`],
+        [`/?project=${project.id}`, "Claims"],
+        [`/?project=${project.id}`, "Review"],
+        [`/?project=${project.id}`, "Evidence health"],
+        [`/?project=${project.id}&mode=story`],
+        [`/?project=${project.id}&mode=preview`],
+      ];
+      for (const [url, section] of screens) {
+        await page.goto(url);
+        await expect(page.locator(".boot-screen")).toHaveCount(0);
+        if (section) await page.locator(".lab-nav button", { hasText: section }).first().click();
+        // Geçişler bitsin: renkler yarı yoldayken ölçülmesin.
+        await page.waitForTimeout(400);
+        const { checked, failures } = await unreadableTexts(page);
+        expect(checked, `${url} ${section ?? ""}`).toBeGreaterThan(20);
+        expect(failures, `${theme} · ${url} ${section ?? ""}`).toEqual([]);
+      }
+    });
+  }
+});
+
+test.describe("library order and layout", () => {
+  function paperTitled(id: string, title: string, year: string) {
+    const project = projectNamed(id);
+    project.evidence.paper = { ...project.evidence.paper, title, year };
+    return project;
+  }
+
+  test("sorts by title or by the paper's year, shows a compact list, and remembers both", async ({ page, request }) => {
+    await seed(request, paperTitled("e2e-order-beta", "Ordering probe Beta", "NeurIPS 2021"));
+    await seed(request, paperTitled("e2e-order-alpha", "ordering probe alpha", "2015"));
+    await seed(request, paperTitled("e2e-order-gamma", "Ordering probe Gamma", "2019"));
+    await page.goto("/?library=1");
+    await page.getByPlaceholder("Search title, author, venue or tag").fill("Ordering probe");
+    const titles = page.locator(".library-card h2");
+    const sort = page.getByRole("combobox", { name: "Sort" });
+
+    await sort.selectOption("title");
+    await expect(titles).toHaveText(["ordering probe alpha", "Ordering probe Beta", "Ordering probe Gamma"]);
+    await sort.selectOption("newest");
+    await expect(titles).toHaveText(["Ordering probe Beta", "Ordering probe Gamma", "ordering probe alpha"]);
+    await sort.selectOption("oldest");
+    await expect(titles).toHaveText(["ordering probe alpha", "Ordering probe Gamma", "Ordering probe Beta"]);
+    await expect(page.locator(".library-toolbar")).toContainText("3 results");
+
+    const card = page.locator(".library-card").first();
+    const gridHeight = (await card.boundingBox())!.height;
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await expect(page.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".library-grid")).toHaveClass(/is-list/);
+    expect((await card.boundingBox())!.height).toBeLessThan(gridHeight / 1.5);
+
+    // Uygulama `?library=1`'i adresten siliyor; yenileme ana sayfaya dönerdi.
+    await page.goto("/?library=1");
+    await expect(sort).toHaveValue("oldest");
+    await expect(page.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".library-grid")).toHaveClass(/is-list/);
+  });
+});
+
+test.describe("lab on a phone", () => {
+  test("moves between sections from a labelled menu instead of a row of icons", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-phone-lab"));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/?project=${project.id}`);
+    const sections = page.getByRole("combobox", { name: "Section" });
+    await expect(sections).toBeVisible();
+    await expect(page.locator(".lab-nav > button").first()).toBeHidden();
+    await sections.selectOption({ label: "Claims" });
+    await expect(page.locator(".claim-row").first()).toBeVisible();
+    await expect(sections).toHaveValue("claims");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
+
+    // Geniş ekranda liste yerinde; menü gizli.
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await expect(sections).toBeHidden();
+    await expect(page.locator(".lab-nav > button", { hasText: "Claims" })).toBeVisible();
   });
 });

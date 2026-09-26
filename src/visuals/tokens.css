@@ -19,7 +19,8 @@
   --line-dark: #beb9af;
   --accent: #e75b37;
   --green: #2e7254;
-  --amber: #a36a1e;
+  /* #a36a1e metin olarak 3,94:1 kalıyordu (rozetler, uyarılar); aynı ton, her zeminde en az 4,99:1. */
+  --amber: #8c5c18;
   --shadow: 0 28px 90px rgba(48, 43, 31, 0.08);
 
   /*
@@ -36,6 +37,44 @@
   --text-base: 1rem;     /* 16 — kartlardaki içerik */
   --text-lg: 1.0625rem;  /* 17 — iddialar, rapor paragrafları */
   --text-xl: 1.125rem;   /* 18 — öne çıkan paragraf */
+
+  /*
+   * Anlamlı renkler. Eskiden kurallarda sabit değerlerdi ("white", "#9c351d");
+   * karanlık temada her biri yanlış yöne düşüyordu (beyaz alan üstünde beyaz
+   * yazı). Açık temadaki değerler o sabitlerin aynısı; metin / zemin
+   * çiftleri iki temada da en az 4,5:1 (`type-scale.test.ts`).
+   */
+  --field: #fff;              /* form alanları, beyaz kartlar */
+  --on-ink: #fff;             /* --ink zeminli düğme ve kartların yazısı */
+  --on-ink-soft: #c8cbc5;
+  --on-ink-accent: #e99a82;
+  --on-ink-line: #41443f;
+  --paper-deep: #eae6dc;
+  --track: #e5e1d8;
+  --tone-low: #ece8df;
+  --danger: #9c351d;
+  --danger-strong: #8a2f1d;
+  --danger-edge: #b3402a;
+  --danger-line: #e6b7aa;
+  --danger-bg: #f6dcd5;
+  --danger-bg-soft: #fff1ec;
+  --good-text: #1f5a41;
+  --good-bg: #e5f1e9;
+  --good-bg-strong: #dcebe2;
+  --warn-text: #7a5410;
+  --warn-bg: #fff2d9;
+  --warn-bg-strong: #f5e6c8;
+  --notice-text: #78551b;
+  --notice-bg: #fff5dc;
+  --notice-line: #e7d5a6;
+  --del-text: #8f3a22;
+  --del-bg: #f7e1da;
+  --ins-text: #2f5e39;
+  --ins-bg: #e0eee3;
+  --done-text: #5a6a58;       /* eskisi #657563 kâğıtta 4,27:1 kalıyordu */
+  --done-mark: #47704d;
+  --done-line: #9baf99;
+  --live: #5f9367;
 }
 
 /* Tarayıcının <small>, <sub> ve <sup> varsayılanı "smaller": 12 px'lik bir
@@ -61,4 +100,117 @@ small, sub, sup { font-size: max(var(--text-2xs), .8em); }
   --accent-ink: oklch(from var(--accent) min(l, .5) c h);
   --card-accent-ink: oklch(from var(--card-accent) min(l, .5) c h);
   --story-accent-ink: oklch(from var(--story-accent) min(l, .5) c h);
+}
+
+/*
+ * Karanlık tema. Yalnızca stüdyo `data-theme` yazıyor: "dark" her zaman,
+ * "system" işletim sistemi karanlıksa. Bağımsız görüntüleyici ve yayımlanan
+ * sayfalar bu özniteliği hiç taşımıyor, açık kalıyorlar.
+ *
+ * Değerler iki blokta aynı (CSS bir medya sorgusunun içinden seçici
+ * paylaştıramıyor); `type-scale.test.ts` ayrışmalarını yakalıyor. Her metin /
+ * zemin çifti en az 5:1. Vurgu renkleri metin olarak burada koyulaşmıyor,
+ * açılıyor: OKLCH parlaklığı en az 0,72, paletin en kötüsü 5,5:1.
+ */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #161714;
+  --surface: #1e201c;
+  --surface-2: #1a1c18;
+  --field: #232521;
+  --ink: #ecebe4;
+  --ink-soft: #c9cbc3;
+  --muted: #a0a49b;
+  --line: #34372f;
+  --line-dark: #4a4e44;
+  --green: #7fd1a0;
+  --amber: #e3ad5b;
+  --shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+  --on-ink: #161714;
+  --on-ink-soft: #4a4e46;
+  --on-ink-accent: #b03c16;
+  --on-ink-line: #c9cbc3;
+  --paper-deep: #121310;
+  --track: #2c2f28;
+  --tone-low: #262822;
+  --danger: #f0a08a;
+  --danger-strong: #f3b3a2;
+  --danger-edge: #e0735a;
+  --danger-line: #6e3b2f;
+  --danger-bg: #3a211b;
+  --danger-bg-soft: #2e1c17;
+  --good-text: #9edcb8;
+  --good-bg: #1d3327;
+  --good-bg-strong: #22402f;
+  --warn-text: #f0cf8a;
+  --warn-bg: #3a2e14;
+  --warn-bg-strong: #3f3217;
+  --notice-text: #f2d494;
+  --notice-bg: #332810;
+  --notice-line: #6a5424;
+  --del-text: #f3b3a2;
+  --del-bg: #3a211b;
+  --ins-text: #a6dfb8;
+  --ins-bg: #1f3a28;
+  --done-text: #a8c4a6;
+  --done-mark: #8fd0a0;
+  --done-line: #4f6b54;
+  --live: #6fbf85;
+}
+html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="dark"] ::after {
+  --accent-ink: oklch(from var(--accent) max(l, .72) c h);
+  --card-accent-ink: oklch(from var(--card-accent) max(l, .72) c h);
+  --story-accent-ink: oklch(from var(--story-accent) max(l, .72) c h);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] {
+    color-scheme: dark;
+    --paper: #161714;
+    --surface: #1e201c;
+    --surface-2: #1a1c18;
+    --field: #232521;
+    --ink: #ecebe4;
+    --ink-soft: #c9cbc3;
+    --muted: #a0a49b;
+    --line: #34372f;
+    --line-dark: #4a4e44;
+    --green: #7fd1a0;
+    --amber: #e3ad5b;
+    --shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+    --on-ink: #161714;
+    --on-ink-soft: #4a4e46;
+    --on-ink-accent: #b03c16;
+    --on-ink-line: #c9cbc3;
+    --paper-deep: #121310;
+    --track: #2c2f28;
+    --tone-low: #262822;
+    --danger: #f0a08a;
+    --danger-strong: #f3b3a2;
+    --danger-edge: #e0735a;
+    --danger-line: #6e3b2f;
+    --danger-bg: #3a211b;
+    --danger-bg-soft: #2e1c17;
+    --good-text: #9edcb8;
+    --good-bg: #1d3327;
+    --good-bg-strong: #22402f;
+    --warn-text: #f0cf8a;
+    --warn-bg: #3a2e14;
+    --warn-bg-strong: #3f3217;
+    --notice-text: #f2d494;
+    --notice-bg: #332810;
+    --notice-line: #6a5424;
+    --del-text: #f3b3a2;
+    --del-bg: #3a211b;
+    --ins-text: #a6dfb8;
+    --ins-bg: #1f3a28;
+    --done-text: #a8c4a6;
+    --done-mark: #8fd0a0;
+    --done-line: #4f6b54;
+    --live: #6fbf85;
+  }
+  html[data-theme="system"] *, html[data-theme="system"] ::before, html[data-theme="system"] ::after {
+    --accent-ink: oklch(from var(--accent) max(l, .72) c h);
+    --card-accent-ink: oklch(from var(--card-accent) max(l, .72) c h);
+    --story-accent-ink: oklch(from var(--story-accent) max(l, .72) c h);
+  }
 }

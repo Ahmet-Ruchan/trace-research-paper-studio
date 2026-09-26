@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TEXT_SIZE_ATTRIBUTE, TEXT_SIZE_KEY, parseTextSize, textSizeBootScript, textSizes } from "./text-size";
+import { THEME_ATTRIBUTE, THEME_KEY, parseTheme, themeBootScript } from "./theme";
 
 /**
  * Yazı ölçeği.
@@ -139,7 +140,7 @@ describe("text size choice", () => {
  * büyük marka başlığında kalıyor.
  */
 describe("accent colour as text", () => {
-  const ALLOWED = [/(svg|circle)$/, /\.citation-center$/, /\.architecture-edges i$/, /\.implementation-notes li::before$/, /\.landing-copy h1 em$/, /\.quote-mark$/, /\.drop-zone \.upload-icon, \.drop-zone \.file-icon$/, /\.chart-key\.series-0$/];
+  const ALLOWED = [/(svg|circle)$/, /\.citation-center$/, /\.architecture-edges i$/, /\.implementation-notes li::before$/, /\.landing-copy h1 em$/, /\.quote-mark$/, /\.drop-zone \.upload-icon, \.drop-zone \.file-icon$/];
 
   it("colours text with the readable tone, not the raw paper colour", () => {
     const offenders: string[] = [];
@@ -160,5 +161,95 @@ describe("accent colour as text", () => {
     for (const name of ["accent", "card-accent", "story-accent"]) {
       expect(tokens).toMatch(new RegExp(`--${name}-ink:\\s*oklch\\(from var\\(--${name}\\) min\\(l, \\.5\\) c h\\)`));
     }
+  });
+});
+
+/**
+ * Karanlık tema. Değerler `tokens.css` içinde iki kez yazılı ("Dark" ve
+ * karanlık cihazda "System"); biri değişip öteki unutulursa iki seçim farklı
+ * görünürdü. Metin / zemin çiftleri de burada ölçülüyor: bir jetonu
+ * değiştiren, okunmaz bir çift bıraktığını testten öğreniyor.
+ */
+describe("colour themes", () => {
+  const css = readFileSync(join(root, "src/visuals/tokens.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const body = (selector: string) => {
+    const escaped = selector.replace(/[[\]"*:]/g, (character) => `\\${character}`).replace(/\s+/g, "\\s*");
+    const found = css.match(new RegExp(`(?:^|[}\\s])${escaped}\\s*\\{([^}]*)\\}`));
+    if (!found) throw new Error(`${selector} is missing from tokens.css`);
+    return Object.fromEntries([...found[1].matchAll(/(--[\w-]+|color-scheme)\s*:\s*([^;]+);/g)].map((match) => [match[1], match[2].trim()]));
+  };
+  const light = body(":root");
+  const dark = body(`html[data-theme="dark"]`);
+  const system = body(`html[data-theme="system"]`);
+
+  it("looks the same whether dark is chosen or comes from the device", () => {
+    expect(Object.keys(dark).length).toBeGreaterThan(30);
+    expect(system).toEqual(dark);
+    const accentInk = (theme: string) => body(`html[data-theme="${theme}"] *, html[data-theme="${theme}"] ::before, html[data-theme="${theme}"] ::after`);
+    expect(accentInk("system")).toEqual(accentInk("dark"));
+    expect(Object.values(accentInk("dark")).every((value) => value.includes("max(l, .72)"))).toBe(true);
+    expect(css).toMatch(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{\s*html\[data-theme="system"\]/);
+  });
+
+  it("gives every colour of the light theme a dark value, except the paper's own colour", () => {
+    const colours = Object.entries(light).filter(([name, value]) => name !== "--accent" && /^(#|rgba?\()/.test(value)).map(([name]) => name);
+    expect(colours.length).toBeGreaterThan(30);
+    expect(colours.filter((name) => !(name in dark))).toEqual([]);
+  });
+
+  it("keeps every text and background pair readable in both themes", () => {
+    const luminance = (hex: string) => [1, 3, 5]
+      .map((start) => Number.parseInt((hex.length === 4 ? hex.replace(/\w/g, "$&$&") : hex).slice(start, start + 2), 16) / 255)
+      .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4))
+      .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    const contrast = (one: string, other: string) => {
+      const [high, low] = [luminance(one), luminance(other)].sort((a, b) => b - a);
+      return (high + 0.05) / (low + 0.05);
+    };
+    const pairs: Array<[string[], string[]]> = [
+      [["--ink", "--ink-soft", "--muted", "--green", "--amber", "--danger", "--good-text", "--warn-text", "--notice-text", "--del-text", "--ins-text", "--done-text"], ["--paper", "--surface", "--surface-2", "--field"]],
+      [["--on-ink", "--on-ink-accent"], ["--ink"]],
+      [["--good-text"], ["--good-bg", "--good-bg-strong"]],
+      [["--warn-text"], ["--warn-bg", "--warn-bg-strong"]],
+      [["--notice-text"], ["--notice-bg"]],
+      [["--danger", "--danger-strong"], ["--danger-bg", "--danger-bg-soft"]],
+      [["--del-text"], ["--del-bg"]],
+      [["--ins-text"], ["--ins-bg"]],
+    ];
+    const unreadable: string[] = [];
+    for (const [name, theme] of [["light", light], ["dark", { ...light, ...dark }]] as const) {
+      for (const [texts, grounds] of pairs) {
+        for (const text of texts) {
+          for (const ground of grounds) {
+            const ratio = contrast(theme[text], theme[ground]);
+            if (!(ratio >= 4.5)) unreadable.push(`${name}: ${text} on ${ground} is ${ratio.toFixed(2)}:1`);
+          }
+        }
+      }
+    }
+    expect(unreadable).toEqual([]);
+  });
+
+  it("reads only the themes it knows", () => {
+    expect(parseTheme("dark")).toBe("dark");
+    expect(parseTheme("system")).toBe("system");
+    expect(parseTheme("sepia")).toBe("light");
+    expect(parseTheme(null)).toBe("light");
+  });
+
+  it("applies a stored theme before the page is drawn, and ignores anything else", () => {
+    const run = (stored: string | null, storageThrows = false) => {
+      const attributes = new Map<string, string>();
+      const localStorage = { getItem: (key: string) => { if (storageThrows) throw new Error("blocked"); return key === THEME_KEY ? stored : null; } };
+      const document = { documentElement: { setAttribute: (name: string, value: string) => attributes.set(name, value) } };
+      new Function("localStorage", "document", themeBootScript)(localStorage, document);
+      return attributes.get(THEME_ATTRIBUTE);
+    };
+    expect(run("dark")).toBe("dark");
+    expect(run("system")).toBe("system");
+    expect(run("light")).toBeUndefined();
+    expect(run("\"><script>")).toBeUndefined();
+    expect(run(null)).toBeUndefined();
+    expect(run("dark", true)).toBeUndefined();
   });
 });

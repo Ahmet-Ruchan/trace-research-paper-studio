@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { textSizeBootScript } from "@/lib/text-size";
+import { themeBootScript } from "@/lib/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,16 +19,24 @@ export const metadata: Metadata = {
   description: "Turn research papers into verifiable, interactive web narratives.",
 };
 
+/*
+ * Yazı boyutu ve tema (`data-text-size`, `data-theme`) kök öğeye ilk boyamadan
+ * önce yazılıyor. Düz bir `<script>`: tarayıcı onu HTML'i okurken çalıştırıyor.
+ * `next/script`'in beforeInteractive'i satır içi betiği Next çalışma zamanı
+ * yüklenene kadar kuyrukta tutuyordu; karanlık temada sayfa bir an açık
+ * görünüyordu. `suppressHydrationWarning`: bu öznitelikler JSX'te yok.
+ */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    // Yazı boyutu seçimi `data-text-size` olarak kök öğeye React'ten önce yazılıyor.
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `${textSizeBootScript}${themeBootScript}` }} />
+      </head>
       <body suppressHydrationWarning className="min-h-full flex flex-col">
-        <Script id="trace-text-size" strategy="beforeInteractive">{textSizeBootScript}</Script>
         {children}
       </body>
     </html>
