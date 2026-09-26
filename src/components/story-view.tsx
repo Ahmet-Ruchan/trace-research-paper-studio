@@ -9,10 +9,13 @@ import {
   InteractiveRenderer,
   LanguageProvider,
   PermalinkButton,
+  SectionPrerequisites,
+  TermParagraphs,
   VisualRenderer,
   figuresBySection,
   stringsFor,
 } from "@/visuals";
+import { sectionPrerequisites, termIndex } from "@/lib/term-index";
 
 type StoryViewProps = {
   project: ResearchProject;
@@ -32,6 +35,8 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
    * üzerinden: bir şekil ve bir bölüm aynı iddiaya dayanıyorsa aynı yere
    * aittir. Hiçbir bölümle eşleşmeyen şekil Lab'in genel bakışında kalır.
    */
+  // Sözlük ve ön bilgi terimleri anlatının içinde açılıyor.
+  const terms = useMemo(() => termIndex(project), [project]);
   const figuresBySectionId = useMemo(
     () => figuresBySection(project.figures, project.story.sections),
     [project.figures, project.story.sections],
@@ -121,7 +126,8 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
                 {section.title}
                 <PermalinkButton hash={sectionHash(section.id)} />
               </h2>
-              <p>{section.body}</p>
+              <SectionPrerequisites concepts={sectionPrerequisites(section, terms, project.language)} />
+              <TermParagraphs paragraphs={[section.body]} entries={terms} />
               <div className="story-claim-links">
                 {section.claimIds.map((claimId) => {
                   const claim = project.evidence.claims.find((item) => item.id === claimId);

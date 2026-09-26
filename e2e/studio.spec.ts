@@ -1351,6 +1351,34 @@ test.describe("learning layer", () => {
     await expect(section.locator(".quiz-score")).toHaveText("1 of 1 right on the first try");
   });
 
+  test("opens a term's definition where it is used, and lists what to know before a section", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-terms"));
+    await page.goto(`/?project=${project.id}&mode=preview`);
+    const scaling = page.locator("section.story-section", { hasText: "Why the scaling was necessary" });
+    await expect(scaling.locator(".term-chips")).toContainText("Before this section:");
+    await expect(scaling.locator(".term-chip")).toHaveText(["Dot product", "Softmax", "Variance and scale"]);
+
+    const softmax = project.primer!.concepts.find((concept) => concept.term === "Softmax")!;
+    await scaling.getByRole("button", { name: "Softmax", exact: true }).first().click();
+    const card = scaling.locator(".term-prerequisites .term-card");
+    await expect(card).toContainText(softmax.intuition);
+    await expect(card).toContainText("Why this paper needs it:");
+    await card.getByRole("button", { name: "Close the definition" }).click();
+    await expect(card).toHaveCount(0);
+
+    // Sözlük terimi anlatının içinde: ilk geçtiği yerde bir düğme, tanımı paragrafın altında.
+    const mark = page.locator(".story-section .term-mark", { hasText: /^self-attention$/i }).first();
+    await mark.click();
+    await expect(mark).toHaveAttribute("aria-expanded", "true");
+    const selfAttention = project.evidence.glossary.find((item) => item.term === "Self-attention")!;
+    await expect(page.locator(".story-section .term-card").first()).toContainText(selfAttention.definition);
+
+    // Derin raporda da.
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Deep report" }).click();
+    expect(await page.locator(".report-analysis .term-mark").count()).toBeGreaterThan(0);
+  });
+
   test("shows the teaching role in the model team, able to run on any provider", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Model team" }).click();

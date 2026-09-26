@@ -16,8 +16,11 @@ import {
   PermalinkButton,
   PrimerView,
   QuizView,
+  SectionPrerequisites,
+  TermParagraphs,
   VisualRenderer,
 } from "@/visuals";
+import { sectionPrerequisites, termIndex } from "@/lib/term-index";
 
 type Tab = "lab" | "story" | "practice" | "technical";
 
@@ -274,6 +277,7 @@ function ClaimRefs({ ids, claims }: { ids: readonly string[]; claims: Claim[] })
 function LabTab({ project }: { project: ResearchProject }) {
   const t = useStrings();
   const { evidence } = project;
+  const terms = useMemo(() => termIndex(project), [project]);
   return (
     <div className="viewer-page">
       <header className="viewer-page-head">
@@ -372,7 +376,7 @@ function LabTab({ project }: { project: ResearchProject }) {
               <span className="viewer-eyebrow">{section.kind}</span>
               <h3>{section.title}</h3>
               <p className="viewer-summary">{section.summary}</p>
-              {section.analysis.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+              <TermParagraphs paragraphs={section.analysis} entries={terms} />
               <ClaimRefs ids={section.claimIds} claims={evidence.claims} />
             </article>
           ))}
@@ -412,6 +416,7 @@ function LabTab({ project }: { project: ResearchProject }) {
 function StoryTab({ project }: { project: ResearchProject }) {
   const t = useStrings();
   const { story, evidence } = project;
+  const terms = useMemo(() => termIndex(project), [project]);
   const [activeId, setActiveId] = useState(story.sections[0]?.id);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -456,7 +461,8 @@ function StoryTab({ project }: { project: ResearchProject }) {
                 {section.title}
                 <PermalinkButton hash={sectionHash(section.id)} />
               </h2>
-              {section.body.split("\n\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+              <SectionPrerequisites concepts={sectionPrerequisites(section, terms, project.language)} />
+              <TermParagraphs paragraphs={section.body.split("\n\n")} entries={terms} />
               <ClaimRefs ids={section.claimIds} claims={evidence.claims} />
               {figures.has(section.id) ? <FiguresView figures={figures.get(section.id)!} /> : null}
               <div className="viewer-mobile-visual">

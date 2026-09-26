@@ -180,6 +180,11 @@ page.
 The paper's own figures sit beside the paragraph that argues them — the join is the claims they
 share, not a guess about where a picture belongs.
 
+Terms from the glossary and the primer open where they are used: click one and its definition, and
+for a primer concept why this paper needs it, opens under the paragraph. Each section starts with
+the concepts to know before reading it, taken from the claims it shares with the primer. The deep
+report does the same. Nothing is generated for this; it all comes from the project.
+
 ![Visual story](docs/images/story.jpg)
 
 ### See where the evidence is thin

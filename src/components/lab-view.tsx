@@ -38,6 +38,7 @@ import {
   MathText,
   PrimerView,
   QuizView,
+  TermParagraphs,
 } from "@/visuals";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { ReviewPanel } from "./review-panel";
@@ -47,6 +48,7 @@ import { useSectionRegeneration } from "./section-regenerator";
 import { LearningGenerator } from "./learning-generator";
 import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
 import { readingDrillFor } from "@/lib/reading-drill";
+import { termIndex } from "@/lib/term-index";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -179,6 +181,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
   // Kanıttan üretilen okuma alıştırması öğrenme katmanı olmayan projede de var.
   const drill = useMemo(() => readingDrillFor(project), [project]);
+  const terms = useMemo(() => termIndex(project), [project]);
   const hasPractice = Boolean(
     project.derivations?.length ||
       project.interactives?.length ||
@@ -329,7 +332,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                     <p>{item.summary}</p>
                   </header>
                   <div className="report-analysis">
-                    {item.analysis.map((paragraph, paragraphIndex) => <p key={`${item.id}-${paragraphIndex}`}>{paragraph}</p>)}
+                    <TermParagraphs paragraphs={item.analysis} entries={terms} />
                   </div>
                   <footer>{item.claimIds.map((claimId) => (
                     <button key={claimId} onClick={() => onClaimSelect(claimId)}><span className={project.evidence.claims.find((claim) => claim.id === claimId)?.confidence === "verified" ? "verified-dot" : "review-dot"} /> {claimId}</button>

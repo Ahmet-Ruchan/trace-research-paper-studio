@@ -317,3 +317,17 @@
 }
 .health-strengthen { justify-self: start; padding: 4px 9px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
 .health-strengthen:hover { border-color: var(--accent); color: var(--accent-ink); }
+
+/* Metnin içinde açılan terimler: tanım paragrafın altında, yerinde açılıyor. */
+.term-mark { display: inline; padding: 0; border: 0; border-bottom: 1px dotted currentColor; background: none; color: inherit; font: inherit; line-height: inherit; letter-spacing: inherit; cursor: help; }
+.term-mark:hover, .term-mark[aria-expanded="true"] { color: var(--accent-ink); border-bottom-style: solid; }
+.term-card { display: grid; gap: 6px; margin: 4px 0 18px; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--surface); color: var(--ink); }
+.term-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.term-card-head strong { font-size: var(--text-md); }
+.term-card-head button { width: 26px; height: 26px; flex: 0 0 auto; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; font-size: var(--text-md); line-height: 1; }
+.term-card-body { display: block; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.6; }
+.term-prerequisites { margin: 2px 0 12px; }
+.term-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--text-xs); }
+.term-chips > span { color: var(--muted); }
+.term-chip { padding: 3px 9px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-xs); }
+.term-chip:hover, .term-chip[aria-expanded="true"] { border-color: var(--accent); }

@@ -47,6 +47,9 @@ export type Strings = {
   numericExample: string;
   /** Sayılar makaleden değil; öğretim aracı onları gösterim için seçti. */
   illustrativeValues: string;
+  /** Hikâye bölümünün başında, dayandığı ön bilgi kavramları. */
+  beforeThisSection: string;
+  closeDefinition: string;
   result: string;
   // Quiz
   checkAnswer: string;
@@ -196,6 +199,8 @@ const en: Strings = {
   nextStep: (shown, total) => `Show the next step (${shown}/${total})`,
   numericExample: "Worked example",
   illustrativeValues: "Illustrative values, not from the paper",
+  beforeThisSection: "Before this section:",
+  closeDefinition: "Close the definition",
   result: "Result:",
   checkAnswer: "Check answer",
   checkAgain: "Check again",
