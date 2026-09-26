@@ -98,9 +98,14 @@ export async function saveLibraryProject(project: ResearchProject, options: Save
   await removeLegacyProject(validated.id).catch(() => undefined);
 }
 
-export async function deleteLibraryProject(projectId: string) {
+/**
+ * `keepalive`: sayfa kapanırken bekleyen bir silme tamamlanıyor; sıradan bir
+ * istek sayfayla birlikte iptal olurdu (bkz. `pending-deletion.ts`).
+ */
+export async function deleteLibraryProject(projectId: string, options: { keepalive?: boolean } = {}) {
   await libraryRequest<{ ok: boolean }>(`${LIBRARY_ENDPOINT}?id=${encodeURIComponent(projectId)}`, {
     method: "DELETE",
+    keepalive: options.keepalive,
   });
   await removeLegacyProject(projectId).catch(() => undefined);
 }

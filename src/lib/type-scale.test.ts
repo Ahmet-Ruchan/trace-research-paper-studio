@@ -131,3 +131,34 @@ describe("text size choice", () => {
     expect(run("large", true)).toBeUndefined();
   });
 });
+
+/**
+ * Vurgu renkleri metin olarak: makalenin rengi sarı ya da açık pembe olabiliyor
+ * ve metinde okunmuyor. Metin rengi `--*-accent-ink` türevlerinden geliyor
+ * (`tokens.css`); rengin kendisi yalnızca simgelerde, grafik işaretlerinde ve
+ * büyük marka başlığında kalıyor.
+ */
+describe("accent colour as text", () => {
+  const ALLOWED = [/(svg|circle)$/, /\.citation-center$/, /\.architecture-edges i$/, /\.implementation-notes li::before$/, /\.landing-copy h1 em$/, /\.quote-mark$/, /\.drop-zone \.upload-icon, \.drop-zone \.file-icon$/, /\.chart-key\.series-0$/];
+
+  it("colours text with the readable tone, not the raw paper colour", () => {
+    const offenders: string[] = [];
+    for (const file of STYLESHEETS) {
+      const source = readFileSync(join(root, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const rule of source.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+        const selector = rule[1].trim();
+        if (/(?:^|;)\s*color\s*:\s*var\(--(?:card-|story-)?accent\)/.test(rule[2]) && !ALLOWED.some((pattern) => pattern.test(selector))) {
+          offenders.push(`${file}: ${selector.slice(-70)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("derives the readable tone for every accent that can change", () => {
+    const tokens = readFileSync(join(root, "src/visuals/tokens.css"), "utf8");
+    for (const name of ["accent", "card-accent", "story-accent"]) {
+      expect(tokens).toMatch(new RegExp(`--${name}-ink:\\s*oklch\\(from var\\(--${name}\\) min\\(l, \\.5\\) c h\\)`));
+    }
+  });
+});

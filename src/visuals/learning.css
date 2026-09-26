@@ -18,11 +18,11 @@
 /* --- Ortak interaktif iskeleti ------------------------------------ */
 .interactive { margin: 22px 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); overflow: hidden; }
 .interactive-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
-.interactive-kind { display: block; margin-bottom: 8px; color: var(--accent); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+.interactive-kind { display: block; margin-bottom: 8px; color: var(--accent-ink); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
 .interactive-head h4 { margin: 0; font: 1.28125rem/1.25 Georgia, serif; }
 .interactive-head p { margin: 7px 0 0; color: var(--muted); font-size: var(--text-md); line-height: 1.6; max-width: 62ch; }
 .interactive-reset { flex: 0 0 auto; padding: 8px 13px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: var(--text-sm); cursor: pointer; transition: 160ms ease; }
-.interactive-reset:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.interactive-reset:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink); }
 .interactive-reset:disabled { opacity: .35; cursor: default; }
 .interactive-foot { padding: 14px 22px; border-top: 1px solid var(--line); background: var(--surface-2); }
 .anchor-note { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
@@ -44,7 +44,7 @@
 .playground-outputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); border-top: 1px solid var(--line); }
 .playground-output { padding: 18px 20px; border-left: 1px solid var(--line); }
 .playground-output:first-child { border-left: 0; }
-.playground-output strong { display: block; color: var(--accent); font: 1.875rem/1 Georgia, serif; letter-spacing: -.03em; }
+.playground-output strong { display: block; color: var(--accent-ink); font: 1.875rem/1 Georgia, serif; letter-spacing: -.03em; }
 .playground-output span { display: block; margin-top: 10px; font-size: var(--text-sm); }
 .playground-output small { display: block; margin-top: 4px; color: var(--muted); font-size: var(--text-2xs); }
 .output-undefined { display: block; margin-top: 6px; color: var(--amber); font-size: var(--text-2xs); font-style: normal; }
@@ -84,7 +84,7 @@
 .sim-grid-cell { --sim-weight: 0; display: grid; place-items: center; padding: 10px 6px; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); font-size: var(--text-xs); background: color-mix(in srgb, var(--accent) calc(var(--sim-weight) * 70%), var(--surface)); color: color-mix(in srgb, white calc(var(--sim-weight) * 100%), var(--ink)); transition: background 300ms ease; }
 
 .sim-narration { padding: 20px 22px 6px; }
-.sim-step-index { color: var(--accent); font: italic var(--text-md) Georgia, serif; }
+.sim-step-index { color: var(--accent-ink); font: italic var(--text-md) Georgia, serif; }
 .sim-narration strong { display: block; margin-top: 8px; font-size: var(--text-base); }
 .sim-narration p { margin: 7px 0 0; color: var(--muted); font-size: var(--text-md); line-height: 1.6; }
 .sim-controls { display: flex; align-items: center; gap: 8px; padding: 14px 22px 20px; }
@@ -111,7 +111,7 @@
 
 /* --- Kanıt açılırı -------------------------------------------------- */
 .evidence-note { margin: 0; }
-.evidence-note summary { color: var(--accent); font-size: var(--text-xs); cursor: pointer; }
+.evidence-note summary { color: var(--accent-ink); font-size: var(--text-xs); cursor: pointer; }
 .evidence-note p { margin: 9px 0 0; font-size: var(--text-sm); line-height: 1.6; }
 .evidence-note blockquote { margin: 8px 0 0; padding-left: 11px; border-left: 2px solid var(--line-dark); color: var(--muted); font: italic var(--text-sm)/1.6 Georgia, serif; }
 
@@ -122,12 +122,12 @@
 .primer-item { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--surface); color: var(--ink); }
 .primer-item.is-open { border-color: var(--accent); }
 .primer-item > button { width: 100%; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; padding: 15px 17px; border: 0; background: none; text-align: left; cursor: pointer; }
-.primer-index { color: var(--accent); font: italic var(--text-base) Georgia, serif; }
+.primer-index { color: var(--accent-ink); font: italic var(--text-base) Georgia, serif; }
 .primer-term { font-size: var(--text-base); font-weight: 600; }
 .primer-level { padding: 4px 9px; border-radius: 20px; font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .1em; }
 .primer-level.level-temel { background: color-mix(in srgb, var(--green) 14%, white); color: var(--green); }
 .primer-level.level-orta { background: color-mix(in srgb, var(--amber) 16%, white); color: var(--amber); }
-.primer-level.level-ileri { background: color-mix(in srgb, var(--accent) 14%, white); color: var(--accent); }
+.primer-level.level-ileri { background: color-mix(in srgb, var(--accent) 14%, white); color: var(--accent-ink); }
 .primer-body { padding: 0 17px 18px 63px; }
 .primer-intuition { margin: 0; font-size: var(--text-base); line-height: 1.75; }
 .primer-formal { margin: 14px 0; padding: 12px; border-radius: 8px; background: var(--surface-2); }
@@ -145,7 +145,7 @@
 .derivation-rationale { margin: 8px 0 0; color: var(--ink-soft); font-size: var(--text-md); line-height: 1.7; }
 .derivation-shapes { display: inline-block; margin-top: 8px; padding: 4px 8px; border-radius: 5px; background: var(--surface-2); color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--text-xs); }
 .derivation-more { margin-top: 18px; padding: 9px 15px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: var(--text-sm); cursor: pointer; }
-.derivation-more:hover { border-color: var(--accent); color: var(--accent); }
+.derivation-more:hover { border-color: var(--accent); color: var(--accent-ink); }
 .derivation-example { margin-top: 22px; padding: 17px; border-radius: 10px; background: var(--surface-2); }
 .derivation-example h5 { margin: 0 0 10px; font-size: var(--text-sm); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
 .example-setup { margin: 0; font-size: var(--text-md); line-height: 1.7; }
@@ -155,11 +155,11 @@
 /* --- Quiz ---------------------------------------------------------- */
 .quiz-head h3 { margin: 0; font: 1.53125rem/1.2 Georgia, serif; }
 .quiz-head p { margin: 10px 0 0; color: var(--ink-soft); font-size: var(--text-base); line-height: 1.7; }
-.quiz-score { margin: 12px 0 0 !important; color: var(--accent) !important; font-size: var(--text-md) !important; font-weight: 650; }
+.quiz-score { margin: 12px 0 0 !important; color: var(--accent-ink) !important; font-size: var(--text-md) !important; font-weight: 650; }
 .quiz-list { display: grid; gap: 14px; margin: 22px 0 0; padding: 0; list-style: none; }
 .quiz-question { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
 .quiz-prompt { display: grid; grid-template-columns: 30px 1fr; gap: 10px; margin: 0 0 14px; font-size: var(--text-base); line-height: 1.6; }
-.quiz-index { color: var(--accent); font: italic var(--text-base) Georgia, serif; }
+.quiz-index { color: var(--accent-ink); font: italic var(--text-base) Georgia, serif; }
 .quiz-options { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .quiz-option { padding: 11px 13px; border: 1px solid var(--line); border-radius: 8px; transition: 160ms ease; }
 .quiz-option label { display: flex; align-items: flex-start; gap: 10px; font-size: var(--text-md); line-height: 1.55; cursor: pointer; }
@@ -172,14 +172,14 @@
 .quiz-verdict { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line); }
 .quiz-verdict strong { display: block; margin-bottom: 8px; font-size: var(--text-md); }
 .quiz-verdict.is-correct strong { color: var(--green); }
-.quiz-verdict.is-wrong strong { color: var(--accent); }
+.quiz-verdict.is-wrong strong { color: var(--accent-ink); }
 
 /* --- Uygulama rehberi ---------------------------------------------- */
 .app-guide-head h3 { margin: 0; font: 1.53125rem/1.2 Georgia, serif; }
 .app-guide-head p { margin: 10px 0 22px; color: var(--ink-soft); font-size: var(--text-base); line-height: 1.7; max-width: 68ch; }
 .guide-recipe { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
 .guide-recipe > li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; }
-.guide-step-index { color: var(--accent); font: italic var(--text-base) Georgia, serif; }
+.guide-step-index { color: var(--accent-ink); font: italic var(--text-base) Georgia, serif; }
 .guide-recipe strong { font-size: var(--text-base); }
 .guide-recipe p { margin: 6px 0 0; color: var(--ink-soft); font-size: var(--text-md); line-height: 1.7; }
 .guide-code { margin: 11px 0 0; padding: 15px; overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
@@ -292,7 +292,7 @@
 
 /* --- Kalıcı bağlantı ------------------------------------------------ */
 .permalink { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 7px; color: var(--muted); font-size: var(--text-md); line-height: 1; text-decoration: none; transition: color .15s, background .15s, opacity .15s; }
-.permalink:hover { color: var(--accent); background: var(--surface-2); }
+.permalink:hover { color: var(--accent-ink); background: var(--surface-2); }
 .permalink.is-copied { color: var(--green); }
 /* Başlık yanındaki bağlantı yalnızca üzerine gelince görünür: her başlıkta
    duran bir "#" işareti hikâyeyi teknik dokümana çevirirdi. */
@@ -306,4 +306,4 @@
   .health-thin li:has(.health-strengthen) { grid-template-columns: 62px 1fr auto auto; }
 }
 .health-strengthen { justify-self: start; padding: 4px 9px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
-.health-strengthen:hover { border-color: var(--accent); color: var(--accent); }
+.health-strengthen:hover { border-color: var(--accent); color: var(--accent-ink); }

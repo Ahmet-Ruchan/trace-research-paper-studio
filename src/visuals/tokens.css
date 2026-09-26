@@ -43,3 +43,22 @@
    kendisi belirtmeyenler için taban burada da geçerli; sınıfla boyut verilen
    öğeler daha özgül kurallarıyla etkilenmiyor. */
 small, sub, sup { font-size: max(var(--text-2xs), .8em); }
+
+/*
+ * Vurgu renkleri metin olarak. Makalenin rengi 20 renklik bir paletten
+ * geliyor ve çoğu açık: sarı kâğıtta 1,33:1, açık mavi 1,86:1, marka turuncusu
+ * 3,07:1 (normal metin için 4,5:1 gerekiyor). Metinde rengin kendisi değil bu
+ * türevleri kullanılıyor: OKLCH parlaklığı 0,5'e sınırlanıyor, ton ve doygunluk
+ * aynı kalıyor. Paletin en kötüsü böylece 4,9:1; zaten koyu olanlar (lacivert,
+ * bordo) değişmiyor. Dolgular, simgeler ve grafik işaretleri parlak rengi
+ * kullanmaya devam ediyor.
+ *
+ * Her öğede hesaplanıyor: --accent çalışma alanında, --card-accent kartlarda,
+ * --story-accent görsellerde makalenin rengiyle değişiyor; :root'ta bir kez
+ * hesaplanan bir türev bu değişikliği görmezdi.
+ */
+*, ::before, ::after {
+  --accent-ink: oklch(from var(--accent) min(l, .5) c h);
+  --card-accent-ink: oklch(from var(--card-accent) min(l, .5) c h);
+  --story-accent-ink: oklch(from var(--story-accent) min(l, .5) c h);
+}

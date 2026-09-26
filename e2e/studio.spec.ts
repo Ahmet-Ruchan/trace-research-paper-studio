@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { evidenceFingerprint } from "../src/lib/section-regeneration";
 import type { ResearchProject } from "../src/lib/schema";
+import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
+import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -701,9 +703,10 @@ test.describe("library search and tags", () => {
     await expect(card.locator(".library-tag")).toHaveText(["Keep"]);
     await expect(page.getByRole("navigation", { name: "Collections" }).getByRole("button", { name: /Omega shelf/ })).toContainText("1");
 
-    page.once("dialog", (dialog) => void dialog.accept());
-    await page.locator(".library-card", { hasText: "Untag b" }).getByTitle("Permanently delete from library").click();
+    await page.locator(".library-card", { hasText: "Untag b" }).getByTitle("Delete from library").click();
     await expect(page.locator(".library-card", { hasText: "Untag b" })).toHaveCount(0);
+    // Geri alma süresini beklemeden silmek.
+    await page.getByRole("button", { name: "Delete now" }).click();
     // Silinen makale "Omega shelf" koleksiyonunun son üyesiydi; koleksiyon da kalkıyor.
     await expect(page.getByRole("navigation", { name: "Collections" }).getByRole("button", { name: /Omega shelf/ })).toHaveCount(0);
 
@@ -847,5 +850,132 @@ test.describe("reading comfort", () => {
     await expect(page.getByRole("menuitemradio", { name: /Larger/ })).toHaveAttribute("aria-checked", "true");
     await page.getByRole("menuitemradio", { name: /Default/ }).click();
     await expect(page.locator("html")).not.toHaveAttribute("data-text-size", /.+/);
+  });
+});
+
+test.describe("undoable deletion", () => {
+  const listed = async (request: APIRequestContext, id: string) =>
+    ((await (await request.get("/api/library")).json()) as { projects: ResearchProject[] }).projects.some((item) => item.id === id);
+
+  test("brings a deleted paper back with its tags, and never deletes it later", async ({ page, request }) => {
+    const project = projectNamed("e2e-undo");
+    project.evidence.paper = { ...project.evidence.paper, title: "Undo me paper" };
+    await seed(request, project);
+    expect((await request.put(`/api/library/tags?id=${project.id}`, { data: { tags: ["Keep me"] } })).ok()).toBe(true);
+
+    await page.goto("/?library=1");
+    const card = page.locator(".library-card", { hasText: "Undo me paper" });
+    await card.getByTitle("Delete from library").click();
+    await expect(card).toHaveCount(0);
+    const toast = page.getByRole("status").filter({ hasText: "Undo me paper" });
+    await expect(toast).toContainText("Deleted");
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await expect(card).toHaveCount(1);
+    await expect(card.locator(".library-tag")).toHaveText(["Keep me"]);
+    await expect(toast).toHaveCount(0);
+
+    // Geri alınan silme süre dolunca da gitmiyor.
+    await page.waitForTimeout(UNDO_WINDOW_MS + 1_000);
+    expect(await listed(request, project.id)).toBe(true);
+  });
+
+  test("undoes with the keyboard, but not while the user is typing", async ({ page, request }) => {
+    const project = projectNamed("e2e-undo-keys");
+    project.evidence.paper = { ...project.evidence.paper, title: "Keyboard undo paper" };
+    await seed(request, project);
+    await page.goto("/?library=1");
+    const card = page.locator(".library-card", { hasText: "Keyboard undo paper" });
+    await card.getByTitle("Delete from library").click();
+    await expect(card).toHaveCount(0);
+    // Arama kutusundayken Ctrl/⌘+Z kullanıcının kendi yazısını geri alıyor, silmeyi değil.
+    const search = page.getByLabel("Search papers");
+    await search.fill("keyboard");
+    await search.press("ControlOrMeta+z");
+    await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+    await search.fill("");
+    await search.blur();
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(card).toHaveCount(1);
+  });
+
+  test("finishes a pending deletion when the user leaves the library or closes the page", async ({ page, request }) => {
+    for (const id of ["e2e-leave-screen", "e2e-leave-page"]) {
+      const project = projectNamed(id);
+      project.evidence.paper = { ...project.evidence.paper, title: `Leaving ${id}` };
+      await seed(request, project);
+    }
+    await page.goto("/?library=1");
+
+    await page.locator(".library-card", { hasText: "Leaving e2e-leave-screen" }).getByTitle("Delete from library").click();
+    await page.getByRole("button", { name: "Home" }).first().click();
+    await expect.poll(() => listed(request, "e2e-leave-screen")).toBe(false);
+
+    await page.goto("/?library=1");
+    await page.locator(".library-card", { hasText: "Leaving e2e-leave-page" }).getByTitle("Delete from library").click();
+    // Sayfadan ayrılmak: istek sayfa kapanırken de tamamlanıyor (keepalive).
+    await page.goto("about:blank");
+    await expect.poll(() => listed(request, "e2e-leave-page")).toBe(false);
+  });
+});
+
+test.describe("accent colour as text", () => {
+  /** Tarayıcının çizdiği iki rengi tuvale boyayıp sRGB olarak okur; kontrast gerçek renklerle. */
+  function contrast(page: Page, foreground: string, background: string) {
+    return page.evaluate(([foreground, background]) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d")!;
+      const luminance = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const [r, g, b] = [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)]
+          .map((value) => value / 255)
+          .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const [light, dark] = [luminance(foreground), luminance(background)].sort((x, y) => y - x);
+      return (light + 0.05) / (dark + 0.05);
+    }, [foreground, background] as const);
+  }
+
+  /** `--accent` bu renkken metnin gerçekten aldığı renk. */
+  function inkFor(page: Page, accent: string) {
+    return page.evaluate((accent) => {
+      const host = document.createElement("div");
+      host.style.setProperty("--accent", accent);
+      const text = document.createElement("span");
+      text.style.color = "var(--accent-ink)";
+      host.append(text);
+      document.body.append(host);
+      const drawn = getComputedStyle(text).color;
+      host.remove();
+      return drawn;
+    }, accent);
+  }
+
+  test("keeps every paper colour readable as text on paper and on cards", async ({ page }) => {
+    await page.goto("/?library=1");
+    await expect(page.locator(".boot-screen")).toHaveCount(0);
+    for (const accent of ["#e75b37", ...TRACE_ACCENT_PALETTE]) {
+      const ink = await inkFor(page, accent);
+      for (const background of ["#f2efe7", "#fbfaf6"]) {
+        expect(await contrast(page, ink, background), `${accent} → ${ink} on ${background}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  test("draws a pale paper colour's card label in the readable tone", async ({ page, request }) => {
+    const project = projectNamed("e2e-pale-accent");
+    project.story.accent = "#FACC15";
+    project.evidence.paper = { ...project.evidence.paper, title: "Pale accent paper" };
+    await seed(request, project);
+    await page.goto("/?library=1");
+    const card = page.locator(".library-card", { hasText: "Pale accent paper" });
+    const label = await card.locator(".library-card-copy > span").evaluate((element) => getComputedStyle(element).color);
+    const surface = await card.evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(await contrast(page, label, surface), label).toBeGreaterThanOrEqual(4.5);
+    // Kapaktaki dolgu ise makalenin kendi rengi olarak kalıyor.
+    expect(await card.locator(".library-cover").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(250, 204, 21)");
   });
 });

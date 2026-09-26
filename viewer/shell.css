@@ -14,7 +14,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t
 .viewer-tabs button { padding: 8px 14px; border: 0; border-radius: 7px; background: none; color: var(--ink-soft); font-size: var(--text-md); cursor: pointer; transition: 160ms ease; }
 .viewer-tabs button.is-active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(35,31,24,.09); }
 .viewer-download { padding: 8px 13px; border: 1px solid var(--line); border-radius: 20px; color: var(--ink-soft); font-size: var(--text-sm); text-decoration: none; }
-.viewer-download:hover { border-color: var(--accent); color: var(--accent); }
+.viewer-download:hover { border-color: var(--accent); color: var(--accent-ink); }
 
 /* Stüdyo köprüsü. Ana eylem olduğu için dolu, indirme bağlantısı ise çerçeveli. */
 .viewer-actions { display: flex; align-items: center; gap: 9px; }
@@ -41,10 +41,10 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t
 .viewer-studio-panel p { margin: 0 0 14px; color: var(--ink-soft); font-size: var(--text-base); line-height: 1.7; }
 .viewer-studio-note { font-size: var(--text-md); }
 .viewer-studio-buttons { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.viewer-studio-buttons a { color: var(--accent); font-size: var(--text-md); text-decoration: none; }
+.viewer-studio-buttons a { color: var(--accent-ink); font-size: var(--text-md); text-decoration: none; }
 .viewer-studio-buttons a:hover { text-decoration: underline; }
 .viewer-studio-buttons button { padding: 8px 15px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: var(--text-md); cursor: pointer; }
-.viewer-studio-buttons button:hover { border-color: var(--accent); color: var(--accent); }
+.viewer-studio-buttons button:hover { border-color: var(--accent); color: var(--accent-ink); }
 
 .viewer-main { flex: 1; }
 .viewer-page { max-width: 900px; margin: 0 auto; padding: clamp(34px, 5vw, 68px) 22px 90px; }
@@ -55,7 +55,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t
 .viewer-block > h3 { margin: 26px 0 10px; font: 1.1875rem Georgia, serif; }
 .viewer-block p { margin: 0 0 14px; font-size: var(--text-lg); line-height: 1.75; }
 .viewer-lead { font: 400 1.1875rem/1.65 Georgia, serif !important; }
-.viewer-eyebrow { display: block; margin-bottom: 9px; color: var(--accent); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+.viewer-eyebrow { display: block; margin-bottom: 9px; color: var(--accent-ink); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
 
 .viewer-tri { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .viewer-tri article { padding: 20px; background: var(--surface); }
@@ -64,7 +64,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t
 
 .viewer-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 9px; }
 .viewer-metrics article { padding: 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
-.viewer-metrics strong { display: block; color: var(--accent); font: 1.625rem/1 Georgia, serif; }
+.viewer-metrics strong { display: block; color: var(--accent-ink); font: 1.625rem/1 Georgia, serif; }
 .viewer-metrics span { display: block; margin-top: 9px; font-size: var(--text-sm); }
 .viewer-metrics small { display: block; margin: 6px 0 9px; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
 
@@ -87,7 +87,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t
 .viewer-equation { margin-bottom: 30px; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .viewer-equation h3 { margin: 0 0 12px; font: var(--text-xl) Georgia, serif; }
 .viewer-variables { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 14px 0; }
-.viewer-variables dt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--text-md); color: var(--accent); }
+.viewer-variables dt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--text-md); color: var(--accent-ink); }
 .viewer-variables dd { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
 .viewer-algorithm { padding-left: 20px; }
 .viewer-algorithm li { margin-bottom: 14px; }

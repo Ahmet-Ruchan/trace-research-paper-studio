@@ -551,7 +551,9 @@ The plugin is one way in. The web app adds generation with your own provider key
 narrative, and a local library. Projects are stored as files under `~/.trace/library`, shared by
 Codex, Claude Code, Antigravity and every Trace Studio launch directory. Existing browser-only
 projects migrate there automatically; removing a Library item removes its stored file and its
-version history and its tags. Earlier versions live under `~/.trace/library/revisions`, tags in
+version history and its tags. Deleting asks for no confirmation: the card goes at once and **Undo**
+(or Ctrl/⌘+Z) brings the project back, history, tags and published links included, for eight
+seconds. Leaving the library or closing the page completes the deletion. Earlier versions live under `~/.trace/library/revisions`, tags in
 `~/.trace/library/tags.json`, saved templates under `~/.trace/templates`.
 
 ```bash
@@ -577,7 +579,8 @@ paper.
 **Aa** in the header sets the text size, from compact to 125%. Every size in the studio is on one
 type scale in `rem`, so the choice and your browser's own font size setting both enlarge everything
 together. The smallest text is 12 px, and a test fails if a rule goes below it. The choice is kept
-in this browser only.
+in this browser only. A paper's colour is used as is for fills and icons; as text it is darkened to
+the same hue at a lightness every colour of the palette can be read at (4.5:1 or better).
 
 <details>
 <summary><b>Model providers</b></summary>

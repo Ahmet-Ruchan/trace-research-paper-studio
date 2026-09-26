@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Gauge, Plu
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import { buildClaimIndex, excerptAround, highlightSegments, searchClaims, type ClaimHit, type ClaimSearch } from "@/lib/library-search";
 import { MAX_TAG_LENGTH, addTag, hasTag, removeTag, tagCounts, tagKey } from "@/lib/library-tags";
+import { UNDO_WINDOW_MS } from "@/lib/pending-deletion";
 import { listLibraryTags, saveProjectTags } from "@/lib/project-library";
 import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
@@ -18,7 +19,14 @@ type LibraryViewProps = {
   onOpenClaim: (project: ResearchProject, claimId: string) => void;
   /** Modellerin alıntı karnesi: kütüphanedeki bütün projelerden hesaplanıyor. */
   onModelRecord: () => void;
-  onDelete: (projectId: string) => Promise<void>;
+  /** Kart hemen kayboluyor; silme geri alma süresi dolunca sunucuya gidiyor. */
+  onDelete: (projectId: string) => void;
+  pendingDeletion?: ResearchProject;
+  onUndoDelete: () => void;
+  /** Bildirimi kapatmak: beklemeden sil. */
+  onConfirmDelete: () => void;
+  deleteError?: string;
+  onDismissDeleteError: () => void;
   onHome: () => void;
   onNew: () => void;
   onImport: (file: File) => Promise<void>;
@@ -46,7 +54,7 @@ function count(value: number, noun: string) {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDelete, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("papers");
   /**
@@ -184,6 +192,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
       </header>
 
       {importError && <div className="library-import-error">{importError}<button onClick={() => setImportError(undefined)}>Close</button></div>}
+      {deleteError && <div className="library-import-error" role="alert">{deleteError} The project is back in the library.<button onClick={onDismissDeleteError}>Close</button></div>}
 
       <section className="library-hero">
         <div>
@@ -318,13 +327,9 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
                 <footer>
                   <span>{formatDate(project.updatedAt)}{generationLabel(project) ? ` · ${generationLabel(project)}` : ""}</span>
                   <div>
-                    <button className="library-delete" title="Permanently delete from library" onClick={() => {
-                      if (window.confirm(`Permanently delete “${project.evidence.paper.title}” from the library?`)) {
-                        setImportError(undefined);
-                        void onDelete(project.id).catch((error) => {
-                          setImportError(error instanceof Error ? error.message : "Could not delete the Trace project.");
-                        });
-                      }
+                    <button className="library-delete" title="Delete from library" aria-label={`Delete ${project.evidence.paper.title} from the library`} onClick={() => {
+                      setImportError(undefined);
+                      onDelete(project.id);
                     }}><Trash2 size={15} /></button>
                     <button className="library-open" onClick={() => onOpen(project)}>Open <ArrowRight size={15} /></button>
                   </div>
@@ -341,7 +346,36 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
           <button onClick={onNew}>Add a paper <ArrowRight size={16} /></button>
         </section>
       )}
+      {pendingDeletion && <UndoToast key={pendingDeletion.id} project={pendingDeletion} onUndo={onUndoDelete} onConfirm={onConfirmDelete} />}
     </main>
+  );
+}
+
+/**
+ * Silmeden sonra birkaç saniye. Ctrl/⌘+Z da geri alıyor; bir metin kutusunun
+ * içindeyken değil, orada kullanıcının kendi yazısını geri alıyor.
+ */
+function UndoToast({ project, onUndo, onConfirm }: { project: ResearchProject; onUndo: () => void; onConfirm: () => void }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (event.key.toLowerCase() === "z" && (event.metaKey || event.ctrlKey) && !event.shiftKey) {
+        event.preventDefault();
+        onUndo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onUndo]);
+
+  return (
+    <div className="undo-toast" role="status" aria-live="polite">
+      <i className="undo-toast-timer" style={{ animationDuration: `${UNDO_WINDOW_MS}ms` }} aria-hidden="true" />
+      <span>Deleted “{project.evidence.paper.title}” with its history.</span>
+      <button className="undo-action" onClick={onUndo}>Undo</button>
+      <button className="undo-dismiss" aria-label="Delete now" title="Delete now" onClick={onConfirm}><X size={15} /></button>
+    </div>
   );
 }
 

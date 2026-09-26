@@ -15,6 +15,7 @@ import { stringsFor } from "@/visuals";
 import type { RevisionReason } from "@/lib/project-revisions";
 import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
 import { loadSampleProject } from "@/lib/sample-project";
+import { PendingDeletion } from "@/lib/pending-deletion";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { HistoryPanel } from "./history-panel";
@@ -74,6 +75,9 @@ export function AppShell() {
   const [loadingSample, setLoadingSample] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<GenerationProgress>(initialGenerationProgress);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pendingDeletion, setPendingDeletion] = useState<ResearchProject>();
+  const [deleteError, setDeleteError] = useState<string>();
+  const deletions = useRef<PendingDeletion<ResearchProject> | undefined>(undefined);
   const [publishOpen, setPublishOpen] = useState(false);
   const generationController = useRef<AbortController | undefined>(undefined);
   /**
@@ -261,6 +265,21 @@ export function AppShell() {
 
   useEffect(() => () => { if (fileUrl) URL.revokeObjectURL(fileUrl); }, [fileUrl]);
 
+  /**
+   * Geri alma yalnızca kütüphanedeyken sunuluyor. Başka bir ekrana geçmek ya
+   * da sayfayı kapatmak bekleyen silmeyi hemen tamamlıyor: kullanıcı silmek
+   * istedi, bildirimi göremediği bir yerde sessizce vazgeçilmemeli.
+   */
+  useEffect(() => {
+    if (screen !== "library") deletions.current?.flush("left");
+  }, [screen]);
+
+  useEffect(() => {
+    const onPageHide = () => deletions.current?.flush("pagehide");
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
   async function generate(options: GenerationOptions) {
     const controller = new AbortController();
     generationController.current = controller;
@@ -406,8 +425,42 @@ export function AppShell() {
     setSelectedClaimId(claimId);
   }
 
-  async function removeProject(projectId: string) {
-    await deleteLibraryProject(projectId);
+  /** Silinen proje listedeki yerine, güncellenme sırasına göre geri konuyor. */
+  function restoreProject(restored: ResearchProject) {
+    setProjects((current) =>
+      [...current.filter((item) => item.id !== restored.id), restored].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    );
+  }
+
+  function deletionQueue() {
+    deletions.current ??= new PendingDeletion<ResearchProject>(
+      (target, reason) => {
+        void removeProject(target.id, reason === "pagehide").catch((error: unknown) => {
+          setDeleteError(error instanceof Error ? error.message : "Could not delete the Trace project.");
+          restoreProject(target);
+        });
+      },
+      setPendingDeletion,
+    );
+    return deletions.current;
+  }
+
+  /** Kart hemen kayboluyor; sunucudaki silme geri alma süresi dolunca (bkz. `pending-deletion.ts`). */
+  function requestDelete(projectId: string) {
+    const target = projects.find((item) => item.id === projectId);
+    if (!target) return;
+    setDeleteError(undefined);
+    deletionQueue().schedule(target);
+    setProjects((current) => current.filter((item) => item.id !== projectId));
+  }
+
+  function undoDelete() {
+    const restored = deletions.current?.undo();
+    if (restored) restoreProject(restored);
+  }
+
+  async function removeProject(projectId: string, keepalive = false) {
+    await deleteLibraryProject(projectId, { keepalive });
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
@@ -419,7 +472,8 @@ export function AppShell() {
       }
     }
     setProjects((current) => current.filter((item) => item.id !== projectId));
-    if (project?.id === projectId) setProject(undefined);
+    // İşlevsel güncelleme: silme geri alma süresi dolunca, eski bir çizimin kapanışından çalışıyor.
+    setProject((current) => (current?.id === projectId ? undefined : current));
   }
 
   async function importProject(file: File) {
@@ -471,7 +525,12 @@ export function AppShell() {
         onOpen={openProject}
         onOpenClaim={openClaim}
         onModelRecord={() => setScreen("models")}
-        onDelete={removeProject}
+        onDelete={requestDelete}
+        pendingDeletion={pendingDeletion}
+        onUndoDelete={undoDelete}
+        onConfirmDelete={() => deletions.current?.flush("left")}
+        deleteError={deleteError}
+        onDismissDeleteError={() => setDeleteError(undefined)}
         onHome={() => setScreen("home")}
         onNew={newProject}
         onImport={importProject}
