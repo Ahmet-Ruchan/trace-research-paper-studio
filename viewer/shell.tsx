@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { claimHash, elementId, parseDeepLink, scrollToDeepLink, sectionHash } from "@/lib/deep-link";
 import { readingDrillFor } from "@/lib/reading-drill";
 import type { Claim, Quiz, ResearchProject } from "@/lib/schema";
@@ -17,12 +17,14 @@ import {
   PrimerView,
   QuizView,
   SectionPrerequisites,
+  StudyView,
   TermParagraphs,
   VisualRenderer,
 } from "@/visuals";
 import { sectionPrerequisites, termIndex } from "@/lib/term-index";
+import { parseStudyProgress, type StudyProgress } from "@/lib/study-path";
 
-type Tab = "lab" | "story" | "practice" | "technical";
+type Tab = "lab" | "story" | "study" | "practice" | "technical";
 
 /**
  * Bu sayfa ile ana uygulama arasındaki köprü. `deliver` teslim anında doldurur:
@@ -59,6 +61,7 @@ export function ViewerShell({
   const tabLabels: Record<Tab, string> = {
     lab: t.tabLab,
     story: t.tabStory,
+    study: t.tabStudy,
     practice: t.tabPractice,
     technical: t.tabTechnical,
   };
@@ -67,7 +70,7 @@ export function ViewerShell({
   const hasPractice = Boolean(
     project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.applicationGuide || drill,
   );
-  const tabs: Tab[] = ["lab", "story", ...(hasPractice ? (["practice"] as Tab[]) : []), ...(project.technicalAppendix ? (["technical"] as Tab[]) : [])];
+  const tabs: Tab[] = ["lab", "story", "study", ...(hasPractice ? (["practice"] as Tab[]) : []), ...(project.technicalAppendix ? (["technical"] as Tab[]) : [])];
   /**
    * Kalıcı bağlantı sekmeyi de seçiyor. Bir iddia Lab'de, bir bölüm hikâyede
    * yaşıyor; bağlantıyı açan kişiyi doğru sekmeye getirmezsek çapa hiçbir
@@ -185,6 +188,7 @@ export function ViewerShell({
       <main className="viewer-main">
         {tab === "lab" ? <LabTab project={project} /> : null}
         {tab === "story" ? <StoryTab project={project} /> : null}
+        {tab === "study" ? <StudyTab project={project} drill={drill} /> : null}
         {tab === "practice" ? <PracticeTab project={project} drill={drill} /> : null}
         {tab === "technical" ? <TechnicalTab project={project} /> : null}
       </main>
@@ -489,6 +493,39 @@ function StoryTab({ project }: { project: ResearchProject }) {
         <h2>{story.closing.title}</h2>
         <p>{story.closing.body}</p>
       </footer>
+    </div>
+  );
+}
+
+/**
+ * Görüntüleyicide ilerleme tarayıcıda duruyor: sayfa paylaşılabilir ve bir
+ * sunucuya yazamaz. Depolama kapalıysa (gizli pencere, dosya izinleri) çalışma
+ * yine açılıyor, yalnızca hatırlanmıyor.
+ */
+const studyKey = (projectId: string) => `trace-study-v1:${projectId}`;
+
+function StudyTab({ project, drill }: { project: ResearchProject; drill?: Quiz }) {
+  const t = useStrings();
+  const [initial] = useState<StudyProgress | undefined>(() => {
+    try {
+      const raw = window.localStorage.getItem(studyKey(project.id));
+      return raw ? parseStudyProgress(JSON.parse(raw)) : undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const save = useCallback((progress: StudyProgress | undefined) => {
+    try {
+      if (progress) window.localStorage.setItem(studyKey(project.id), JSON.stringify(progress));
+      else window.localStorage.removeItem(studyKey(project.id));
+    } catch {
+      // Hatırlanamasa da çalışma sürüyor.
+    }
+  }, [project.id]);
+  return (
+    // `.viewer-block` değil: onun paragraf kuralı çalışma adımlarının kendi biçimini eziyordu.
+    <div className="viewer-page">
+      <StudyView project={project} drill={drill} initialProgress={initial} onSave={save} note={t.studyBrowserNote} />
     </div>
   );
 }

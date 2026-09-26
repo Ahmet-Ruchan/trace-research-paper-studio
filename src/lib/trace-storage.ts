@@ -27,6 +27,7 @@ import {
 } from "./project-revisions";
 import { isLibraryTagsFile, libraryTagsToJson, parseLibraryTags, tagListSchema } from "./library-tags";
 import { findBuiltInTemplate, templateIssues } from "./narrative-templates";
+import { isStudyFile, parseStudyFile, studyFileToJson, studyProgressSchema, type StudyProgress } from "./study-path";
 import {
   projectContentFingerprint,
   projectForPublication,
@@ -366,6 +367,8 @@ export async function deleteStoredProject(projectId: string) {
   // silinmeden önceki koleksiyonlarına geri dönerdi. Bu adım başarısız olursa
   // silme yine tamamlanıyor: artakalan kayıt hiçbir listede görünmüyor.
   await saveStoredProjectTags(projectId, []).catch(() => undefined);
+  // Çalışma ilerlemesi de: aynı kimlikle eklenen başka bir makale eski yanıtları devralmamalı.
+  await saveStudyProgress(projectId, undefined).catch(() => undefined);
   try {
     await unlink(path);
     return true;
@@ -426,6 +429,57 @@ export async function saveStoredProjectTags(projectId: string, tags: readonly st
     if (next.length) current.set(projectId, next);
     else current.delete(projectId);
     await atomicWrite(join(directory, TAGS_FILE), `${JSON.stringify(libraryTagsToJson(current), null, 2)}\n`);
+    return next;
+  } finally {
+    await release();
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Çalışma ilerlemesi — ~/.trace/library/study.json
+ *
+ * Etiketler gibi kütüphanenin bilgisi, makalenin değil (`study-path.ts`):
+ * çalışmak projeyi değiştirmiyor ve paylaşılan bir JSON kişinin yanıtlarını
+ * taşımıyor. Aynı kilit ve bozuk dosyayı kenara alma kuralı geçerli.
+ * ------------------------------------------------------------------ */
+
+const STUDY_FILE = "study.json";
+const STUDY_LOCK = "study.lock";
+
+async function readStudyFile(): Promise<{ exists: boolean; raw: unknown }> {
+  try {
+    return { exists: true, raw: JSON.parse(await readFile(join(traceLibraryDirectory(), STUDY_FILE), "utf8")) as unknown };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { exists: false, raw: undefined };
+    if (error instanceof SyntaxError) return { exists: true, raw: undefined };
+    throw error;
+  }
+}
+
+export async function readAllStudyProgress() {
+  return parseStudyFile((await readStudyFile()).raw);
+}
+
+export async function readStudyProgress(projectId: string) {
+  return (await readAllStudyProgress()).get(projectId);
+}
+
+/** Bir projenin ilerlemesini yazar; `undefined` kaydı kaldırır. Değişiklik yoksa dosyaya dokunulmuyor. */
+export async function saveStudyProgress(projectId: string, progress: StudyProgress | undefined) {
+  const next = progress === undefined ? undefined : studyProgressSchema.parse(progress);
+  const directory = traceLibraryDirectory();
+  const release = await acquireDirectoryLock(directory, STUDY_LOCK, "The study progress is busy. Please retry in a moment.");
+  try {
+    const file = await readStudyFile();
+    const current = parseStudyFile(file.raw);
+    if (!next && !current.has(projectId)) return next;
+    if (file.exists && !isStudyFile(file.raw)) {
+      const stamp = new Date().toISOString().replace(/[-:.]/g, "");
+      await rename(join(directory, STUDY_FILE), join(directory, `study.damaged-${stamp}.json`));
+    }
+    if (next) current.set(projectId, next);
+    else current.delete(projectId);
+    await atomicWrite(join(directory, STUDY_FILE), `${JSON.stringify(studyFileToJson(current), null, 2)}\n`);
     return next;
   } finally {
     await release();

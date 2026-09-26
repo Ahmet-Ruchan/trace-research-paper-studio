@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useStrings } from "../language-context";
 import type { Primer } from "@/lib/schema";
+import { orderByPrerequisites } from "@/lib/study-path";
 import { MathText } from "../math";
 
 /**
@@ -24,9 +25,7 @@ export function PrimerView({ primer, renderAction }: { primer: Primer; renderAct
       <ol className="primer-list">
         {ordered.map((concept, index) => {
           const open = openId === concept.id;
-          const prerequisites = concept.prerequisiteIds
-            .map((id) => primer.concepts.find((item) => item.id === id)?.term)
-            .filter(Boolean);
+          const prerequisites = prerequisiteTerms(primer, concept);
           return (
             <li key={concept.id} className={open ? "primer-item is-open" : "primer-item"}>
               <button type="button" onClick={() => setOpenId(open ? null : concept.id)} aria-expanded={open}>
@@ -36,20 +35,7 @@ export function PrimerView({ primer, renderAction }: { primer: Primer; renderAct
               </button>
               {open ? (
                 <div className="primer-body">
-                  <p className="primer-intuition">{concept.intuition}</p>
-                  {concept.formal ? (
-                    <div className="primer-formal">
-                      <MathText latex={concept.formal} display />
-                    </div>
-                  ) : null}
-                  <p className="primer-why">
-                    <strong>{t.whyItMatters}</strong> {concept.whyItMatters}
-                  </p>
-                  {prerequisites.length ? (
-                    <p className="primer-prereq">
-                      {t.readFirst} {prerequisites.join(", ")}
-                    </p>
-                  ) : null}
+                  <ConceptBody concept={concept} prerequisites={prerequisites} />
                   {renderAction?.(concept.id)}
                 </div>
               ) : null}
@@ -61,29 +47,29 @@ export function PrimerView({ primer, renderAction }: { primer: Primer; renderAct
   );
 }
 
-/**
- * Ön koşulları önce gelecek şekilde topolojik sıralama. Doğrulayıcı döngüyü
- * zaten reddediyor; yine de burada ziyaret seti tutulur, böylece bozuk bir
- * veri sonsuz döngüye değil orijinal sıraya düşer.
- */
-function orderByPrerequisites(concepts: Primer["concepts"]): Primer["concepts"] {
-  const byId = new Map(concepts.map((concept) => [concept.id, concept]));
-  const result: Primer["concepts"] = [];
-  const placed = new Set<string>();
-  const visiting = new Set<string>();
+export function prerequisiteTerms(primer: Primer, concept: Primer["concepts"][number]) {
+  return concept.prerequisiteIds.flatMap((id) => primer.concepts.find((item) => item.id === id)?.term ?? []);
+}
 
-  const visit = (concept: Primer["concepts"][number]) => {
-    if (placed.has(concept.id) || visiting.has(concept.id)) return;
-    visiting.add(concept.id);
-    for (const id of concept.prerequisiteIds) {
-      const prerequisite = byId.get(id);
-      if (prerequisite) visit(prerequisite);
-    }
-    visiting.delete(concept.id);
-    placed.add(concept.id);
-    result.push(concept);
-  };
-
-  concepts.forEach(visit);
-  return result.length === concepts.length ? result : concepts;
+/** Bir kavramın içeriği; ön bilgi listesi ve çalışma modu aynı biçimi kullanıyor. */
+export function ConceptBody({ concept, prerequisites }: { concept: Primer["concepts"][number]; prerequisites: readonly string[] }) {
+  const t = useStrings();
+  return (
+    <>
+      <p className="primer-intuition">{concept.intuition}</p>
+      {concept.formal ? (
+        <div className="primer-formal">
+          <MathText latex={concept.formal} display />
+        </div>
+      ) : null}
+      <p className="primer-why">
+        <strong>{t.whyItMatters}</strong> {concept.whyItMatters}
+      </p>
+      {prerequisites.length ? (
+        <p className="primer-prereq">
+          {t.readFirst} {prerequisites.join(", ")}
+        </p>
+      ) : null}
+    </>
+  );
 }

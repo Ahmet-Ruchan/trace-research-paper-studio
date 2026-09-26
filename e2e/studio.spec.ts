@@ -7,6 +7,7 @@ import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
 import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 import { readingDrillFor } from "../src/lib/reading-drill";
 import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
+import { studyPath } from "../src/lib/study-path";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -1422,5 +1423,103 @@ test.describe("learning layer", () => {
     const card = page.locator(".task-assignment-card", { hasText: "Teaching and learning material" });
     await expect(card).toBeVisible();
     await expect(card.getByRole("combobox").first().locator("option", { hasText: "Local model" })).not.toHaveAttribute("disabled");
+  });
+});
+
+test.describe("study mode", () => {
+  test("walks the paper step by step, remembers where the reader stopped, and says what to read again", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-study"));
+    const path = studyPath(project, readingDrillFor(project));
+    const firstSection = path.steps.find((step) => step.kind === "section")!;
+    if (firstSection.kind !== "section") throw new Error("no section step");
+    const question = path.questions.get(firstSection.checkId!)!;
+    const wrong = question.options.find((option) => !option.correct)!;
+
+    await page.goto(`/?project=${project.id}`);
+    const offer = page.locator(".study-offer");
+    await expect(offer).toContainText(`A guided path in ${path.steps.length} steps`);
+    await offer.getByRole("button", { name: "Start studying" }).click();
+
+    const study = page.locator("section.study");
+    await expect(study.locator(".study-title")).toHaveText("What this paper asks");
+    await expect(study).toContainText(project.evidence.researchQuestion);
+    await study.getByRole("button", { name: "Begin →" }).click();
+    await expect(study.locator(".study-title")).toHaveText(path.steps[1].kind === "concept" ? path.steps[1].title : "");
+
+    // Doğrudan ilk bölüme; bölüm bir soruyla bitiyor.
+    await study.locator(".study-outline summary").click();
+    await study.locator(".study-outline button", { hasText: firstSection.title }).click();
+    await expect(study.locator(".study-title")).toHaveText(firstSection.title);
+    const check = study.locator(".study-check");
+    await expect(check).toContainText("Check yourself");
+    await expect(study.getByRole("button", { name: "Skip the question →" })).toBeVisible();
+    await check.getByText(wrong.label, { exact: true }).click();
+    await check.getByRole("button", { name: "Check answer" }).click();
+    await expect(check.locator(".quiz-verdict")).toContainText("Not quite");
+    await check.getByRole("button", { name: "Show the answer" }).click();
+    await expect(check.locator(".quiz-verdict")).toContainText("The answer");
+    await study.getByRole("button", { name: "Next →" }).click();
+    const secondStep = path.steps[path.steps.indexOf(firstSection) + 1];
+    await expect(study.locator(".study-title")).toHaveText(secondStep.kind === "section" ? secondStep.title : "");
+
+    // İlerleme kütüphanede; proje dosyasında değil.
+    await expect.poll(async () => {
+      const response = await request.get(`/api/library/study?id=${project.id}`);
+      const { progress } = (await response.json()) as { progress: { current?: string; answers: Array<{ id: string; revealed: boolean }> } | null };
+      return progress && { current: progress.current, answers: progress.answers.map((answer) => [answer.id, answer.revealed]) };
+    }).toEqual({ current: secondStep.id, answers: [[question.id, true]] });
+    const stored = await (await request.get("/api/library")).json() as { projects: Array<Record<string, unknown>> };
+    expect(JSON.stringify(stored.projects.find((item) => item.id === project.id))).not.toContain("studyProgress");
+
+    // Yeniden açınca kaldığı yerden; önceki yanıt hatırlanıyor.
+    await page.reload();
+    await expect(page.locator(".study-offer")).toContainText(`2 of ${path.steps.length - 1} steps done`);
+    await page.locator(".study-offer").getByRole("button", { name: "Continue studying" }).click();
+    await expect(study.locator(".study-title")).toHaveText(secondStep.kind === "section" ? secondStep.title : "");
+    await study.getByRole("button", { name: "← Back" }).click();
+    await expect(study.locator(".study-saved")).toHaveText("Last time: you asked for the answer.");
+
+    // Sonuç: kaçan sorunun bölümü "yeniden bak" listesinde.
+    await study.locator(".study-outline summary").click();
+    await study.locator(".study-outline button", { hasText: "How it went" }).click();
+    const revisit = study.locator(".study-revisit");
+    await expect(revisit).toContainText("Worth another look");
+    await expect(revisit.locator("button", { hasText: firstSection.title })).toBeVisible();
+    await expect(study.locator(".study-result").nth(1)).toHaveText(`0 of 1 question right on the first try; ${path.questions.size - 1} not answered yet.`);
+    await revisit.locator("button", { hasText: firstSection.title }).click();
+    await expect(study.locator(".study-title")).toHaveText(firstSection.title);
+
+    // Baştan başlamak kaydı siliyor.
+    await study.locator(".study-outline summary").click();
+    await study.locator(".study-outline button", { hasText: "How it went" }).click();
+    await study.getByRole("button", { name: "Start over" }).click();
+    await study.getByRole("button", { name: "Clear", exact: true }).click();
+    await expect(study.locator(".study-title")).toHaveText("What this paper asks");
+    await expect.poll(async () => ((await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress: unknown }).progress).toBeNull();
+  });
+
+  test("works in a published page too, keeping progress in the reader's browser", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-study-published"));
+    const created = await request.post("/api/publications", {
+      data: {
+        projectId: project.id,
+        settings: { include: { deepReport: true, technicalAppendix: true, learning: true, figures: false }, expiresAt: null },
+      },
+    });
+    const { publication } = (await created.json()) as { publication: { path: string } };
+    const path = studyPath(project, readingDrillFor(project));
+
+    await page.goto(publication.path);
+    await page.locator(".viewer-tabs button", { hasText: "Study" }).click();
+    const study = page.locator("section.study");
+    await expect(study).toContainText("Your progress stays in this browser.");
+    await study.getByRole("button", { name: "Begin →" }).click();
+    await study.getByRole("button", { name: "Next →" }).click();
+    await expect(study.locator(".study-meta")).toContainText(`Step 3 of ${path.steps.length}`);
+
+    await page.reload();
+    await page.locator(".viewer-tabs button", { hasText: "Study" }).click();
+    await expect(page.locator("section.study .study-meta")).toContainText(`Step 3 of ${path.steps.length}`);
+    await expect(page.locator("section.study .study-bar")).toHaveAttribute("aria-valuenow", "2");
   });
 });

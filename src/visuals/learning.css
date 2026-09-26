@@ -331,3 +331,63 @@
 .term-chips > span { color: var(--muted); }
 .term-chip { padding: 3px 9px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-xs); }
 .term-chip:hover, .term-chip[aria-expanded="true"] { border-color: var(--accent); }
+
+/* --- Rehberli çalışma ------------------------------------------------ */
+.study { max-width: 860px; scroll-margin-top: 84px; }
+.study-head { position: relative; margin-bottom: 26px; }
+.study-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .12em; }
+.study-phase { color: var(--accent-ink); font-weight: 650; }
+.study-bar { height: 6px; margin: 10px 0 12px; overflow: hidden; border-radius: 6px; background: var(--surface-2); }
+.study-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .3s ease; }
+.study-outline > summary { width: fit-content; color: var(--ink-soft); font-size: var(--text-sm); cursor: pointer; }
+.study-outline ol { margin: 10px 0 0; padding: 8px; list-style: none; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); max-height: 360px; overflow-y: auto; }
+.study-outline button { width: 100%; display: grid; grid-template-columns: 30px 118px minmax(0, 1fr); align-items: baseline; gap: 8px; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink); text-align: left; cursor: pointer; font-size: var(--text-sm); }
+.study-outline button:hover { background: var(--surface-2); }
+.study-outline button[aria-current="step"] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.study-outline button > span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.study-outline button.is-done > span { color: var(--green); }
+.study-outline b { color: var(--muted); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+.study-outline em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.study-title { margin: 6px 0 14px; font: 1.875rem/1.2 Georgia, serif; }
+.study-subhead { margin: 28px 0 10px; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.study-question { margin: 0; font: 1.3125rem/1.55 Georgia, serif; }
+.study-thesis { margin: 22px 0 0; padding: 16px 18px; border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; background: var(--surface-2); }
+.study-thesis span { color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .12em; }
+.study-thesis p { margin: 6px 0 0; font-size: var(--text-md); line-height: 1.65; }
+.study-ahead { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.study-ahead li { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: var(--text-md); }
+.study-ahead b { color: var(--accent-ink); font-size: var(--text-xs); font-weight: 650; text-transform: uppercase; letter-spacing: .1em; padding-top: 3px; }
+.study-kicker { color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .12em; }
+.study .primer-body { padding: 0; }
+.study-prose p { margin: 0 0 16px; font: var(--text-lg)/1.75 Georgia, serif; }
+.study-visual { margin: 22px 0; }
+.study-check { margin-top: 30px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.study-check .quiz-list { margin-bottom: 0; }
+.study-saved { margin: 10px 0 0; color: var(--ink-soft); font-size: var(--text-md); }
+.study-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--line); }
+.study-next { padding: 11px 20px; border: 0; border-radius: 22px; background: var(--ink); color: var(--on-ink); font-size: var(--text-base); cursor: pointer; }
+.study-next:hover { opacity: .88; }
+.study-back { padding: 10px 16px; border: 1px solid var(--line); border-radius: 22px; background: transparent; color: var(--ink-soft); font-size: var(--text-sm); cursor: pointer; }
+.study-back:disabled { opacity: .4; cursor: default; }
+.study-reset { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--ink-soft); font-size: var(--text-sm); }
+.study-reset button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.study-reset .study-danger { border-color: var(--danger-edge); background: var(--danger-bg-soft); color: var(--danger); }
+.study-note { margin: 14px 0 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
+.study-result { margin: 0 0 8px; font-size: var(--text-md); line-height: 1.6; }
+.study-revisit > p { margin: 0 0 10px; color: var(--ink-soft); font-size: var(--text-sm); }
+.study-clear { margin: 16px 0 0; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--green) 10%, var(--surface)); font-size: var(--text-md); }
+.study-jumps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.study-jumps button { width: 100%; display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; font-size: var(--text-md); }
+.study-jumps button:hover { border-color: var(--accent); }
+.study-more { margin: 8px 0 0; color: var(--muted); font-size: var(--text-sm); }
+.study-jumps b { color: var(--muted); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+@media (max-width: 760px) {
+  .study-title { font-size: 1.5rem; }
+  .study-ahead li, .study-jumps button { grid-template-columns: 1fr; gap: 3px; }
+  .study-outline button { grid-template-columns: 26px minmax(0, 1fr); }
+  .study-outline b { display: none; }
+  .study-check { padding: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .study-bar i { transition: none; }
+}

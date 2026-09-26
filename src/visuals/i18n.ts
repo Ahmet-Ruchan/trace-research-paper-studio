@@ -73,6 +73,44 @@ export type Strings = {
   guidePaperValue: string;
   guideRange: string;
   guideHowToChoose: string;
+  // Rehberli çalışma
+  studyHeading: string;
+  studyPhases: Record<"prepare" | "read" | "work" | "check" | "apply" | "review", string>;
+  studyStepOf: (step: number, total: number) => string;
+  studyDoneOf: (done: number, total: number) => string;
+  studyProgress: string;
+  studyAllSteps: string;
+  studyStartTitle: string;
+  studyAhead: string;
+  studyAheadConcepts: (count: number) => string;
+  studyAheadSections: (count: number, checks: number) => string;
+  studyAheadWork: (count: number) => string;
+  studyAheadQuiz: (count: number) => string;
+  studyAheadGuide: string;
+  studyCheckTitle: string;
+  studyCheckIntro: string;
+  studyFinalTitle: string;
+  studyFinalIntro: string;
+  studyYourAnswer: (answer: { correct: boolean; attempts: number; revealed: boolean }) => string;
+  studyAnswerAgain: string;
+  studyBack: string;
+  studyNext: string;
+  studyBegin: string;
+  studySkipCheck: string;
+  studyToResults: string;
+  studyFinishTitle: string;
+  studyFinishSteps: (done: number, total: number) => string;
+  studyFinishChecks: (firstTry: number, answered: number, total: number) => string;
+  studyRevisit: string;
+  studyRevisitHint: string;
+  studyAllClear: string;
+  studySkipped: string;
+  studyMoreSteps: (count: number) => string;
+  studyStartOver: string;
+  studyStartOverConfirm: string;
+  studyClear: string;
+  studyKeep: string;
+  studyBrowserNote: string;
   // Kabuk
   navPrimer: string;
   navPractice: string;
@@ -80,6 +118,7 @@ export type Strings = {
   tabStory: string;
   tabPractice: string;
   tabTechnical: string;
+  tabStudy: string;
   practiceHeading: string;
   derivationsHeading: string;
   interactivesHeading: string;
@@ -223,11 +262,54 @@ const en: Strings = {
   guideRange: "Range",
   guideHowToChoose: "How to choose",
   navPrimer: "Primer",
+  studyHeading: "Study this paper",
+  studyPhases: { prepare: "Prepare", read: "Read", work: "Work it through", check: "Check", apply: "Apply", review: "Review" },
+  studyStepOf: (step, total) => `Step ${step} of ${total}`,
+  studyDoneOf: (done, total) => `${done} of ${total} done`,
+  studyProgress: "Study progress",
+  studyAllSteps: "All steps",
+  studyStartTitle: "What this paper asks",
+  studyAhead: "The path ahead",
+  studyAheadConcepts: (count) => `${count} ${count === 1 ? "concept" : "concepts"} the paper assumes you know`,
+  studyAheadSections: (count, checks) =>
+    `${count} ${count === 1 ? "section" : "sections"} of the story${checks ? `, ${checks === count ? "each" : `${checks} of them`} ending in one question` : ""}`,
+  studyAheadWork: (count) => `${count} ${count === 1 ? "derivation or exploration" : "derivations and explorations"} to work through`,
+  studyAheadQuiz: (count) => `a final check of ${count} ${count === 1 ? "question" : "questions"}`,
+  studyAheadGuide: "how to apply it in practice",
+  studyCheckTitle: "Check yourself",
+  studyCheckIntro: "One question on what you just read. Answer from memory before you look back.",
+  studyFinalTitle: "Final check",
+  studyFinalIntro: "The questions no section has asked yet.",
+  studyYourAnswer: (answer) =>
+    answer.correct
+      ? answer.attempts === 1 ? "Last time: right on the first try." : `Last time: right after ${answer.attempts} tries.`
+      : "Last time: you asked for the answer.",
+  studyAnswerAgain: "Answer again",
+  studyBack: "Back",
+  studyNext: "Next",
+  studyBegin: "Begin",
+  studySkipCheck: "Skip the question",
+  studyToResults: "See how it went",
+  studyFinishTitle: "How it went",
+  studyFinishSteps: (done, total) => `You worked through ${done} of ${total} steps.`,
+  studyFinishChecks: (firstTry, answered, total) =>
+    `${firstTry} of ${answered} ${answered === 1 ? "question" : "questions"} right on the first try${answered < total ? `; ${total - answered} not answered yet` : ""}.`,
+  studyRevisit: "Worth another look",
+  studyRevisitHint: "Where a question took more than one try, these are the steps it rests on.",
+  studyAllClear: "Every question you answered was right on the first try.",
+  studySkipped: "Not done yet",
+  studyMoreSteps: (count) => `and ${count} more ${count === 1 ? "step" : "steps"}, in the list of all steps above.`,
+  studyStartOver: "Start over",
+  studyStartOverConfirm: "Clear your progress and answers?",
+  studyClear: "Clear",
+  studyKeep: "Keep",
+  studyBrowserNote: "Your progress stays in this browser. It is not sent anywhere, and it is not part of the paper.",
   navPractice: "Learn & Try",
   tabLab: "Lab",
   tabStory: "Story",
   tabPractice: "Learn & Try",
   tabTechnical: "Technical",
+  tabStudy: "Study",
   practiceHeading: "Learn & Try",
   derivationsHeading: "Step-by-step derivations",
   interactivesHeading: "Interactive exploration",

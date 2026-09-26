@@ -16,6 +16,7 @@ export { MathText, sanitizeMathML } from "./math";
 export { PrimerView } from "./teaching/primer";
 export { DerivationView } from "./teaching/derivations";
 export { QuizView } from "./teaching/quiz";
+export { StudyView } from "./teaching/study";
 export { ApplicationGuideView } from "./teaching/application-guide";
 export { FiguresView, figuresBySection } from "./teaching/figures";
 export { EvidenceHealthView } from "./teaching/evidence-health";

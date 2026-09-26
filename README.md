@@ -41,6 +41,10 @@ running on the coding agent you already use, with no second API key.
 | | |
 | --- | --- |
 | **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
+| **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
+| **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
+| **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
+| **[Explain it differently](#rewrite-one-section-without-touching-the-evidence)** | One click asks for a section simpler, with an analogy, with a worked example or more technical, with the evidence still locked. |
 | **[Search what your papers claim](#search-what-your-papers-claim)** | The library search looks through every claim of every paper, with its quote, page and trust marks. Click a result and the project opens on that claim. |
 | **[Group papers with tags](#group-papers-with-tags)** | A tag is a collection: filter by it, search only its claims, or compare and map it in one click. |
 | **[See how each model's quotes held up](#see-how-each-models-quotes-held-up)** | **Model record** adds up, per model, how many of its quotes were found on their page, with an honest range for small samples. Your agent has it too (`record`). |
@@ -174,6 +178,24 @@ every project has them, even one without a learning layer, and every answer can 
 page.
 
 ![Evidence-linked quiz](docs/images/quiz.jpg)
+
+### Study it step by step
+
+**Study** turns the paper into a path you walk in order: the question it asks and its thesis, the
+concepts it assumes (each one after the concepts it builds on), every section of the story followed
+by one question on the same claims, the derivations and playgrounds, a final check with the questions
+no section has asked yet, and the application guide. The question after a section comes from the
+quiz; where the quiz has none on those claims, it comes from **Read it like a reviewer**, so a
+project without a learning layer gets a path too.
+
+At the end, **How it went** lists what to read again: for every question that took more than one
+try, the section it belongs to and the primer concepts resting on the same claims, one click away.
+Trace remembers where you stopped. In the studio the progress is kept in your library, next to the
+paper, and never in the project file, so exports and published pages do not carry your answers. The
+published site and the exported page have **Study** too, and keep progress in the reader's own
+browser.
+
+![Study mode](docs/images/study.jpg)
 
 ### Read it as a narrative, with the source one click away
 
@@ -904,7 +926,9 @@ the server.
 ## Status
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
-learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), the
+learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), a guided
+study path with saved progress, a reading drill made from the evidence, terms defined where they are
+used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
 review queue, questions answered from the collected evidence only, exports (Markdown and printable
@@ -961,6 +985,7 @@ the two from mixing.
 - [x] Exports: reports, slides, runnable notebook, citations
 - [x] Claim search across the library, tags, and a per-model quote record
 - [x] Dark theme, adjustable text size, contrast-checked colours
+- [x] Learning in the studio: a teaching model, traced numbers, a quiz that teaches, terms in place, a guided study path
 - [ ] Team review with accounts and shared annotations
 
 ---

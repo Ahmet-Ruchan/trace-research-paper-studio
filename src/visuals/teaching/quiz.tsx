@@ -29,12 +29,15 @@ export function QuizView({
   claims,
   sections = [],
   renderAction,
+  onResult,
 }: {
   quiz: Quiz;
   claims: Claim[];
   /** Verilirse her soru, aynı iddialara dayanan hikâye bölümüne bağlanıyor. */
   sections?: readonly QuizSection[];
   renderAction?: (questionId: string) => ReactNode;
+  /** Soru çözülünce ya da yanıtı açılınca; çalışma modu sonucu kaydediyor. */
+  onResult?: (question: Question, result: { correct: boolean; attempts: number; revealed: boolean }) => void;
 }) {
   const t = useStrings();
   const [answers, setAnswers] = useState<Record<string, number[]>>({});
@@ -47,11 +50,10 @@ export function QuizView({
 
   function check(question: Question) {
     const right = isCorrect(question, answers[question.id] ?? []);
-    setProgress((previous) => {
-      const current = previous[question.id] ?? { attempts: 0, solved: false, revealed: false };
-      return { ...previous, [question.id]: { ...current, attempts: current.attempts + 1, solved: right } };
-    });
-    if (!right) setPending((previous) => ({ ...previous, [question.id]: true }));
+    const current = progress[question.id] ?? { attempts: 0, solved: false, revealed: false };
+    setProgress((previous) => ({ ...previous, [question.id]: { ...current, attempts: current.attempts + 1, solved: right } }));
+    if (right) onResult?.(question, { correct: true, attempts: current.attempts + 1, revealed: false });
+    else setPending((previous) => ({ ...previous, [question.id]: true }));
   }
 
   return (
@@ -135,7 +137,10 @@ export function QuizView({
                     <button
                       type="button"
                       className="quiz-reveal"
-                      onClick={() => setProgress((previous) => ({ ...previous, [question.id]: { ...state, revealed: true } }))}
+                      onClick={() => {
+                        setProgress((previous) => ({ ...previous, [question.id]: { ...state, revealed: true } }));
+                        onResult?.(question, { correct: false, attempts: state.attempts, revealed: true });
+                      }}
                     >
                       {t.showAnswer}
                     </button>

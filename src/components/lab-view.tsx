@@ -15,6 +15,7 @@ import {
   MessageCircleQuestion,
   Quote,
   RefreshCw,
+  Route,
   ShieldCheck,
   Sigma,
   SlidersHorizontal,
@@ -38,6 +39,7 @@ import {
   MathText,
   PrimerView,
   QuizView,
+  StudyView,
   TermParagraphs,
 } from "@/visuals";
 import { EvidenceDrawer } from "./evidence-drawer";
@@ -49,6 +51,8 @@ import { LearningGenerator } from "./learning-generator";
 import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
 import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
+import { studyPath, studySummary } from "@/lib/study-path";
+import { useStudyProgress } from "./study-progress";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -182,6 +186,12 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   // Kanıttan üretilen okuma alıştırması öğrenme katmanı olmayan projede de var.
   const drill = useMemo(() => readingDrillFor(project), [project]);
   const terms = useMemo(() => termIndex(project), [project]);
+  const study = useStudyProgress(project.id);
+  const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
+  const studyStatus = useMemo(() => {
+    const path = studyPath(project, drill);
+    return { steps: path.steps.length, summary: studySummary(project, path, studyProgress) };
+  }, [project, drill, studyProgress]);
   const hasPractice = Boolean(
     project.derivations?.length ||
       project.interactives?.length ||
@@ -192,6 +202,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
   const nav = [
     { id: "overview", label: "Overview", icon: Lightbulb },
+    { id: "study", label: t.tabStudy, icon: Route },
     ...(project.primer ? [{ id: "primer", label: t.navPrimer, icon: GraduationCap }] : []),
     ...(hasPractice ? [{ id: "practice", label: t.navPractice, icon: SlidersHorizontal }] : []),
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
@@ -262,6 +273,22 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 <button onClick={() => setLearningOpen(true)}><Sparkles size={14} /> Add the learning layer</button>
               </section>
             )}
+            <section className="study-offer" aria-label={t.studyHeading}>
+              <Route size={20} aria-hidden="true" />
+              <div>
+                <strong>{t.studyHeading}</strong>
+                <p>
+                  {studyProgress
+                    ? studyProgress.finishedAt
+                      ? `You reached the end: ${studyStatus.summary.checks.firstTry} of ${studyStatus.summary.checks.answered} questions right on the first try. The results show what to read again.`
+                      : `${studyStatus.summary.done} of ${studyStatus.summary.total} steps done. You continue where you left off.`
+                    : `A guided path in ${studyStatus.steps} steps: what the paper assumes, each section with one question after it, then what to read again.`}
+                </p>
+              </div>
+              <button onClick={() => setSection("study")} disabled={study.state.status === "loading"}>
+                {studyProgress ? (studyProgress.finishedAt ? "See your results" : "Continue studying") : "Start studying"} <ArrowRight size={14} />
+              </button>
+            </section>
             <section className="thesis-card">
               <span>Core thesis</span>
               <blockquote>{project.evidence.thesis}</blockquote>
@@ -302,6 +329,25 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 <FiguresView figures={project.figures} />
               </section>
             ) : null}
+          </div>
+        )}
+
+        {section === "study" && (
+          <div className="lab-content-stack">
+            {study.state.status === "loading" ? <p className="section-intro" role="status">Loading your study progress…</p> : null}
+            {study.state.status === "failed" ? (
+              <p className="regen-error" role="alert">{study.state.message} Nothing was changed; reload the page to try again.</p>
+            ) : null}
+            {study.state.status === "ready" ? (
+              <StudyView
+                project={project}
+                drill={drill}
+                initialProgress={study.state.progress}
+                onSave={study.save}
+                note="Your progress is saved in your library, next to this paper. It is not part of the project file, so exports and published pages never carry your answers."
+              />
+            ) : null}
+            {study.saveError ? <p className="regen-error" role="status">Progress not saved: {study.saveError}</p> : null}
           </div>
         )}
 
