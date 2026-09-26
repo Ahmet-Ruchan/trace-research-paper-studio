@@ -398,6 +398,12 @@ export function AppShell() {
     setWarnings([]);
   }
 
+  /** Kütüphanedeki iddia aramasından: proje laboratuvarda, o iddia seçili ve görünür açılır. */
+  function openClaim(nextProject: ResearchProject, claimId: string) {
+    openProject(nextProject);
+    setSelectedClaimId(claimId);
+  }
+
   async function removeProject(projectId: string) {
     await deleteLibraryProject(projectId);
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -458,6 +464,7 @@ export function AppShell() {
       <LibraryView
         projects={projects}
         onOpen={openProject}
+        onOpenClaim={openClaim}
         onDelete={removeProject}
         onHome={() => setScreen("home")}
         onNew={newProject}

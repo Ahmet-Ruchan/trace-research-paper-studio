@@ -25,6 +25,7 @@ import {
   type RevisionRecord,
   type RevisionSummary,
 } from "./project-revisions";
+import { isLibraryTagsFile, libraryTagsToJson, parseLibraryTags, tagListSchema } from "./library-tags";
 import { findBuiltInTemplate, templateIssues } from "./narrative-templates";
 import {
   projectContentFingerprint,
@@ -150,9 +151,14 @@ async function atomicWrite(path: string, contents: string) {
   }
 }
 
-async function acquireAccentLock(dataDirectory: string) {
-  const lockPath = join(dataDirectory, STATE_LOCK);
-  await mkdir(dataDirectory, { recursive: true, mode: 0o700 });
+/**
+ * Süreçler arası kilit: aynı dizinde `mkdir` yalnızca bir kez başarılı olur.
+ * Oku-değiştir-yaz yapan her durum dosyası (renk döngüsü, etiketler) bunu
+ * kullanıyor; iki stüdyo ya da stüdyo ile ajan aynı anda yazabiliyor.
+ */
+async function acquireDirectoryLock(directory: string, name: string, busyMessage: string) {
+  const lockPath = join(directory, name);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
 
   for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
     try {
@@ -172,14 +178,14 @@ async function acquireAccentLock(dataDirectory: string) {
       await new Promise((done) => setTimeout(done, 10 + Math.min(attempt, 40)));
     }
   }
-  throw new Error("The Trace accent cycle is busy. Please retry in a moment.");
+  throw new Error(busyMessage);
 }
 
 export async function allocatePaperAccent(paperIdentity: string): Promise<PaperAccent> {
   if (!paperIdentity.trim()) throw new Error("A paper identity is required for accent allocation.");
   const dataDirectory = traceDataDirectory();
   const statePath = join(dataDirectory, STATE_FILE);
-  const release = await acquireAccentLock(dataDirectory);
+  const release = await acquireDirectoryLock(dataDirectory, STATE_LOCK, "The Trace accent cycle is busy. Please retry in a moment.");
   try {
     let state = freshAccentState();
     try {
@@ -356,12 +362,73 @@ export async function deleteStoredProject(projectId: string) {
   for (const publication of await listPublications(projectId)) {
     await deletePublication(publication.id);
   }
+  // Etiket kaydı da gitmeli; kalırsa aynı kimlikle yeniden eklenen proje
+  // silinmeden önceki koleksiyonlarına geri dönerdi. Bu adım başarısız olursa
+  // silme yine tamamlanıyor: artakalan kayıt hiçbir listede görünmüyor.
+  await saveStoredProjectTags(projectId, []).catch(() => undefined);
   try {
     await unlink(path);
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Kütüphane etiketleri — ~/.trace/library/tags.json
+ *
+ * Neden projenin içinde değil: `library-tags.ts`. Dosya kütüphanenin yanında
+ * duruyor, çünkü etiketler proje kimliklerine bağlı ve `TRACE_LIBRARY_DIR`
+ * kütüphaneyi taşıdığında onlar da birlikte gitmeli. Kütüphane listesi
+ * yalnızca `*.trace.json` dosyalarını okuduğu için bu dosya orada görünmüyor.
+ * ------------------------------------------------------------------ */
+
+const TAGS_FILE = "tags.json";
+const TAGS_LOCK = "tags.lock";
+
+async function readTagsFile(): Promise<{ exists: boolean; raw: unknown }> {
+  try {
+    return { exists: true, raw: JSON.parse(await readFile(join(traceLibraryDirectory(), TAGS_FILE), "utf8")) as unknown };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { exists: false, raw: undefined };
+    if (error instanceof SyntaxError) return { exists: true, raw: undefined };
+    throw error;
+  }
+}
+
+export async function readLibraryTags() {
+  return parseLibraryTags((await readTagsFile()).raw);
+}
+
+/**
+ * Bir projenin etiketlerini yazar; boş liste kaydı kaldırır. Hiçbir şey
+ * değişmiyorsa dosyaya dokunulmuyor: etiketi olmayan bir projeyi silmek boş
+ * bir `tags.json` yaratmamalı.
+ *
+ * Tanınmayan (bozuk ya da elle bozulmuş) bir dosyanın üzerine yazılmıyor;
+ * dosya `tags.damaged-<zaman>.json` adıyla kenara alınıyor. İçindeki etiketler
+ * kullanıcının emeği ve kurtarılabilir kalmalı.
+ */
+export async function saveStoredProjectTags(projectId: string, tags: readonly string[]) {
+  const next = tagListSchema.parse(tags);
+  const directory = traceLibraryDirectory();
+  const release = await acquireDirectoryLock(directory, TAGS_LOCK, "The Trace tags are busy. Please retry in a moment.");
+  try {
+    const file = await readTagsFile();
+    const current = parseLibraryTags(file.raw);
+    const previous = current.get(projectId) ?? [];
+    if (previous.length === next.length && previous.every((tag, index) => tag === next[index])) return next;
+    if (file.exists && !isLibraryTagsFile(file.raw)) {
+      const stamp = new Date().toISOString().replace(/[-:.]/g, "");
+      await rename(join(directory, TAGS_FILE), join(directory, `tags.damaged-${stamp}.json`));
+    }
+    if (next.length) current.set(projectId, next);
+    else current.delete(projectId);
+    await atomicWrite(join(directory, TAGS_FILE), `${JSON.stringify(libraryTagsToJson(current), null, 2)}\n`);
+    return next;
+  } finally {
+    await release();
   }
 }
 

@@ -1,3 +1,4 @@
+import { parseLibraryTags } from "./library-tags";
 import type { RevisionReason, RevisionSummary } from "./project-revisions";
 import { researchProjectSchema, type ResearchProject } from "./schema";
 
@@ -102,6 +103,22 @@ export async function deleteLibraryProject(projectId: string) {
     method: "DELETE",
   });
   await removeLegacyProject(projectId).catch(() => undefined);
+}
+
+const TAGS_ENDPOINT = "/api/library/tags";
+
+export async function listLibraryTags() {
+  return parseLibraryTags(await libraryRequest<unknown>(TAGS_ENDPOINT));
+}
+
+/** Etiketlerin tamamını yazar; sunucunun temizlediği hâli döner. */
+export async function saveProjectTags(projectId: string, tags: readonly string[]) {
+  const body = await libraryRequest<{ tags: string[] }>(`${TAGS_ENDPOINT}?id=${encodeURIComponent(projectId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tags }),
+  });
+  return body.tags;
 }
 
 const REVISIONS_ENDPOINT = "/api/library/revisions";

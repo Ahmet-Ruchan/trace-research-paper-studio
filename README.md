@@ -263,6 +263,24 @@ side by side, and so is what each paper says it cannot do. A value that grows ov
 presented as progress: the dataset, the setup and which direction is better are things the papers
 say. Like the two-paper view, it is computed from the `.trace.json` files alone.
 
+### Search what your papers claim
+
+Switch the library search from **Papers** to **Claims** and it goes through every claim of every
+paper you have analysed, together with their quotes. Ask which of your papers says anything about
+layer normalization, and the answer is the claims themselves, each with its paper, page and quote.
+Each one also shows the same three trust marks as in the project: what the model said, whether the
+quote was found on its page, and what a reviewer decided. A rejected claim is still listed, last.
+Every word you type must appear in the claim or its quote. Nothing but the claims is searched, and
+no model is asked. Click a result and the project opens on that claim.
+
+### Group papers with tags
+
+Give a paper a tag from its library card and the tag becomes a collection. Pick it to see only those
+papers, search only their claims, or compare and map them in one click. Typing "nlp" joins an
+existing "NLP" tag instead of starting a second one. Tags belong to your library, not to the paper:
+they are kept in `~/.trace/library/tags.json`. So tagging a paper does not add a version to its
+history, does not change its `.trace.json`, and never goes out with a published link or an export.
+
 ### See what a paper builds on, and what built on it
 
 **Citations** in the studio opens the paper's citation graph: the most-cited works it references on
@@ -513,8 +531,8 @@ The plugin is one way in. The web app adds generation with your own provider key
 narrative, and a local library. Projects are stored as files under `~/.trace/library`, shared by
 Codex, Claude Code, Antigravity and every Trace Studio launch directory. Existing browser-only
 projects migrate there automatically; removing a Library item removes its stored file and its
-version history. Earlier versions live under `~/.trace/library/revisions`, saved templates under
-`~/.trace/templates`.
+version history and its tags. Earlier versions live under `~/.trace/library/revisions`, tags in
+`~/.trace/library/tags.json`, saved templates under `~/.trace/templates`.
 
 ```bash
 git clone https://github.com/Ahmet-Ruchan/trace-research-paper-studio.git

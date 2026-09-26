@@ -16,7 +16,7 @@ type EvidenceDrawerProps = {
   persistent?: boolean;
 };
 
-const kindLabels: Record<Claim["kind"], string> = {
+export const claimKindLabels: Record<Claim["kind"], string> = {
   "reported-result": "Reported result",
   "author-interpretation": "Author interpretation",
   method: "Method",
@@ -32,7 +32,7 @@ export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, pers
       <div className="drawer-header">
         <div>
           <span>Evidence</span>
-          <strong>{claim ? kindLabels[claim.kind] : t.pickAClaim}</strong>
+          <strong>{claim ? claimKindLabels[claim.kind] : t.pickAClaim}</strong>
         </div>
         {onClose && (
           <button className="icon-button" onClick={onClose} aria-label="Close evidence panel">
@@ -52,7 +52,7 @@ export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, pers
             <span className={claim.confidence === "verified" ? "verified" : "review"}>
               <Check size={13} /> {claim.confidence === "verified" ? "Verified" : "Needs review"}
             </span>
-            <small>{kindLabels[claim.kind]}</small>
+            <small>{claimKindLabels[claim.kind]}</small>
           </div>
           {review && (
             <p className={`claim-reviewed is-${review.status}`}>

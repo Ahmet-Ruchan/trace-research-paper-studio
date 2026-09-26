@@ -1,14 +1,20 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Plus, Search, Trash2 } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Plus, Quote, Search, Tag, Trash2, X } from "lucide-react";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
+import { buildClaimIndex, excerptAround, highlightSegments, searchClaims, type ClaimHit, type ClaimSearch } from "@/lib/library-search";
+import { MAX_TAG_LENGTH, addTag, hasTag, removeTag, tagCounts, tagKey } from "@/lib/library-tags";
+import { listLibraryTags, saveProjectTags } from "@/lib/project-library";
 import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
+import { claimKindLabels } from "./evidence-drawer";
 
 type LibraryViewProps = {
   projects: ResearchProject[];
   onOpen: (project: ResearchProject) => void;
+  /** Bir arama sonucundan projeye, doğrudan o iddianın üstüne. */
+  onOpenClaim: (project: ResearchProject, claimId: string) => void;
   onDelete: (projectId: string) => Promise<void>;
   onHome: () => void;
   onNew: () => void;
@@ -16,6 +22,10 @@ type LibraryViewProps = {
   /** İki proje yan yana karşılaştırılır; üç ve fazlası literatür haritasına gider. */
   onCompare: (projects: ResearchProject[]) => void;
 };
+
+type SearchScope = "papers" | "claims";
+
+const TAG_OPTIONS_ID = "library-tag-options";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" })
@@ -29,8 +39,13 @@ function generationLabel(project: ResearchProject) {
   return models.size > 1 ? `${models.size}-model team` : [...models][0]?.split(":").slice(1).join(":");
 }
 
-export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+function count(value: number, noun: string) {
+  return `${value} ${noun}${value === 1 ? "" : "s"}`;
+}
+
+export function LibraryView({ projects, onOpen, onOpenClaim, onDelete, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<SearchScope>("papers");
   /**
    * Karşılaştırma için seçim. İki proje yan yana iki sütuna sığıyor; üç ve
    * fazlası sütun değil zaman çizgisi olarak (literatür haritası) gösteriliyor.
@@ -50,15 +65,97 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
     .filter((project): project is ResearchProject => Boolean(project));
   const [importError, setImportError] = useState<string>();
   const importRef = useRef<HTMLInputElement>(null);
+
+  const [tags, setTags] = useState<Map<string, string[]>>(() => new Map());
+  const [activeTag, setActiveTag] = useState<string>();
+  const [editingTags, setEditingTags] = useState<string>();
+  const [tagDraft, setTagDraft] = useState("");
+  /** Doğrulama hatası kartın içinde: sayfanın tepesindeki şerit, aşağıdaki bir kartı düzenlerken görünmüyor. */
+  const [tagError, setTagError] = useState<string>();
+  /**
+   * Etiket kayıtları sıraya giriyor. Her istek listenin tamamını yazıyor;
+   * arka arkaya iki ekleme sunucuya ters sırada varırsa ilki ikincisini
+   * silerdi.
+   */
+  const tagSaves = useRef<Promise<unknown>>(Promise.resolve());
+
+  useEffect(() => {
+    let active = true;
+    listLibraryTags()
+      .then((loaded) => { if (active) setTags(loaded); })
+      .catch((error: unknown) => {
+        if (active) setImportError(error instanceof Error ? error.message : "Could not read the library tags.");
+      });
+    return () => { active = false; };
+  }, []);
+
+  const tagSummary = useMemo(() => tagCounts(projects.map((project) => project.id), tags), [projects, tags]);
+  const knownTags = useMemo(() => tagSummary.map((entry) => entry.tag), [tagSummary]);
+  // Son makaleden de kaldırılan bir etiket artık bir koleksiyon değil; süzgeç kendiliğinden kalkıyor.
+  const collection = activeTag ? knownTags.find((tag) => tagKey(tag) === tagKey(activeTag)) : undefined;
+  const inCollection = useMemo(
+    () => (collection ? projects.filter((project) => hasTag(tags.get(project.id), collection)) : projects),
+    [projects, tags, collection],
+  );
+
   const filtered = useMemo(() => {
     const needle = foldForSearch(query.trim());
-    if (!needle) return projects;
-    return projects.filter((project) =>
+    if (!needle) return inCollection;
+    return inCollection.filter((project) =>
       foldForSearch(
-        [project.evidence.paper.title, project.evidence.paper.authors.join(" "), project.evidence.paper.venue].join(" "),
+        [
+          project.evidence.paper.title,
+          project.evidence.paper.authors.join(" "),
+          project.evidence.paper.venue,
+          ...(tags.get(project.id) ?? []),
+        ].join(" "),
       ).includes(needle),
     );
-  }, [projects, query]);
+  }, [inCollection, query, tags]);
+
+  const claimIndex = useMemo(() => (scope === "claims" ? buildClaimIndex(inCollection) : []), [scope, inCollection]);
+  const claimSearch = useMemo(() => searchClaims(claimIndex, query), [claimIndex, query]);
+
+  function persistTags(projectId: string, next: string[]) {
+    setTags((current) => {
+      const updated = new Map(current);
+      if (next.length) updated.set(projectId, next);
+      else updated.delete(projectId);
+      return updated;
+    });
+    tagSaves.current = tagSaves.current
+      .then(() => saveProjectTags(projectId, next))
+      .catch(async (error: unknown) => {
+        setImportError(error instanceof Error ? error.message : "Could not save the tags.");
+        // Ekrandaki hâl kaydedilmemiş olabilir; sunucudakine dön.
+        const loaded = await listLibraryTags().catch(() => undefined);
+        if (loaded) setTags(loaded);
+      });
+  }
+
+  function submitTag(projectId: string) {
+    const current = tags.get(projectId) ?? [];
+    const result = addTag(current, tagDraft, knownTags);
+    if (!result.ok) {
+      setTagError(result.error);
+      return;
+    }
+    setTagError(undefined);
+    setTagDraft("");
+    if (result.tags.length !== current.length) persistTags(projectId, result.tags);
+  }
+
+  function startEditingTags(projectId: string) {
+    setEditingTags(projectId);
+    setTagDraft("");
+    setTagError(undefined);
+  }
+
+  const toolbarCount = scope === "papers"
+    ? `${filtered.length} results`
+    : claimSearch.terms.length
+      ? `${count(claimSearch.total, "claim")} in ${count(claimSearch.papers, "paper")}`
+      : count(claimIndex.length, "claim");
 
   return (
     <main className="library-page">
@@ -93,9 +190,47 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
       </section>
 
       <section className="library-toolbar">
-        <label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, author or venue" /></label>
-        <span>{filtered.length} results</span>
+        <div className="library-scope" role="group" aria-label="Search in">
+          <button aria-pressed={scope === "papers"} onClick={() => setScope("papers")}>Papers</button>
+          <button aria-pressed={scope === "claims"} onClick={() => setScope("claims")}>Claims</button>
+        </div>
+        <label>
+          <Search size={17} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label={scope === "papers" ? "Search papers" : "Search claims"}
+            placeholder={scope === "papers" ? "Search title, author, venue or tag" : "Search what your papers claim"}
+          />
+        </label>
+        <span>{toolbarCount}</span>
       </section>
+
+      {tagSummary.length > 0 && (
+        <nav className="library-tags" aria-label="Collections">
+          <button aria-pressed={!collection} onClick={() => setActiveTag(undefined)}>All papers <i>{projects.length}</i></button>
+          {tagSummary.map((entry) => (
+            <button
+              key={tagKey(entry.tag)}
+              aria-pressed={collection === entry.tag}
+              onClick={() => setActiveTag(collection === entry.tag ? undefined : entry.tag)}
+            >
+              <Tag size={11} /> {entry.tag} <i>{entry.count}</i>
+            </button>
+          ))}
+          {collection && inCollection.length >= 2 && inCollection.length <= MAX_MAP_PAPERS && (
+            <button className="library-open library-collection-action" onClick={() => onCompare(inCollection)}>
+              {inCollection.length > 2 ? `Map these ${inCollection.length} papers` : "Compare these two"} <ArrowRight size={14} />
+            </button>
+          )}
+          {collection && inCollection.length > MAX_MAP_PAPERS && (
+            <small>Select up to {MAX_MAP_PAPERS} of these to map them.</small>
+          )}
+        </nav>
+      )}
+      <datalist id={TAG_OPTIONS_ID}>
+        {knownTags.map((tag) => <option key={tagKey(tag)} value={tag} />)}
+      </datalist>
 
       {chosen.length > 0 && (
         <div className="compare-bar">
@@ -113,48 +248,85 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
         </div>
       )}
 
-      {filtered.length ? (
+      {projects.length > 0 && scope === "claims" ? (
+        <ClaimResults search={claimSearch} claimCount={claimIndex.length} paperCount={inCollection.length} collection={collection} onOpenClaim={onOpenClaim} />
+      ) : filtered.length ? (
         <section className="library-grid">
-          {filtered.map((project, index) => (
-            <article className={selected.includes(project.id) ? "library-card is-selected" : "library-card"} key={project.id} style={{ "--card-accent": project.story.accent } as React.CSSProperties}>
-              <label className="library-select" title="Select for comparison">
-                <input type="checkbox" checked={selected.includes(project.id)} onChange={() => toggleSelected(project.id)} />
-                <span aria-hidden="true" />
-              </label>
-              <button className="library-card-main" onClick={() => onOpen(project)}>
-                <div className="library-cover">
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <FileText size={25} />
-                  <i />
-                </div>
-                <div className="library-card-copy">
-                  <span>{project.evidence.paper.venue || "Research paper"} · {project.evidence.paper.year}</span>
-                  <h2>{project.evidence.paper.title}</h2>
-                  <p>{project.evidence.plainSummary}</p>
-                  <div className="library-card-meta">
-                    <span>{project.story.sections.length} story</span>
-                    <span>{project.evidence.claims.length} claim</span>
-                    {project.deepReport && <span>{project.deepReport.sections.length} report</span>}
-                    {project.technicalAppendix && <span>technical appendix</span>}
+          {filtered.map((project, index) => {
+            const projectTags = tags.get(project.id) ?? [];
+            const editing = editingTags === project.id;
+            return (
+              <article className={selected.includes(project.id) ? "library-card is-selected" : "library-card"} key={project.id} style={{ "--card-accent": project.story.accent } as React.CSSProperties}>
+                <label className="library-select" title="Select for comparison">
+                  <input type="checkbox" checked={selected.includes(project.id)} onChange={() => toggleSelected(project.id)} />
+                  <span aria-hidden="true" />
+                </label>
+                <button className="library-card-main" onClick={() => onOpen(project)}>
+                  <div className="library-cover">
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <FileText size={25} />
+                    <i />
                   </div>
+                  <div className="library-card-copy">
+                    <span>{project.evidence.paper.venue || "Research paper"} · {project.evidence.paper.year}</span>
+                    <h2>{project.evidence.paper.title}</h2>
+                    <p>{project.evidence.plainSummary}</p>
+                    <div className="library-card-meta">
+                      <span>{project.story.sections.length} story</span>
+                      <span>{project.evidence.claims.length} claim</span>
+                      {project.deepReport && <span>{project.deepReport.sections.length} report</span>}
+                      {project.technicalAppendix && <span>technical appendix</span>}
+                    </div>
+                  </div>
+                </button>
+                <div className={editing ? "library-card-tags is-editing" : "library-card-tags"}>
+                  {projectTags.map((tag) => editing ? (
+                    <span className="library-tag" key={tagKey(tag)}>
+                      {tag}
+                      <button aria-label={`Remove the tag ${tag}`} onClick={() => persistTags(project.id, removeTag(projectTags, tag))}><X size={11} /></button>
+                    </span>
+                  ) : (
+                    <button className="library-tag" key={tagKey(tag)} title="Show the papers with this tag" onClick={() => setActiveTag(tag)}>{tag}</button>
+                  ))}
+                  {editing ? (
+                    <form onSubmit={(event) => { event.preventDefault(); submitTag(project.id); }}>
+                      <input
+                        autoFocus
+                        list={TAG_OPTIONS_ID}
+                        value={tagDraft}
+                        maxLength={MAX_TAG_LENGTH}
+                        onChange={(event) => { setTagDraft(event.target.value); setTagError(undefined); }}
+                        onKeyDown={(event) => { if (event.key === "Escape") setEditingTags(undefined); }}
+                        placeholder="Add a tag"
+                        aria-label={`Add a tag to ${project.evidence.paper.title}`}
+                      />
+                      <button type="submit" disabled={!tagDraft.trim()}>Add</button>
+                      <button type="button" onClick={() => setEditingTags(undefined)}>Done</button>
+                      {tagError && <small className="library-tag-error" role="alert">{tagError}</small>}
+                    </form>
+                  ) : (
+                    <button className="library-tag-edit" onClick={() => startEditingTags(project.id)}>
+                      <Tag size={11} /> {projectTags.length ? "Edit tags" : "Add tags"}
+                    </button>
+                  )}
                 </div>
-              </button>
-              <footer>
-                <span>{formatDate(project.updatedAt)}{generationLabel(project) ? ` · ${generationLabel(project)}` : ""}</span>
-                <div>
-                  <button className="library-delete" title="Permanently delete from library" onClick={() => {
-                    if (window.confirm(`Permanently delete “${project.evidence.paper.title}” from the library?`)) {
-                      setImportError(undefined);
-                      void onDelete(project.id).catch((error) => {
-                        setImportError(error instanceof Error ? error.message : "Could not delete the Trace project.");
-                      });
-                    }
-                  }}><Trash2 size={15} /></button>
-                  <button className="library-open" onClick={() => onOpen(project)}>Open <ArrowRight size={15} /></button>
-                </div>
-              </footer>
-            </article>
-          ))}
+                <footer>
+                  <span>{formatDate(project.updatedAt)}{generationLabel(project) ? ` · ${generationLabel(project)}` : ""}</span>
+                  <div>
+                    <button className="library-delete" title="Permanently delete from library" onClick={() => {
+                      if (window.confirm(`Permanently delete “${project.evidence.paper.title}” from the library?`)) {
+                        setImportError(undefined);
+                        void onDelete(project.id).catch((error) => {
+                          setImportError(error instanceof Error ? error.message : "Could not delete the Trace project.");
+                        });
+                      }
+                    }}><Trash2 size={15} /></button>
+                    <button className="library-open" onClick={() => onOpen(project)}>Open <ArrowRight size={15} /></button>
+                  </div>
+                </footer>
+              </article>
+            );
+          })}
         </section>
       ) : (
         <section className="library-empty">
@@ -165,5 +337,89 @@ export function LibraryView({ projects, onOpen, onDelete, onHome, onNew, onImpor
         </section>
       )}
     </main>
+  );
+}
+
+function Highlighted({ text, terms }: { text: string; terms: readonly string[] }) {
+  return (
+    <>
+      {highlightSegments(text, terms).map((segment, index) =>
+        segment.match ? <mark key={index}>{segment.text}</mark> : <Fragment key={index}>{segment.text}</Fragment>,
+      )}
+    </>
+  );
+}
+
+type ClaimResultsProps = {
+  search: ClaimSearch;
+  claimCount: number;
+  paperCount: number;
+  collection?: string;
+  onOpenClaim: (project: ResearchProject, claimId: string) => void;
+};
+
+function ClaimResults({ search, claimCount, paperCount, collection, onOpenClaim }: ClaimResultsProps) {
+  if (!search.terms.length) {
+    return (
+      <section className="library-empty">
+        <Quote size={30} />
+        <h2>Search what your papers claim.</h2>
+        <p>
+          Type a word or two to search the {count(claimCount, "claim")} of {count(paperCount, "paper")}
+          {collection ? ` tagged “${collection}”` : ""}. Every match opens on its quote and page.
+        </p>
+      </section>
+    );
+  }
+  if (!search.hits.length) {
+    return (
+      <section className="library-empty">
+        <Quote size={30} />
+        <h2>No claim mentions every word you typed.</h2>
+        <p>The search reads the claims and their quotes, not the full text of the papers.</p>
+      </section>
+    );
+  }
+  return (
+    <section className="claim-results" aria-label="Matching claims">
+      {search.hits.map((hit) => (
+        <ClaimResult key={JSON.stringify([hit.project.id, hit.claim.id])} hit={hit} terms={search.terms} onOpen={onOpenClaim} />
+      ))}
+      {search.total > search.hits.length && (
+        <p className="claim-results-more">
+          Showing the first {search.hits.length} of {search.total} claims. Add a word to narrow the search.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ClaimResult({ hit, terms, onOpen }: { hit: ClaimHit; terms: readonly string[]; onOpen: ClaimResultsProps["onOpenClaim"] }) {
+  const { project, claim, reference, review } = hit;
+  const source = project.evidence.sources.find((item) => item.id === reference.sourceId);
+  const location = reference.page ? `p. ${reference.page}` : source?.type === "web" ? "web source" : undefined;
+  return (
+    <article className="claim-hit" style={{ "--card-accent": project.story.accent } as React.CSSProperties}>
+      <button onClick={() => onOpen(project, claim.id)} title="Open this claim in its project">
+        <span className="claim-hit-source">
+          <b>{project.evidence.paper.title}</b>
+          <small>{[project.evidence.paper.year, location].filter(Boolean).join(" · ")}</small>
+        </span>
+        <span className="claim-hit-statement"><Highlighted text={claim.statement} terms={terms} /></span>
+        <span className="claim-hit-quote">“<Highlighted text={excerptAround(reference.excerpt, terms)} terms={terms} />”</span>
+        <span className="claim-hit-marks">
+          <span>{claimKindLabels[claim.kind]}</span>
+          <span className={claim.confidence === "verified" ? "is-good" : "is-warn"}>
+            {claim.confidence === "verified" ? "Verified" : "Needs review"}
+          </span>
+          {hit.quoteMissing && <span className="is-warn">Quote not found on its page</span>}
+          {review && (
+            <span className={review.status === "approved" ? "is-good" : "is-bad"}>
+              {review.status === "approved" ? "Approved" : "Rejected"} by {review.by}
+            </span>
+          )}
+        </span>
+      </button>
+    </article>
   );
 }

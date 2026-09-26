@@ -595,3 +595,121 @@ test.describe("export menu", () => {
     await expect(page.getByRole("menu")).toHaveCount(0);
   });
 });
+
+test.describe("library search and tags", () => {
+  test("finds a claim across papers, keeps its trust marks, and opens it in its project", async ({ page, request }) => {
+    const first = projectNamed("e2e-search-a");
+    const found = first.evidence.claims[0];
+    found.statement = "Quokka routing doubles throughput on long inputs.";
+    await seed(request, first);
+    const second = projectNamed("e2e-search-b");
+    const doubted = second.evidence.claims[1];
+    doubted.statement = "Quokka routing fails without warmup.";
+    second.claimReviews = { [doubted.id]: { status: "rejected", by: "Ada", at: "2026-09-01T00:00:00.000Z" } };
+    await seed(request, second);
+
+    await page.goto("/?library=1");
+    await page.getByRole("group", { name: "Search in" }).getByRole("button", { name: "Claims" }).click();
+    await page.getByLabel("Search claims").fill("quokka ROUTING");
+
+    const hits = page.locator(".claim-hit");
+    await expect(hits).toHaveCount(2);
+    await expect(page.locator(".library-toolbar > span")).toHaveText("2 claims in 2 papers");
+    await expect(hits.first()).toContainText("doubles throughput");
+    await expect(hits.first().locator(".claim-hit-statement mark")).toHaveText(["Quokka", "routing"]);
+    // Reddedilen iddia gizlenmiyor, sona konuyor ve kimin reddettiği görünüyor.
+    await expect(hits.nth(1)).toContainText("Rejected by Ada");
+
+    await hits.first().getByRole("button").click();
+    await expect(page).toHaveURL(new RegExp(`project=e2e-search-a.*#claim-${found.id}$`));
+    await expect(page.locator(".claim-row.selected")).toContainText("Quokka routing doubles throughput");
+  });
+
+  test("gathers papers under a tag, filters by it and maps the collection", async ({ page, request }) => {
+    for (const year of ["2015", "2018", "2021"]) {
+      const project = projectNamed(`e2e-tag-${year}`);
+      project.evidence.paper = { ...project.evidence.paper, title: `Tagged paper ${year}`, year };
+      await seed(request, project);
+    }
+
+    await page.goto("/?library=1");
+    for (const [year, typed] of [["2015", "Zeta collection"], ["2018", "#zeta   COLLECTION"], ["2021", "zeta collection"]] as const) {
+      const card = page.locator(".library-card", { hasText: `Tagged paper ${year}` });
+      await card.getByRole("button", { name: "Add tags" }).click();
+      await card.getByPlaceholder("Add a tag").fill(typed);
+      await card.getByPlaceholder("Add a tag").press("Enter");
+      await card.getByRole("button", { name: "Done" }).click();
+      // Farklı yazımlar ayrı bir koleksiyon açmıyor, var olana katılıyor.
+      await expect(card.locator(".library-tag")).toHaveText(["Zeta collection"]);
+    }
+
+    const collections = page.getByRole("navigation", { name: "Collections" });
+    await collections.getByRole("button", { name: /Zeta collection/ }).click();
+    await expect(page.locator(".library-card")).toHaveCount(3);
+
+    // Etiket projenin değil kütüphanenin: proje dosyaları değişmiyor, etiketler yeniden yüklemede kalıyor.
+    const stored = (await (await request.get("/api/library/tags")).json()) as { projects: Array<{ id: string; tags: string[] }> };
+    expect(stored.projects.filter((entry) => entry.id.startsWith("e2e-tag-"))).toEqual(
+      ["2015", "2018", "2021"].map((year) => ({ id: `e2e-tag-${year}`, tags: ["Zeta collection"] })),
+    );
+    const library = (await (await request.get("/api/library")).json()) as { projects: Array<Record<string, unknown>> };
+    expect(library.projects.every((project) => !("tags" in project))).toBe(true);
+    // Açılış `?library=1` parametresini adresten siliyor; yeniden yüklemek ana sayfaya dönerdi.
+    await page.goto("/?library=1");
+    await expect(page.locator(".library-card", { hasText: "Tagged paper 2018" }).locator(".library-tag")).toHaveText(["Zeta collection"]);
+
+    await collections.getByRole("button", { name: /Zeta collection/ }).click();
+    await page.getByRole("button", { name: "Map these 3 papers" }).click();
+    await expect(page.getByRole("heading", { name: "3 papers, in the order they appeared." })).toBeVisible();
+    await expect(page.locator(".map-year")).toHaveText(["2015", "2018", "2021"]);
+  });
+
+  test("says next to the card why a thirteenth tag is refused", async ({ page, request }) => {
+    const project = projectNamed("e2e-full-tags");
+    project.evidence.paper = { ...project.evidence.paper, title: "Fully tagged paper" };
+    await seed(request, project);
+    const twelve = Array.from({ length: 12 }, (_, index) => `Shelf ${index + 1}`);
+    expect((await request.put(`/api/library/tags?id=${project.id}`, { data: { tags: twelve } })).ok()).toBe(true);
+
+    await page.goto("/?library=1");
+    const card = page.locator(".library-card", { hasText: "Fully tagged paper" });
+    await card.getByRole("button", { name: "Edit tags" }).click();
+    await card.getByPlaceholder("Add a tag").fill("Shelf 13");
+    await card.getByPlaceholder("Add a tag").press("Enter");
+    await expect(card.getByRole("alert")).toHaveText("A paper can carry at most 12 tags.");
+    await expect(card.locator(".library-tag")).toHaveCount(12);
+    // Yazmaya devam etmek uyarıyı kaldırıyor; kayıt hiç değişmedi.
+    await card.getByPlaceholder("Add a tag").fill("Shelf");
+    await expect(card.getByRole("alert")).toHaveCount(0);
+    const stored = (await (await request.get("/api/library/tags")).json()) as { projects: Array<{ id: string; tags: string[] }> };
+    expect(stored.projects.find((entry) => entry.id === project.id)?.tags).toEqual(twelve);
+  });
+
+  test("removes a tag, and a paper's tags go with it when it is deleted", async ({ page, request }) => {
+    for (const id of ["e2e-untag-a", "e2e-untag-b"]) {
+      const project = projectNamed(id);
+      project.evidence.paper = { ...project.evidence.paper, title: `Untag ${id.slice(-1)}` };
+      await seed(request, project);
+      expect((await request.put(`/api/library/tags?id=${id}`, { data: { tags: ["Omega shelf", "Keep"] } })).ok()).toBe(true);
+    }
+
+    await page.goto("/?library=1");
+    const card = page.locator(".library-card", { hasText: "Untag a" });
+    await card.getByRole("button", { name: "Edit tags" }).click();
+    await card.getByRole("button", { name: "Remove the tag Omega shelf" }).click();
+    await card.getByRole("button", { name: "Done" }).click();
+    await expect(card.locator(".library-tag")).toHaveText(["Keep"]);
+    await expect(page.getByRole("navigation", { name: "Collections" }).getByRole("button", { name: /Omega shelf/ })).toContainText("1");
+
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.locator(".library-card", { hasText: "Untag b" }).getByTitle("Permanently delete from library").click();
+    await expect(page.locator(".library-card", { hasText: "Untag b" })).toHaveCount(0);
+    // Silinen makale "Omega shelf" koleksiyonunun son üyesiydi; koleksiyon da kalkıyor.
+    await expect(page.getByRole("navigation", { name: "Collections" }).getByRole("button", { name: /Omega shelf/ })).toHaveCount(0);
+
+    await expect.poll(async () => {
+      const stored = (await (await request.get("/api/library/tags")).json()) as { projects: Array<{ id: string; tags: string[] }> };
+      return stored.projects.filter((entry) => entry.id.startsWith("e2e-untag-"));
+    }).toEqual([{ id: "e2e-untag-a", tags: ["Keep"] }]);
+  });
+});
