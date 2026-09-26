@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { untracedLearningNumbers } from "./learning-numbers";
 import { expectedSectionCounts } from "./section-budgets";
 import { reportTemplateIssues, storyTemplateIssues, templateIssues } from "./narrative-templates";
 export {
@@ -113,6 +114,9 @@ export function validateProjectObject(
     run(() => validateTechnicalAppendixIntegrity(project.technicalAppendix!, project.evidence));
   }
   run(() => validateLearningIntegrity(project, options));
+  // Sıkı denetim (teslimden önce) öğrenme katmanındaki sayıların kanıttan
+  // geldiğini de istiyor; stüdyonun ürettiği katman aynı kurala tabi.
+  if (options.requireDepthBlocks) issues.push(...untracedLearningNumbers(project));
 
   return issues.length ? { ok: false, issues } : { ok: true, project };
 }

@@ -27,7 +27,7 @@ describe("report exports", () => {
     expect(markdown.startsWith("# Attention Is All You Need\n")).toBe(true);
     for (const claim of value.evidence.claims) expect(markdown).toContain(`\\[${claim.id}\\]`);
     expect(markdown).toMatch(/> “.+” — p\\?\. \d+/);
-    expect(markdown).toContain("67 of 67 quotes were found");
+    expect(markdown).toContain("75 of 75 quotes were found");
     expect(markdown).toContain("| Measurement | Value | Context | Source |");
   });
 

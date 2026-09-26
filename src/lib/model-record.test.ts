@@ -53,7 +53,7 @@ describe("one project's quotes", () => {
     expect(record.status).toBe("counted");
     if (record.status !== "counted") return;
     expect(record.tallies).toEqual([
-      { key: "native-agent:claude-code/claude-opus-5[1m]", provider: "native-agent", model: "claude-code/claude-opus-5[1m]", checked: 67, found: 67, approved: 0, rejected: 0 },
+      { key: "native-agent:claude-code/claude-opus-5[1m]", provider: "native-agent", model: "claude-code/claude-opus-5[1m]", checked: 75, found: 75, approved: 0, rejected: 0 },
     ]);
   });
 
@@ -81,7 +81,7 @@ describe("one project's quotes", () => {
       } },
     });
     const record = projectQuoteRecord(project);
-    expect(record.status === "counted" && record.tallies.map((tally) => [tally.key, tally.checked])).toEqual([["gemini:gemini-3.7-flash", 67]]);
+    expect(record.status === "counted" && record.tallies.map((tally) => [tally.key, tally.checked])).toEqual([["gemini:gemini-3.7-flash", 75]]);
   });
 
   it("attributes a person's decisions to the model that wrote the claim", () => {
@@ -246,10 +246,10 @@ describe("the record the agent bridge prints", () => {
       provider: "native-agent",
       modelId: "claude-code/claude-opus-5[1m]",
       papers: 1,
-      quotesChecked: 67,
-      quotesFound: 67,
+      quotesChecked: 75,
+      quotesFound: 75,
       rate: 1,
-      likelyLow: 0.9458,
+      likelyLow: 0.9513,
       likelyHigh: 1,
       claimsApproved: 0,
       claimsRejected: 0,
@@ -268,8 +268,8 @@ describe("the record the agent bridge prints", () => {
     expect(summary.samePaper).toEqual([{
       title: example.evidence.paper.title,
       entries: [
-        { projectId: example.id, model: "Agent · claude-code/claude-opus-5[1m]", quotesChecked: 67, quotesFound: 67, rate: 1 },
-        { projectId: "other-model", model: "OpenAI · gpt-5.6-terra", quotesChecked: 67, quotesFound: 67, rate: 1 },
+        { projectId: example.id, model: "Agent · claude-code/claude-opus-5[1m]", quotesChecked: 75, quotesFound: 75, rate: 1 },
+        { projectId: "other-model", model: "OpenAI · gpt-5.6-terra", quotesChecked: 75, quotesFound: 75, rate: 1 },
       ],
     }]);
   });

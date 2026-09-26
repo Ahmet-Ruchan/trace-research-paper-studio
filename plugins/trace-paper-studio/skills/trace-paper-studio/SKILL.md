@@ -69,6 +69,7 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    - `interactives` must make a point the paper argues but never plots — a crossover, a saturation, a cost curve. Anchor every parameter at the paper's own value via `paperValue`, and use `paperAnchor` to state plainly what the paper did NOT verify.
    - `quiz` questions test understanding, not recall of wording. Every option needs an explanation, including the correct one.
    - `applicationGuide` must include `whenNotToUse` grounded in the paper's own limitation claims.
+   - Numbers a reader would take for the paper's own (a playground's `paperValue`, table cells, a hyperparameter's `paperValue`, the numbers a worked example starts from, simulation grid values) must appear in the evidence; `validate --strict` lists any that do not. Add the number to `evidence.metrics` with its quote, drop it, or, for values made up to show a mechanism, set `illustrative: true` on the simulation or the `numericExample`.
 7. Write the complete JSON to the `outputPath` from `job.json`. Set `story.accent` to `presentation.accent` from the same job exactly. Set `generation.provider` to `native-agent` and `generation.model` to the current host/model when known; otherwise use the host name.
 8. Check the quotes, then validate the output:
 

@@ -35,6 +35,7 @@ export function SimulationView({ simulation }: { simulation: Simulation }) {
           <span className="interactive-kind">{t.simulationKind}</span>
           <h4>{simulation.title}</h4>
           <p>{simulation.description}</p>
+          {simulation.illustrative ? <span className="illustrative-note">{t.illustrativeValues}</span> : null}
         </div>
       </header>
 

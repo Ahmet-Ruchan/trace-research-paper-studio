@@ -45,6 +45,7 @@ export function DerivationView({ derivation, action }: { derivation: Derivation;
       {allShown && derivation.numericExample ? (
         <div className="derivation-example">
           <h5>{t.numericExample}</h5>
+          {derivation.numericExample.illustrative ? <span className="illustrative-note">{t.illustrativeValues}</span> : null}
           <p className="example-setup">{derivation.numericExample.setup}</p>
           <ol className="example-walkthrough">
             {derivation.numericExample.walkthrough.map((line, index) => (

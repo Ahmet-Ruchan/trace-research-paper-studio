@@ -211,7 +211,9 @@ Five optional root blocks turn a summary into something the reader can learn fro
 
 `validate --strict` enforces this. Plain `validate` does not, so projects authored before this layer still pass.
 
-Everything here obeys the same evidence rule as the rest of the contract: **every block links to existing claim IDs, and no numeric value may be invented.** Slider ranges, table cells, and hyperparameter defaults must trace to `evidence.metrics` or to an explicit claim. When a teaching device needs illustrative numbers the paper never published (a worked attention matrix, for example), say so in that block's own `description`.
+Everything here obeys the same evidence rule as the rest of the contract: **every block links to existing claim IDs, and no numeric value may be invented.** `validate --strict` checks the numbers a reader would take for the paper's own: every playground `paperValue`, every number in a dataset explorer's number columns, every number in a hyperparameter's `paperValue`, the numbers a `numericExample.setup` starts from, and every simulation grid value must appear in the evidence (claims and their quotes, metrics, methods, findings, limitations or glossary). Put a number the teaching needs into `evidence.metrics`, with its quote, rather than only into the block. Slider `min`, `max` and `step` are exploration ranges and are not checked; 0 and 1 never are.
+
+When a teaching device needs numbers the paper never published (a worked attention matrix, for example), mark it: a simulation sets `"illustrative": true`, a numeric example sets `"illustrative": true` inside `numericExample`, and the description says so too. The reader sees an "Illustrative values, not from the paper" label on both.
 
 ## `primer`
 
@@ -246,7 +248,7 @@ Up to six. Each is `{ id, title, goal, steps, numericExample?, claimIds }` with 
 }
 ```
 
-`plain` is mandatory: it is the fallback when MathML cannot render and the screen-reader label. `rationale` carries the teaching value — a step that only restates its own formula is wasted. `numericExample` is `{ setup, walkthrough (1–6 lines), result }` and should end somewhere the reader can verify against the paper's own numbers.
+`plain` is mandatory: it is the fallback when MathML cannot render and the screen-reader label. `rationale` carries the teaching value — a step that only restates its own formula is wasted. `numericExample` is `{ setup, walkthrough (1–6 lines), result, illustrative? }` and should end somewhere the reader can verify against the paper's own numbers.
 
 ## `interactives`
 
@@ -283,7 +285,7 @@ Choose ranges that make a real point. The strongest playgrounds show a *crossove
 
 ### `mechanism-simulation`
 
-`{ kind, id, title, description, stageNodes (2–10), frames (2–12), claimIds }`.
+`{ kind, id, title, description, illustrative?, stageNodes (2–10), frames (2–12), claimIds }`.
 
 ```json
 { "label": "√d_k ile ölçekle", "caption": "What changes at this step and why.",

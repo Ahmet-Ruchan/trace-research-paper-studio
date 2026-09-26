@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { IntegrityError, validateLearningIntegrity } from "./generation-validation";
+import { untracedLearningNumbers } from "./learning-numbers";
 import {
   APPLICATION_GUIDE_RULES,
   DERIVATION_RULES,
@@ -217,8 +218,9 @@ Return only the schema-compliant object for this task.`;
 
 /**
  * Tek bloğun denetimi: eklentinin ve içe aktarmanın kullandığı bütünlük
- * denetimi, artı yalnızca üretimde uygulanan iki kural (reddedilen iddia ve
- * kendi formülünü tekrar eden türetim adımı).
+ * denetimi, artı üretimde uygulanan kurallar: sayılar kanıttan (ya da blok
+ * açıkça temsili), reddedilen iddia yok, kendi formülünü tekrar eden türetim
+ * adımı yok.
  */
 export function validateLearningBlock(block: LearningBlockId, value: unknown, context: LearningContext) {
   const blocks = applyLearningBlock(block, value);
@@ -229,7 +231,7 @@ export function validateLearningBlock(block: LearningBlockId, value: unknown, co
     ...blocks,
   });
 
-  const issues: string[] = [];
+  const issues: string[] = untracedLearningNumbers({ evidence: context.evidence, ...blocks });
   const rejected = new Set(context.rejectedClaimIds ?? []);
   if (rejected.size) {
     for (const id of citedClaimIds(blocks)) {

@@ -341,6 +341,8 @@ export const derivationSchema = z.object({
       setup: z.string(),
       walkthrough: z.array(z.string()).min(1).max(6),
       result: z.string(),
+      /** Başlangıç sayıları makaleden değil; okuyucuya "temsili" diye gösteriliyor. */
+      illustrative: z.boolean().optional(),
     })
     .optional(),
   claimIds: z.array(z.string()).min(1),
@@ -421,6 +423,8 @@ export const interactiveSchema = z.discriminatedUnion("kind", [
     id: z.string(),
     title: z.string(),
     description: z.string(),
+    /** Izgara değerleri makaleden değil, mekanizmayı göstermek için seçildi; okuyucuya söyleniyor. */
+    illustrative: z.boolean().optional(),
     stageNodes: z
       .array(z.object({ id: z.string(), label: z.string(), detail: z.string() }))
       .min(2)

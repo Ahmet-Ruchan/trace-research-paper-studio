@@ -21,6 +21,8 @@
 .interactive-kind { display: block; margin-bottom: 8px; color: var(--accent-ink); font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
 .interactive-head h4 { margin: 0; font: 1.28125rem/1.25 Georgia, serif; }
 .interactive-head p { margin: 7px 0 0; color: var(--muted); font-size: var(--text-md); line-height: 1.6; max-width: 62ch; }
+/* Makaleden gelmeyen, gösterim için seçilmiş sayılar: okuyucu bunu bilmeli. */
+.illustrative-note { display: inline-block; margin-top: 10px; padding: 3px 8px; border: 1px dashed var(--line-dark); border-radius: 20px; color: var(--ink-soft); font-size: var(--text-2xs); letter-spacing: .02em; }
 .interactive-reset { flex: 0 0 auto; padding: 8px 13px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font-size: var(--text-sm); cursor: pointer; transition: 160ms ease; }
 .interactive-reset:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink); }
 .interactive-reset:disabled { opacity: .35; cursor: default; }

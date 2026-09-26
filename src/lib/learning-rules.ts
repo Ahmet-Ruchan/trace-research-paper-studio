@@ -34,22 +34,22 @@ export const QUIZ_RULES = [
 export const DERIVATION_RULES = [
   "Derive the result step by step. Each step has latex, a plain-language reading and a rationale that says why it follows from the previous step.",
   "Step IDs are unique within the derivation.",
-  "numericExample is optional and may only use numbers from the evidence metrics or the paper's stated settings; never invent values.",
+  "numericExample is optional. Its setup starts from numbers in the evidence metrics or claims. If it must start from made-up numbers to show the mechanism, set numericExample.illustrative to true; the reader is told.",
   "Use standard LaTeX math only; no macros defined elsewhere.",
 ] as const;
 
 /** Formüller çalıştırılabilir kod değil: formula.ts'teki kısıtlı dilbilgisi. */
 export const INTERACTIVE_RULES = [
   "Formulas are parsed by a restricted grammar, never executed as code. Allowed: numbers, declared parameter names, + - * / % ^, parentheses, unary minus, the constants pi and e, and the functions abs sqrt exp ln log2 log10 log floor ceil round sign sin cos tan tanh pow min max clamp sigmoid. Nothing else.",
-  "formula-playground: 1–4 parameters and 1–4 outputs. A parameter name is a valid identifier used by the formulas. paperValue is the paper's own configuration and lies inside [min, max]; every output must give a finite value at the paper values. chart.xParam is a declared parameter and every series names a declared output.",
+  "formula-playground: 1–4 parameters and 1–4 outputs. A parameter name is a valid identifier used by the formulas. paperValue is the paper's own configuration, a number that appears in the evidence, and lies inside [min, max]; every output must give a finite value at the paper values. chart.xParam is a declared parameter and every series names a declared output.",
   "Choose ranges that make a real point: the strongest playground shows a crossover or a saturation the paper argues for but never plots. paperAnchor says what configuration the paper actually used and what it did NOT verify.",
-  "mechanism-simulation: 2–10 stageNodes and 2–12 frames. Every activeNodeIds entry names a declared node. A grid's values have exactly one row per rowLabel and one cell per columnLabel, all finite; say in the description when the grid values are illustrative.",
-  "dataset-explorer: 2–8 columns and 2–40 rows, each row with exactly one cell per column. A number column holds only numbers, never \"n/a\" or \"—\"; drop rows or columns rather than inventing placeholders. Values come from the evidence metrics or claims. sourceRef points at the paper's table: sourceId \"paper\", its page and a short excerpt.",
+  "mechanism-simulation: 2–10 stageNodes and 2–12 frames. Every activeNodeIds entry names a declared node. A grid's values have exactly one row per rowLabel and one cell per columnLabel, all finite. Grid values come from the evidence; when they are made up to show the mechanism (a worked attention matrix, for example), set illustrative to true and say so in the description.",
+  "dataset-explorer: 2–8 columns and 2–40 rows, each row with exactly one cell per column. A number column holds only numbers, never \"n/a\" or \"—\"; drop rows or columns rather than inventing placeholders. Every number appears in the evidence metrics or claims; leave out a row whose numbers the evidence does not have. sourceRef points at the paper's table: sourceId \"paper\", its page and a short excerpt.",
 ] as const;
 
 export const APPLICATION_GUIDE_RULES = [
   "recipe has 2–8 steps a practitioner would follow. A step may carry code { language, source }; code is explanatory, never presented as the authors' or a runnable library's code. Showing the wrong way beside the right way teaches the most.",
-  "hyperparameters (at most 8): paperValue and range come from the paper. If a parameter was never ablated, say so in guidance instead of recommending a range.",
+  "hyperparameters (at most 8): paperValue and range come from the paper, and every number in paperValue appears in the evidence. If a parameter was never ablated, say so in guidance instead of recommending a range.",
   "pitfalls (at most 6) each give a symptom, its cause and the fix, tied to claims.",
   "whenNotToUse (1–5 items) draws on the paper's own limitations. A guide that only says when the method works is advocacy, not teaching.",
 ] as const;

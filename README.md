@@ -129,13 +129,16 @@ The studio has the same search under the upload box: type a title, a DOI, an arX
 ### Learn from it, not just read it
 
 Every analysis comes with a learning layer, sized by the depth you pick: the prior knowledge the
-paper assumes, the key results derived step by step, playgrounds that run its formulas, a quiz
-whose every answer shows its page, and a guide to using the method. It is written from the
-evidence alone and checked like everything else: every item cites existing claims, a formula must
-parse and give a finite value at the paper's own setting, and a derivation step that only restates
-its formula is refused. In the studio a fifth model, **Teaching**, writes it; it never receives the
-PDF, so it can be a local model. If one part fails its checks twice, the analysis still completes
-and says which part is missing.
+paper assumes, the key results derived step by step, playgrounds that run its formulas, a quiz whose
+every answer shows its page, and a guide to using the method. It is written from the evidence alone
+and checked like everything else: every item cites existing claims, a formula must parse and give a
+finite value at the paper's own setting, and a derivation step that only restates its formula is
+refused. A number a reader would take for the paper's own (a playground's "paper value", a table
+cell, a hyperparameter, the numbers a worked example starts from) must appear in the evidence. When
+a teaching device needs made-up numbers, such as a worked attention matrix, it is labelled
+**Illustrative values, not from the paper**. In the studio a fifth model, **Teaching**, writes it;
+it never receives the PDF, so it can be a local model. If one part fails its checks twice, the
+analysis still completes and says which part is missing.
 
 A project made before this (or imported without it) shows **Add the learning layer** on its
 overview. It writes only the missing parts, from the locked evidence, and the previous version stays
@@ -211,7 +214,7 @@ it. When the words are not on that page it says so and shows the page anyway.
 It runs during every new analysis. For a project you imported, **Check the quotes against the PDF**
 in the evidence health panel asks for the PDF; if almost nothing matches, it assumes the wrong file
 and changes nothing. The shipped *Attention Is All You Need* example was checked against the arXiv
-PDF: all 67 quotes were found.
+PDF: all 75 quotes were found.
 
 ```text
 Verify the quotes of my Trace project against the PDF using the Trace plugin.

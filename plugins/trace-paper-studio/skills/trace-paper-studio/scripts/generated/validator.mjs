@@ -4304,6 +4304,104 @@ function superRefine(fn, params) {
 }
 
 //#endregion
+//#region src/lib/learning-numbers.ts
+/**
+* Öğrenme katmanındaki sayılar kanıttan mı geliyor?
+*
+* Anlatının karşılaştırma grafikleri zaten yalnızca kanıttaki metrik
+* değerlerini kullanabiliyordu. Öğrenme katmanında böyle bir denetim yoktu:
+* bir oyun alanının "makalenin değeri", bir tablonun hücreleri ya da bir
+* hiperparametrenin makaledeki değeri uydurulabiliyordu ve okuyucu bunu
+* makalenin sayısı sanıyordu. Burada her biri kanıtın metninde (iddialar,
+* alıntılar, metrikler, yöntem ve bulgular) aranıyor.
+*
+* Bir öğretim aracı makalede olmayan sayılara ihtiyaç duyabilir (bir dikkat
+* matrisinin hücreleri gibi). O zaman blok `illustrative` olarak işaretlenir
+* ve okuyucuya öyle gösterilir; işaretsiz bir blokta her sayı makaleden gelir.
+*/
+/** Her yerde geçen ve kaynak göstermeye değmeyen değerler. */
+const TRIVIAL = /* @__PURE__ */ new Set([0, 1]);
+const MINUS = /[−–]/g;
+/**
+* Metindeki sayılar, her olası okunuşuyla: "4,000" İngilizcede dört bin,
+* Türkçede dört; "0,1" Türkçede ondalık. İkisi de kümeye giriyor: amaç
+* uydurulmuş bir sayıyı yakalamak, yazım biçimini denetlemek değil.
+*/
+function numbersIn(text) {
+	const values = [];
+	const normalized = text.replace(MINUS, "-").replace(/\[\d+(?:\s*[,–-]\s*\d+)*\]/g, " ");
+	for (const match of normalized.matchAll(/(\d+(?:[.,]\d+)?)\s*[·×x*]\s*10\s*\^?\s*\{?\s*(-?\d+)\s*\}?/g)) values.push(Number(match[1].replace(",", ".")) * 10 ** Number(match[2]));
+	for (const match of normalized.matchAll(/(?<![\d.])10\s*\^\s*\{?\s*(-?\d+)\s*\}?/g)) values.push(10 ** Number(match[1]));
+	for (const match of normalized.matchAll(/(?<![\w.,])-?\d+(?:[.,]\d+)*(?:e-?\d+)?%?/gi)) {
+		let token = match[0];
+		const percent = token.endsWith("%");
+		if (percent) token = token.slice(0, -1);
+		const readings = /* @__PURE__ */ new Set();
+		if (/^-?\d+(?:\.\d+)?(?:e-?\d+)?$/i.test(token)) readings.add(Number(token));
+		if (/^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(token)) readings.add(Number(token.replace(/,/g, "")));
+		if (/^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(token)) readings.add(Number(token.replace(/\./g, "").replace(",", ".")));
+		if (/^-?\d+,\d+$/.test(token)) readings.add(Number(token.replace(",", ".")));
+		for (const value of readings) {
+			if (!Number.isFinite(value)) continue;
+			values.push(value);
+			if (percent) values.push(value / 100);
+		}
+	}
+	return values;
+}
+/** Kanıtın sayı dağarcığı: makalenin söylediği her sayı. */
+function evidenceNumbers(evidence) {
+	return [
+		evidence.thesis,
+		evidence.plainSummary,
+		evidence.researchQuestion,
+		...evidence.methods,
+		...evidence.findings,
+		...evidence.limitations,
+		...evidence.glossary.map((item) => `${item.term} ${item.definition}`),
+		...evidence.claims.flatMap((claim) => [claim.statement, ...claim.sourceRefs.map((reference) => reference.excerpt)]),
+		...evidence.metrics.flatMap((metric) => [
+			String(metric.value),
+			metric.displayValue,
+			metric.label,
+			metric.context ?? ""
+		])
+	].flatMap(numbersIn);
+}
+function traced(value, known) {
+	if (TRIVIAL.has(Math.abs(value))) return true;
+	return known.some((candidate) => Math.abs(candidate - value) <= Math.max(1e-9, Math.abs(candidate) * 1e-6));
+}
+/**
+* Kanıtta bulunmayan sayılar, nerede oldukları ile. Boş liste: her sayı
+* makaleden ya da blok açıkça temsili.
+*/
+function untracedLearningNumbers(project) {
+	const known = evidenceNumbers(project.evidence);
+	const issues = [];
+	const check = (owner, values) => {
+		const missing = [...new Set(values.filter((value) => !traced(value, known)))];
+		if (missing.length) issues.push(`${owner}: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not in the evidence`);
+	};
+	project.interactives?.forEach((interactive) => {
+		const owner = `interactives.${interactive.id}`;
+		if (interactive.kind === "formula-playground") interactive.parameters.forEach((parameter) => check(`${owner}.${parameter.name}.paperValue`, [parameter.paperValue]));
+		if (interactive.kind === "dataset-explorer") interactive.columns.forEach((column, index) => {
+			if (column.type !== "number") return;
+			check(`${owner}.${column.id}`, interactive.rows.flatMap((row) => typeof row.cells[index] === "number" ? [row.cells[index]] : []));
+		});
+		if (interactive.kind === "mechanism-simulation" && !interactive.illustrative) interactive.frames.forEach((frame, index) => {
+			if (frame.grid) check(`${owner}.frames[${index}].grid`, frame.grid.values.flat());
+		});
+	});
+	project.derivations?.forEach((derivation) => {
+		if (derivation.numericExample && !derivation.numericExample.illustrative) check(`derivations.${derivation.id}.numericExample.setup`, numbersIn(derivation.numericExample.setup));
+	});
+	project.applicationGuide?.hyperparameters.forEach((item) => check(`applicationGuide.${item.name}.paperValue`, numbersIn(item.paperValue)));
+	return issues;
+}
+
+//#endregion
 //#region src/lib/section-budgets.ts
 /**
 * Derinliğe göre bölüm bütçeleri. Prompt bunları hedef olarak veriyor,
@@ -4644,7 +4742,9 @@ const derivationSchema = object({
 	numericExample: object({
 		setup: string(),
 		walkthrough: array(string()).min(1).max(6),
-		result: string()
+		result: string(),
+		/** Başlangıç sayıları makaleden değil; okuyucuya "temsili" diye gösteriliyor. */
+		illustrative: boolean().optional()
 	}).optional(),
 	claimIds: array(string()).min(1)
 });
@@ -4713,6 +4813,8 @@ const interactiveSchema = discriminatedUnion("kind", [
 		id: string(),
 		title: string(),
 		description: string(),
+		/** Izgara değerleri makaleden değil, mekanizmayı göstermek için seçildi; okuyucuya söyleniyor. */
+		illustrative: boolean().optional(),
 		stageNodes: array(object({
 			id: string(),
 			label: string(),
@@ -20245,7 +20347,7 @@ const QUIZ_RULES = [
 const DERIVATION_RULES = [
 	"Derive the result step by step. Each step has latex, a plain-language reading and a rationale that says why it follows from the previous step.",
 	"Step IDs are unique within the derivation.",
-	"numericExample is optional and may only use numbers from the evidence metrics or the paper's stated settings; never invent values.",
+	"numericExample is optional. Its setup starts from numbers in the evidence metrics or claims. If it must start from made-up numbers to show the mechanism, set numericExample.illustrative to true; the reader is told.",
 	"Use standard LaTeX math only; no macros defined elsewhere."
 ];
 
@@ -20326,7 +20428,7 @@ function integrityIssues(run) {
 	}
 }
 const claimsOf = (item) => item.claimIds.join(", ") || "none";
-const learningIssues = (project) => integrityIssues(() => validateLearningIntegrity(project));
+const learningIssues = (project) => [...integrityIssues(() => validateLearningIntegrity(project)), ...untracedLearningNumbers(project)];
 const EQUATION_RULES = [
 	"expression is the equation in plain text; latex (optional) is the same equation in LaTeX; explanation says what it computes and why the method needs it.",
 	"variables (at most 10) define every symbol a reader needs, with its meaning in this paper.",
@@ -20768,6 +20870,7 @@ function validateProjectObject(input, options = {}) {
 	}
 	if (project.technicalAppendix) run(() => validateTechnicalAppendixIntegrity(project.technicalAppendix, project.evidence));
 	run(() => validateLearningIntegrity(project, options));
+	if (options.requireDepthBlocks) issues.push(...untracedLearningNumbers(project));
 	return issues.length ? {
 		ok: false,
 		issues

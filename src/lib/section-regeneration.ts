@@ -12,6 +12,7 @@ import {
 import { reportTemplateIssues, storyTemplateIssues, templateSlotInstruction } from "./narrative-templates";
 import { REPORT_SECTION_RULES, STORY_SECTION_RULES, bulletList, languageName } from "./prompts";
 import { DERIVATION_RULES, PRIMER_RULES, QUIZ_RULES } from "./learning-rules";
+import { untracedLearningNumbers } from "./learning-numbers";
 import {
   deepReportSectionSchema,
   derivationSchema,
@@ -145,7 +146,12 @@ function integrityIssues(run: () => void) {
 
 const claimsOf = (item: RegeneratedSection) => item.claimIds.join(", ") || "none";
 
-const learningIssues = (project: ResearchProject) => integrityIssues(() => validateLearningIntegrity(project));
+// Takma yalnızca yeni öğenin GETİRDİĞİ sorunlara bakıyor; eski bir projedeki
+// işaretsiz temsili sayılar başka bir öğeyi yeniden yazmayı engellemez.
+const learningIssues = (project: ResearchProject) => [
+  ...integrityIssues(() => validateLearningIntegrity(project)),
+  ...untracedLearningNumbers(project),
+];
 
 const EQUATION_RULES = [
   "expression is the equation in plain text; latex (optional) is the same equation in LaTeX; explanation says what it computes and why the method needs it.",

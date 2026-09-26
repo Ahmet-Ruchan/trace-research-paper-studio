@@ -46,8 +46,8 @@ describe("trace-agent record", () => {
     const record = JSON.parse(run.stdout);
     expect(record).toMatchObject({ ok: true, library, projects: 4, unreadable: 1, counted: 2 });
     expect(record.models.map((row: { model: string; quotesFound: number; quotesChecked: number }) => [row.model, row.quotesFound, row.quotesChecked])).toEqual([
-      ["Agent · claude-code/claude-opus-5[1m]", 67, 67],
-      ["Google Gemini · gemini-3.7-flash", 66, 67],
+      ["Agent · claude-code/claude-opus-5[1m]", 75, 75],
+      ["Google Gemini · gemini-3.7-flash", 74, 75],
     ]);
     expect(record.samePaper).toHaveLength(1);
     expect(record.notCounted).toEqual([

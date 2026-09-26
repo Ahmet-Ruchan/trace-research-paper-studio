@@ -636,6 +636,48 @@
         }
       },
       {
+        "id": "metric-bleu-ende-gnmt",
+        "label": "BLEU (EN-DE, GNMT + RL)",
+        "value": 24.6,
+        "displayValue": "24.6",
+        "unit": "BLEU",
+        "context": "Karşılaştırma temeli: yinelemeli ağ tabanlı tekil model",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "GNMT + RL [38] 24.6 39.92",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-bleu-ende-convs2s",
+        "label": "BLEU (EN-DE, ConvS2S)",
+        "value": 25.16,
+        "displayValue": "25.16",
+        "unit": "BLEU",
+        "context": "Karşılaştırma temeli: evrişim tabanlı tekil model",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "ConvS2S [9] 25.16 40.46",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-bleu-ende-moe",
+        "label": "BLEU (EN-DE, MoE)",
+        "value": 26.03,
+        "displayValue": "26.03",
+        "unit": "BLEU",
+        "context": "Karşılaştırma temeli: uzmanlar karışımı (MoE) tekil model",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "MoE [32] 26.03 40.56",
+          "locator": "Tablo 2"
+        }
+      },
+      {
         "id": "metric-flops-big",
         "label": "Tahmini eğitim maliyeti (Transformer big)",
         "value": 23000000000000000000,
@@ -660,6 +702,62 @@
           "sourceId": "paper",
           "page": 8,
           "excerpt": "Transformer (base model) 27.3 38.1 3.3 · 10^18",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-flops-convs2s",
+        "label": "Tahmini eğitim maliyeti (ConvS2S)",
+        "value": 9600000000000000000,
+        "displayValue": "9.6 · 10^18 FLOP",
+        "unit": "FLOP",
+        "context": "Tablo 2'deki önceki model, EN-DE eğitimi",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "ConvS2S [9] 25.16 40.46 9.6 · 10^18",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-flops-moe",
+        "label": "Tahmini eğitim maliyeti (MoE)",
+        "value": 20000000000000000000,
+        "displayValue": "2.0 · 10^19 FLOP",
+        "unit": "FLOP",
+        "context": "Tablo 2'deki önceki model, EN-DE eğitimi",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "MoE [32] 26.03 40.56 2.0 · 10^19",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-flops-gnmt-ensemble",
+        "label": "Tahmini eğitim maliyeti (GNMT + RL Ensemble)",
+        "value": 180000000000000000000,
+        "displayValue": "1.8 · 10^20 FLOP",
+        "unit": "FLOP",
+        "context": "Tablo 2'deki önceki topluluk modeli, EN-DE eğitimi; üs tabloda satırın üstünde basılı",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "GNMT + RL Ensemble [38] 26.30 41.16 1.8 · 10",
+          "locator": "Tablo 2"
+        }
+      },
+      {
+        "id": "metric-flops-convs2s-ensemble",
+        "label": "Tahmini eğitim maliyeti (ConvS2S Ensemble)",
+        "value": 77000000000000000000,
+        "displayValue": "7.7 · 10^19 FLOP",
+        "unit": "FLOP",
+        "context": "Tablo 2'deki önceki topluluk modeli, EN-DE eğitimi; üs tabloda satırın üstünde basılı",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 8,
+          "excerpt": "ConvS2S Ensemble [9] 26.36 41.29 7.7 · 10",
           "locator": "Tablo 2"
         }
       },
@@ -703,6 +801,20 @@
           "page": 3,
           "excerpt": "all sub-layers in the model, as well as the embedding layers, produce outputs of dimension dmodel = 512",
           "locator": "Bölüm 3.1"
+        }
+      },
+      {
+        "id": "metric-dmodel-big",
+        "label": "Model boyutu d_model (Transformer big)",
+        "value": 1024,
+        "displayValue": "1024",
+        "unit": "boyut",
+        "context": "Tablo 3 son satırındaki büyük model yapılandırması",
+        "sourceRef": {
+          "sourceId": "paper",
+          "page": 9,
+          "excerpt": "big 6 1024 4096 16 0.3 300K 4.33 26.4 213",
+          "locator": "Tablo 3"
         }
       },
       {
@@ -2219,6 +2331,7 @@
       "id": "sim-attention",
       "title": "Dikkat ağırlıkları adım adım",
       "description": "Scaled Dot-Product Attention'ın altı adımı. Izgara, dört tokenlık bir cümlede her sorgunun her anahtara verdiği ağırlığı gösterir; koyulaştıkça ağırlık artar. Sayılar AÇIKLAYICIDIR — makale örnek bir dikkat matrisi yayımlamamıştır; gösterilen mekanizma makaleye, değerler ise açıklama amacına aittir.",
+      "illustrative": true,
       "stageNodes": [
         {
           "id": "qkv",
@@ -3088,10 +3201,10 @@
     }
   ],
   "excerptCheck": {
-    "checkedAt": "2026-09-21T22:45:44.817Z",
+    "checkedAt": "2026-09-26T22:53:20.004Z",
     "method": "pdftotext",
     "pageCount": 15,
-    "checked": 67,
+    "checked": 75,
     "unlocated": []
   }
 }

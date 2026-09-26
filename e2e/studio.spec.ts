@@ -783,11 +783,11 @@ test.describe("model record", () => {
     await expect(page.getByRole("heading", { name: "How each model’s quotes held up." })).toBeVisible();
 
     const byModel = page.locator(".record-table-wrap");
-    await expect(byModel.locator("tr", { hasText: "Google Gemini · gemini-3.7-flash" })).toContainText("67 of 67");
+    await expect(byModel.locator("tr", { hasText: "Google Gemini · gemini-3.7-flash" })).toContainText("75 of 75");
     await expect(byModel.locator("tr", { hasText: "Google Gemini · gemini-3.7-flash" })).toContainText("1 approved · 0 rejected");
     const openai = byModel.locator("tr", { hasText: "OpenAI · e2e-gpt-record" });
-    await expect(openai).toContainText("65 of 67");
-    await expect(openai).toContainText("97%");
+    await expect(openai).toContainText("73 of 75");
+    await expect(openai).toContainText("97.3%");
     await expect(openai).toContainText(/likely \d+(\.\d)?%–\d+(\.\d)?%/);
 
     // Başlıklar büyük harf ve noktalamada ayrılsa da aynı makale.
@@ -802,7 +802,7 @@ test.describe("model record", () => {
     // Model seçerken aynı karne, seçilen modelin satırıyla.
     await page.goto("/");
     await expect(page.locator(".quote-track-record")).toContainText("Google Gemini · gemini-3.7-flash");
-    await expect(page.locator(".quote-track-record")).toContainText("67 of 67 quotes found on their page, in 1 paper");
+    await expect(page.locator(".quote-track-record")).toContainText("75 of 75 quotes found on their page, in 1 paper");
   });
 });
 
@@ -1286,6 +1286,16 @@ test.describe("learning layer", () => {
     await expect(page.getByRole("region", { name: "Learning layer" })).toHaveCount(0);
     await page.getByRole("button", { name: "Version history" }).click();
     await expect(page.locator(".history-list")).toContainText("Before the learning layer was added");
+  });
+
+  test("tells the reader which numbers are illustrative and which are the paper's", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-illustrative"));
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Learn & Try" }).click();
+    const simulation = page.locator("section.simulation", { hasText: "Attention weights, step by step" });
+    await expect(simulation.locator(".illustrative-note")).toHaveText("Illustrative values, not from the paper");
+    // Makalenin kendi tablosu ve oyun alanları işaretsiz.
+    await expect(page.locator("section.playground .illustrative-note, section.explorer .illustrative-note")).toHaveCount(0);
   });
 
   test("shows the teaching role in the model team, able to run on any provider", async ({ page }) => {
