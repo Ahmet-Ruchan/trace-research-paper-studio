@@ -24,12 +24,13 @@ import { CitationPanel } from "./citation-panel";
 import { CompareView } from "./compare-view";
 import { LiteratureMapView } from "./literature-map-view";
 import { LibraryView } from "./library-view";
+import { ModelRecordView } from "./model-record-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
 import { StoryView } from "./story-view";
 
 type WorkspaceMode = "lab" | "story" | "preview";
-type AppScreen = "home" | "library" | "workspace" | "compare";
+type AppScreen = "home" | "library" | "workspace" | "compare" | "models";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
 
@@ -459,12 +460,16 @@ export function AppShell() {
       />
     );
   }
+  if (screen === "models") {
+    return <ModelRecordView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />;
+  }
   if (screen === "library") {
     return (
       <LibraryView
         projects={projects}
         onOpen={openProject}
         onOpenClaim={openClaim}
+        onModelRecord={() => setScreen("models")}
         onDelete={removeProject}
         onHome={() => setScreen("home")}
         onNew={newProject}
@@ -477,7 +482,7 @@ export function AppShell() {
     );
   }
   if (screen === "home" || !project) {
-    return <><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryCount={projects.length} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>;
+    return <><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryProjects={projects} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>;
   }
 
   const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);

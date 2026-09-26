@@ -19,9 +19,11 @@ import {
 import { DEFAULT_LOCAL_ENDPOINT } from "@/lib/local-endpoint";
 import { languageOptions, preferredLanguage, type ProjectLanguage } from "@/lib/preferred-language";
 import { builtInTemplates } from "@/lib/narrative-templates";
-import type { NarrativeTemplate } from "@/lib/schema";
+import { modelRecord } from "@/lib/model-record";
+import type { NarrativeTemplate, ResearchProject } from "@/lib/schema";
 import { deleteTemplate, listTemplates } from "@/lib/template-library";
 import { downloadCandidate, findPapers, originLabels, type PaperCandidate } from "@/lib/paper-lookup";
+import { QuoteTrackRecord } from "./model-record-view";
 import { TeamProbe } from "./team-probe";
 import { TemplateEditor } from "./template-editor";
 
@@ -46,13 +48,16 @@ type OnboardingProps = {
   onSample: () => void;
   sampleBusy?: boolean;
   onLibrary: () => void;
-  libraryCount: number;
+  /** Kütüphane; sayısı başlıkta, alıntı karnesi model seçiminin altında. */
+  libraryProjects: ResearchProject[];
   initialTeam?: boolean;
   /** Atıf grafiğinden "bunu analiz et" ile gelindiğinde aranacak makale. */
   initialLookup?: { query: string; expectTitle?: string };
 };
 
-export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, initialTeam = false, sampleBusy = false, initialLookup }: OnboardingProps) {
+export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, initialTeam = false, sampleBusy = false, initialLookup }: OnboardingProps) {
+  const libraryCount = libraryProjects.length;
+  const quoteRecord = useMemo(() => modelRecord(libraryProjects), [libraryProjects]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File>();
   const [dragging, setDragging] = useState(false);
@@ -445,6 +450,8 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryCount, init
                 </div>
               </>
             )}
+
+            {libraryCount > 0 && <QuoteTrackRecord assignments={assignments} record={quoteRecord} />}
 
             <div className="credential-heading"><LockKeyhole size={14} /><div><strong>Provider keys in use</strong><span>Only required for the providers you selected.</span></div></div>
             <div className="credential-grid">

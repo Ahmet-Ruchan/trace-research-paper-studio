@@ -190,6 +190,22 @@ PDF: all 67 quotes were found.
 Verify the quotes of my Trace project against the PDF using the Trace plugin.
 ```
 
+### See how each model's quotes held up
+
+Every project records which model wrote it and which of its quotes were found on their page, so your
+library already measures your models. **Model record** in the library adds that up per model: how many
+quotes were found out of how many were checked, across how many papers, and how many of its claims a
+reviewer approved or rejected. In a model team, each quote goes to the model that wrote it: the
+technical model writes the method and results evidence, the evidence model the rest.
+
+A rate from three quotes is not a rate from three hundred. Each rate shows the range the evidence is
+consistent with, and models are sorted by the low end of it. Different models read different papers,
+and a scanned or table-heavy paper lowers anyone's rate. So when the same paper was analysed with two
+models, the two are lined up side by side: same PDF, same tables in the way. A project whose quotes were
+never checked, whose evidence changed after the check, or that does not say which model wrote it is
+listed with that reason, not counted. When you pick a model for a new analysis, its record appears
+under the picker.
+
 ### Let a person review the claims
 
 A model says how sure it is, and a program can check that a quote is on its page. Neither can say

@@ -713,3 +713,56 @@ test.describe("library search and tags", () => {
     }).toEqual([{ id: "e2e-untag-a", tags: ["Keep"] }]);
   });
 });
+
+test.describe("model record", () => {
+  test("adds up each model's quotes, lines up the same paper, and says what it left out", async ({ page, request }) => {
+    const steady = projectNamed("e2e-record-gemini");
+    steady.evidence.paper = { ...steady.evidence.paper, title: "Quokka record paper", doi: undefined };
+    steady.generation = { provider: "gemini", model: "gemini-3.7-flash" };
+    steady.claimReviews = { [steady.evidence.claims[0].id]: { status: "approved", by: "Ada", at: "2026-09-01T00:00:00.000Z" } };
+    await seed(request, steady);
+
+    const shaky = projectNamed("e2e-record-openai");
+    shaky.evidence.paper = { ...shaky.evidence.paper, title: "quokka record paper.", doi: undefined };
+    shaky.generation = { provider: "openai", model: "e2e-gpt-record" };
+    shaky.excerptCheck = {
+      ...shaky.excerptCheck!,
+      unlocated: [
+        { owner: "claim", id: shaky.evidence.claims[0].id, page: 2 },
+        { owner: "metric", id: shaky.evidence.metrics[0].id, page: 8 },
+      ],
+    };
+    await seed(request, shaky);
+
+    const unchecked = projectNamed("e2e-record-unchecked");
+    unchecked.evidence.paper = { ...unchecked.evidence.paper, title: "Quokka unchecked paper" };
+    delete unchecked.excerptCheck;
+    await seed(request, unchecked);
+
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Model record" }).click();
+    await expect(page.getByRole("heading", { name: "How each model’s quotes held up." })).toBeVisible();
+
+    const byModel = page.locator(".record-table-wrap");
+    await expect(byModel.locator("tr", { hasText: "Google Gemini · gemini-3.7-flash" })).toContainText("67 of 67");
+    await expect(byModel.locator("tr", { hasText: "Google Gemini · gemini-3.7-flash" })).toContainText("1 approved · 0 rejected");
+    const openai = byModel.locator("tr", { hasText: "OpenAI · e2e-gpt-record" });
+    await expect(openai).toContainText("65 of 67");
+    await expect(openai).toContainText("97%");
+    await expect(openai).toContainText(/likely \d+(\.\d)?%–\d+(\.\d)?%/);
+
+    // Başlıklar büyük harf ve noktalamada ayrılsa da aynı makale.
+    const pair = page.locator(".record-pairs .compare-card", { hasText: "Quokka record paper" });
+    await expect(pair.locator("tr")).toHaveCount(2);
+
+    const left = page.locator(".record-excluded li", { hasText: "Quokka unchecked paper" });
+    await expect(left).toContainText("never checked against the PDF");
+    await left.getByRole("button", { name: "Open" }).click();
+    await expect(page).toHaveURL(/project=e2e-record-unchecked/);
+
+    // Model seçerken aynı karne, seçilen modelin satırıyla.
+    await page.goto("/");
+    await expect(page.locator(".quote-track-record")).toContainText("Google Gemini · gemini-3.7-flash");
+    await expect(page.locator(".quote-track-record")).toContainText("67 of 67 quotes found on their page, in 1 paper");
+  });
+});

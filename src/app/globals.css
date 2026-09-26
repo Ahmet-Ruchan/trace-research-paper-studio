@@ -759,3 +759,40 @@ span.library-tag { cursor: default; }
 .export-menu-list strong { font-size: 11.5px; font-weight: 600; }
 .export-menu-list small { color: var(--muted); font-size: 10px; line-height: 1.45; }
 .citation-bibtex { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+
+/* --- Model karnesi ---------------------------------------------------- */
+.record-table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.record-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.record-table th, .record-table td { padding: 11px 14px; border-top: 1px solid var(--line); color: var(--ink-soft); text-align: left; vertical-align: top; }
+.record-table thead th { border-top: 0; color: var(--muted); font-size: 8.5px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
+.record-table tbody th { color: var(--ink); font-weight: 600; overflow-wrap: break-word; }
+.record-table td { white-space: nowrap; }
+.record-table b { display: block; color: var(--ink); font: 400 17px/1.2 Georgia, serif; }
+.record-table small { display: block; margin-top: 3px; color: var(--muted); font-size: 9.5px; }
+.record-table .library-open { height: 26px; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; font-size: 10px; }
+.record-pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.record-pairs .record-table th, .record-pairs .record-table td { padding: 9px 8px 9px 0; vertical-align: middle; }
+.record-pairs .record-table tr:first-child > * { border-top: 0; }
+.record-excluded { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.record-excluded li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.record-excluded li > div { display: grid; gap: 4px; min-width: 0; }
+.record-excluded strong { font: 400 15px/1.3 Georgia, serif; }
+.record-excluded span { color: var(--muted); font-size: 10.5px; line-height: 1.55; }
+.record-excluded .library-open { flex-shrink: 0; height: 28px; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; font-size: 10px; }
+.quote-track-record { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-left: 2px solid var(--green); border-radius: 9px; }
+.quote-track-record > strong { font-size: 9px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.quote-track-record ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.quote-track-record li { display: grid; gap: 2px; font-size: 10.5px; line-height: 1.55; }
+.quote-track-record b { color: var(--ink); font-weight: 600; }
+.quote-track-record span { color: var(--ink-soft); }
+@media (max-width: 720px) {
+  .record-pairs { grid-template-columns: 1fr; }
+  /* Beş sütun telefona sığmıyor: her model etiketli küçük bir karta dönüşüyor. */
+  .record-table-wrap .record-table thead { display: none; }
+  .record-table-wrap .record-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .record-table-wrap .record-table tbody tr:first-child { border-top: 0; }
+  .record-table-wrap .record-table th, .record-table-wrap .record-table td { padding: 0; border: 0; white-space: normal; }
+  .record-table-wrap .record-table tbody th { grid-column: 1 / -1; }
+  .record-table-wrap .record-table td::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--muted); font-size: 8.5px; letter-spacing: .09em; text-transform: uppercase; }
+  .record-excluded li { align-items: flex-start; flex-direction: column; }
+}

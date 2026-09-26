@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Plus, Quote, Search, Tag, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Gauge, Plus, Quote, Search, Tag, Trash2, X } from "lucide-react";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import { buildClaimIndex, excerptAround, highlightSegments, searchClaims, type ClaimHit, type ClaimSearch } from "@/lib/library-search";
 import { MAX_TAG_LENGTH, addTag, hasTag, removeTag, tagCounts, tagKey } from "@/lib/library-tags";
@@ -15,6 +15,8 @@ type LibraryViewProps = {
   onOpen: (project: ResearchProject) => void;
   /** Bir arama sonucundan projeye, doğrudan o iddianın üstüne. */
   onOpenClaim: (project: ResearchProject, claimId: string) => void;
+  /** Modellerin alıntı karnesi: kütüphanedeki bütün projelerden hesaplanıyor. */
+  onModelRecord: () => void;
   onDelete: (projectId: string) => Promise<void>;
   onHome: () => void;
   onNew: () => void;
@@ -43,7 +45,7 @@ function count(value: number, noun: string) {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-export function LibraryView({ projects, onOpen, onOpenClaim, onDelete, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDelete, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("papers");
   /**
@@ -173,6 +175,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onDelete, onHome, o
             setImportError(undefined);
             void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : "Could not import the Trace project."));
           }} />
+          <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>
           <button className="library-new-button" onClick={onNew}><Plus size={16} /> New paper</button>
         </div>
