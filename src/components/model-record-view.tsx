@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { ArrowLeft, Columns2, Gauge, ListX } from "lucide-react";
 import { documentTaskRoles, type ModelTeam } from "@/lib/model-providers";
-import { modelIdentity, modelLabel, modelRecord, type ExclusionReason, type ModelIdentity, type ModelRecord } from "@/lib/model-record";
+import { exclusionDescriptions, modelIdentity, modelLabel, modelRecord, type ExclusionReason, type ModelIdentity, type ModelRecord } from "@/lib/model-record";
 import type { ResearchProject } from "@/lib/schema";
 
 const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
@@ -12,12 +12,10 @@ function plural(value: number, noun: string) {
   return `${value.toLocaleString("en")} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-const exclusionText: Record<ExclusionReason, string> = {
-  "not-checked": "Its quotes were never checked against the PDF. Open it and use Check the quotes against the PDF in Evidence health.",
-  "model-not-recorded": "The project does not say which model wrote it.",
-  "check-truncated": "Its check stopped listing missing quotes at 400, so its rate would look better than it is.",
-  "changed-since-check": "The evidence changed after its quotes were checked. Check them again with the PDF to count it.",
-  "stage-unknown": "Two models wrote its evidence, and some claims cannot be traced to the stage that wrote them.",
+/** Stüdyoda düzeltilebilen nedenler için yol. */
+const exclusionRemedy: Partial<Record<ExclusionReason, string>> = {
+  "not-checked": "Open it and use Check the quotes against the PDF in Evidence health.",
+  "changed-since-check": "Check them again with the PDF to count it.",
 };
 
 /**
@@ -138,7 +136,7 @@ export function ModelRecordView({
           <ul className="record-excluded">
             {record.excluded.map((item) => (
               <li key={item.project.id}>
-                <div><strong>{item.project.evidence.paper.title}</strong><span>{exclusionText[item.reason]}</span></div>
+                <div><strong>{item.project.evidence.paper.title}</strong><span>{[exclusionDescriptions[item.reason], exclusionRemedy[item.reason]].filter(Boolean).join(" ")}</span></div>
                 <button className="library-open" onClick={() => onOpen(item.project)}>Open</button>
               </li>
             ))}

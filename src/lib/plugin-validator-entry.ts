@@ -15,6 +15,7 @@ export { evidenceHealth } from "./evidence-health";
 export { applyExcerptCheck, splitPages } from "./paper-text";
 export { ankiCards, buildAnkiDeck } from "./anki-export";
 export { exportDefinitions, findExport } from "./exports";
+export { libraryModelRecord } from "./model-record";
 export {
   defaultPublicationInclude,
   expiryFromDays,

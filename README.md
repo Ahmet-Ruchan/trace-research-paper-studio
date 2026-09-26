@@ -206,6 +206,10 @@ never checked, whose evidence changed after the check, or that does not say whic
 listed with that reason, not counted. When you pick a model for a new analysis, its record appears
 under the picker.
 
+```text
+Show me how each model's quotes held up in my Trace library using the Trace plugin.
+```
+
 ### Let a person review the claims
 
 A model says how sure it is, and a program can check that a quote is on its page. Neither can say
@@ -615,6 +619,9 @@ npm run trace:agent -- export --project "paper.trace.json" --format slides
 
 # The citation graph of a project, a DOI or a title
 npm run trace:agent -- graph --project "paper.trace.json"
+
+# How each model's quotes held up across the library, and what was left out
+npm run trace:agent -- record
 
 # --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"

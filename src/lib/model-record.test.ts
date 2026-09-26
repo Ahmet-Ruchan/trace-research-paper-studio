@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadExampleProject } from "./example-fixture";
-import { UNLOCATED_LIMIT, modelLabel, modelRecord, projectQuoteRecord, wilsonInterval } from "./model-record";
+import { UNLOCATED_LIMIT, libraryModelRecord, modelLabel, modelRecord, projectQuoteRecord, wilsonInterval } from "./model-record";
 import { checkExcerpts } from "./paper-text";
 import type { ExcerptCheck, ResearchProject } from "./schema";
 
@@ -231,5 +231,46 @@ describe("model labels", () => {
     expect(modelLabel({ provider: "anthropic", model: "claude-sonnet-5" })).toBe("Anthropic Claude · claude-sonnet-5");
     expect(modelLabel({ provider: "native-agent", model: "claude-code/claude-opus-5[1m]" })).toBe("Agent · claude-code/claude-opus-5[1m]");
     expect(modelLabel({ provider: "someone-else", model: "m" })).toBe("someone-else · m");
+  });
+});
+
+describe("the record the agent bridge prints", () => {
+  it("names each model, rounds its numbers and explains every project it left out", () => {
+    const unchecked = copy("unchecked", { excerptCheck: undefined });
+    unchecked.evidence.paper = { ...unchecked.evidence.paper, title: "Unchecked paper" };
+    const summary = libraryModelRecord([example, unchecked, { not: "a project" }]);
+
+    expect(summary).toMatchObject({ projects: 3, unreadable: 1, counted: 1 });
+    expect(summary.models).toEqual([{
+      model: "Agent · claude-code/claude-opus-5[1m]",
+      provider: "native-agent",
+      modelId: "claude-code/claude-opus-5[1m]",
+      papers: 1,
+      quotesChecked: 67,
+      quotesFound: 67,
+      rate: 1,
+      likelyLow: 0.9458,
+      likelyHigh: 1,
+      claimsApproved: 0,
+      claimsRejected: 0,
+    }]);
+    expect(summary.notCounted).toEqual([{
+      projectId: "unchecked",
+      title: "Unchecked paper",
+      reason: "not-checked",
+      detail: "Its quotes were never checked against the PDF.",
+    }]);
+  });
+
+  it("carries the same-paper comparison without the projects themselves", () => {
+    const other = copy("other-model", { generation: { provider: "openai", model: "gpt-5.6-terra" } });
+    const summary = libraryModelRecord([example, other]);
+    expect(summary.samePaper).toEqual([{
+      title: example.evidence.paper.title,
+      entries: [
+        { projectId: example.id, model: "Agent · claude-code/claude-opus-5[1m]", quotesChecked: 67, quotesFound: 67, rate: 1 },
+        { projectId: "other-model", model: "OpenAI · gpt-5.6-terra", quotesChecked: 67, quotesFound: 67, rate: 1 },
+      ],
+    }]);
   });
 });

@@ -26,6 +26,7 @@ import {
   exportDefinitions,
   findBuiltInTemplate,
   findExport,
+  libraryModelRecord,
   narrativeTemplateSchema,
   templateFromProject,
   templateIssues,
@@ -303,6 +304,7 @@ Usage:
   node trace-agent.mjs verify --project <project.trace.json> [--paper <paper.pdf> | --pages <paper.pages.txt>]
   node trace-agent.mjs export --project <project.trace.json> --format md|html|slides|ipynb|bib|ris|anki [--out <file>]
   node trace-agent.mjs anki --project <project.trace.json> [--out <deck.anki.txt>]
+  node trace-agent.mjs record
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
@@ -348,6 +350,11 @@ Usage:
   graph     Prints the paper's citation graph from OpenAlex: the most-cited
             works it builds on and the most-cited works that cite it. Every
             node carries an "identifier" that prepare --source accepts.
+  record    Prints how each model's quotes held up across the Trace library:
+            quotes found on their page out of quotes checked, with the range
+            the evidence is consistent with, the same paper analysed by
+            different models, and every project left out with its reason.
+            Reads the library only. No network, no model.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -1506,6 +1513,45 @@ function stopServers(args) {
   console.log(JSON.stringify({ ok: true, stopped }, null, 2));
 }
 
+/**
+ * Kütüphanenin model karnesi; stüdyodaki "Model record" ekranıyla aynı kod
+ * (paketlenmiş doğrulayıcı). Okunamayan dosyalar sayılıyor, atlanmıyor.
+ */
+function printModelRecord() {
+  const library = traceLibraryDirectory();
+  const inputs = [];
+  const fileById = new Map();
+  let unreadableFiles = 0;
+  let entries = [];
+  try {
+    entries = readdirSync(library, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".trace.json")) continue;
+    try {
+      const project = JSON.parse(readFileSync(join(library, entry.name), "utf8"));
+      inputs.push(project);
+      if (typeof project?.id === "string") fileById.set(project.id, join(library, entry.name));
+    } catch {
+      unreadableFiles += 1;
+    }
+  }
+  const record = libraryModelRecord(inputs);
+  // Dışarıda kalan projeyi düzeltmek için (ör. verify) hangi dosya olduğu gerekiyor.
+  const notCounted = record.notCounted.map((item) => ({ ...item, file: fileById.get(item.projectId) }));
+  console.log(JSON.stringify({
+    ok: true,
+    library,
+    ...record,
+    projects: record.projects + unreadableFiles,
+    unreadable: record.unreadable + unreadableFiles,
+    notCounted,
+    note: "A quote that is not found on its page is not always invented: tables, equations and scanned pages do not survive text extraction. Models are sorted by likelyLow, the low end of a 95% Wilson interval, so a model checked on a few quotes does not outrank one checked on many. samePaper is the fairest comparison: the same PDF read by different models.",
+  }, null, 2));
+}
+
 async function main() {
 try {
   const [command, ...rest] = process.argv.slice(2);
@@ -1525,6 +1571,7 @@ try {
   else if (command === "verify") verifyProject(args);
   else if (command === "anki") exportAnki(args);
   else if (command === "export") exportProject(args);
+  else if (command === "record") printModelRecord();
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

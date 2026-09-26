@@ -19482,6 +19482,454 @@ function findExport(format) {
 }
 
 //#endregion
+//#region src/lib/model-providers.ts
+const providerCatalog = [
+	{
+		id: "gemini",
+		label: "Google Gemini",
+		keyLabel: "Gemini API key",
+		models: [
+			{
+				id: "gemini-3.7-flash",
+				label: "Gemini 3.7 Flash",
+				note: "Fast"
+			},
+			{
+				id: "gemini-3.1-pro-preview",
+				label: "Gemini 3.1 Pro",
+				note: "Deepest"
+			},
+			{
+				id: "gemini-2.5-flash",
+				label: "Gemini 2.5 Flash",
+				note: "Compatible"
+			}
+		]
+	},
+	{
+		id: "openai",
+		label: "OpenAI",
+		keyLabel: "OpenAI API key",
+		models: [
+			{
+				id: "gpt-5.6-terra",
+				label: "GPT-5.6 Terra",
+				note: "Recommended"
+			},
+			{
+				id: "gpt-5.6-sol",
+				label: "GPT-5.6 Sol",
+				note: "Highest quality"
+			},
+			{
+				id: "gpt-5.6-luna",
+				label: "GPT-5.6 Luna",
+				note: "Economical"
+			}
+		]
+	},
+	{
+		id: "anthropic",
+		label: "Anthropic Claude",
+		keyLabel: "Claude API key",
+		models: [
+			{
+				id: "claude-sonnet-4-5",
+				label: "Claude Sonnet 4.5",
+				note: "Recommended"
+			},
+			{
+				id: "claude-opus-4-1",
+				label: "Claude Opus 4.1",
+				note: "Deepest"
+			},
+			{
+				id: "claude-haiku-4-5",
+				label: "Claude Haiku 4.5",
+				note: "Fast"
+			}
+		]
+	},
+	{
+		id: "openrouter",
+		label: "OpenRouter",
+		keyLabel: "OpenRouter API key",
+		dynamicModels: true,
+		freeformModel: true,
+		readsDocuments: true,
+		models: [{
+			id: "openrouter/auto",
+			label: "Auto Router",
+			note: "Automatic selection"
+		}]
+	},
+	{
+		id: "local",
+		label: "Local model",
+		keyLabel: "Local server address",
+		local: true,
+		freeformModel: true,
+		readsDocuments: false,
+		readsPaperAsText: true,
+		hint: "Ollama, LM Studio or llama.cpp on this machine. Nothing leaves it, and no key is needed. A local model cannot open the PDF, so on the Evidence and Technical stages it reads the text extracted from it (needs pdftotext from Poppler): figures and layout are lost, and every quote is checked against the page text. Give the model a context window of 32K tokens or more.",
+		models: [
+			{
+				id: "qwen3:8b",
+				label: "qwen3:8b",
+				note: "Ollama"
+			},
+			{
+				id: "llama3.1:8b",
+				label: "llama3.1:8b",
+				note: "Ollama"
+			},
+			{
+				id: "mistral-nemo:12b",
+				label: "mistral-nemo:12b",
+				note: "Ollama"
+			}
+		]
+	}
+];
+const generationTaskCatalog = [
+	{
+		id: "evidence",
+		label: "Evidence and source reading",
+		shortLabel: "Evidence",
+		description: "Paper summary, source map, limitations and verifiable claims.",
+		recommendation: "Large context and strong PDF reading"
+	},
+	{
+		id: "technical",
+		label: "Technical and mathematical analysis",
+		shortLabel: "Technical",
+		description: "Method, equations, architecture, experimental setup, results and coding logic.",
+		recommendation: "Deep reasoning and coding ability"
+	},
+	{
+		id: "report",
+		label: "Report and explanatory writing",
+		shortLabel: "Report",
+		description: "Deep report, critique, reproduction notes and clear explanations.",
+		recommendation: "Strong writing and synthesis"
+	},
+	{
+		id: "visual",
+		label: "Canvas and visual direction",
+		shortLabel: "Visual",
+		description: "Infographics, architecture maps, canvas layouts and the scrollytelling plan.",
+		recommendation: "Design judgement and structured output"
+	}
+];
+const generationTaskRoles = generationTaskCatalog.map((task) => task.id);
+function getProvider(providerId) {
+	return providerCatalog.find((provider) => provider.id === providerId);
+}
+
+//#endregion
+//#region src/lib/search-text.ts
+/**
+* Arama için metin katlama.
+*
+* Kütüphane ve laboratuvar aramaları `toLocaleLowerCase("tr")` kullanıyordu.
+* Türkçe yerel ayarında "I" harfi "ı"ya iner: İngilizce yazan bir kullanıcı
+* "IMAGE" arattığında sorgu "ımage" olur ve metindeki "image" ile eşleşmez —
+* yani arama sessizce hiçbir şey bulmaz. Sabit "en" de simetrik olarak Türkçe
+* kullanıcıyı vurur ("İMGE" → "i̇mge").
+*
+* Bu yüzden yerel ayar seçmiyoruz: I ailesini tek bir harfe indirip kalanı
+* yerel ayardan bağımsız küçültüyoruz. Böylece her iki taraf da aynı şekilde
+* katlanır ve iki dilde de eşleşir.
+*/
+function foldForSearch(value) {
+	return value.replace(/[İIıi]/g, "i").toLowerCase();
+}
+
+//#endregion
+//#region src/lib/model-record.ts
+/**
+* Modellerin alıntı karnesi.
+*
+* Her yeni analizde modelin yazdığı her alıntı, atıf yaptığı sayfada aranıyor
+* (`excerptCheck`). Proje hangi modelin yazdığını da tutuyor (`generation`).
+* İkisi birleşince kütüphanenin kendisi bir ölçüm oluyor: hangi model kaç
+* alıntıyı sayfasında bulunabilir yazdı?
+*
+* Bulunamayan alıntı her zaman uydurma değil: tablolar, denklemler ve taranmış
+* sayfalar metin çıkarmada kayboluyor. Bu yüzden karne "uydurdu" demiyor,
+* "sayfasında bulundu" diyor. Arayüz de bunu söylemeli.
+*
+* Yanlış veri, hiç veri olmamasından kötü. Bir projenin sayıları ancak
+* güvenilirse sayılıyor; değilse proje nedeniyle birlikte ayrı listeleniyor:
+* - Denetim hiç yapılmadıysa "hepsi bulundu" sayılmaz.
+* - Denetim kaydı 400 bulunamayan alıntıda kesiliyor; o sınırdaki bir kayıt
+*   oranı olduğundan iyi gösterirdi.
+* - Denetimden sonra kanıt değiştiyse kayıt artık bu kanıtı anlatmıyor.
+*   Referanslar denetimin saydığı gibi yeniden sayılıyor; tutmazsa dışarıda.
+* - Hangi modelin yazdığı bilinmiyorsa kime yazılacağı tahmin edilmiyor.
+*/
+/** `excerptCheckSchema.unlocated` üst sınırı. Bu sayıya ulaşan kayıt kesilmiş olabilir. */
+const UNLOCATED_LIMIT = 400;
+/** Stüdyo ve ajan köprüsü aynı cümleyi söylesin; nasıl düzeltileceği her yüzeyin kendi işi. */
+const exclusionDescriptions = {
+	"not-checked": "Its quotes were never checked against the PDF.",
+	"model-not-recorded": "The project does not say which model wrote it.",
+	"check-truncated": "Its check stopped listing missing quotes at 400, so its rate would look better than it is.",
+	"changed-since-check": "The evidence changed after its quotes were checked.",
+	"stage-unknown": "Two models wrote its evidence, and some claims cannot be traced to the stage that wrote them."
+};
+/** Model seçicideki atama ile projedeki kayıt aynı anahtara iner; boşluklar sayılmaz. */
+function modelIdentity(assignment) {
+	const provider = assignment?.provider.trim();
+	const model = assignment?.model.trim();
+	if (!provider || !model) return void 0;
+	return {
+		key: `${provider}:${model}`,
+		provider,
+		model
+	};
+}
+function modelLabel(model) {
+	return `${model.provider === "native-agent" ? "Agent" : getProvider(model.provider)?.label ?? model.provider} · ${model.model}`;
+}
+/**
+* Model ekibinde alıntıları iki model yazıyor. Dört kanıt aşamasından
+* "methods" ve "results" teknik modelde, "overview" ve "limitations" kanıt
+* modelinde çalışıyor (`api/generate`). Her aşama kendi önekiyle kimlik
+* veriyor (`validateEvidencePass`), metrikler "results"tan, sözlük
+* "overview"dan geliyor. Önek tanınmazsa tahmin edilmiyor.
+*/
+function claimRole(claimId) {
+	if (claimId.startsWith("overview-") || claimId.startsWith("limit-")) return "evidence";
+	if (claimId.startsWith("method-") || claimId.startsWith("result-")) return "technical";
+}
+function projectQuoteRecord(project) {
+	const excluded = (reason) => ({
+		status: "excluded",
+		project,
+		reason
+	});
+	const generation = project.generation;
+	const evidenceModel = modelIdentity(generation?.assignments?.evidence ?? generation);
+	const technicalModel = modelIdentity(generation?.assignments?.technical ?? generation);
+	if (!evidenceModel || !technicalModel) return excluded("model-not-recorded");
+	const check = project.excerptCheck;
+	if (!check) return excluded("not-checked");
+	if (check.unlocated.length >= 400) return excluded("check-truncated");
+	const oneModel = evidenceModel.key === technicalModel.key;
+	const modelFor = (owner, id) => {
+		if (oneModel) return evidenceModel;
+		const role = owner === "metric" ? "technical" : owner === "glossary" ? "evidence" : claimRole(id);
+		return role === "technical" ? technicalModel : role === "evidence" ? evidenceModel : void 0;
+	};
+	const tallies = /* @__PURE__ */ new Map();
+	const tally = (model) => {
+		const existing = tallies.get(model.key);
+		if (existing) return existing;
+		const created = {
+			...model,
+			checked: 0,
+			found: 0,
+			approved: 0,
+			rejected: 0
+		};
+		tallies.set(model.key, created);
+		return created;
+	};
+	const paperSources = new Set(project.evidence.sources.filter((source) => source.type === "paper").map((source) => source.id));
+	const owners = /* @__PURE__ */ new Map();
+	let counted = 0;
+	const count = (owner, id, sourceId) => {
+		const model = modelFor(owner, id);
+		if (!model) return false;
+		owners.set(`${owner}\u0000${id}`, model);
+		if (sourceId === void 0 || !paperSources.has(sourceId)) return true;
+		tally(model).checked += 1;
+		counted += 1;
+		return true;
+	};
+	for (const claim of project.evidence.claims) for (const reference of claim.sourceRefs) if (!count("claim", claim.id, reference.sourceId)) return excluded("stage-unknown");
+	for (const metric of project.evidence.metrics) count("metric", metric.id, metric.sourceRef.sourceId);
+	for (const item of project.evidence.glossary) count("glossary", item.term, item.sourceRef?.sourceId);
+	if (counted !== check.checked) return excluded("changed-since-check");
+	const missing = /* @__PURE__ */ new Map();
+	for (const item of check.unlocated) {
+		const model = owners.get(`${item.owner}\u0000${item.id}`);
+		if (!model) return excluded("changed-since-check");
+		missing.set(model.key, (missing.get(model.key) ?? 0) + 1);
+	}
+	for (const entry of tallies.values()) {
+		entry.found = entry.checked - (missing.get(entry.key) ?? 0);
+		if (entry.found < 0) return excluded("changed-since-check");
+	}
+	const reviews = project.claimReviews ?? {};
+	for (const claim of project.evidence.claims) {
+		if (!Object.hasOwn(reviews, claim.id)) continue;
+		const model = owners.get(`claim\u0000${claim.id}`);
+		if (!model) continue;
+		tally(model)[reviews[claim.id].status] += 1;
+	}
+	return {
+		status: "counted",
+		project,
+		tallies: [...tallies.values()]
+	};
+}
+/**
+* %95 Wilson aralığı. Üç alıntının üçü de bulunduysa oran %100 ama kanıt
+* %44'le de uyumlu; aralık, az denetlenmiş bir modelin çok denetlenmiş
+* birini geçmesini engelliyor.
+*/
+function wilsonInterval(found, checked, z = 1.96) {
+	if (checked <= 0) return void 0;
+	const rate = found / checked;
+	const zz = z * z;
+	const centre = rate + zz / (2 * checked);
+	const spread = z * Math.sqrt(rate * (1 - rate) / checked + zz / (4 * checked * checked));
+	const denominator = 1 + zz / checked;
+	return {
+		low: Math.max(0, (centre - spread) / denominator),
+		high: Math.min(1, (centre + spread) / denominator)
+	};
+}
+function titleKey(title) {
+	return foldForSearch(title).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+/**
+* Aynı makale: DOI'si ya da noktalamadan arınmış başlığı aynı olan projeler.
+* İkisinden biri yetiyor, çünkü arXiv ve dergi DOI'leri aynı makale için
+* farklı olabiliyor. Başlık benzerliğine bakılmıyor; yakın başlıklar farklı
+* makaleler olabilir.
+*/
+function samePaperGroups(records) {
+	const parent = records.map((_, index) => index);
+	const find = (index) => parent[index] === index ? index : parent[index] = find(parent[index]);
+	const firstByKey = /* @__PURE__ */ new Map();
+	records.forEach((record, index) => {
+		const paper = record.project.evidence.paper;
+		const keys = [`title:${titleKey(paper.title)}`, paper.doi?.trim() ? `doi:${paper.doi.trim().toLowerCase()}` : void 0];
+		for (const key of keys) {
+			if (!key || key === "title:") continue;
+			const first = firstByKey.get(key);
+			if (first === void 0) firstByKey.set(key, index);
+			else parent[find(index)] = find(first);
+		}
+	});
+	const groups = /* @__PURE__ */ new Map();
+	records.forEach((record, index) => {
+		const entries = groups.get(find(index)) ?? [];
+		for (const tally of record.tallies) if (tally.checked) entries.push({
+			key: tally.key,
+			provider: tally.provider,
+			model: tally.model,
+			project: record.project,
+			checked: tally.checked,
+			found: tally.found
+		});
+		groups.set(find(index), entries);
+	});
+	return [...groups.values()].filter((entries) => new Set(entries.map((entry) => entry.key)).size > 1).map((entries) => ({
+		title: entries[0].project.evidence.paper.title,
+		entries
+	}));
+}
+function modelRecord(projects) {
+	const records = projects.map(projectQuoteRecord);
+	const counted = records.filter((record) => record.status === "counted");
+	const rows = /* @__PURE__ */ new Map();
+	for (const record of counted) for (const tally of record.tallies) {
+		const row = rows.get(tally.key) ?? {
+			...tally,
+			checked: 0,
+			found: 0,
+			approved: 0,
+			rejected: 0,
+			papers: 0,
+			projects: /* @__PURE__ */ new Set()
+		};
+		row.checked += tally.checked;
+		row.found += tally.found;
+		row.approved += tally.approved;
+		row.rejected += tally.rejected;
+		row.projects.add(record.project.id);
+		rows.set(tally.key, row);
+	}
+	return {
+		models: [...rows.values()].filter((row) => row.checked > 0).map(({ projects: ids, ...row }) => {
+			const interval = wilsonInterval(row.found, row.checked);
+			return {
+				...row,
+				papers: ids.size,
+				rate: row.found / row.checked,
+				...interval
+			};
+		}).sort((left, right) => right.low - left.low || right.checked - left.checked || left.key.localeCompare(right.key)),
+		samePaper: samePaperGroups(counted),
+		excluded: records.flatMap((record) => record.status === "excluded" ? [{
+			project: record.project,
+			reason: record.reason
+		}] : []),
+		counted: counted.length
+	};
+}
+/**
+* Ajan köprüsünün (`trace-agent.mjs record`) yazdığı biçim: projelerin
+* tamamı değil, yalnızca bir ajanın kullanıcıya aktaracağı sayılar ve
+* nedenler. Alan adları kendini anlatıyor, çünkü okuyan bir model.
+*/
+function modelRecordSummary(record) {
+	const round = (value) => Math.round(value * 1e4) / 1e4;
+	return {
+		counted: record.counted,
+		models: record.models.map((row) => ({
+			model: modelLabel(row),
+			provider: row.provider,
+			modelId: row.model,
+			papers: row.papers,
+			quotesChecked: row.checked,
+			quotesFound: row.found,
+			rate: round(row.rate),
+			likelyLow: round(row.low),
+			likelyHigh: round(row.high),
+			claimsApproved: row.approved,
+			claimsRejected: row.rejected
+		})),
+		samePaper: record.samePaper.map((group) => ({
+			title: group.title,
+			entries: group.entries.map((entry) => ({
+				projectId: entry.project.id,
+				model: modelLabel(entry),
+				quotesChecked: entry.checked,
+				quotesFound: entry.found,
+				rate: round(entry.found / entry.checked)
+			}))
+		})),
+		notCounted: record.excluded.map((item) => ({
+			projectId: item.project.id,
+			title: item.project.evidence.paper.title,
+			reason: item.reason,
+			detail: exclusionDescriptions[item.reason]
+		}))
+	};
+}
+/**
+* Diskten okunmuş ham projelerden karne. Şemaya uymayan dosya sayılmıyor ama
+* sessizce de kaybolmuyor: kaç tane olduğu raporlanıyor.
+*/
+function libraryModelRecord(inputs) {
+	const projects = [];
+	for (const input of inputs) {
+		const parsed = researchProjectSchema.safeParse(input);
+		if (parsed.success) projects.push(parsed.data);
+	}
+	return {
+		projects: inputs.length,
+		unreadable: inputs.length - projects.length,
+		...modelRecordSummary(modelRecord(projects))
+	};
+}
+
+//#endregion
 //#region src/lib/canonical-json.ts
 /**
 * Anahtarları sıralanmış JSON.
@@ -20401,4 +20849,4 @@ function spliceSectionObject(input, rawBrief, section, options = {}) {
 }
 
 //#endregion
-export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildSectionBrief, builtInTemplates, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, narrativeTemplateSchema, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, shouldSnapshot, spliceSectionObject, splitPages, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildSectionBrief, builtInTemplates, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, libraryModelRecord, narrativeTemplateSchema, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, shouldSnapshot, spliceSectionObject, splitPages, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section, primer concept, quiz question, derivation or equation of an existing Trace project with its evidence locked, to generate with or save a narrative template, to publish a shareable link to a project, to check a project's quotes against the text of its PDF, to resolve a paper from a DOI or an open-access repository link, to export a project as a Markdown or printable report, slides, a Jupyter notebook, a BibTeX/RIS citation or Anki flashcards, and to show a paper's citation graph.
+description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section, primer concept, quiz question, derivation or equation of an existing Trace project with its evidence locked, to generate with or save a narrative template, to publish a shareable link to a project, to check a project's quotes against the text of its PDF, to resolve a paper from a DOI or an open-access repository link, to export a project as a Markdown or printable report, slides, a Jupyter notebook, a BibTeX/RIS citation or Anki flashcards, to show a paper's citation graph, and to report how each model's quotes held up across the Trace library.
 ---
 
 # Trace Paper Studio
@@ -172,6 +172,21 @@ When the user asks to strengthen the evidence, or `validate` lists `thinSections
 If the project has a `template`, the prompt includes the section's slot, and `splice` keeps the section's visual and claim kinds in that slot.
 
 `splice` runs the app's own integrity checks. If it returns `ok: false`, the project file was not touched. Fix every listed issue in the section file and run `splice` again. Do not edit the project JSON directly to get around a lock. When it succeeds, run `deliver` again so the standalone site shows the new section. The studio's library copy is refreshed by `splice` itself. The version it replaced stays in the studio's version history, so the user can restore it.
+
+## Model record
+
+When the user asks which model to trust, how reliable the quotes of the models they used have been, or whether a model makes up quotes, run:
+
+```bash
+node scripts/trace-agent.mjs record
+```
+
+It reads the Trace library (the one the studio shows) and prints, for each model, `quotesFound` out of `quotesChecked` on their page, `likelyLow`–`likelyHigh` (a 95% range), the papers, and the claims a reviewer approved or rejected. In a model team each quote is counted for the model that wrote it. Report the numbers as they are:
+
+- Say "found on its page" or "not found on its page", never "invented" or "hallucinated": a missing quote may sit in a table, an equation or a scanned page that text extraction cannot read.
+- Keep the order of `models`; it is sorted by `likelyLow`. Give the number of quotes behind every rate, and do not call one model more reliable than another when their ranges overlap.
+- When `samePaper` is not empty, lead with it: the same PDF read by different models is the fairest comparison the library has.
+- Name every `notCounted` project with its `detail`. For `not-checked` or `changed-since-check`, offer to run `verify --project <file> --paper <paper.pdf>` on the `file` it lists when the user has the PDF; that project is counted from then on.
 
 ## Resume behavior
 

@@ -1,5 +1,5 @@
 import { getProvider } from "./model-providers";
-import type { ResearchProject } from "./schema";
+import { researchProjectSchema, type ResearchProject } from "./schema";
 import { foldForSearch } from "./search-text";
 
 /**
@@ -37,6 +37,15 @@ export type ModelTally = ModelIdentity & {
 };
 
 export type ExclusionReason = "model-not-recorded" | "not-checked" | "check-truncated" | "changed-since-check" | "stage-unknown";
+
+/** Stüdyo ve ajan köprüsü aynı cümleyi söylesin; nasıl düzeltileceği her yüzeyin kendi işi. */
+export const exclusionDescriptions: Record<ExclusionReason, string> = {
+  "not-checked": "Its quotes were never checked against the PDF.",
+  "model-not-recorded": "The project does not say which model wrote it.",
+  "check-truncated": "Its check stopped listing missing quotes at 400, so its rate would look better than it is.",
+  "changed-since-check": "The evidence changed after its quotes were checked.",
+  "stage-unknown": "Two models wrote its evidence, and some claims cannot be traced to the stage that wrote them.",
+};
 
 export type ProjectQuoteRecord =
   | { status: "counted"; project: ResearchProject; tallies: ModelTally[] }
@@ -248,4 +257,59 @@ export function modelRecord(projects: readonly ResearchProject[]): ModelRecord {
     excluded: records.flatMap((record) => (record.status === "excluded" ? [{ project: record.project, reason: record.reason }] : [])),
     counted: counted.length,
   };
+}
+
+/**
+ * Ajan köprüsünün (`trace-agent.mjs record`) yazdığı biçim: projelerin
+ * tamamı değil, yalnızca bir ajanın kullanıcıya aktaracağı sayılar ve
+ * nedenler. Alan adları kendini anlatıyor, çünkü okuyan bir model.
+ */
+export function modelRecordSummary(record: ModelRecord) {
+  // Kayan nokta artığı ("0.9999999999999998") okuyan modeli yanıltmasın.
+  const round = (value: number) => Math.round(value * 10_000) / 10_000;
+  return {
+    counted: record.counted,
+    models: record.models.map((row) => ({
+      model: modelLabel(row),
+      provider: row.provider,
+      modelId: row.model,
+      papers: row.papers,
+      quotesChecked: row.checked,
+      quotesFound: row.found,
+      rate: round(row.rate),
+      likelyLow: round(row.low),
+      likelyHigh: round(row.high),
+      claimsApproved: row.approved,
+      claimsRejected: row.rejected,
+    })),
+    samePaper: record.samePaper.map((group) => ({
+      title: group.title,
+      entries: group.entries.map((entry) => ({
+        projectId: entry.project.id,
+        model: modelLabel(entry),
+        quotesChecked: entry.checked,
+        quotesFound: entry.found,
+        rate: round(entry.found / entry.checked),
+      })),
+    })),
+    notCounted: record.excluded.map((item) => ({
+      projectId: item.project.id,
+      title: item.project.evidence.paper.title,
+      reason: item.reason,
+      detail: exclusionDescriptions[item.reason],
+    })),
+  };
+}
+
+/**
+ * Diskten okunmuş ham projelerden karne. Şemaya uymayan dosya sayılmıyor ama
+ * sessizce de kaybolmuyor: kaç tane olduğu raporlanıyor.
+ */
+export function libraryModelRecord(inputs: readonly unknown[]) {
+  const projects: ResearchProject[] = [];
+  for (const input of inputs) {
+    const parsed = researchProjectSchema.safeParse(input);
+    if (parsed.success) projects.push(parsed.data);
+  }
+  return { projects: inputs.length, unreadable: inputs.length - projects.length, ...modelRecordSummary(modelRecord(projects)) };
 }
