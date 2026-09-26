@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { learningBlockSpec, learningBlocksFor } from "./learning-generation";
 import type { GenerationTaskRole } from "./model-providers";
 import type { NarrativeTemplate, ResearchProject } from "./schema";
 import { SECTION_BUDGETS, expectedSectionCounts } from "./section-budgets";
@@ -124,6 +125,14 @@ export function generationStageProfiles(options: {
       label: "The visual story",
       promptCharacters: 34_000,
       outputCharacters: Math.round(18_500 * counts.story / SECTION_BUDGETS.story.standard),
+    },
+    // Öğrenme katmanı blok blok yazılıyor; en ağır istek derinliğe göre değişiyor:
+    // özlüde ön bilgi, standartta türetimler, derinde oyun alanları.
+    teaching: {
+      id: "teaching",
+      label: "The learning material",
+      promptCharacters: options.depth === "concise" ? 19_000 : 25_500,
+      outputCharacters: Math.max(...learningBlocksFor(options.depth).map((block) => learningBlockSpec(block).expectedCharacters)),
     },
   };
 }

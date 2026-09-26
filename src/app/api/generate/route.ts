@@ -16,9 +16,18 @@ import type { GenerationProgress, GenerationStreamEvent } from "@/lib/generation
 import {
   validateDeepReportIntegrity,
   validateEvidenceIntegrity,
+  validateLearningIntegrity,
   validateStoryIntegrity,
   validateTechnicalAppendixIntegrity,
 } from "@/lib/generation-validation";
+import {
+  applyLearningBlock,
+  describeLearningGaps,
+  learningBlockSpec,
+  learningBlocksFor,
+  type LearningBlockId,
+  type LearningBlocks,
+} from "@/lib/learning-generation";
 import { buildDeepReportPrompt, buildEvidencePassPrompt, buildStoryPrompt, buildTechnicalAppendixPrompt } from "@/lib/prompts";
 import { expectedSectionCounts } from "@/lib/section-budgets";
 import { applyExcerptCheck, downgradeUnlocatedClaims, renderPaperText } from "@/lib/paper-text";
@@ -65,6 +74,7 @@ import {
   type ProgressWriter,
   type ProviderRuntime,
 } from "@/lib/server/model-runtime";
+import { generateLearningBlock, learningFailureReason } from "@/lib/server/learning-runner";
 import { allocatePaperAccent, paperIdentityFromBytes } from "@/lib/trace-storage";
 
 export const runtime = "nodejs";
@@ -141,14 +151,17 @@ function parseInput(form: FormData): GenerationInput {
   const rawAssignments = String(form.get("assignments") ?? "");
   try {
     const parsed = rawAssignments ? JSON.parse(rawAssignments) as Record<string, unknown> : undefined;
-    assignments = Object.fromEntries(generationTaskRoles.map((role) => {
+    const chosen: Partial<ModelTeam> = {};
+    for (const role of generationTaskRoles) {
       const candidate = parsed?.[role] as { provider?: unknown; model?: unknown } | undefined;
+      // Öğretim rolünü göndermeyen eski bir istemcide öğretimi rapor modeli yapıyor.
       const selection = candidate
         ? resolveProviderModel(String(candidate.provider ?? ""), String(candidate.model ?? ""))
-        : fallbackSelection;
+        : role === "teaching" && chosen.report ? chosen.report : fallbackSelection;
       if (!selection) throw new Error(`invalid ${role}`);
-      return [role, selection];
-    })) as ModelTeam;
+      chosen[role] = selection;
+    }
+    assignments = chosen as ModelTeam;
   } catch {
     throw new InputError("The per-task model assignment is not valid.", 400);
   }
@@ -556,7 +569,7 @@ async function runPipeline(
             progress({
               stage: "evidence",
               progress: evidenceHighWater,
-              title: `${evidencePassLabels[passId]} yeniden denetleniyor.`,
+              title: `Rechecking ${evidencePassLabels[passId]}.`,
               detail: `Clearing ${issues.length} inconsistencies · structure attempt ${attempt}/2`,
               attempt,
             }),
@@ -670,11 +683,20 @@ async function runPipeline(
     let reportHighWater = 69;
     let lastReportNotice = 0;
     let lastTechnicalNotice = 0;
+    const learningPlan = learningBlocksFor(input.depth);
+    let learningHighWater = 69;
+    let lastLearningNotice = 0;
+    /**
+     * Şeritler paralel ilerliyor ve her biri kendi olayını yazıyor. Çubuk en
+     * geride kalan şeridi gösteriyor: yalnızca ileri gidiyor, öne geçen bir
+     * şerit onu geri zıplatmıyor.
+     */
+    const specialistProgress = () => Math.min(storyHighWater, reportHighWater, learningHighWater);
     const storyStartedAt = Date.now();
     progress({
       stage: "story",
-      progress: storyHighWater,
-      title: "Designing the visual narrative and the deep report.",
+      progress: specialistProgress(),
+      title: "Designing the visual narrative, the deep report and the learning material.",
       detail: "Different models run in parallel; tasks sharing one model run in a controlled sequence.",
     });
     const [visualRuntime, reportRuntime, technicalRuntime] = await Promise.all([
@@ -682,6 +704,15 @@ async function runPipeline(
       getRuntime("report"),
       getRuntime("technical", false),
     ]);
+    // Öğretim modeli hazırlanamıyorsa (ör. kapalı bir yerel sunucu) analiz
+    // yine tamamlanıyor; katman eksik kalıyor ve bu söyleniyor.
+    let teachingUnavailable: string | undefined;
+    const teachingRuntime = await getRuntime("teaching", false).catch((error: unknown) => {
+      if (signal.aborted) throw error;
+      teachingUnavailable = learningFailureReason(error);
+      console.error("Trace generation stage", { stage: "learning", outcome: "skipped", ...safeDiagnostic(error) });
+      return undefined;
+    });
     const generateStory = () => generateValidated<StorySpec>({
       stage: "Story planning",
       schema: storySpecSchema,
@@ -704,7 +735,7 @@ async function runPipeline(
             storyHighWater = Math.max(storyHighWater, 69 + Math.min(17, characters / 600));
             progress({
               stage: "story",
-              progress: storyHighWater,
+              progress: specialistProgress(),
               title: "Streaming the StorySpec.",
               detail: `Received ${characters.toLocaleString("en")} characters of validated narrative.`,
             });
@@ -717,7 +748,7 @@ async function runPipeline(
       onStructureRetry: (attempt, issues) =>
         progress({
           stage: "story",
-          progress: storyHighWater,
+          progress: specialistProgress(),
           title: "Relinking the story.",
           detail: `Clearing ${issues.length} narrative inconsistencies · structure attempt ${attempt}/2`,
           attempt,
@@ -725,7 +756,7 @@ async function runPipeline(
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
-          progress: storyHighWater,
+          progress: specialistProgress(),
           title: "Reconnecting for the story.",
           detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
           attempt,
@@ -755,7 +786,7 @@ async function runPipeline(
             reportHighWater = Math.max(reportHighWater, 69 + Math.min(17, characters / 700));
             progress({
               stage: "story",
-              progress: Math.min(storyHighWater, reportHighWater),
+              progress: specialistProgress(),
               title: "Streaming the deep report.",
               detail: `Received ${characters.toLocaleString("en")} characters of analytical report.`,
             });
@@ -768,7 +799,7 @@ async function runPipeline(
       onStructureRetry: (attempt, issues) =>
         progress({
           stage: "story",
-          progress: Math.min(storyHighWater, reportHighWater),
+          progress: specialistProgress(),
           title: "Relinking the report.",
           detail: `Clearing ${issues.length} report inconsistencies · structure attempt ${attempt}/2`,
           attempt,
@@ -776,7 +807,7 @@ async function runPipeline(
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
-          progress: Math.min(storyHighWater, reportHighWater),
+          progress: specialistProgress(),
           title: "Reconnecting for the report.",
           detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
           attempt,
@@ -805,7 +836,7 @@ async function runPipeline(
             lastTechnicalNotice = now;
             progress({
               stage: "story",
-              progress: Math.min(storyHighWater, reportHighWater),
+              progress: specialistProgress(),
               title: "Preparing the technical appendix.",
               detail: `Received ${characters.toLocaleString("en")} characters of equation, algorithm and code analysis.`,
             });
@@ -814,14 +845,14 @@ async function runPipeline(
       validate: (value) => validateTechnicalAppendixIntegrity(value, evidence),
       onStructureRetry: (attempt, issues) => progress({
         stage: "story",
-        progress: Math.min(storyHighWater, reportHighWater),
+        progress: specialistProgress(),
         title: "Relinking the technical appendix.",
         detail: `Clearing ${issues.length} technical inconsistencies · structure attempt ${attempt}/2`,
         attempt,
       }),
       onNetworkRetry: (attempt) => progress({
         stage: "story",
-        progress: Math.min(storyHighWater, reportHighWater),
+        progress: specialistProgress(),
         title: "Reconnecting for the technical appendix.",
         detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
         attempt,
@@ -836,17 +867,122 @@ async function runPipeline(
     const addPostTask = (runtime: ProviderRuntime, task: () => Promise<void>) => {
       groupedTasks.set(runtime, [...(groupedTasks.get(runtime) ?? []), task]);
     };
+    /**
+     * Türetimler ve oyun alanları teknik ekin denklemlerine dayanıyor. Teknik
+     * ek başka bir şeritte yazılıyorsa öğretim şeridi onu bekliyor; aynı
+     * şeritteyse zaten önce geliyor (görevler eklendiği sırayla çalışıyor ve
+     * teknik ek öğretimden önce ekleniyor), yani bekleme kilitlenmiyor.
+     */
+    let appendixSettled: (value: TechnicalAppendix | undefined) => void = () => undefined;
+    const appendixReady = new Promise<TechnicalAppendix | undefined>((resolve) => { appendixSettled = resolve; });
     addPostTask(visualRuntime, async () => {
       story = { ...(await generateStory()), accent: presentation.accent };
     });
     addPostTask(reportRuntime, async () => { deepReport = await generateReport(); });
-    addPostTask(technicalRuntime, async () => { technicalAppendix = await generateTechnical(); });
+    addPostTask(technicalRuntime, async () => {
+      try {
+        technicalAppendix = await generateTechnical();
+      } finally {
+        appendixSettled(technicalAppendix);
+      }
+    });
+
+    /**
+     * Öğrenme katmanı analizi düşürmüyor: bir blok iki denemede de denetimden
+     * geçemezse ya da öğretim modeli hata verirse o blok atlanıyor ve kullanıcı
+     * bir uyarıyla, eksik parçayı Lab'den ekleyebileceğini öğreniyor. İptal
+     * ise her şeyi durduruyor.
+     */
+    const learning: LearningBlocks = {};
+    const unavailableReason = teachingUnavailable;
+    const learningFailures: Array<{ block: LearningBlockId; reason: string }> = unavailableReason
+      ? learningPlan.map((block) => ({ block, reason: unavailableReason }))
+      : [];
+    let learningDone = 0;
+    const learningStartedAt = Date.now();
+    const teachingTasks = teachingRuntime ? learningPlan.map((block) => ({ block, lane: teachingRuntime })) : [];
+    for (const { block, lane } of teachingTasks) {
+      addPostTask(lane, async () => {
+        const spec = learningBlockSpec(block);
+        const appendix = spec.usesTechnicalAppendix ? await appendixReady : undefined;
+        const step = `${learningDone + 1}/${learningPlan.length}`;
+        progress({
+          stage: "story",
+          progress: specialistProgress(),
+          title: `${spec.title}.`,
+          detail: `Learning material ${step} · built from the evidence only, without the PDF.`,
+        });
+        try {
+          const value = await generateLearningBlock(block, lane, {
+            evidence,
+            depth: input.depth,
+            language: input.language,
+            audience: input.audience,
+            technicalAppendix: appendix,
+          }, signal, {
+            onChunk: (characters) => {
+              markProviderActivity();
+              const now = Date.now();
+              if (now - lastLearningNotice < 900) return;
+              lastLearningNotice = now;
+              const partial = Math.min(0.9, characters / 7_000);
+              learningHighWater = Math.max(learningHighWater, 69 + ((learningDone + partial) / learningPlan.length) * 17);
+              progress({
+                stage: "story",
+                progress: specialistProgress(),
+                title: `${spec.title}.`,
+                detail: `Received ${characters.toLocaleString("en")} characters · learning material ${step}`,
+              });
+            },
+            onStructureRetry: (attempt, issues) => progress({
+              stage: "story",
+              progress: specialistProgress(),
+              title: `Relinking ${spec.noun}.`,
+              detail: `Clearing ${issues.length} inconsistencies · structure attempt ${attempt}/2`,
+              attempt,
+            }),
+            onNetworkRetry: (attempt) => progress({
+              stage: "story",
+              progress: specialistProgress(),
+              title: `Reconnecting for ${spec.noun}.`,
+              detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+              attempt,
+            }),
+          });
+          Object.assign(learning, applyLearningBlock(block, value));
+        } catch (error) {
+          if (signal.aborted) throw error;
+          learningFailures.push({ block, reason: learningFailureReason(error) });
+          console.error("Trace generation stage", {
+            stage: `learning:${block}`,
+            fallbackProvider: input.assignments.teaching.provider,
+            fallbackModel: input.assignments.teaching.model,
+            outcome: "skipped",
+            ...safeDiagnostic(error),
+          });
+        } finally {
+          learningDone += 1;
+          learningHighWater = Math.max(learningHighWater, 69 + (learningDone / learningPlan.length) * 17);
+        }
+      });
+    }
+    if (!learningPlan.length || !teachingRuntime) learningHighWater = 86;
+
     await Promise.all([...groupedTasks.values()].map(async (tasks) => {
       for (const task of tasks) await task();
     }));
     if (!story || !deepReport || !technicalAppendix) {
       throw new Error("The model team did not produce every required output.");
     }
+    const learningGap = describeLearningGaps(learningFailures);
+    if (learningGap) warnings.push(learningGap);
+    console.info("Trace generation stage", {
+      stage: "learning",
+      durationMs: Date.now() - learningStartedAt,
+      model: input.assignments.teaching.model,
+      written: Object.keys(learning),
+      skipped: learningFailures.map((failure) => failure.block),
+    });
     console.info("Trace generation stage", {
       stage: "story",
       durationMs: Date.now() - storyStartedAt,
@@ -871,6 +1007,7 @@ async function runPipeline(
       validateReportTemplate(deepReport, input.template);
     }
     validateTechnicalAppendixIntegrity(technicalAppendix, evidence);
+    validateLearningIntegrity({ evidence, depth: input.depth, technicalAppendix, ...learning });
 
     const now = new Date().toISOString();
     const project = researchProjectSchema.parse({
@@ -885,6 +1022,7 @@ async function runPipeline(
       story,
       deepReport,
       technicalAppendix,
+      ...learning,
       excerptCheck: excerptChecked?.project.excerptCheck,
       template: input.template,
       generation: {
@@ -895,6 +1033,7 @@ async function runPipeline(
           visual: { ...input.assignments.visual, model: visualRuntime.effectiveModel },
           report: { ...input.assignments.report, model: reportRuntime.effectiveModel },
           technical: { ...input.assignments.technical, model: technicalRuntime.effectiveModel },
+          teaching: { ...input.assignments.teaching, model: teachingRuntime?.effectiveModel ?? input.assignments.teaching.model },
         },
       },
     });

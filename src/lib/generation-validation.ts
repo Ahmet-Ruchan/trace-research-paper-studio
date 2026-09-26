@@ -199,8 +199,15 @@ export function validateTechnicalAppendixIntegrity(
  * kırılır. Bunu üretim anında yakalamak, kullanıcıya bozuk bir kaydırma
  * çubuğu göstermekten iyidir.
  */
+/**
+ * Denetimin okuduğu alanlar. Tam bir proje de olur, üretim sırasındaki
+ * yarım proje de: öğrenme blokları anlatı ve rapor bitmeden yazılıyor.
+ */
+export type LearningIntegrityInput = Pick<ResearchProject, "evidence" | "depth"> &
+  Partial<Pick<ResearchProject, "technicalAppendix" | "figures" | "primer" | "derivations" | "quiz" | "interactives" | "applicationGuide">>;
+
 export function validateLearningIntegrity(
-  project: ResearchProject,
+  project: LearningIntegrityInput,
   options: { requireDepthBlocks?: boolean } = {},
 ) {
   const issues: string[] = [];
@@ -218,7 +225,7 @@ export function validateLearningIntegrity(
   // alınamaz; mevcut çalışmayı bozmamak için varsayılan kapalı.
   if (options.requireDepthBlocks) {
     for (const block of LEARNING_REQUIREMENTS[project.depth]) {
-      const value = project[block as keyof ResearchProject];
+      const value = project[block];
       const missing = value === undefined || (Array.isArray(value) && value.length === 0);
       if (missing) issues.push(`${block}: required at "${project.depth}" depth`);
     }
@@ -267,6 +274,9 @@ export function validateLearningIntegrity(
       });
       checkClaims(concept.claimIds, `primer.${concept.id}`);
     });
+    // Okuma sırası ön koşullardan çıkıyor; döngüde hiçbir kavram önce okunamaz.
+    const cycle = prerequisiteCycle(project.primer.concepts);
+    if (cycle) issues.push(`primer: the prerequisites form a cycle (${cycle.join(" → ")})`);
   }
 
   if (project.derivations) {
@@ -427,6 +437,34 @@ export function validateLearningIntegrity(
   }
 
   if (issues.length) throw new IntegrityError("Learning", issues);
+}
+
+/** Ön koşul zincirindeki ilk döngü, varsa: ["a", "b", "a"]. */
+function prerequisiteCycle(concepts: ReadonlyArray<{ id: string; prerequisiteIds: readonly string[] }>) {
+  const byId = new Map(concepts.map((concept) => [concept.id, concept]));
+  const done = new Set<string>();
+  const path: string[] = [];
+  const visit = (id: string): string[] | undefined => {
+    if (done.has(id)) return undefined;
+    const start = path.indexOf(id);
+    if (start >= 0) return [...path.slice(start), id];
+    const concept = byId.get(id);
+    if (!concept) return undefined;
+    path.push(id);
+    for (const next of concept.prerequisiteIds) {
+      if (next === id) continue;
+      const found = visit(next);
+      if (found) return found;
+    }
+    path.pop();
+    done.add(id);
+    return undefined;
+  };
+  for (const concept of concepts) {
+    const found = visit(concept.id);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 export function describeValidationError(error: unknown) {

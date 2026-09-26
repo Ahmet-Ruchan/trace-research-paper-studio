@@ -4,6 +4,7 @@ import {
   providerCatalog,
   providerReadsDocuments,
   resolveProviderModel,
+  withTeachingRole,
   type ModelTeam,
   type ProviderId,
 } from "./model-providers";
@@ -42,8 +43,10 @@ const fields = {
   single: assignmentSchema.refine((assignment) => providerReadsDocuments(assignment.provider), "A single model must be able to read the paper."),
   orchestration: z.enum(["single", "team"]),
   team: z
-    .object({ evidence: assignmentSchema, technical: assignmentSchema, report: assignmentSchema, visual: assignmentSchema })
-    .refine((team) => documentTaskRoles.every((role) => providerReadsDocuments(team[role].provider)), "The stages that read the paper need a provider that can."),
+    .object({ evidence: assignmentSchema, technical: assignmentSchema, report: assignmentSchema, visual: assignmentSchema, teaching: assignmentSchema.optional() })
+    .refine((team) => documentTaskRoles.every((role) => providerReadsDocuments(team[role]?.provider ?? "")), "The stages that read the paper need a provider that can.")
+    // Öğretim rolünden önce hatırlanan bir ekip öğretimi rapor modeline veriyor.
+    .transform(withTeachingRole),
   templateId: z.string().min(1).max(160),
 };
 

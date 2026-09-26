@@ -29,6 +29,7 @@ import {
   type ProgressWriter,
   type ProviderRuntime,
 } from "@/lib/server/model-runtime";
+import { RequestError, readJsonBody } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,43 +50,6 @@ const requestSchema = z.object({
   assignment: z.object({ provider: z.string(), model: z.string() }),
   apiKey: z.string().max(4_096).default(""),
 });
-
-class RequestError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-  }
-}
-
-async function readBody(request: Request) {
-  const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MAX_BODY_BYTES) throw new RequestError("The project is too large to regenerate a section of.", 413);
-  if (!request.body) throw new RequestError("The request body is empty.", 400);
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > MAX_BODY_BYTES) {
-      await reader.cancel().catch(() => undefined);
-      throw new RequestError("The project is too large to regenerate a section of.", 413);
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(received);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
-  } catch {
-    throw new RequestError("The request body is not valid JSON.", 400);
-  }
-}
 
 function parseInput(raw: unknown) {
   const parsed = requestSchema.safeParse(raw);
@@ -272,7 +236,7 @@ async function runRegeneration(
 export async function POST(request: Request) {
   let input: ReturnType<typeof parseInput>;
   try {
-    input = parseInput(await readBody(request));
+    input = parseInput(await readJsonBody(request, MAX_BODY_BYTES, "The project is too large to regenerate a section of."));
   } catch (error) {
     if (error instanceof RequestError) return Response.json({ error: error.message }, { status: error.status });
     return Response.json({ error: "The regeneration request could not be read." }, { status: 400 });

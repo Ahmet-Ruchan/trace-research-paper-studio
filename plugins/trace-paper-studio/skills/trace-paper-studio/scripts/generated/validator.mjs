@@ -4952,7 +4952,12 @@ const researchProjectSchema = generationResultSchema.extend({
 			visual: object({
 				provider: string(),
 				model: string()
-			})
+			}),
+			/** Öğretim rolü sonradan eklendi; ondan önce üretilen projelerde yok. */
+			teaching: object({
+				provider: string(),
+				model: string()
+			}).optional()
 		}).optional()
 	}).optional()
 });
@@ -5430,16 +5435,6 @@ function validateTechnicalAppendixIntegrity(appendix, evidence) {
 	if (!linkedItems.length) issues.push("The technical appendix must include at least one evidence-linked item");
 	if (issues.length) throw new IntegrityError("TechnicalAppendix", issues);
 }
-/**
-* Öğrenme katmanının bütünlüğü.
-*
-* İki iş yapar: (1) `depth` için zorunlu blokların var olduğunu doğrular,
-* (2) her bloğun kendi içinde tutarlı ve ÇALIŞIR olduğunu denetler. İkincisi
-* özellikle interaktifler için kritik: bir formül ayrıştırılamıyorsa veya
-* bildirilmeyen bir parametreye atıfta bulunuyorsa, oynatıcı çalışma anında
-* kırılır. Bunu üretim anında yakalamak, kullanıcıya bozuk bir kaydırma
-* çubuğu göstermekten iyidir.
-*/
 function validateLearningIntegrity(project, options = {}) {
 	const issues = [];
 	const claimIds = new Set(project.evidence.claims.map((claim) => claim.id));
@@ -5486,6 +5481,8 @@ function validateLearningIntegrity(project, options = {}) {
 			});
 			checkClaims(concept.claimIds, `primer.${concept.id}`);
 		});
+		const cycle = prerequisiteCycle(project.primer.concepts);
+		if (cycle) issues.push(`primer: the prerequisites form a cycle (${cycle.join(" → ")})`);
 	}
 	if (project.derivations) {
 		const duplicateDerivations = duplicates(project.derivations.map((item) => item.id));
@@ -5599,6 +5596,31 @@ function validateLearningIntegrity(project, options = {}) {
 		guide.pitfalls.forEach((item, index) => checkClaims(item.claimIds, `applicationGuide.pitfalls[${index}]`));
 	}
 	if (issues.length) throw new IntegrityError("Learning", issues);
+}
+/** Ön koşul zincirindeki ilk döngü, varsa: ["a", "b", "a"]. */
+function prerequisiteCycle(concepts) {
+	const byId = new Map(concepts.map((concept) => [concept.id, concept]));
+	const done = /* @__PURE__ */ new Set();
+	const path = [];
+	const visit = (id) => {
+		if (done.has(id)) return void 0;
+		const start = path.indexOf(id);
+		if (start >= 0) return [...path.slice(start), id];
+		const concept = byId.get(id);
+		if (!concept) return void 0;
+		path.push(id);
+		for (const next of concept.prerequisiteIds) {
+			if (next === id) continue;
+			const found = visit(next);
+			if (found) return found;
+		}
+		path.pop();
+		done.add(id);
+	};
+	for (const concept of concepts) {
+		const found = visit(concept.id);
+		if (found) return found;
+	}
 }
 function describeValidationError(error) {
 	if (error instanceof IntegrityError) return error.issues;
@@ -19619,6 +19641,13 @@ const generationTaskCatalog = [
 		shortLabel: "Visual",
 		description: "Infographics, architecture maps, canvas layouts and the scrollytelling plan.",
 		recommendation: "Design judgement and structured output"
+	},
+	{
+		id: "teaching",
+		label: "Teaching and learning material",
+		shortLabel: "Teaching",
+		description: "Primer, step-by-step derivations, playgrounds, quiz and the application guide.",
+		recommendation: "Clear explanation and careful formulas"
 	}
 ];
 const generationTaskRoles = generationTaskCatalog.map((task) => task.id);
@@ -20086,7 +20115,8 @@ const revisionReasons = [
 	"import",
 	"manual",
 	"agent",
-	"verify"
+	"verify",
+	"learning"
 ];
 const revisionReasonSchema = _enum(revisionReasons);
 /** Proje başına tutulan revizyon sayısı. Her biri projenin tam kopyası. */
@@ -20198,6 +20228,28 @@ function bulletList(lines) {
 }
 
 //#endregion
+//#region src/lib/learning-rules.ts
+const PRIMER_RULES = [
+	"A concept explains prior knowledge the paper assumes but does not explain. It is not a summary of the paper.",
+	"intuition gives the plain-language idea first; formal (optional) is the precise definition in LaTeX; whyItMatters connects the concept to this paper.",
+	"level is one of temel (basic), orta (intermediate) or ileri (advanced).",
+	"prerequisiteIds may only name other concept IDs from the outline, never this concept itself.",
+	"claimIds may be empty for general background; when present, each must be a claim ID from the evidence JSON."
+];
+const QUIZ_RULES = [
+	"Test understanding of the paper, not recall of trivia. The correct answer must follow from the cited claims.",
+	"single and true-false questions have exactly one correct option; multi questions have at least two. A true-false question has exactly two options.",
+	"Every option carries an explanation of why it is right or wrong, grounded in the evidence.",
+	"page is optional; give it only when it is a page one of the cited claims comes from."
+];
+const DERIVATION_RULES = [
+	"Derive the result step by step. Each step has latex, a plain-language reading and a rationale that says why it follows from the previous step.",
+	"Step IDs are unique within the derivation.",
+	"numericExample is optional and may only use numbers from the evidence metrics or the paper's stated settings; never invent values.",
+	"Use standard LaTeX math only; no macros defined elsewhere."
+];
+
+//#endregion
 //#region src/lib/section-regeneration.ts
 /**
 * Bölüm düzeyinde yeniden üretim, kanıt kilidiyle.
@@ -20275,25 +20327,6 @@ function integrityIssues(run) {
 }
 const claimsOf = (item) => item.claimIds.join(", ") || "none";
 const learningIssues = (project) => integrityIssues(() => validateLearningIntegrity(project));
-const PRIMER_RULES = [
-	"A concept explains prior knowledge the paper assumes but does not explain. It is not a summary of the paper.",
-	"intuition gives the plain-language idea first; formal (optional) is the precise definition in LaTeX; whyItMatters connects the concept to this paper.",
-	"level is one of temel (basic), orta (intermediate) or ileri (advanced).",
-	"prerequisiteIds may only name other concept IDs from the outline, never this concept itself.",
-	"claimIds may be empty for general background; when present, each must be a claim ID from the evidence JSON."
-];
-const QUIZ_RULES = [
-	"Test understanding of the paper, not recall of trivia. The correct answer must follow from the cited claims.",
-	"single and true-false questions have exactly one correct option; multi questions have at least two. A true-false question has exactly two options.",
-	"Every option carries an explanation of why it is right or wrong, grounded in the evidence.",
-	"page is optional; give it only when it is a page one of the cited claims comes from."
-];
-const DERIVATION_RULES = [
-	"Derive the result step by step. Each step has latex, a plain-language reading and a rationale that says why it follows from the previous step.",
-	"Step IDs are unique within the derivation.",
-	"numericExample is optional and may only use numbers from the evidence metrics or the paper's stated settings; never invent values.",
-	"Use standard LaTeX math only; no macros defined elsewhere."
-];
 const EQUATION_RULES = [
 	"expression is the equation in plain text; latex (optional) is the same equation in LaTeX; explanation says what it computes and why the method needs it.",
 	"variables (at most 10) define every symbol a reader needs, with its meaning in this paper.",
@@ -20371,7 +20404,7 @@ const KINDS = {
 		noun: "concept",
 		schema: primerConceptSchema,
 		schemaName: "trace_primer_concept",
-		taskRole: "report",
+		taskRole: "teaching",
 		missingBlock: "This project has no primer to regenerate a concept of",
 		items: (project) => project.primer?.concepts,
 		replace: (project, items) => ({
@@ -20398,7 +20431,7 @@ const KINDS = {
 		noun: "question",
 		schema: quizQuestionSchema,
 		schemaName: "trace_quiz_question",
-		taskRole: "report",
+		taskRole: "teaching",
 		missingBlock: "This project has no quiz to regenerate a question of",
 		items: (project) => project.quiz?.questions,
 		replace: (project, items) => ({
@@ -20425,7 +20458,7 @@ const KINDS = {
 		noun: "derivation",
 		schema: derivationSchema,
 		schemaName: "trace_derivation",
-		taskRole: "technical",
+		taskRole: "teaching",
 		missingBlock: "This project has no derivations to regenerate",
 		items: (project) => project.derivations,
 		replace: (project, items) => ({

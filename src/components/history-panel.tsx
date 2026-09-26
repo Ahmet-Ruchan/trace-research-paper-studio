@@ -22,6 +22,7 @@ const reasonLabels: Record<RevisionReason, string> = {
   manual: "Saved version",
   agent: "Before an agent update",
   verify: "Before a quote check",
+  learning: "Before the learning layer was added",
 };
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });

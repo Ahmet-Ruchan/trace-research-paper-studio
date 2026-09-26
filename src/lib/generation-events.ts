@@ -14,11 +14,11 @@ export const generationStages = [
   {
     id: "story",
     label: "Specialist outputs",
-    description: "Visual story, deep report and technical appendix built by the assigned models.",
+    description: "Visual story, deep report, technical appendix and learning material, built by the assigned models.",
   },
   {
     id: "finalize",
-    label: "Son denetim",
+    label: "Final check",
     description: "Checking every link and the data schema.",
   },
 ] as const;
@@ -41,6 +41,8 @@ export type GenerationStreamEvent =
   | { type: "result"; project: unknown; warnings: string[] }
   /** Bölüm yeniden üretiminin sonucu: proje değil, yalnızca bölüm ve dayandığı kanıtın mührü. */
   | { type: "section"; target: SectionTarget; section: unknown; evidenceFingerprint: string }
+  /** Mevcut bir projeye eklenen öğrenme katmanı: yazılan bloklar ve yazılamayanlar. */
+  | { type: "learning"; blocks: unknown; failed: Array<{ block: string; reason: string }>; evidenceFingerprint: string }
   | { type: "error"; error: string; detail?: unknown };
 
 export const initialGenerationProgress: GenerationProgress = {
@@ -53,7 +55,7 @@ export const initialGenerationProgress: GenerationProgress = {
 export function isGenerationStreamEvent(value: unknown): value is GenerationStreamEvent {
   if (!value || typeof value !== "object" || !("type" in value)) return false;
   const type = (value as { type?: unknown }).type;
-  return type === "progress" || type === "checkpoint" || type === "result" || type === "section" || type === "error";
+  return type === "progress" || type === "checkpoint" || type === "result" || type === "section" || type === "learning" || type === "error";
 }
 
 /**

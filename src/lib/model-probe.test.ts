@@ -11,6 +11,7 @@ import {
   generationStageProfiles,
   slowestEstimate,
 } from "./model-probe";
+import { buildLearningPrompt } from "./learning-generation";
 import { builtInTemplates } from "./narrative-templates";
 import { buildDeepReportPrompt, buildEvidencePassPrompt, buildStoryPrompt } from "./prompts";
 import type { ResearchProject } from "./schema";
@@ -86,6 +87,14 @@ describe("full analysis estimate", () => {
     near(profiles.visual.outputCharacters, JSON.stringify(example.story).length);
     near(profiles.report.outputCharacters, JSON.stringify(example.deepReport).length);
     near(profiles.technical.outputCharacters, JSON.stringify(example.technicalAppendix).length);
+    // Öğretim: standart derinlikte en ağır istek türetimler, derinde oyun alanları.
+    const learning = { evidence: example.evidence, language: "en", audience: "student", technicalAppendix: example.technicalAppendix } as const;
+    near(profiles.teaching.promptCharacters, buildLearningPrompt("derivations", { ...learning, depth: "standard" }).length);
+    near(profiles.teaching.outputCharacters, JSON.stringify({ derivations: example.derivations }).length);
+    const deep = generationStageProfiles({ depth: "deep" });
+    near(deep.teaching.outputCharacters, JSON.stringify({ interactives: example.interactives }).length);
+    near(generationStageProfiles({ depth: "concise" }).teaching.promptCharacters, buildLearningPrompt("primer", { ...learning, depth: "concise" }).length);
+    near(generationStageProfiles({ depth: "concise" }).teaching.outputCharacters, JSON.stringify(example.primer).length);
   });
 
   it("grows the writing estimate with the number of sections", () => {

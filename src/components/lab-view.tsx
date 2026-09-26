@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Sigma,
   SlidersHorizontal,
+  Sparkles,
   TriangleAlert,
   UserCheck,
 } from "lucide-react";
@@ -43,6 +44,8 @@ import { ReviewPanel } from "./review-panel";
 import { AskPanel } from "./ask-panel";
 import type { SectionKind } from "@/lib/section-regeneration";
 import { useSectionRegeneration } from "./section-regenerator";
+import { LearningGenerator } from "./learning-generator";
+import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -91,6 +94,9 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   // sağdaki çekmecede zaten görünür, ama bağlantıyı gönderen kişi listedeki
   // yerini de göstermek istemiştir.
   const [section, setSection] = useState(() => (selectedClaimId ? "claims" : "overview"));
+  // Öğrenme katmanı eksikse (stüdyonun eski analizleri) Lab onu eklemeyi öneriyor.
+  const missingLearning = onProjectChange ? missingLearningBlocks(project) : [];
+  const [learningOpen, setLearningOpen] = useState(false);
   const quoteCheckInput = useRef<HTMLInputElement>(null);
   const [quoteCheck, setQuoteCheck] = useState<{ message: string; failed?: boolean }>();
 
@@ -236,6 +242,19 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "overview" && (
           <div className="lab-content-stack">
+            {missingLearning.length > 0 && (
+              <section className="learning-offer" aria-label="Learning layer">
+                <GraduationCap size={20} aria-hidden="true" />
+                <div>
+                  <strong>Learn this paper, not just read it</strong>
+                  <p>
+                    This project is missing {learningBlockList(missingLearning)}. Trace can write them from the evidence already
+                    collected: every item cites its claims, and the PDF is not needed.
+                  </p>
+                </div>
+                <button onClick={() => setLearningOpen(true)}><Sparkles size={14} /> Add the learning layer</button>
+              </section>
+            )}
             <section className="thesis-card">
               <span>Core thesis</span>
               <blockquote>{project.evidence.thesis}</blockquote>
@@ -568,6 +587,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         persistent
       />
       {regeneration.panel}
+      {learningOpen && onProjectChange && (
+        <LearningGenerator
+          project={project}
+          onApply={(next) => onProjectChange(next, "learning")}
+          onOpen={(block) => setSection(block === "primer" ? "primer" : "practice")}
+          onClose={() => setLearningOpen(false)}
+        />
+      )}
     </div>
     </LanguageProvider>
   );

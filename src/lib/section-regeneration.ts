@@ -11,6 +11,7 @@ import {
 } from "./generation-validation";
 import { reportTemplateIssues, storyTemplateIssues, templateSlotInstruction } from "./narrative-templates";
 import { REPORT_SECTION_RULES, STORY_SECTION_RULES, bulletList, languageName } from "./prompts";
+import { DERIVATION_RULES, PRIMER_RULES, QUIZ_RULES } from "./learning-rules";
 import {
   deepReportSectionSchema,
   derivationSchema,
@@ -116,7 +117,7 @@ type KindSpec = {
   schema: z.ZodType;
   schemaName: string;
   /** Hangi model görevine düşüyor; arayüz ilk üretimdeki modeli önerirken kullanıyor. */
-  taskRole: "visual" | "report" | "technical";
+  taskRole: "visual" | "report" | "technical" | "teaching";
   missingBlock: string;
   items: (project: ResearchProject) => RegeneratedSection[] | undefined;
   replace: (project: ResearchProject, items: RegeneratedSection[]) => ResearchProject;
@@ -145,28 +146,6 @@ function integrityIssues(run: () => void) {
 const claimsOf = (item: RegeneratedSection) => item.claimIds.join(", ") || "none";
 
 const learningIssues = (project: ResearchProject) => integrityIssues(() => validateLearningIntegrity(project));
-
-const PRIMER_RULES = [
-  "A concept explains prior knowledge the paper assumes but does not explain. It is not a summary of the paper.",
-  "intuition gives the plain-language idea first; formal (optional) is the precise definition in LaTeX; whyItMatters connects the concept to this paper.",
-  "level is one of temel (basic), orta (intermediate) or ileri (advanced).",
-  "prerequisiteIds may only name other concept IDs from the outline, never this concept itself.",
-  "claimIds may be empty for general background; when present, each must be a claim ID from the evidence JSON.",
-] as const;
-
-const QUIZ_RULES = [
-  "Test understanding of the paper, not recall of trivia. The correct answer must follow from the cited claims.",
-  "single and true-false questions have exactly one correct option; multi questions have at least two. A true-false question has exactly two options.",
-  "Every option carries an explanation of why it is right or wrong, grounded in the evidence.",
-  "page is optional; give it only when it is a page one of the cited claims comes from.",
-] as const;
-
-const DERIVATION_RULES = [
-  "Derive the result step by step. Each step has latex, a plain-language reading and a rationale that says why it follows from the previous step.",
-  "Step IDs are unique within the derivation.",
-  "numericExample is optional and may only use numbers from the evidence metrics or the paper's stated settings; never invent values.",
-  "Use standard LaTeX math only; no macros defined elsewhere.",
-] as const;
 
 const EQUATION_RULES = [
   "expression is the equation in plain text; latex (optional) is the same equation in LaTeX; explanation says what it computes and why the method needs it.",
@@ -243,7 +222,7 @@ const KINDS: Record<SectionKind, KindSpec> = {
     noun: "concept",
     schema: primerConceptSchema,
     schemaName: "trace_primer_concept",
-    taskRole: "report",
+    taskRole: "teaching",
     missingBlock: "This project has no primer to regenerate a concept of",
     items: (project) => project.primer?.concepts,
     replace: (project, items) => ({ ...project, primer: { ...project.primer!, concepts: items as PrimerConcept[] } }),
@@ -264,7 +243,7 @@ const KINDS: Record<SectionKind, KindSpec> = {
     noun: "question",
     schema: quizQuestionSchema,
     schemaName: "trace_quiz_question",
-    taskRole: "report",
+    taskRole: "teaching",
     missingBlock: "This project has no quiz to regenerate a question of",
     items: (project) => project.quiz?.questions,
     replace: (project, items) => ({ ...project, quiz: { ...project.quiz!, questions: items as QuizQuestion[] } }),
@@ -285,7 +264,7 @@ const KINDS: Record<SectionKind, KindSpec> = {
     noun: "derivation",
     schema: derivationSchema,
     schemaName: "trace_derivation",
-    taskRole: "technical",
+    taskRole: "teaching",
     missingBlock: "This project has no derivations to regenerate",
     items: (project) => project.derivations,
     replace: (project, items) => ({ ...project, derivations: items as Derivation[] }),

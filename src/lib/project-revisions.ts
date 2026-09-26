@@ -13,7 +13,7 @@ import type { ResearchProject } from "./schema";
  * öteki "her yazımda" derse geçmiş iki yerden farklı büyür.
  */
 
-export const revisionReasons = ["edit", "regenerate", "restore", "import", "manual", "agent", "verify"] as const;
+export const revisionReasons = ["edit", "regenerate", "restore", "import", "manual", "agent", "verify", "learning"] as const;
 export type RevisionReason = (typeof revisionReasons)[number];
 export const revisionReasonSchema = z.enum(revisionReasons);
 

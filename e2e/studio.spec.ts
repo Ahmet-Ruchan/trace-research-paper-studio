@@ -217,12 +217,12 @@ test.describe("analysis setup", () => {
     const row = page.locator(".team-probe-list > li");
     await expect(row).toHaveCount(1);
     await expect(row).toHaveClass(/probe-slow/);
-    await expect(row).toContainText("Evidence, Technical, Report, Visual");
+    await expect(row).toContainText("Evidence, Technical, Report, Visual, Teaching");
     await expect(row).toContainText("close to the 2 min limit");
     await expect(row.locator(".team-probe-stages")).toContainText("The deep report: about");
-    // Tek model dört görevi yapıyor: tek istek, dört tahmin.
+    // Tek model beş görevi yapıyor: tek istek, beş tahmin.
     expect(requests).toHaveLength(1);
-    expect(requests[0].stages.map((stage) => stage.id)).toEqual(["evidence", "technical", "report", "visual"]);
+    expect(requests[0].stages.map((stage) => stage.id)).toEqual(["evidence", "technical", "report", "visual", "teaching"]);
 
     // Seçim değişince eski hüküm kaybolmalı.
     await page.getByRole("combobox", { name: "Depth" }).selectOption("deep");
@@ -1228,5 +1228,71 @@ test.describe("lab on a phone", () => {
     await page.setViewportSize({ width: 1280, height: 860 });
     await expect(sections).toBeHidden();
     await expect(page.locator(".lab-nav > button", { hasText: "Claims" })).toBeVisible();
+  });
+});
+
+test.describe("learning layer", () => {
+  function withoutLearning(id: string) {
+    const project = projectNamed(id) as Partial<ResearchProject>;
+    delete project.primer;
+    delete project.quiz;
+    delete project.derivations;
+    delete project.interactives;
+    delete project.applicationGuide;
+    return { ...project, depth: "standard" } as ResearchProject;
+  }
+
+  test("offers to add the learning layer to a project without one, and keeps the previous version", async ({ page, request }) => {
+    const project = await seed(request, withoutLearning("e2e-learning-layer"));
+    const sent: Array<{ blocks: string[]; apiKey: string; assignment: { provider: string } }> = [];
+    await page.route("**/api/learning", async (route) => {
+      sent.push(route.request().postDataJSON());
+      const events = [
+        { type: "progress", stage: "story", progress: 40, title: "Writing the quiz.", detail: "Part 2/3 of the learning layer." },
+        {
+          type: "learning",
+          blocks: { primer: example.primer, quiz: example.quiz, derivations: example.derivations },
+          failed: [],
+          evidenceFingerprint: evidenceFingerprint(project.evidence),
+        },
+      ];
+      await route.fulfill({ status: 200, headers: { "Content-Type": "application/x-ndjson" }, body: events.map((event) => JSON.stringify(event)).join("\n") + "\n" });
+    });
+
+    await page.goto(`/?project=${project.id}`);
+    // Ön bilgisi olmayan projede Lab'de "Primer" yok; öneri genel bakışta.
+    await expect(page.locator(".lab-nav > button", { hasText: "Primer" })).toHaveCount(0);
+    const offer = page.getByRole("region", { name: "Learning layer" });
+    await expect(offer).toContainText("missing the primer, the quiz and the derivations");
+    await offer.getByRole("button", { name: "Add the learning layer" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".learning-plan li")).toHaveText([/Primer/, /Quiz/, /Derivations/]);
+    await dialog.getByLabel("Gemini API key").fill("test-key");
+    await dialog.getByRole("button", { name: "Write the learning layer" }).click();
+    await expect(dialog).toContainText("Added the primer, the quiz and the derivations.");
+    expect(sent[0]).toMatchObject({ blocks: ["primer", "quiz", "derivations"], apiKey: "test-key", assignment: { provider: "gemini" } });
+
+    await dialog.getByRole("button", { name: "Start with the primer" }).click();
+    await expect(page.locator(".primer")).toBeVisible();
+    await expect(page.locator(".lab-nav > button", { hasText: "Primer" })).toHaveClass(/active/);
+
+    // Kaydedildi, önceki sürüm geçmişte; öneri kayboldu.
+    await expect.poll(async () => {
+      const { projects } = (await (await request.get("/api/library")).json()) as { projects: ResearchProject[] };
+      return projects.find((item) => item.id === project.id)?.quiz?.questions.length;
+    }).toBe(example.quiz!.questions.length);
+    await page.locator(".lab-nav > button", { hasText: "Overview" }).click();
+    await expect(page.getByRole("region", { name: "Learning layer" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Version history" }).click();
+    await expect(page.locator(".history-list")).toContainText("Before the learning layer was added");
+  });
+
+  test("shows the teaching role in the model team, able to run on any provider", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Model team" }).click();
+    const card = page.locator(".task-assignment-card", { hasText: "Teaching and learning material" });
+    await expect(card).toBeVisible();
+    await expect(card.getByRole("combobox").first().locator("option", { hasText: "Local model" })).not.toHaveAttribute("disabled");
   });
 });

@@ -56,6 +56,17 @@ describe("öğrenme katmanı bütünlüğü", () => {
     expect(() => validateLearningIntegrity(base, { requireDepthBlocks: true })).toThrow(/required at/);
   });
 
+  it("ön koşulları döngü kuran bir ön bilgiyi reddeder", () => {
+    const primer = structuredClone(exampleProject.primer!);
+    const [first, second] = primer.concepts;
+    first.prerequisiteIds = [second.id];
+    second.prerequisiteIds = [first.id];
+    expect(() => validateLearningIntegrity(withBlocks({ primer }))).toThrow(
+      new RegExp(`form a cycle \\(${first.id} → ${second.id} → ${first.id}\\)`),
+    );
+    expect(() => validateLearningIntegrity(withBlocks({ primer: exampleProject.primer }))).not.toThrow();
+  });
+
   it("geçerli bir formül oyun alanını kabul eder", () => {
     expect(() => validateLearningIntegrity(withBlocks({ interactives: [playground] }))).not.toThrow();
   });

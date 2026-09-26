@@ -40,6 +40,7 @@ running on the coding agent you already use, with no second API key.
 
 | | |
 | --- | --- |
+| **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
 | **[Search what your papers claim](#search-what-your-papers-claim)** | The library search looks through every claim of every paper, with its quote, page and trust marks. Click a result and the project opens on that claim. |
 | **[Group papers with tags](#group-papers-with-tags)** | A tag is a collection: filter by it, search only its claims, or compare and map it in one click. |
 | **[See how each model's quotes held up](#see-how-each-models-quotes-held-up)** | **Model record** adds up, per model, how many of its quotes were found on their page, with an honest range for small samples. Your agent has it too (`record`). |
@@ -124,6 +125,21 @@ The studio has the same search under the upload box: type a title, a DOI, an arX
 ---
 
 ## What you actually get
+
+### Learn from it, not just read it
+
+Every analysis comes with a learning layer, sized by the depth you pick: the prior knowledge the
+paper assumes, the key results derived step by step, playgrounds that run its formulas, a quiz
+whose every answer shows its page, and a guide to using the method. It is written from the
+evidence alone and checked like everything else: every item cites existing claims, a formula must
+parse and give a finite value at the paper's own setting, and a derivation step that only restates
+its formula is refused. In the studio a fifth model, **Teaching**, writes it; it never receives the
+PDF, so it can be a local model. If one part fails its checks twice, the analysis still completes
+and says which part is missing.
+
+A project made before this (or imported without it) shows **Add the learning layer** on its
+overview. It writes only the missing parts, from the locked evidence, and the previous version stays
+in the history.
 
 ### Run the paper's own equations
 
@@ -638,8 +654,9 @@ which opens by itself when your last analysis used a template.
 ![Anthropic](https://img.shields.io/badge/Anthropic-191B18?style=flat-square&logo=anthropic&logoColor=fff)
 ![OpenRouter](https://img.shields.io/badge/OpenRouter-6566F1?style=flat-square&logo=openrouter&logoColor=fff)
 
-Run everything on one model, or split the work across four roles — Evidence, Technical, Report
-and Visual — each with its own provider and key. Keys are used for the active request only;
+Run everything on one model, or split the work across five roles — Evidence, Technical, Report,
+Visual and Teaching — each with its own provider and key. Only Evidence and Technical read the PDF;
+the other three work from the extracted evidence, so any of them can be a local model. Keys are used for the active request only;
 they are never written to local storage or included in exports. The rest of the setup is
 remembered in this browser for the next paper.
 

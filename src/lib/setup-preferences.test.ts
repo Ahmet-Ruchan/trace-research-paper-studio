@@ -18,6 +18,12 @@ describe("remembered analysis setup", () => {
     expect(roundTrip(preferences)).toEqual(preferences);
   });
 
+  it("gives a team remembered before the teaching role its report model as the teacher", () => {
+    const { teaching, ...olderTeam } = structuredClone(recommendedModelTeam);
+    expect(teaching).toBeDefined();
+    expect(parseSetupPreferences({ version: 1, team: olderTeam }).team).toEqual({ ...olderTeam, teaching: olderTeam.report });
+  });
+
   it("never writes an API key, whatever it is handed", () => {
     const withKeys = { audience: "student", apiKeys: { openai: "sk-secret" }, key: "sk-secret" } as SetupPreferences;
     const written = serializeSetupPreferences(withKeys);

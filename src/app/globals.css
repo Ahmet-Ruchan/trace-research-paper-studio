@@ -880,3 +880,19 @@ html[data-text-size="larger"] { font-size: 125%; }
   .library-grid.is-list .library-card > footer { flex-direction: row; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); border-left: 0; }
   .library-grid.is-list .library-card > footer > span { max-width: 55%; }
 }
+
+/* Öğrenme katmanı olmayan projede Lab'in önerisi ve ekleme diyaloğu */
+.learning-offer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--surface); }
+.learning-offer > svg { color: var(--accent-ink); }
+.learning-offer strong { display: block; font-size: var(--text-md); }
+.learning-offer p { margin: 4px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
+.learning-offer button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 0; border-radius: 8px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
+.learning-offer button:hover { opacity: .88; }
+.learning-plan { display: grid; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
+.learning-plan li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.learning-plan b { font-size: var(--text-sm); }
+.learning-plan span { color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.45; }
+@media (max-width: 760px) {
+  .learning-offer { grid-template-columns: auto minmax(0, 1fr); }
+  .learning-offer button { grid-column: 1 / -1; justify-self: start; }
+}

@@ -1,6 +1,6 @@
 export type ProviderId = "gemini" | "openai" | "anthropic" | "openrouter" | "local";
 
-export type GenerationTaskRole = "evidence" | "technical" | "report" | "visual";
+export type GenerationTaskRole = "evidence" | "technical" | "report" | "visual" | "teaching";
 
 export type ModelAssignment = {
   provider: ProviderId;
@@ -163,6 +163,13 @@ export const generationTaskCatalog: ReadonlyArray<{
     description: "Infographics, architecture maps, canvas layouts and the scrollytelling plan.",
     recommendation: "Design judgement and structured output",
   },
+  {
+    id: "teaching",
+    label: "Teaching and learning material",
+    shortLabel: "Teaching",
+    description: "Primer, step-by-step derivations, playgrounds, quiz and the application guide.",
+    recommendation: "Clear explanation and careful formulas",
+  },
 ];
 
 export const generationTaskRoles = generationTaskCatalog.map((task) => task.id) as GenerationTaskRole[];
@@ -173,7 +180,17 @@ export function createSingleModelTeam(assignment: ModelAssignment): ModelTeam {
     technical: { ...assignment },
     report: { ...assignment },
     visual: { ...assignment },
+    teaching: { ...assignment },
   };
+}
+
+/**
+ * Öğretim rolü sonradan eklendi. Onu taşımayan bir ekip (eski bir istek ya da
+ * hatırlanan eski bir kurulum) öğretimi rapor modeline veriyor: ikisi de
+ * açıklayıcı yazı ve ikisi de makaleyi okumuyor.
+ */
+export function withTeachingRole(team: Omit<ModelTeam, "teaching"> & Partial<Pick<ModelTeam, "teaching">>): ModelTeam {
+  return { ...team, teaching: team.teaching ?? { ...team.report } };
 }
 
 export const recommendedModelTeam: ModelTeam = {
@@ -181,6 +198,7 @@ export const recommendedModelTeam: ModelTeam = {
   technical: { provider: "anthropic", model: "claude-opus-4-1" },
   report: { provider: "openai", model: "gpt-5.6-sol" },
   visual: { provider: "openrouter", model: "openrouter/auto" },
+  teaching: { provider: "anthropic", model: "claude-sonnet-4-5" },
 };
 
 export function getProvider(providerId: string) {

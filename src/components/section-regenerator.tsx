@@ -52,7 +52,9 @@ function rememberedAssignment(): ModelAssignment | undefined {
 
 function initialAssignment(project: ResearchProject, target: SectionTarget): ModelAssignment {
   const role = sectionKindInfo(target.kind).taskRole;
-  const used = project.generation?.assignments?.[role];
+  const assignments = project.generation?.assignments;
+  // Öğretim rolünden önce üretilen projelerde öğrenme öğelerini rapor modeli yazmıştı.
+  const used = assignments?.[role] ?? (role === "teaching" ? assignments?.report : undefined);
   return (
     rememberedAssignment() ??
     (used ? resolveProviderModel(used.provider, used.model) : undefined) ??

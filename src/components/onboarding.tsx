@@ -456,13 +456,13 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
                   </option>
                 ))}</select></div>
                 <ModelPicker assignment={{ provider, model }} onChange={(assignment) => { setProvider(assignment.provider); setModel(assignment.model); }} openRouterModels={openRouterModels} inputId="single" />
-                <p>This model runs all four tasks.</p>
+                <p>This model runs all five tasks.</p>
               </div>
             ) : (
               <>
                 <div className="team-preset-row">
                   <div><strong>Task assignment</strong><span>Each specialist produces only the structured task assigned to it.</span></div>
-                  <button onClick={() => setTeam(structuredClone(recommendedModelTeam))}>Recommended 4-model team</button>
+                  <button onClick={() => setTeam(structuredClone(recommendedModelTeam))}>Recommended model team</button>
                 </div>
                 <div className="task-assignment-grid">
                   {generationTaskCatalog.map((task, index) => (

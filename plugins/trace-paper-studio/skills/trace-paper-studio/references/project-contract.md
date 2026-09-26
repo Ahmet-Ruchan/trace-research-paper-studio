@@ -230,7 +230,7 @@ Everything here obeys the same evidence rule as the rest of the contract: **ever
 }
 ```
 
-`level` is `temel` | `orta` | `ileri`. `prerequisiteIds` must reference other concepts in the same primer and may not be self-referential; the renderer topologically sorts on them. `formal` is optional LaTeX.
+`level` is `temel` | `orta` | `ileri`. `prerequisiteIds` must reference other concepts in the same primer, may not be self-referential and may not form a cycle; the renderer topologically sorts on them. `formal` is optional LaTeX.
 
 ## `derivations`
 

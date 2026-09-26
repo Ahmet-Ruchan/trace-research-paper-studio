@@ -685,6 +685,8 @@ export const researchProjectSchema = generationResultSchema.extend({
       technical: z.object({ provider: z.string(), model: z.string() }),
       report: z.object({ provider: z.string(), model: z.string() }),
       visual: z.object({ provider: z.string(), model: z.string() }),
+      /** Öğretim rolü sonradan eklendi; ondan önce üretilen projelerde yok. */
+      teaching: z.object({ provider: z.string(), model: z.string() }).optional(),
     }).optional(),
   }).optional(),
 });

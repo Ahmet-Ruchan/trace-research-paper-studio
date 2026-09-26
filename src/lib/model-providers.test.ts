@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createSingleModelTeam,
   defaultModelByProvider,
   documentTaskRoles,
   generationTaskRoles,
@@ -9,6 +10,8 @@ import {
   providerReadsPaperAsText,
   recommendedModelTeam,
   resolveProviderModel,
+  withTeachingRole,
+  type ModelTeam,
 } from "./model-providers";
 
 describe("model provider catalog", () => {
@@ -91,9 +94,23 @@ describe("model provider catalog", () => {
 
   it("ships a valid four-provider expert team preset", () => {
     expect(new Set(generationTaskRoles.map((role) => recommendedModelTeam[role].provider)).size).toBe(4);
+    expect(Object.keys(recommendedModelTeam).sort()).toEqual([...generationTaskRoles].sort());
     generationTaskRoles.forEach((role) => {
       const assignment = recommendedModelTeam[role];
       expect(resolveProviderModel(assignment.provider, assignment.model)).toEqual(assignment);
     });
+  });
+
+  it("lets the teaching role run on any model, because it never receives the PDF", () => {
+    expect(generationTaskRoles).toContain("teaching");
+    expect(documentTaskRoles).not.toContain("teaching");
+    expect(createSingleModelTeam({ provider: "local", model: "qwen3:8b" }).teaching).toEqual({ provider: "local", model: "qwen3:8b" });
+  });
+
+  it("gives an older four-role team its report model as the teacher", () => {
+    const older: Partial<ModelTeam> = { ...recommendedModelTeam };
+    delete older.teaching;
+    expect(withTeachingRole(older as Omit<ModelTeam, "teaching">).teaching).toEqual(recommendedModelTeam.report);
+    expect(withTeachingRole(recommendedModelTeam)).toEqual(recommendedModelTeam);
   });
 });
