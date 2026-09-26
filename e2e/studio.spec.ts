@@ -869,7 +869,7 @@ test.describe("undoable deletion", () => {
     await expect(card).toHaveCount(0);
     const toast = page.getByRole("status").filter({ hasText: "Undo me paper" });
     await expect(toast).toContainText("Deleted");
-    await toast.getByRole("button", { name: "Undo" }).click();
+    await toast.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(card).toHaveCount(1);
     await expect(card.locator(".library-tag")).toHaveText(["Keep me"]);
     await expect(toast).toHaveCount(0);
@@ -891,7 +891,8 @@ test.describe("undoable deletion", () => {
     const search = page.getByLabel("Search papers");
     await search.fill("keyboard");
     await search.press("ControlOrMeta+z");
-    await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+    // Bildirimin içinde ve tam adla: kart düğmeleri de makale başlığındaki "Undo"yu taşıyabiliyor.
+    await expect(page.getByRole("status").getByRole("button", { name: "Undo", exact: true })).toBeVisible();
     await search.fill("");
     await search.blur();
     await page.keyboard.press("ControlOrMeta+z");
