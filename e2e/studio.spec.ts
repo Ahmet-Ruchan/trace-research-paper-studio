@@ -766,3 +766,86 @@ test.describe("model record", () => {
     await expect(page.locator(".quote-track-record")).toContainText("67 of 67 quotes found on their page, in 1 paper");
   });
 });
+
+test.describe("reading comfort", () => {
+  /** Görünür metnin en küçük boyutu; SVG ve formül alt/üst simgeleri kendi ölçeklerinde. */
+  async function smallestText(page: Page) {
+    return page.evaluate(() => {
+      let smallest = Infinity;
+      let where = "";
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const element = node.parentElement;
+        if (!node.textContent?.trim() || !element || element.closest("svg, math")) continue;
+        const style = getComputedStyle(element);
+        const size = parseFloat(style.fontSize);
+        const box = element.getBoundingClientRect();
+        if (!size || !box.width || !box.height || style.visibility === "hidden") continue;
+        if (size < smallest) { smallest = size; where = `${element.className || element.tagName}: ${node.textContent.trim().slice(0, 30)}`; }
+      }
+      return { smallest, where };
+    });
+  }
+
+  test("keeps every visible text at 12 px or more on the main screens", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-type-floor"));
+    for (const url of ["/", "/?library=1", `/?project=${project.id}`, `/?project=${project.id}&mode=story`, `/?project=${project.id}&mode=preview`]) {
+      await page.goto(url);
+      await expect(page.locator(".boot-screen")).toHaveCount(0);
+      const { smallest, where } = await smallestText(page);
+      expect(smallest, `${url} · ${where}`).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  test("puts the claim kind above the statement instead of on top of it", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-claim-row"));
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav button", { hasText: "Claims" }).first().click();
+    const row = page.locator(".claim-row").first();
+    const kind = await row.locator(".claim-kind").boundingBox();
+    const text = await row.locator("p").boundingBox();
+    expect(kind && text && kind.y + kind.height <= text.y + 1).toBe(true);
+    await expect(row.locator(".claim-page")).toHaveText(/^p\. \d+$/);
+  });
+
+  test("fits the phone screen at the largest text size", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-phone-larger"));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => window.localStorage.setItem("trace-text-size", "larger"));
+    for (const url of ["/", "/?library=1", `/?project=${project.id}`, `/?project=${project.id}&mode=preview`]) {
+      await page.goto(url);
+      await expect(page.locator(".boot-screen")).toHaveCount(0);
+      // Izgara sütunları içeriğin en küçük genişliğine göre büyüyüp ekranı aşıyordu.
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), url).toBe(0);
+    }
+  });
+
+  test("lets the reader choose a larger text size and remembers it", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-text-size"));
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav button", { hasText: "Claims" }).first().click();
+    const statement = page.locator(".claim-row p").first();
+    const before = parseFloat(await statement.evaluate((element) => getComputedStyle(element).fontSize));
+
+    await page.getByRole("button", { name: "Text size" }).click();
+    // Örnek "Aa" başlıktaki düğme kurallarına takılıp gizlenmiyor; etiketle çakışmıyor.
+    const larger = page.getByRole("menuitemradio", { name: /Larger/ });
+    await expect(larger.locator(".text-size-sample")).toBeVisible();
+    const sample = await larger.locator(".text-size-sample").boundingBox();
+    const label = await larger.locator("strong").boundingBox();
+    expect(sample && label && sample.x + sample.width <= label.x).toBe(true);
+    await larger.click();
+    await expect(page.locator("html")).toHaveAttribute("data-text-size", "larger");
+    await expect(page.getByRole("menu", { name: "Text size" })).toHaveCount(0);
+    expect(parseFloat(await statement.evaluate((element) => getComputedStyle(element).fontSize))).toBeCloseTo(before * 1.25, 1);
+
+    // Seçim tarayıcıda kalıyor ve sayfa çizilmeden uygulanıyor.
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-text-size", "larger");
+    await page.getByRole("button", { name: "Text size" }).click();
+    await expect(page.getByRole("menuitemradio", { name: /Larger/ })).toHaveAttribute("aria-checked", "true");
+    await page.getByRole("menuitemradio", { name: /Default/ }).click();
+    await expect(page.locator("html")).not.toHaveAttribute("data-text-size", /.+/);
+  });
+});

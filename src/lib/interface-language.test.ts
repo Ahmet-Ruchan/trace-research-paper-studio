@@ -85,6 +85,24 @@ describe("arayüz dili", () => {
   });
 
   /**
+   * "s. 3" Türkçe "sayfa"nın kısaltması; ne Türkçe harf taşıyor ne de kelime
+   * listesine uyuyor, bu yüzden laboratuvarda ve hikâye düzenleyicide
+   * İngilizce arayüzün ortasında fark edilmeden duruyordu. Arayüzün kısaltması
+   * "p." (`stringsFor(...).page`).
+   */
+  it("sayfa numarasını Türkçe kısaltmayla yazmaz", () => {
+    const offenders: string[] = [];
+    for (const file of [...sourceFiles("src/components"), ...sourceFiles("src/visuals"), ...sourceFiles("viewer")]) {
+      stripComments(readFileSync(join(root, file), "utf8"))
+        .split("\n")
+        .forEach((line, index) => {
+          if (/[`"'>]s\. ?\$?\{/.test(line)) offenders.push(`${file}:${index + 1} ${line.trim().slice(0, 80)}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /**
    * Köprü de arayüzdür. Yardım metnini ve hatalarını doğrudan kullanıcının
    * ajanına yazıyor; plugin'i kuran herkes İngilizce konuşmuyor olabilir ama
    * hepsi İngilizce'yi okuyabiliyor. Türkçe bir hata mesajı, okuyamadığı bir

@@ -28,6 +28,7 @@ import { ModelRecordView } from "./model-record-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
 import { StoryView } from "./story-view";
+import { TextSizeControl } from "./text-size-control";
 
 type WorkspaceMode = "lab" | "story" | "preview";
 type AppScreen = "home" | "library" | "workspace" | "compare" | "models";
@@ -530,6 +531,7 @@ export function AppShell() {
               </>
             )}
           </div>
+          <TextSizeControl />
           <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
           <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
         </div>

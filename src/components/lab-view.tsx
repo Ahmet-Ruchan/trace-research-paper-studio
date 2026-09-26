@@ -333,7 +333,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                       {claim.confidence === "verified" ? "Verified" : "Review"}
                     </span>
                     <span className="claim-page">
-                      {claim.sourceRefs[0]?.page ? `s. ${claim.sourceRefs[0].page}` : "web"}
+                      {claim.sourceRefs[0]?.page ? `p. ${claim.sourceRefs[0].page}` : "web"}
                     </span>
                   </button>
                   <PermalinkButton hash={claimHash(claim.id)} />
@@ -478,7 +478,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                   <span>{metric.label}</span>
                   <strong>{metric.displayValue} <small>{metric.unit}</small></strong>
                   <p>{metric.context}</p>
-                  <em>s. {metric.sourceRef.page ?? "—"}</em>
+                  <em>p. {metric.sourceRef.page ?? "—"}</em>
                 </button>
               ))}
             </div>

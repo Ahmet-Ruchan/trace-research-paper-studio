@@ -9,6 +9,7 @@ import { listLibraryTags, saveProjectTags } from "@/lib/project-library";
 import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
 import { claimKindLabels } from "./evidence-drawer";
+import { TextSizeControl } from "./text-size-control";
 
 type LibraryViewProps = {
   projects: ResearchProject[];
@@ -175,6 +176,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
             setImportError(undefined);
             void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : "Could not import the Trace project."));
           }} />
+          <TextSizeControl />
           <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>
           <button className="library-new-button" onClick={onNew}><Plus size={16} /> New paper</button>

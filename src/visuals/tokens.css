@@ -12,11 +12,34 @@
   --surface-2: #f7f5ef;
   --ink: #191b18;
   --ink-soft: #454a44;
-  --muted: #71766f;
+  /* Kâğıt zeminde 4,74:1, yüzeyde 5,22:1. Eski #71766f 4,04:1 ile en küçük
+     etiketlerde okunmuyordu (WCAG AA normal metin için 4,5:1 istiyor). */
+  --muted: #666b64;
   --line: #d8d3c9;
   --line-dark: #beb9af;
   --accent: #e75b37;
   --green: #2e7254;
   --amber: #a36a1e;
   --shadow: 0 28px 90px rgba(48, 43, 31, 0.08);
+
+  /*
+   * Yazı ölçeği. Eskiden her kural kendi px değerini taşıyordu: 50'ye yakın
+   * farklı boyut, çoğu 7–11 px. Artık küçük metin bu basamaklardan biri ve
+   * hepsi rem: tarayıcının yazı boyutu tercihi de, stüdyodaki boyut seçimi de
+   * her şeyi birlikte büyütüyor. 12 px taban; altına inen bir kural testte
+   * (type-scale.test.ts) yakalanıyor. Daha büyük boyutlar doğrudan rem.
+   */
+  --text-2xs: 0.75rem;   /* 12 — üst etiketler, rozetler, meta */
+  --text-xs: 0.8125rem;  /* 13 — küçük etiketler, ikincil bilgi */
+  --text-sm: 0.875rem;   /* 14 — düğmeler, gezinme, arayüz metni */
+  --text-md: 0.9375rem;  /* 15 — arayüzde okunan metin */
+  --text-base: 1rem;     /* 16 — kartlardaki içerik */
+  --text-lg: 1.0625rem;  /* 17 — iddialar, rapor paragrafları */
+  --text-xl: 1.125rem;   /* 18 — öne çıkan paragraf */
 }
+
+/* Tarayıcının <small>, <sub> ve <sup> varsayılanı "smaller": 12 px'lik bir
+   etiketin içinde 9,6 px (oyun alanının ölçek uçları böyleydi). Boyutunu
+   kendisi belirtmeyenler için taban burada da geçerli; sınıfla boyut verilen
+   öğeler daha özgül kurallarıyla etkilenmiyor. */
+small, sub, sup { font-size: max(var(--text-2xs), .8em); }

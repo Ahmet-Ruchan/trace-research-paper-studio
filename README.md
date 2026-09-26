@@ -574,6 +574,11 @@ panel rewrites a thin section with more evidence. The history button in the head
 earlier versions of the project. **Save as template** in `Story` keeps the structure for the next
 paper.
 
+**Aa** in the header sets the text size, from compact to 125%. Every size in the studio is on one
+type scale in `rem`, so the choice and your browser's own font size setting both enlarge everything
+together. The smallest text is 12 px, and a test fails if a rule goes below it. The choice is kept
+in this browser only.
+
 <details>
 <summary><b>Model providers</b></summary>
 

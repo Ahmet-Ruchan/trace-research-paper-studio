@@ -25,6 +25,7 @@ import { deleteTemplate, listTemplates } from "@/lib/template-library";
 import { downloadCandidate, findPapers, originLabels, type PaperCandidate } from "@/lib/paper-lookup";
 import { QuoteTrackRecord } from "./model-record-view";
 import { TeamProbe } from "./team-probe";
+import { TextSizeControl } from "./text-size-control";
 import { TemplateEditor } from "./template-editor";
 
 export type GenerationOptions = {
@@ -261,6 +262,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
           <span><strong>trace</strong><small>research studio</small></span>
         </a>
         <div className="landing-header-actions">
+          <TextSizeControl />
           <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> Library <span className="nav-count">{libraryCount}</span></button>
           <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? "Loading example…" : "Open the example project"} <ArrowRight size={15} /></button>
         </div>

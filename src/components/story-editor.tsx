@@ -115,7 +115,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
                   const linked = project.evidence.claims.find((item) => item.id === id);
                   return (
                     <button key={id} onClick={() => setClaimId(id)}>
-                      {linked?.sourceRefs[0]?.page ? `s. ${linked.sourceRefs[0].page}` : "web"} · {linked?.statement.slice(0, 72)}
+                      {linked?.sourceRefs[0]?.page ? `p. ${linked.sourceRefs[0].page}` : "web"} · {linked?.statement.slice(0, 72)}
                     </button>
                   );
                 })}
