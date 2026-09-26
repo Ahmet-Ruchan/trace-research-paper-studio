@@ -30,6 +30,7 @@ import {
   type RegenerationGoal,
   type SectionTarget,
 } from "@/lib/section-regeneration";
+import { isPresetActive, rewritePresets, togglePreset } from "@/lib/rewrite-presets";
 import { MathText } from "@/visuals";
 import { VisualRenderer } from "./visual-renderer";
 
@@ -265,6 +266,27 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
                 <span><b>Choose from all evidence</b><small>The model may cite other existing claims. It still cannot add a fact.</small></span>
               </label>
             </fieldset>
+
+            <div className="regen-presets" role="group" aria-label="Quick requests">
+              <span>Explain it differently</span>
+              {rewritePresets(target.kind).map((preset) => {
+                const active = isPresetActive(instruction, preset);
+                const next = togglePreset(target.kind, instruction, preset.id);
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className="regen-preset"
+                    aria-pressed={active}
+                    disabled={next === undefined}
+                    title={preset.instruction}
+                    onClick={() => { if (next !== undefined) setInstruction(next); }}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
 
             <label className="regen-field">
               What should change? <small>Optional</small>

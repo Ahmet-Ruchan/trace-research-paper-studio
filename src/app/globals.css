@@ -483,9 +483,15 @@ span.library-tag { cursor: default; }
 .regen-policy svg { flex: 0 0 auto; margin-top: 2px; color: var(--ink-soft); }
 .regen-policy b { display: block; font-size: var(--text-base); font-weight: 650; }
 .regen-policy small { display: block; margin-top: 4px; color: var(--muted); font-size: var(--text-md); line-height: 1.45; }
+.regen-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0 0 12px; }
+.regen-presets > span { margin-right: 3px; color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; }
+.regen-preset { min-height: 32px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--field); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.regen-preset:hover:not(:disabled) { border-color: var(--ink); }
+.regen-preset[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.regen-preset:disabled { opacity: .45; cursor: default; }
 .regen-field { position: relative; display: block; color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .1em; }
 .regen-field > small { margin-left: 6px; text-transform: none; letter-spacing: 0; }
-.regen-field textarea { width: 100%; min-height: 86px; display: block; margin-top: 9px; padding: 11px 12px; resize: vertical; border: 1px solid var(--line); border-radius: 9px; outline: 0; background: var(--field); color: var(--ink); font: var(--text-lg)/1.55 Georgia, serif; text-transform: none; letter-spacing: 0; }
+.regen-field textarea { width: 100%; min-height: 86px; max-height: 240px; field-sizing: content; display: block; margin-top: 9px; padding: 11px 12px 28px; resize: vertical; border: 1px solid var(--line); border-radius: 9px; outline: 0; background: var(--field); color: var(--ink); font: var(--text-lg)/1.55 Georgia, serif; text-transform: none; letter-spacing: 0; }
 .regen-count { color: var(--muted); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; }
 .regen-field .regen-count { position: absolute; right: 10px; bottom: 8px; }
 .regen-model { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }

@@ -390,6 +390,14 @@ equation in the technical appendix can each be rewritten on its own. Each keeps 
 quiz question needs the right number of correct options, a derivation stays attached to its
 equation, and a concept other concepts build on keeps its subject.
 
+Not sure how to ask for a better version? **Explain it differently** fills the request in one
+click: *Simpler*, *With an analogy*, *With a worked example*, *More technical* or *Shorter* for a
+section; *Harder*, *Easier* or *Test a misconception* for a quiz question; *Smaller steps* or
+*Intuition first* for a derivation; *Explain each symbol* for an equation. Requests combine, and
+opposite ones replace each other. Each one lands in the text box as a plain sentence, so you see
+and can edit exactly what the model receives, and none of them loosens the evidence lock: a worked
+example uses the paper's numbers, or says that its numbers are only illustrative.
+
 ![Regenerate a section](docs/images/regenerate.jpg)
 
 ```text

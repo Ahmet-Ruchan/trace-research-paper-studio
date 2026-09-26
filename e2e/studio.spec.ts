@@ -6,6 +6,7 @@ import type { ResearchProject } from "../src/lib/schema";
 import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
 import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 import { readingDrillFor } from "../src/lib/reading-drill";
+import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -106,6 +107,42 @@ test.describe("section regeneration", () => {
       const { revisions } = (await response.json()) as { revisions: Array<{ reason: string }> };
       return revisions.map((revision) => revision.reason);
     }).toContain("regenerate");
+  });
+
+  test("turns a quick request into the instruction the model receives", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-presets"));
+    const section = project.story.sections[0];
+    const preset = (id: string) => REWRITE_PRESETS.story.find((item) => item.id === id)!.instruction;
+    let sent = "";
+
+    await page.route("**/api/regenerate", async (route) => {
+      sent = (route.request().postDataJSON() as { instruction: string }).instruction;
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/x-ndjson" },
+        body: `${JSON.stringify({ type: "section", target: { kind: "story", sectionId: section.id }, section: { ...section, body: "Simpler, with an analogy." }, evidenceFingerprint: evidenceFingerprint(project.evidence) })}\n`,
+      });
+    });
+
+    await openStory(page, project.id);
+    await page.locator(".regen-trigger").first().click();
+    const dialog = page.getByRole("dialog");
+    const quick = dialog.getByRole("group", { name: "Quick requests" });
+    const field = dialog.getByRole("textbox", { name: /What should change/ });
+
+    await field.fill("Keep the timeline.");
+    await quick.getByRole("button", { name: "More technical" }).click();
+    await quick.getByRole("button", { name: "With an analogy" }).click();
+    // "Simpler" ile "More technical" birlikte gönderilmiyor.
+    await quick.getByRole("button", { name: "Simpler" }).click();
+    await expect(quick.getByRole("button", { name: "Simpler" })).toHaveAttribute("aria-pressed", "true");
+    await expect(quick.getByRole("button", { name: "More technical" })).toHaveAttribute("aria-pressed", "false");
+    await expect(field).toHaveValue(["Keep the timeline.", preset("analogy"), preset("simpler")].join("\n"));
+
+    await dialog.getByLabel("Gemini API key").fill("test-key");
+    await dialog.getByRole("button", { name: "Regenerate", exact: true }).click();
+    await expect(page.locator(".regen-preview").nth(1)).toContainText("Simpler, with an analogy.");
+    expect(sent).toBe(["Keep the timeline.", preset("analogy"), preset("simpler")].join("\n"));
   });
 
   test("rewrites one quiz question in the practice tab", async ({ page, request }) => {
