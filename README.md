@@ -12,9 +12,9 @@ running on the coding agent you already use, with no second API key.
 [![Check](https://img.shields.io/github/actions/workflow/status/Ahmet-Ruchan/trace-research-paper-studio/check.yml?branch=main&style=for-the-badge&label=check&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/actions/workflows/check.yml)
 [![Stars](https://img.shields.io/github/stars/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=E75B37&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/stargazers)
 [![Forks](https://img.shields.io/github/forks/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/network/members)
-[![Issues](https://img.shields.io/github/issues/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=A36A1E&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/issues)
+[![Issues](https://img.shields.io/github/issues/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=8C5C18&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/issues)
 [![License](https://img.shields.io/github/license/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=191B18&labelColor=191B18)](LICENSE)
-[![Last commit](https://img.shields.io/github/last-commit/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=71766F&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=666B64&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/commits/main)
 
 **Works with the agent you already have**
 
@@ -35,6 +35,17 @@ running on the coding agent you already use, with no second API key.
 ---
 
 ## What's new
+
+**On `main` since 0.21**
+
+| | |
+| --- | --- |
+| **[Search what your papers claim](#search-what-your-papers-claim)** | The library search looks through every claim of every paper, with its quote, page and trust marks. Click a result and the project opens on that claim. |
+| **[Group papers with tags](#group-papers-with-tags)** | A tag is a collection: filter by it, search only its claims, or compare and map it in one click. |
+| **[See how each model's quotes held up](#see-how-each-models-quotes-held-up)** | **Model record** adds up, per model, how many of its quotes were found on their page, with an honest range for small samples. Your agent has it too (`record`). |
+| **[Keep a growing library in order](#keep-a-growing-library-in-order)** | Sort by title or by the paper's year, switch to a compact list, and undo a deletion for eight seconds. |
+| **[Read it the way you like](#read-it-the-way-you-like)** | A dark theme, four text sizes, a readable colour for every paper, and a section menu on phones. |
+| **[The analysis screen remembers you](#the-full-application)** | Your last reader, depth, language, models and template come back for the next paper. API keys never do. |
 
 **0.21**
 
@@ -293,6 +304,8 @@ quote was found on its page, and what a reviewer decided. A rejected claim is st
 Every word you type must appear in the claim or its quote. Nothing but the claims is searched, and
 no model is asked. Click a result and the project opens on that claim.
 
+![Search the claims of every paper](docs/images/library.jpg)
+
 ### Group papers with tags
 
 Give a paper a tag from its library card and the tag becomes a collection. Pick it to see only those
@@ -300,6 +313,17 @@ papers, search only their claims, or compare and map them in one click. Typing "
 existing "NLP" tag instead of starting a second one. Tags belong to your library, not to the paper:
 they are kept in `~/.trace/library/tags.json`. So tagging a paper does not add a version to its
 history, does not change its `.trace.json`, and never goes out with a published link or an export.
+
+### Keep a growing library in order
+
+Sort the library by when a paper was last updated, by title, or by the paper's own year, newest or
+oldest first. The year is read from how it is written ("2017", "NeurIPS 2017"); papers without one go
+last. **List** turns the tall cards into one line each, so a long library fits on a screen. Both
+choices are kept in this browser.
+
+Deleting a paper asks for no confirmation. The card goes at once, and **Undo** (or Ctrl/⌘+Z) brings
+it back for eight seconds, with its history, tags and published links. Nothing is deleted on the
+server until then. Leaving the library or closing the page completes the deletion.
 
 ### See what a paper builds on, and what built on it
 
@@ -390,6 +414,29 @@ only you. When it is deployed somewhere public, it is everyone who has the link.
 
 Every claim and every story section has its own anchor, in the studio and in the portable
 single-file copy alike. The address bar tracks what is open, so the link is always there to copy.
+
+### Read it the way you like
+
+**Aa** in the header of the analysis screen, the library and a project sets the text size and the
+theme.
+
+- **Text size**: compact, default, large or larger (93.75% to 125%). Every size in the studio is on
+  one type scale in `rem`, so this choice and your browser's own font size setting both enlarge
+  everything together. The smallest text is 12 px.
+- **Theme**: light, dark, or **System**, which follows your device and changes when it does. The
+  choice is applied while the page loads, so a dark page never flashes white first. The standalone
+  site and published links stay light: a shared story looks the same for every reader.
+- **A readable colour for every paper.** Each paper has its own accent colour, and many of the
+  palette's colours are pale. Fills and icons use the colour as it is. Text uses the same hue at a
+  lightness that can be read: darker on the light theme, lighter on the dark one.
+- **On a phone**, the Lab's sections (up to thirteen) are a labelled menu at the top instead of a
+  row of unlabelled icons.
+
+In both themes, text reaches at least 4.5:1 against its background (3:1 for large headings), the
+WCAG AA level. Tests check the colour values, every paper colour as the browser draws it, and every
+visible text on eight screens in both themes. Both choices are kept in this browser.
+
+![The dark theme](docs/images/dark.jpg)
 
 ---
 
@@ -533,7 +580,7 @@ flowchart TD
     V -->|"passes"| OUT["Site + .trace.json"]
 
     style EV fill:#191b18,stroke:#191b18,color:#ffffff
-    style V fill:#a36a1e,stroke:#a36a1e,color:#ffffff
+    style V fill:#8c5c18,stroke:#8c5c18,color:#ffffff
     style X fill:#e75b37,stroke:#e75b37,color:#ffffff
     style OUT fill:#2e7254,stroke:#2e7254,color:#ffffff
 ```
@@ -551,10 +598,9 @@ The plugin is one way in. The web app adds generation with your own provider key
 narrative, and a local library. Projects are stored as files under `~/.trace/library`, shared by
 Codex, Claude Code, Antigravity and every Trace Studio launch directory. Existing browser-only
 projects migrate there automatically; removing a Library item removes its stored file and its
-version history and its tags. Deleting asks for no confirmation: the card goes at once and **Undo**
-(or Ctrl/⌘+Z) brings the project back, history, tags and published links included, for eight
-seconds. Leaving the library or closing the page completes the deletion. Earlier versions live under `~/.trace/library/revisions`, tags in
-`~/.trace/library/tags.json`, saved templates under `~/.trace/templates`.
+version history and its tags, after an eight-second window to undo it. Earlier versions live
+under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`, saved templates under
+`~/.trace/templates`.
 
 ```bash
 git clone https://github.com/Ahmet-Ruchan/trace-research-paper-studio.git
@@ -574,13 +620,13 @@ rewrites only that section against the locked evidence. The same button appears 
 concepts, quiz questions, derivations and equations, and **Strengthen** in the evidence health
 panel rewrites a thin section with more evidence. The history button in the header opens
 earlier versions of the project. **Save as template** in `Story` keeps the structure for the next
-paper.
+paper. **Aa** sets the text size and the theme ([Read it the way you like](#read-it-the-way-you-like)).
 
-**Aa** in the header sets the text size, from compact to 125%. Every size in the studio is on one
-type scale in `rem`, so the choice and your browser's own font size setting both enlarge everything
-together. The smallest text is 12 px, and a test fails if a rule goes below it. The choice is kept
-in this browser only. A paper's colour is used as is for fills and icons; as text it is darkened to
-the same hue at a lightness every colour of the palette can be read at (4.5:1 or better).
+**The analysis screen remembers you.** Reader, depth, language, the model or the model team, and the
+narrative template of your last analysis come back for the next paper, in this browser. API keys are
+never kept: the stored record has no place for one, and a test checks that a key typed into the form
+is not in the browser's storage. Supporting sources and the template are under **More options**,
+which opens by itself when your last analysis used a template.
 
 <details>
 <summary><b>Model providers</b></summary>
@@ -594,7 +640,8 @@ the same hue at a lightness every colour of the palette can be read at (4.5:1 or
 
 Run everything on one model, or split the work across four roles — Evidence, Technical, Report
 and Visual — each with its own provider and key. Keys are used for the active request only;
-they are never written to local storage or included in exports.
+they are never written to local storage or included in exports. The rest of the setup is
+remembered in this browser for the next paper.
 
 The plugin path needs none of this: it uses whatever model your agent is already running.
 
@@ -693,6 +740,13 @@ npm run version:set -- 0.17.0  # write one version into the package and every pl
 
 <br>
 
+**Colours and type sizes are tokens, and tests hold them.** `src/visuals/tokens.css` is the one
+source for the studio, the standalone viewer and published pages: the type scale, the colours and
+their dark values. `src/lib/type-scale.test.ts` fails on a font size in `px` or below 12 px, on a
+paper colour used raw as text, on a text and background pair under 4.5:1 in either theme, and on
+the two copies of the dark values (chosen, and from the device) drifting apart. Add a colour as a
+token with a dark value rather than as a literal in a rule.
+
 **One render source, two runtimes.** The visual grammars and interactive components live in
 `src/visuals/` and are compiled twice — as real React for the app, and through preact for the
 standalone viewer. A grammar is written once instead of three times. `src/visuals/**` is an
@@ -724,6 +778,7 @@ src/
 ├── app/                        # Next.js app router, generation API, design system
 ├── components/                 # Workspace shell, Lab, Story editor, Preview, Library
 ├── visuals/                    # SHARED render layer — compiled for both hosts
+│   ├── tokens.css              #   type scale, colours and the dark theme
 │   ├── visual-renderer.tsx     #   eleven visual grammars
 │   ├── interactive/            #   playground · simulation · data explorer
 │   ├── teaching/               #   primer · derivations · quiz · application guide
@@ -792,7 +847,8 @@ the server.
 - Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,
   timeout and payload size.
 - PDF and web content are treated as source material, never as instructions.
-- Provider keys are used only for the active request and never appear in exports.
+- Provider keys are used only for the active request. They never appear in exports or in the
+  browser's storage: the remembered analysis setup has no field for a key.
 - Verified paper claims require an excerpt and a visible page number.
 - Comparison visuals may only use numeric values already recorded in evidence.
 - A publication is a filtered copy: blocks the author leaves out are removed from the served file,
@@ -818,7 +874,9 @@ templates, model speed tests before generation, shareable publications with
 publication controls,
 per-claim and per-section permalinks, resolution from a paper's name, DOI or repository link
 (arXiv, bioRxiv, medRxiv, PubMed Central, ACL Anthology), literature maps of up to six projects,
-citation graphs, local library, exports, the native plugin for Codex / Claude Code /
+citation graphs, a local library with claim search across papers, tags, sorting, a list view and
+undoable deletion, a per-model record of how quotes held up, a dark theme and an adjustable text
+size, exports, the native plugin for Codex / Claude Code /
 Antigravity CLI, and generation through Gemini, OpenAI, Claude, OpenRouter and a local model
 server (Ollama, LM Studio, llama.cpp).
 
@@ -860,6 +918,8 @@ the two from mixing.
 - [x] Quotes checked against the page text; Docker image and password protection
 - [x] Claim review by a person, quotes shown on the page, evidence-locked questions, Anki export
 - [x] Exports: reports, slides, runnable notebook, citations
+- [x] Claim search across the library, tags, and a per-model quote record
+- [x] Dark theme, adjustable text size, contrast-checked colours
 - [ ] Team review with accounts and shared annotations
 
 ---
