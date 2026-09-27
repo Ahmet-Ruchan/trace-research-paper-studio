@@ -1800,6 +1800,47 @@ test.describe("learning health", () => {
 });
 
 test.describe("concepts across the library", () => {
+  test("orders the library so a paper comes after the one that defines what it assumes", async ({ page, request }) => {
+    const foundations = await seed(request, {
+      ...projectNamed("e2e-order-a"),
+      evidence: {
+        ...example.evidence,
+        paper: { ...example.evidence.paper, title: "Zeta foundations", year: "2015" },
+        glossary: [{ term: "Zeta attention", definition: "Attention over zeta-sized windows." }],
+      },
+    });
+    const base = projectNamed("e2e-order-b");
+    const applied = await seed(request, {
+      ...base,
+      evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Zeta applied", year: "2019" } },
+      primer: { ...base.primer!, concepts: base.primer!.concepts.map((concept) => (concept.id === "softmax" ? { ...concept, term: "Zeta attention" } : concept)) },
+    });
+
+    // Lab: bu makaleden önce okunacak olan.
+    await page.goto(`/?project=${applied.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Concepts" }).click();
+    const first = page.getByRole("region", { name: "Read first" });
+    await expect(first.locator("li")).toHaveCount(1);
+    await expect(first.locator("li")).toContainText("Zeta foundations");
+    await expect(first.locator("li")).toContainText("2015 · defines Zeta attention");
+    await expect(first.locator(".read-first-status")).toHaveText("Not studied yet");
+
+    // Kütüphane: okuma sırası.
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Concepts", exact: true }).click();
+    const order = page.getByRole("region", { name: "A reading order" });
+    // `allTextContents` beklemiyor: önce iki makalenin de listede olması bekleniyor.
+    await expect(order.locator(".reading-head button", { hasText: "Zeta applied" })).toBeVisible();
+    await expect(order.locator(".reading-head button", { hasText: "Zeta foundations" })).toBeVisible();
+    const titles = await order.locator(".reading-head button").allTextContents();
+    expect(titles.indexOf("Zeta foundations")).toBeGreaterThanOrEqual(0);
+    expect(titles.indexOf("Zeta foundations")).toBeLessThan(titles.indexOf("Zeta applied"));
+    const step = order.locator("li", { has: page.locator(".reading-head button", { hasText: "Zeta applied" }) });
+    await expect(step.locator(".reading-why")).toHaveText("After Zeta foundations: it assumes Zeta attention, which that paper defines.");
+    await order.locator(".reading-head button", { hasText: "Zeta foundations" }).click();
+    await expect(page.locator(".lab-section-header h1")).toHaveText(foundations.evidence.paper.title);
+  });
+
   test("says where the reader already studied a concept, suggests cited papers for the rest, and maps the library", async ({ page, request }) => {
     // Kütüphane diğer testlerin kopyalarını da taşıyor; bu iki makaleye özgü adlar eşleşmeyi yalnızca onlarla sınırlıyor.
     const rename = (project: ResearchProject, terms: Record<string, string>) => ({

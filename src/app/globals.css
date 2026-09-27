@@ -1021,6 +1021,27 @@ html[data-text-size="larger"] { font-size: 125%; }
 .concept-actions a { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; color: var(--ink-soft); }
 .concept-actions a.concept-open { width: auto; height: auto; padding: 6px 12px; border-color: color-mix(in srgb, var(--green) 55%, var(--line)); border-radius: 20px; color: var(--ink); font-size: var(--text-sm); text-decoration: none; white-space: nowrap; }
 .concept-actions a.concept-open:hover { border-color: var(--green); }
+.read-first { margin-bottom: 20px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 12px; background: var(--surface); }
+.read-first h4 { margin: 0 0 4px; color: var(--accent-ink); font-size: var(--text-xs); letter-spacing: .12em; text-transform: uppercase; }
+.read-first > p { margin: 0 0 10px; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; }
+.read-first-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.read-first-list li { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.read-first-paper { display: grid; gap: 2px; min-width: 0; }
+.read-first-paper small { color: var(--muted); font-size: var(--text-xs); }
+.read-first-status, .reading-status { flex: none; padding: 3px 9px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.read-first-list li.is-finished .read-first-status, .reading-order li.is-finished .reading-status { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); color: var(--green); }
+.reading-order { max-width: 960px; margin: 0 auto 28px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.reading-order > p { margin: 8px 0 14px; color: var(--ink-soft); font-size: var(--text-md); line-height: 1.55; }
+.reading-order ol { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: reading; }
+.reading-order li { position: relative; padding: 10px 12px 10px 44px; border: 1px solid var(--line); border-radius: 10px; counter-increment: reading; }
+.reading-order li::before { content: counter(reading); position: absolute; left: 12px; top: 10px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--field); color: var(--ink-soft); font-size: var(--text-xs); font-weight: 600; }
+.reading-order li.is-next { border-color: var(--accent); }
+.reading-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.reading-head button { padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: 600 var(--text-md)/1.4 inherit; text-align: left; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.reading-head small { color: var(--muted); font-size: var(--text-xs); }
+.reading-head .reading-status { margin-left: auto; }
+.reading-next { padding: 2px 8px; border-radius: 10px; background: var(--ink); color: var(--surface); font-size: var(--text-xs); }
+.reading-why { margin: 6px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
 .shared-concepts { display: grid; gap: 10px; max-width: 960px; margin: 0 auto 60px; padding: 0; list-style: none; }
 .shared-concepts > li { padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .shared-concepts > li.is-studied { border-left: 3px solid var(--green); }

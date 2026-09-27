@@ -20507,6 +20507,127 @@ function studyFileToJson(entries) {
 }
 
 //#endregion
+//#region src/lib/library-order.ts
+/** Makalenin yılı; "2017", "NeurIPS 2017" ya da "2017a" gibi yazılışlardan. Yoksa undefined. */
+function paperYear(project) {
+	const match = project.evidence.paper.year.match(/(?<!\d)(1[5-9]\d\d|20\d\d)(?!\d)/);
+	return match ? Number(match[1]) : void 0;
+}
+const titles = new Intl.Collator("en", {
+	sensitivity: "base",
+	numeric: true,
+	ignorePunctuation: true
+});
+
+//#endregion
+//#region src/lib/reading-order.ts
+function studyStatus(progress) {
+	if (progress?.finishedAt) return "finished";
+	if (progress && (progress.done.length || progress.answers.length)) return "started";
+	return "new";
+}
+const statusWeight = {
+	finished: 2,
+	started: 1,
+	new: 0
+};
+/** Aynı makalenin analizlerinden biri temsilci: en çok çalışılmış, sonra en yeni. */
+function representatives(library, study) {
+	const byPaper = /* @__PURE__ */ new Map();
+	const weight = (project) => statusWeight[studyStatus(study.get(project.id))];
+	for (const project of library) {
+		const key = paperKey(project);
+		const current = byPaper.get(key);
+		if (!current || weight(project) > weight(current) || weight(project) === weight(current) && project.updatedAt > current.updatedAt) byPaper.set(key, project);
+	}
+	return [...byPaper.values()];
+}
+/** Makalenin varsaydığı kavramlar: anahtar → ön bilgideki adı. */
+function assumed(project) {
+	const keys = /* @__PURE__ */ new Map();
+	for (const concept of project.primer?.concepts ?? []) for (const key of conceptKeys(concept.term)) keys.set(key, concept.term);
+	return keys;
+}
+/** Makalenin tanımladığı ama kendisi varsaymadığı kavramlar: anahtar → sözlükteki adı. */
+function defined(project) {
+	const own = assumed(project);
+	const keys = /* @__PURE__ */ new Map();
+	for (const item of project.evidence.glossary) {
+		const itemKeys = conceptKeys(item.term);
+		if (itemKeys.some((key) => own.has(key))) continue;
+		for (const key of itemKeys) keys.set(key, item.term);
+	}
+	return keys;
+}
+/** `to`'nun varsaydığı ve `from`'un tanımladığı kavramlar; aynı kavramın iki yazımı bir kez. */
+function conceptsBetween(from, to) {
+	const definitions = defined(from);
+	const found = /* @__PURE__ */ new Map();
+	for (const [key, term] of assumed(to)) {
+		const definedAs = definitions.get(key);
+		if (definedAs && !found.has(term)) found.set(term, {
+			term,
+			definedAs
+		});
+	}
+	return [...found.values()];
+}
+const byYearThenTitle = (left, right) => {
+	const [a, b] = [paperYear(left), paperYear(right)];
+	return (a ?? Infinity) - (b ?? Infinity) || left.evidence.paper.title.localeCompare(right.evidence.paper.title);
+};
+/**
+* Bu makaleden önce okunabilecek makaleler: varsaydığı kavramları sözlüğünde
+* tanımlayanlar, en çok kavramı karşılayan önce. Aynı makalenin başka
+* analizleri sayılmıyor.
+*/
+function readFirst(project, library, study) {
+	const own = paperKey(project);
+	return representatives(library.filter((item) => paperKey(item) !== own), study).map((from) => ({
+		project: from,
+		concepts: conceptsBetween(from, project),
+		status: studyStatus(study.get(from.id))
+	})).filter((item) => item.concepts.length).sort((left, right) => right.concepts.length - left.concepts.length || byYearThenTitle(left.project, right.project));
+}
+function readingOrder(library, study) {
+	const papers = representatives(library, study);
+	const links = papers.flatMap((to) => papers.filter((from) => from !== to).flatMap((from) => {
+		const concepts = conceptsBetween(from, to);
+		return concepts.length ? [{
+			from,
+			to,
+			concepts
+		}] : [];
+	}));
+	const connected = papers.filter((paper) => links.some((link) => link.from === paper || link.to === paper));
+	const remaining = new Set(connected);
+	const placed = /* @__PURE__ */ new Set();
+	const steps = [];
+	while (remaining.size) {
+		const pending = [...remaining];
+		const ready = pending.filter((paper) => !links.some((link) => link.to === paper && remaining.has(link.from))).sort(byYearThenTitle);
+		const project = ready[0] ?? pending.sort(byYearThenTitle)[0];
+		const together = ready.length ? [] : links.filter((link) => link.to === project && remaining.has(link.from) && link.from !== project).map((link) => link.from);
+		steps.push({
+			project,
+			status: studyStatus(study.get(project.id)),
+			after: links.filter((link) => link.to === project && placed.has(link.from)).map((link) => ({
+				project: link.from,
+				concepts: link.concepts
+			})),
+			together
+		});
+		remaining.delete(project);
+		placed.add(project);
+	}
+	return {
+		steps,
+		next: steps.find((step) => step.status !== "finished")?.project,
+		unconnected: papers.length - connected.length
+	};
+}
+
+//#endregion
 //#region src/lib/publications.ts
 /**
 * Paylaşılabilir yayınlar.
@@ -21797,4 +21918,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, isStudyFile, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, isStudyFile, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

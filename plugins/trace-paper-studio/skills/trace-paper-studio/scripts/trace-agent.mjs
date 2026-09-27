@@ -18,6 +18,8 @@ import {
   libraryPaperFor,
   paperKey,
   parseStudyFile,
+  readFirst,
+  readingOrder,
   sharedConcepts,
   suggestReferences,
   builtInTemplates,
@@ -1849,6 +1851,7 @@ async function printConcepts(args) {
   if ((args.suggest || args.references) && !args.project) throw new Error("--suggest and --references need --project <project.trace.json>.");
   const { library, projects, files, unreadable, study } = readLibrary();
   const paper = (source) => ({ paper: source.paperTitle, projectId: source.projectId, file: files.get(source.projectId), kind: source.kind, studied: Boolean(source.knowledge?.studied) });
+  const libraryPaper = (project) => ({ paper: project.evidence.paper.title, projectId: project.id, file: files.get(project.id), year: project.evidence.paper.year });
   if (args.project) {
     const outcome = validateProjectObject(readJsonFile(resolve(args.project), "project"));
     if (!outcome.ok) {
@@ -1879,12 +1882,18 @@ async function printConcepts(args) {
         studiedIn: link.studiedIn ? paper(link.studiedIn) : null,
         alsoIn: link.elsewhere.map(paper),
       })),
+      readFirst: readFirst(outcome.project, projects, study).map((item) => ({
+        ...libraryPaper(item.project),
+        status: item.status,
+        defines: item.concepts,
+      })),
       ...(suggestions ? { suggestions } : {}),
-      note: "Concepts are matched by name across the library, never by meaning. Tell the reader which of this paper's concepts they already studied in other papers, and where, and which are new to them. This is about the reader, not the paper: do not write it into the project.",
+      note: "Concepts are matched by name across the library, never by meaning. Tell the reader which of this paper's concepts they already studied in other papers, and where, and which are new to them. readFirst lists library papers that define (in their glossary) concepts this paper assumes: suggest the ones not studied yet before this one. This is about the reader, not the paper: do not write it into the project.",
     }, null, 2));
     return;
   }
   const shared = sharedConcepts(projects, study);
+  const order = readingOrder(projects, study);
   console.log(JSON.stringify({
     ok: true,
     library,
@@ -1892,7 +1901,17 @@ async function printConcepts(args) {
     projects: projects.length,
     unreadable,
     shared: shared.map((concept) => ({ term: concept.term, papers: concept.sources.map(paper), studied: concept.studied })),
-    note: "Concepts that more than one paper in the library explains, from primers and glossaries, matched by name. studied: the reader studied it in that paper.",
+    readingOrder: {
+      steps: order.steps.map((step) => ({
+        ...libraryPaper(step.project),
+        status: step.status,
+        after: step.after.map((item) => ({ paper: item.project.evidence.paper.title, projectId: item.project.id, concepts: item.concepts })),
+        together: step.together.map((item) => ({ paper: item.project.evidence.paper.title, projectId: item.project.id })),
+      })),
+      next: order.next ? libraryPaper(order.next) : null,
+      unconnected: order.unconnected,
+    },
+    note: "Concepts that more than one paper in the library explains, from primers and glossaries, matched by name. studied: the reader studied it in that paper. readingOrder puts each paper after the papers that define (in their glossary) a concept it assumes (in its primer), older first where nothing decides; next is the first paper the reader has not finished studying.",
   }, null, 2));
 }
 

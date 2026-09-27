@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowLeft, Waypoints } from "lucide-react";
+import { ArrowLeft, ListOrdered, Waypoints } from "lucide-react";
 import { libraryConceptIndex, sharedConcepts } from "@/lib/concept-links";
+import { readingOrder } from "@/lib/reading-order";
 import type { ResearchProject } from "@/lib/schema";
+import { studyStatusLabel } from "./concepts-view";
 import { useLibraryStudy } from "./study-progress";
 
 /**
@@ -24,6 +26,7 @@ export function ConceptMapView({
   const study = useLibraryStudy();
   const shared = useMemo(() => sharedConcepts(projects, study ?? new Map()), [projects, study]);
   const total = useMemo(() => libraryConceptIndex(projects).size, [projects]);
+  const order = useMemo(() => readingOrder(projects, study ?? new Map()), [projects, study]);
   const byId = new Map(projects.map((project) => [project.id, project]));
 
   return (
@@ -47,6 +50,46 @@ export function ConceptMapView({
           endings, plurals), never by meaning, so two names for one idea stay apart. {total} names in all.
         </p>
       </section>
+
+      {order.steps.length ? (
+        <section className="reading-order" aria-label="A reading order">
+          <div className="block-title"><ListOrdered size={16} /> A reading order</div>
+          <p>
+            Each paper comes after the papers that define, in their glossary, a concept it assumes. Where nothing decides, the
+            older paper comes first.{" "}
+            {order.unconnected
+              ? `${order.unconnected === 1 ? "One paper is" : `${order.unconnected} papers are`} not connected to the others this way and ${order.unconnected === 1 ? "is" : "are"} left out.`
+              : ""}
+          </p>
+          <ol>
+            {order.steps.map((step) => {
+              const next = step.project === order.next;
+              return (
+                <li key={step.project.id} className={`is-${step.status}${next ? " is-next" : ""}`}>
+                  <div className="reading-head">
+                    <button type="button" onClick={() => onOpen(step.project)}>{step.project.evidence.paper.title}</button>
+                    <small>{step.project.evidence.paper.year}</small>
+                    {next ? <strong className="reading-next">Next</strong> : null}
+                    <span className="reading-status">{studyStatusLabel[step.status]}</span>
+                  </div>
+                  {step.after.map((item) => (
+                    <p key={item.project.id} className="reading-why">
+                      After <em>{item.project.evidence.paper.title}</em>: it assumes{" "}
+                      {item.concepts.map((concept) => concept.term).join(", ")}, which that paper defines.
+                    </p>
+                  ))}
+                  {step.together.length ? (
+                    <p className="reading-why">
+                      Read it alongside {step.together.map((item) => item.evidence.paper.title).join(" and ")}: each defines something
+                      the other assumes.
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
 
       {shared.length ? (
         <ul className="shared-concepts">

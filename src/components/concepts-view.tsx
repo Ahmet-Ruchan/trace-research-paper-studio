@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ExternalLink, Search } from "lucide-react";
 import { libraryPaperFor, suggestReferences, type ConceptLink, type ReferenceSuggestion } from "@/lib/concept-links";
 import { loadCitationGraph } from "@/lib/paper-lookup";
+import type { ReadFirst, StudyStatus } from "@/lib/reading-order";
 import type { ResearchProject } from "@/lib/schema";
 import { PaperLink, paperHref } from "./concept-note";
 
@@ -14,6 +15,8 @@ type Lookup =
   | { status: "failed"; message: string };
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+export const studyStatusLabel: Record<StudyStatus, string> = { finished: "Studied", started: "Studying", new: "Not studied yet" };
 
 /**
  * Lab'de "Concepts": makalenin varsaydığı kavramlar ve kütüphanedeki izleri
@@ -26,11 +29,14 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
 export function ConceptsView({
   project,
   links,
+  readFirst = [],
   library = [],
   onAnalyse,
 }: {
   project: ResearchProject;
   links: readonly ConceptLink[];
+  /** Kütüphanede bu makalenin varsaydığını tanımlayan makaleler (`reading-order.ts`). */
+  readFirst?: readonly ReadFirst[];
   library?: readonly ResearchProject[];
   onAnalyse?: (work: { identifier: string; title: string }) => void;
 }) {
@@ -54,6 +60,31 @@ export function ConceptsView({
 
   return (
     <div className="concepts">
+      {readFirst.length ? (
+        <section className="read-first" aria-label="Read first">
+          <h4>Read first</h4>
+          <p>
+            {readFirst.length === 1
+              ? "One paper in your library defines, in its glossary, concepts this paper assumes. Reading it first"
+              : `${readFirst.length} papers in your library define, in their glossaries, concepts this paper assumes. Reading them first`}{" "}
+            means this one builds on something you know.
+          </p>
+          <ul className="read-first-list">
+            {readFirst.map((item) => (
+              <li key={item.project.id} className={`is-${item.status}`}>
+                <span className="read-first-paper">
+                  <PaperLink projectId={item.project.id} title={item.project.evidence.paper.title} />
+                  <small>
+                    {item.project.evidence.paper.year ? `${item.project.evidence.paper.year} · ` : ""}defines{" "}
+                    {item.concepts.map((concept) => concept.definedAs).join(", ")}
+                  </small>
+                </span>
+                <span className="read-first-status">{studyStatusLabel[item.status]}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <p className="concepts-summary" role="status">
         Of {plural(links.length, "concept")} this paper assumes, you studied {studiedHere} here and {studiedElsewhere} in other papers;
         {" "}{inOtherPapers} {inOtherPapers === 1 ? "is" : "are"} explained in other papers you have not studied yet.

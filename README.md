@@ -41,6 +41,7 @@ running on the coding agent you already use, with no second API key.
 
 | | |
 | --- | --- |
+| **[A reading order for your library](#connect-what-you-learn-across-papers)** | Each paper after the papers that define what it assumes, with the reason and the next paper to read. The Lab says which papers to read first. |
 | **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references, titles and abstracts, for works that teach what you have not studied yet. |
 | **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim and page. Explain it again later and Trace shows what you added since. |
 | **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next. The answers come from the formulas themselves, not from a model. |
@@ -290,6 +291,18 @@ OpenAlex has it, because OpenAlex occasionally attaches an abstract to the wrong
 lets you see that. **Concepts** in
 the library header is the map across all of it: every concept more than one paper explains, with the
 papers that explain it and a check mark where you studied it.
+
+**A reading order.** A paper's primer is what it assumes; its glossary is what it uses and defines. When
+one paper defines a concept that another assumes, reading the first one first makes the second easier.
+So the concept map opens with a reading order for your library: each paper after the papers that define
+what it assumes, the older paper first where nothing decides, and the first paper you have not finished
+marked **Next**. Each step says why it comes where it does ("after *Attention Is All You Need*: it
+assumes multi-head attention, which that paper defines"). Two papers that each define something the
+other assumes are shown as a pair to read side by side, not put in an invented order, and papers nothing
+connects are left out. In the Lab, **Read first** names the papers of your library that define what
+this one assumes, and whether you have studied them.
+
+![A reading order for the library](docs/images/reading-order.jpg)
 
 Nothing here is generated. Concepts are matched by name, from each paper's primer and glossary, with
 case, hyphens, British and American spellings and plurals folded, never by meaning: two names for one

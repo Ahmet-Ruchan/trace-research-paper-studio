@@ -56,6 +56,7 @@ import { ExplainPanel } from "./explain-panel";
 import { ConceptNote } from "./concept-note";
 import { ConceptsView } from "./concepts-view";
 import { conceptLinks } from "@/lib/concept-links";
+import { readFirst } from "@/lib/reading-order";
 import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
 import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
@@ -205,12 +206,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
   // Kavram bağları: bu makalenin kavramları kütüphanenin başka makalelerinde.
   const libraryStudy = useLibraryStudy();
-  const links = useMemo(() => {
-    if (!library) return [];
+  const studyByPaper = useMemo(() => {
     const study = new Map(libraryStudy ?? []);
     if (studyProgress) study.set(project.id, studyProgress);
-    return conceptLinks(project, library, study);
-  }, [project, library, libraryStudy, studyProgress]);
+    return study;
+  }, [project.id, libraryStudy, studyProgress]);
+  const links = useMemo(() => (library ? conceptLinks(project, library, studyByPaper) : []), [project, library, studyByPaper]);
+  // Bu makaleden önce okunabilecekler: varsaydığını sözlüğünde tanımlayan makaleler.
+  const firstReads = useMemo(() => (library ? readFirst(project, library, studyByPaper) : []), [project, library, studyByPaper]);
   const linkFor = (conceptId: string) => links.find((link) => link.conceptId === conceptId);
   const [openedAt] = useState(() => new Date().toISOString());
   const studyStatus = useMemo(() => {
@@ -530,7 +533,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
               The concepts this paper assumes, and where else your library explains them. Nothing is generated: concepts are
               matched by name across your papers, and each paper&apos;s study progress says what you have already studied.
             </p>
-            <ConceptsView project={project} links={links} library={library} onAnalyse={onAnalysePaper} />
+            <ConceptsView project={project} links={links} readFirst={firstReads} library={library} onAnalyse={onAnalysePaper} />
           </section>
         )}
 
