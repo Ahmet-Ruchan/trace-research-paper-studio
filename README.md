@@ -10,6 +10,7 @@ Trace turns a research paper into something you can verify, learn from and exper
 running on the coding agent you already use, with no second API key.
 
 [![Check](https://img.shields.io/github/actions/workflow/status/Ahmet-Ruchan/trace-research-paper-studio/check.yml?branch=main&style=for-the-badge&label=check&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/actions/workflows/check.yml)
+[![Plugins](https://img.shields.io/github/actions/workflow/status/Ahmet-Ruchan/trace-research-paper-studio/plugins.yml?branch=main&style=for-the-badge&label=plugin%20on%203%20agents&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/actions/workflows/plugins.yml)
 [![Stars](https://img.shields.io/github/stars/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=E75B37&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/stargazers)
 [![Forks](https://img.shields.io/github/forks/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/network/members)
 [![Issues](https://img.shields.io/github/issues/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=8C5C18&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/issues)
@@ -51,7 +52,7 @@ running on the coding agent you already use, with no second API key.
 | **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
 | **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
 | **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio includes the learning layer, written by a fifth **Teaching** model from the evidence alone. Every number in it comes from the paper or says it is illustrative. Older projects offer **Add the learning layer**. |
-| **[The plugin, checked on all three agents](#install-in-under-a-minute)** | Installed and run on Claude Code, Codex and Antigravity CLI. Codex had been cutting the skill's description off mid-sentence and ignoring half of its starter prompts; both now fit its limits, and a test keeps them there. |
+| **[The plugin, checked on all three agents](#install-in-under-a-minute)** | Installed and run on Claude Code, Codex and Antigravity CLI. Codex had been cutting the skill's description off mid-sentence and ignoring half of its starter prompts; both now fit its limits. A [workflow](#development) now installs the plugin into all three on every push and runs it from the installed copy. |
 
 Your agent has the new parts too: `explain` checks your own explanation, `concepts` links a paper to
 what you studied in the others, and `validate --strict` expects common misreadings at standard and
@@ -927,7 +928,16 @@ npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
 npm run version:set -- 0.22.0  # write one version into the package and every plugin manifest
+npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)"
 ```
+
+`test:plugins` installs the plugin into each agent CLI you pass, in a throwaway home directory, the
+way a user would. It then asks the agent how it sees the plugin (version, skill, description,
+starter prompts) and treats any warning that names the plugin as a failure, because an agent that
+cuts a description short or drops a field says so only in a log line. Finally it runs the bridge
+from the installed copy, outside the repository, so a copy that depends on a repository file fails
+there. The `plugins` workflow runs it on every push with pinned CLI versions, and weekly with the
+latest ones.
 
 <details>
 <summary><b>Architecture notes worth knowing before contributing</b></summary>

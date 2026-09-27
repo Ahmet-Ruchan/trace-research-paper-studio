@@ -1,0 +1,58 @@
+# Eklenti her ajanda gerçekten kuruluyor ve çalışıyor mu.
+#
+# Manifest testleri alan sınırlarını tutuyor; bu iş akışı ajanın kendisine
+# soruyor. Codex, Claude Code ve Antigravity CLI kuruluyor, eklenti her birine
+# kullanıcının kuracağı yoldan kuruluyor ve köprü kurulan kopyadan
+# çalıştırılıyor (bkz. scripts/plugin-smoke.mjs). Codex bir açıklamayı
+# kestiğinde ya da bir alanı uyarıyla attığında burada kırmızı görünüyor.
+#
+# Push ve PR'larda CLI sürümleri sabit: kırmızı bir sonuç bu depodaki bir
+# değişikliği gösteriyor. Haftalık çalıştırma en son sürümlerle koşuyor: bir
+# ajanın yeni sürümü eklentiyi bozarsa kullanıcılardan önce burada görülüyor.
+# Antigravity'nin kurulum betiği her zaman son sürümü kuruyor.
+name: plugins
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+concurrency:
+  group: plugins-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: plugin on Codex, Claude Code and Antigravity CLI
+    env:
+      CODEX_VERSION: ${{ github.event_name == 'schedule' && 'latest' || '0.157.1' }}
+      CLAUDE_CODE_VERSION: ${{ github.event_name == 'schedule' && 'latest' || '2.1.283' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # Köprü bağımlılıksız çalışıyor, betik de yalnızca Node modüllerini
+      # kullanıyor: deponun `npm ci`'ı gerekmiyor. Ajanlar deponun dışına kuruluyor.
+      - name: Install the agent CLIs
+        run: |
+          npm install --prefix "$RUNNER_TEMP/agents" --no-audit --no-fund \
+            "@openai/codex@$CODEX_VERSION" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+          curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --dir "$RUNNER_TEMP/agy"
+
+      - name: Install the plugin into each agent and run it
+        run: >
+          node scripts/plugin-smoke.mjs
+          --codex "$RUNNER_TEMP/agents/node_modules/.bin/codex"
+          --claude "$RUNNER_TEMP/agents/node_modules/.bin/claude"
+          --agy "$RUNNER_TEMP/agy/agy"
