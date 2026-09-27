@@ -17,6 +17,7 @@ export { ConceptBody, PrimerView } from "./teaching/primer";
 export { DerivationView } from "./teaching/derivations";
 export { QuizView } from "./teaching/quiz";
 export { StudyView } from "./teaching/study";
+export { MisreadingsView } from "./teaching/misreadings";
 export { ApplicationGuideView } from "./teaching/application-guide";
 export { FiguresView, figuresBySection } from "./teaching/figures";
 export { EvidenceHealthView } from "./teaching/evidence-health";

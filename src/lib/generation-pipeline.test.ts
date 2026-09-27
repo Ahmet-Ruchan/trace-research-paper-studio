@@ -94,6 +94,7 @@ function loadAnswers(project: ResearchProject) {
     ["trace_technical_appendix", project.technicalAppendix],
     ["trace_primer", project.primer],
     ["trace_quiz", project.quiz],
+    ["trace_misreadings", project.misreadings],
     ["trace_derivations", { derivations: project.derivations }],
     ["trace_interactives", { interactives: project.interactives }],
     ["trace_application_guide", project.applicationGuide],
@@ -121,7 +122,7 @@ async function analyse(assignments: Partial<ModelTeam>, depth: ResearchProject["
   return { project: result.project as ResearchProject, warnings: result.warnings, events };
 }
 
-const learningSchemas = ["trace_primer", "trace_quiz", "trace_derivations", "trace_interactives", "trace_application_guide"];
+const learningSchemas = ["trace_primer", "trace_quiz", "trace_misreadings", "trace_derivations", "trace_interactives", "trace_application_guide"];
 
 describe("analysis pipeline", () => {
   let project: ResearchProject;
@@ -145,6 +146,7 @@ describe("analysis pipeline", () => {
 
     expect(result.primer).toEqual(project.primer);
     expect(result.quiz).toEqual(project.quiz);
+    expect(result.misreadings).toEqual(project.misreadings);
     expect(result.derivations).toEqual(project.derivations);
     expect(result.interactives).toEqual(project.interactives);
     expect(result.applicationGuide).toEqual(project.applicationGuide);
@@ -204,7 +206,7 @@ describe("analysis pipeline", () => {
     const { project: result, warnings } = await analyse(team);
     expect(result.story.sections).toHaveLength(project.story.sections.length);
     expect(result.primer).toBeUndefined();
-    expect(warnings.join(" ")).toContain("The learning layer is incomplete: the primer, the quiz, the derivations, the interactive explorations and the application guide could not be written.");
+    expect(warnings.join(" ")).toContain("The learning layer is incomplete: the primer, the quiz, the common misreadings, the derivations, the interactive explorations and the application guide could not be written.");
     expect(state.calls.some((call) => learningSchemas.includes(call.schemaName))).toBe(false);
   });
 

@@ -6,6 +6,7 @@ import { SectionPrerequisites, TermParagraphs } from "../term-text";
 import { ApplicationGuideView } from "./application-guide";
 import { DerivationView } from "./derivations";
 import { FiguresView, figuresBySection } from "./figures";
+import { MisreadingsView } from "./misreadings";
 import { ConceptBody, prerequisiteTerms } from "./primer";
 import { QuizView } from "./quiz";
 import { sectionPrerequisites, termIndex } from "@/lib/term-index";
@@ -234,6 +235,7 @@ function StepContent({ step, project, terms, figures, questions, progress, summa
           {count("concept") ? <li><b>{t.studyPhases.prepare}</b> {t.studyAheadConcepts(count("concept"))}</li> : null}
           <li><b>{t.studyPhases.read}</b> {t.studyAheadSections(sections.length, checks)}</li>
           {work ? <li><b>{t.studyPhases.work}</b> {t.studyAheadWork(work)}</li> : null}
+          {project.misreadings ? <li><b>{t.studyPhases.check}</b> {t.studyAheadMisreadings(project.misreadings.items.length)}</li> : null}
           {quiz?.kind === "quiz" ? <li><b>{t.studyPhases.check}</b> {t.studyAheadQuiz(quiz.questionIds.length)}</li> : null}
           {project.applicationGuide ? <li><b>{t.studyPhases.apply}</b> {t.studyAheadGuide}</li> : null}
         </ol>
@@ -293,6 +295,10 @@ function StepContent({ step, project, terms, figures, questions, progress, summa
   if (step.kind === "interactive") {
     const interactive = project.interactives?.find((item) => item.id === step.interactiveId);
     return interactive ? <InteractiveRenderer interactive={interactive} /> : null;
+  }
+
+  if (step.kind === "misreadings") {
+    return project.misreadings ? <MisreadingsView misreadings={project.misreadings} claims={evidence.claims} /> : null;
   }
 
   if (step.kind === "quiz") {

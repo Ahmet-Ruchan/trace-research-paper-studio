@@ -55,6 +55,15 @@ export function ankiCards(project: ResearchProject): AnkiCard[] {
     });
   }
 
+  // "Makale bunu söylüyor mu?" kartı: yanlış okuma önde, düzeltme ve kaynağı arkada.
+  for (const item of project.misreadings?.items ?? []) {
+    cards.push({
+      front: `Does the paper show this?<br><br><i>${escapeHtml(item.misreading)}</i>`,
+      back: `<b>No.</b> ${escapeHtml(item.correction)}${sourceLine(project, item.claimIds)}`,
+      tags: ["misreading", item.trap],
+    });
+  }
+
   for (const item of project.evidence.glossary) {
     cards.push({
       front: escapeHtml(item.term),

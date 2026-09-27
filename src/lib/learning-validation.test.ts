@@ -13,6 +13,7 @@ const base: ResearchProject = (() => {
   delete legacy.primer;
   delete legacy.derivations;
   delete legacy.quiz;
+  delete legacy.misreadings;
   delete legacy.interactives;
   delete legacy.applicationGuide;
   return legacy as ResearchProject;
@@ -272,5 +273,38 @@ describe("quiz ve ön bilgi tutarlılığı", () => {
       /cannot list itself as a prerequisite/,
     );
     expect(() => validateLearningIntegrity(withBlocks({ primer }))).toThrow(/unknown prerequisite/);
+  });
+});
+
+describe("common misreadings", () => {
+  const item = (id: string, trap: "interpretation-as-result" | "beyond-tested" | "number" | "mechanism", claimIds = [claimId]) => ({
+    id,
+    trap,
+    misreading: `The paper proves ${id}.`,
+    correction: `It does not: the evidence only shows part of ${id}.`,
+    claimIds,
+  });
+  const block = (items: ReturnType<typeof item>[]) => withBlocks({ misreadings: { title: "Common misreadings", intro: "Traps.", items } });
+
+  it("accepts the shipped example's misreadings", () => {
+    expect(() => validateLearningIntegrity(exampleProject, { requireDepthBlocks: true })).not.toThrow();
+    expect(new Set(exampleProject.misreadings!.items.map((entry) => entry.trap)).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("requires them at standard and deep depth, like the quiz", () => {
+    const legacy = structuredClone(exampleProject) as Partial<ResearchProject>;
+    delete legacy.misreadings;
+    expect(() => validateLearningIntegrity(legacy as ResearchProject, { requireDepthBlocks: true })).toThrow(/misreadings: required at "deep" depth/);
+    // İçe aktarmada zorunlu değil: bloktan önce yazılmış projeler kütüphaneye girebilmeli.
+    expect(() => validateLearningIntegrity(legacy as ResearchProject)).not.toThrow();
+  });
+
+  it("refuses an unknown claim, a repeated id, a correction that repeats the misreading, and a single kind of trap", () => {
+    expect(() => validateLearningIntegrity(block([item("a", "number", ["claim-nowhere"]), item("b", "mechanism")]))).toThrow(/misreadings\.a: .*claim-nowhere/);
+    expect(() => validateLearningIntegrity(block([item("a", "number"), item("a", "mechanism")]))).toThrow(/duplicate id a/);
+    const parrot = { ...item("a", "number"), correction: " the paper proves a. " };
+    expect(() => validateLearningIntegrity(block([parrot, item("b", "mechanism")]))).toThrow(/repeats the misreading/);
+    expect(() => validateLearningIntegrity(block([item("a", "number"), item("b", "number"), item("c", "number")]))).toThrow(/same trap/);
+    expect(() => validateLearningIntegrity(block([item("a", "number"), item("b", "mechanism"), item("c", "number")]))).not.toThrow();
   });
 });

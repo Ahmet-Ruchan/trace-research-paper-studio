@@ -359,8 +359,9 @@ Usage:
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
             and the report order; job.json carries the instructions.
-  --strict  Treats the learning blocks (primer, derivations, quiz,
-            interactives, application guide) as REQUIRED for the chosen depth.
+  --strict  Treats the learning blocks (primer, derivations, quiz, common
+            misreadings, interactives, application guide) as REQUIRED for
+            the chosen depth.
 
   --no-app  Do not start or open the main Trace app; deliver only the
             standalone site.
@@ -765,6 +766,7 @@ function inspectProject(args, print = true) {
       derivations: project.derivations?.length ?? 0,
       interactives: project.interactives?.length ?? 0,
       quizQuestions: project.quiz?.questions.length ?? 0,
+      misreadings: project.misreadings?.items.length ?? 0,
       applicationGuide: Boolean(project.applicationGuide),
     },
     // Tek iddiaya ya da yalnızca doğrulanmamış iddialara dayanan bölümler;

@@ -63,6 +63,10 @@ export type Strings = {
   answerShown: string;
   whereToLook: string;
   score: (firstTry: number, attempted: number) => string;
+  // Yanlış okumalar
+  misreadingTempting: string;
+  misreadingActually: string;
+  misreadingReveal: string;
   // Uygulama rehberi
   hyperparameters: string;
   pitfalls: string;
@@ -86,6 +90,7 @@ export type Strings = {
   studyAheadSections: (count: number, checks: number) => string;
   studyAheadWork: (count: number) => string;
   studyAheadQuiz: (count: number) => string;
+  studyAheadMisreadings: (count: number) => string;
   studyAheadGuide: string;
   studyCheckTitle: string;
   studyCheckIntro: string;
@@ -252,6 +257,9 @@ const en: Strings = {
   answerShown: "The answer",
   whereToLook: "Where the paper says it:",
   score: (firstTry, attempted) => `${firstTry} of ${attempted} right on the first try`,
+  misreadingTempting: "Tempting to conclude:",
+  misreadingActually: "What the paper shows",
+  misreadingReveal: "Why this is wrong",
   hyperparameters: "Choosing hyperparameters",
   pitfalls: "Common pitfalls",
   pitfallCause: "Cause:",
@@ -276,6 +284,7 @@ const en: Strings = {
   studyAheadWork: (count) => `${count} ${count === 1 ? "derivation or exploration" : "derivations and explorations"} to work through`,
   studyAheadQuiz: (count) => `a final check of ${count} ${count === 1 ? "question" : "questions"}`,
   studyAheadGuide: "how to apply it in practice",
+  studyAheadMisreadings: (count) => `${count} common ${count === 1 ? "misreading" : "misreadings"} of this paper to see through`,
   studyCheckTitle: "Check yourself",
   studyCheckIntro: "One question on what you just read. Answer from memory before you look back.",
   studyFinalTitle: "Final check",

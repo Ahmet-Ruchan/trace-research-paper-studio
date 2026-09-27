@@ -3021,6 +3021,71 @@
       }
     ]
   },
+  "misreadings": {
+    "title": "Sık yapılan yanlış okumalar",
+    "intro": "Bu makaleyi hızlı okuyan birinin kolayca çıkardığı ama kanıtın desteklemediği altı sonuç. Her birinin altında makalenin gerçekte ne gösterdiği ve kanıtın nerede durduğu var.",
+    "items": [
+      {
+        "id": "m-scaling",
+        "trap": "interpretation-as-result",
+        "misreading": "Makale, √d_k ölçeklemesi olmadan softmax'ın doyuma ulaştığını ve eğitimin bozulduğunu gösteriyor.",
+        "correction": "Böyle bir ölçüm yok. Yazarlar büyük nokta çarpımlarının softmax'ı gradyanın son derece küçük olduğu bölgelere ittiğinden şüphelendiklerini yazıyor ve √d_k ile ölçeklemeyi bu varsayıma dayanan bir önlem olarak ekliyor; makalede ölçeklemesiz bir deneme yok.",
+        "claimIds": [
+          "claim-interpretation-01",
+          "claim-method-05"
+        ]
+      },
+      {
+        "id": "m-positional",
+        "trap": "interpretation-as-result",
+        "misreading": "Sinüzoidal konum kodlaması öğrenilen konum gömmelerinden daha iyi sonuç veriyor; Transformer bu yüzden onu kullanıyor.",
+        "correction": "Öğrenilen konum gömmeleri neredeyse aynı sonucu verdi. Yazarlar sinüzoidal sürümü, modelin eğitimde görmediği uzunluktaki dizilere genelleyebileceği düşüncesiyle seçti; makale bu varsayımı sınamıyor.",
+        "claimIds": [
+          "claim-result-06",
+          "claim-interpretation-02"
+        ]
+      },
+      {
+        "id": "m-faster",
+        "trap": "beyond-tested",
+        "misreading": "Öz-dikkat, dizinin uzunluğu ne olursa olsun tekrarlayan bir katmandan daha hızlıdır.",
+        "correction": "Yalnızca dizi uzunluğu n, temsil boyutu d'den küçük olduğu sürece. Tablo 1 öz-dikkatin katman başına maliyetini O(n² · d) olarak veriyor; bu yüzden uzun dizilerde avantaj kayboluyor ve onlar için önerilen kısıtlı dikkat bu makalede denenmedi.",
+        "claimIds": [
+          "claim-limitation-01",
+          "claim-result-04",
+          "claim-limitation-02"
+        ]
+      },
+      {
+        "id": "m-heads-cost",
+        "trap": "mechanism",
+        "misreading": "8 başlıklı çok başlı dikkat, tek başlıklı dikkatin yaklaşık sekiz katı maliyetlidir.",
+        "correction": "Her başlık küçültülmüş bir boyutta çalışıyor, d_k = d_v = d_model / h = 64; bu yüzden toplam hesaplama maliyeti tam boyutlu tek başlıklı dikkatle karşılaştırılabilir düzeyde kalıyor.",
+        "claimIds": [
+          "claim-method-06"
+        ]
+      },
+      {
+        "id": "m-more-heads",
+        "trap": "beyond-tested",
+        "misreading": "Ablasyonlar, dikkat başlığı sayısı arttıkça sonucun hep iyileştiğini gösteriyor.",
+        "correction": "Tek başlıklı dikkat en iyi ayardan 0.9 BLEU geride, ama başlık sayısı fazla artırıldığında kalite yine düşüyor; makale bir eğilim değil, bir orta nokta buluyor.",
+        "claimIds": [
+          "claim-result-05"
+        ]
+      },
+      {
+        "id": "m-flops",
+        "trap": "number",
+        "misreading": "Tablo 2'deki eğitim maliyetleri ölçüldü: temel model 3.3 · 10^18 FLOP harcadı.",
+        "correction": "Bunlar tahmin. Makale onları eğitim süresi, GPU sayısı ve GPU başına varsayılan sürekli tek duyarlıklı hız çarpılarak elde ediyor; FLOP sayısı ölçülmedi.",
+        "claimIds": [
+          "claim-limitation-06",
+          "claim-result-03"
+        ]
+      }
+    ]
+  },
   "applicationGuide": {
     "title": "Kendi projende kullanmak",
     "overview": "Transformer'ı bugün sıfırdan yazmanız gerekmiyor; ama makalenin hangi kararının neden alındığını bilmek, kendi yapılandırmanızı seçerken fark yaratır. Aşağıdaki değerlerin tamamı makaleden gelir — uydurma varsayılan yoktur. Kod taslakları AÇIKLAYICIDIR, çalıştırılabilir kütüphane kodu değildir.",

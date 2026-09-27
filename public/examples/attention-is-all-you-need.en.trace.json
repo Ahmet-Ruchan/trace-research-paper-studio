@@ -2,7 +2,7 @@
   "version": 1,
   "id": "attention-is-all-you-need-en",
   "createdAt": "2026-08-20T00:00:00.000Z",
-  "updatedAt": "2026-09-26T22:53:13.172Z",
+  "updatedAt": "2026-09-27T00:28:08.627Z",
   "language": "en",
   "audience": "student",
   "depth": "deep",
@@ -3018,6 +3018,71 @@
           "claim-limitation-05"
         ],
         "page": 10
+      }
+    ]
+  },
+  "misreadings": {
+    "title": "Common misreadings",
+    "intro": "Six conclusions a quick reader easily draws from this paper and the evidence does not support. Under each one: what the paper actually shows, and where its evidence stops.",
+    "items": [
+      {
+        "id": "m-scaling",
+        "trap": "interpretation-as-result",
+        "misreading": "The paper shows that without the √d_k scaling, softmax saturates and training breaks down.",
+        "correction": "Nothing like this is measured. The authors write that they suspect large dot products push softmax into regions of extremely small gradients, and they scale by √d_k as a precaution based on that supposition; the paper has no run without the scaling.",
+        "claimIds": [
+          "claim-interpretation-01",
+          "claim-method-05"
+        ]
+      },
+      {
+        "id": "m-positional",
+        "trap": "interpretation-as-result",
+        "misreading": "Sinusoidal position encodings beat learned ones; that is why the Transformer uses them.",
+        "correction": "Learned positional embeddings gave nearly identical results. The authors chose the sinusoidal version because it may let the model extrapolate to sequences longer than those seen in training, a hypothesis the paper does not test.",
+        "claimIds": [
+          "claim-result-06",
+          "claim-interpretation-02"
+        ]
+      },
+      {
+        "id": "m-faster",
+        "trap": "beyond-tested",
+        "misreading": "Self-attention is faster than a recurrent layer, whatever the length of the sequence.",
+        "correction": "Only while the sequence length n is smaller than the representation dimension d. Table 1 puts self-attention at O(n² · d) per layer, so the advantage disappears on long sequences, and the restricted attention proposed for them was not tried in this paper.",
+        "claimIds": [
+          "claim-limitation-01",
+          "claim-result-04",
+          "claim-limitation-02"
+        ]
+      },
+      {
+        "id": "m-heads-cost",
+        "trap": "mechanism",
+        "misreading": "With 8 heads, multi-head attention costs about eight times as much as a single head.",
+        "correction": "Each head works in a reduced dimension, d_k = d_v = d_model / h = 64, so the total computational cost stays comparable to single-head attention at full dimensionality.",
+        "claimIds": [
+          "claim-method-06"
+        ]
+      },
+      {
+        "id": "m-more-heads",
+        "trap": "beyond-tested",
+        "misreading": "The ablations show that more attention heads are always better.",
+        "correction": "Single-head attention is 0.9 BLEU worse than the best setting, but quality also drops when the number of heads is pushed too high; the paper finds a middle, not a trend.",
+        "claimIds": [
+          "claim-result-05"
+        ]
+      },
+      {
+        "id": "m-flops",
+        "trap": "number",
+        "misreading": "The training costs in Table 2 were measured: the base model took 3.3 · 10^18 FLOPs.",
+        "correction": "They are estimates. The paper derives them by multiplying training time, the number of GPUs and an assumed sustained single-precision throughput per GPU; no FLOP count was measured.",
+        "claimIds": [
+          "claim-limitation-06",
+          "claim-result-03"
+        ]
       }
     ]
   },

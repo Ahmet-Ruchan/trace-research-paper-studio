@@ -27,6 +27,7 @@ import { evidenceFingerprint } from "@/lib/section-regeneration";
 const blockPlan: Record<LearningBlockId, { label: string; purpose: string }> = {
   primer: { label: "Primer", purpose: "What the paper assumes you already know, in the order to learn it." },
   quiz: { label: "Quiz", purpose: "Questions that check understanding; every answer shows its page and quote." },
+  misreadings: { label: "Common misreadings", purpose: "What a hurried reader gets wrong about this paper, each corrected from the evidence." },
   derivations: { label: "Derivations", purpose: "The key results worked out step by step, each step with its reason." },
   interactives: { label: "Interactive explorations", purpose: "Playgrounds and simulations that run the paper's formulas from its own settings." },
   applicationGuide: { label: "Application guide", purpose: "How to use the method, its settings, pitfalls, and when not to." },

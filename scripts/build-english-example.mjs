@@ -182,6 +182,13 @@ p.quiz.questions.forEach((question) => {
   question.options.forEach((option, i) => { [option.label, option.explanation] = map.options[i]; });
 });
 
+p.misreadings.title = ln.misreadings.title;
+p.misreadings.intro = ln.misreadings.intro;
+p.misreadings.items.forEach((item) => {
+  const map = need(ln.misreadings.items[item.id], `misreading ${item.id}`);
+  if (map) [item.misreading, item.correction] = map;
+});
+
 p.applicationGuide.title = ln.applicationGuide.title;
 p.applicationGuide.overview = ln.applicationGuide.overview;
 p.applicationGuide.recipe.forEach((item, i) => { [item.step, item.detail] = ln.applicationGuide.recipe[i]; });

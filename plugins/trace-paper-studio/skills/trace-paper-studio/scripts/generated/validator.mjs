@@ -4887,6 +4887,33 @@ const figureSchema = object({
 	image: string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "image must be an embedded data URI"),
 	claimIds: array(string()).default([])
 });
+/**
+* Sık yapılan yanlış okumalar: dikkatli ama aceleci bir okuyucunun makaleden
+* kolayca çıkardığı, kanıtın desteklemediği sonuçlar; her biri iddialarla
+* düzeltilmiş. Trace'in ayrımını öğretiyor: ölçülen ile yorumlanan, denenen
+* ile genellenen.
+*/
+const misreadingTraps = [
+	"interpretation-as-result",
+	"beyond-tested",
+	"number",
+	"mechanism"
+];
+const misreadingSchema = object({
+	id: string(),
+	/** Hatanın türü: yorumu sonuç sanmak, denenenin ötesine genellemek, bir sayıyı yanlış okumak, mekanizmayı yanlış anlamak. */
+	trap: _enum(misreadingTraps),
+	/** Okuyucunun söyleyeceği biçimde, tek cümle. */
+	misreading: string(),
+	/** Makalenin gerçekte gösterdiği ve kanıtın nerede durduğu. */
+	correction: string(),
+	claimIds: array(string()).min(1)
+});
+const misreadingsSchema = object({
+	title: string(),
+	intro: string(),
+	items: array(misreadingSchema).min(2).max(8)
+});
 /** "Bunu kendi projemde nasıl kullanırım." */
 const applicationGuideSchema = object({
 	title: string(),
@@ -5028,6 +5055,7 @@ const researchProjectSchema = generationResultSchema.extend({
 	primer: primerSchema.optional(),
 	derivations: array(derivationSchema).max(6).optional(),
 	quiz: quizSchema.optional(),
+	misreadings: misreadingsSchema.optional(),
 	interactives: array(interactiveSchema).max(8).optional(),
 	applicationGuide: applicationGuideSchema.optional(),
 	figures: array(figureSchema).max(6).optional(),
@@ -5069,12 +5097,14 @@ const LEARNING_REQUIREMENTS = {
 	standard: [
 		"primer",
 		"derivations",
-		"quiz"
+		"quiz",
+		"misreadings"
 	],
 	deep: [
 		"primer",
 		"derivations",
 		"quiz",
+		"misreadings",
 		"interactives",
 		"applicationGuide"
 	]
@@ -5691,6 +5721,17 @@ function validateLearningIntegrity(project, options = {}) {
 			}
 		});
 	}
+	if (project.misreadings) {
+		const items = project.misreadings.items;
+		const repeated = duplicates(items.map((item) => item.id));
+		if (repeated.length) issues.push(`misreadings: duplicate id ${repeated.join(", ")}`);
+		const normalised = (text) => text.replace(/\s+/g, " ").trim().toLowerCase();
+		items.forEach((item) => {
+			checkClaims(item.claimIds, `misreadings.${item.id}`);
+			if (normalised(item.misreading) === normalised(item.correction)) issues.push(`misreadings.${item.id}: the correction repeats the misreading; say what the paper actually shows`);
+		});
+		if (items.length >= 3 && new Set(items.map((item) => item.trap)).size < 2) issues.push("misreadings: every item uses the same trap; use at least two kinds of mistake");
+	}
 	if (project.applicationGuide) {
 		const guide = project.applicationGuide;
 		guide.recipe.forEach((item, index) => checkClaims(item.claimIds, `applicationGuide.recipe[${index}]`));
@@ -6281,6 +6322,11 @@ function ankiCards(project) {
 			tags: ["quiz", question.kind]
 		});
 	}
+	for (const item of project.misreadings?.items ?? []) cards.push({
+		front: `Does the paper show this?<br><br><i>${escapeHtml$1(item.misreading)}</i>`,
+		back: `<b>No.</b> ${escapeHtml$1(item.correction)}${sourceLine(project, item.claimIds)}`,
+		tags: ["misreading", item.trap]
+	});
 	for (const item of project.evidence.glossary) cards.push({
 		front: escapeHtml$1(item.term),
 		back: escapeHtml$1(item.definition) + (item.sourceRef ? `<br><br><small>“${escapeHtml$1(item.sourceRef.excerpt)}”${item.sourceRef.page ? ` — p. ${item.sourceRef.page}` : ""}</small>` : ""),
@@ -6379,6 +6425,19 @@ function buildRis(project, related = []) {
 		"ER  - "
 	].filter(Boolean).join("\r\n")).join("\r\n\r\n")}\r\n`;
 }
+
+//#endregion
+//#region src/lib/misreadings.ts
+/**
+* Yanlış okuma türlerinin okuyucuya söylenişi. Arayüz, rapor ve Anki aynı
+* adları kullanıyor: bir tür, okuyucuya hangi ayrımı kaçırdığını söylüyor.
+*/
+const misreadingTrapLabels = {
+	"interpretation-as-result": "An interpretation read as a result",
+	"beyond-tested": "Beyond what was tested",
+	number: "A misread number",
+	mechanism: "How the method works"
+};
 
 //#endregion
 //#region src/lib/exports/report-document.ts
@@ -6564,6 +6623,27 @@ function reportDocument(project) {
 		type: "list",
 		items: evidence.limitations
 	});
+	if (project.misreadings) {
+		push({
+			type: "heading",
+			level: 2,
+			text: project.misreadings.title
+		}, {
+			type: "paragraph",
+			text: project.misreadings.intro
+		});
+		for (const item of project.misreadings.items) push({
+			type: "heading",
+			level: 3,
+			text: `Misreading: ${item.misreading}`
+		}, {
+			type: "paragraph",
+			text: item.correction
+		}, {
+			type: "note",
+			text: `${misreadingTrapLabels[item.trap]} · ${item.claimIds.map((id) => `[${id}]`).join(" ")}`
+		});
+	}
 	push({
 		type: "heading",
 		level: 2,
@@ -20187,6 +20267,7 @@ function projectForPublication(project, include) {
 		delete copy.primer;
 		delete copy.derivations;
 		delete copy.quiz;
+		delete copy.misreadings;
 		delete copy.interactives;
 		delete copy.applicationGuide;
 	}

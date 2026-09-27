@@ -514,6 +514,29 @@ export const figureSchema = z.object({
   claimIds: z.array(z.string()).default([]),
 });
 
+/**
+ * Sık yapılan yanlış okumalar: dikkatli ama aceleci bir okuyucunun makaleden
+ * kolayca çıkardığı, kanıtın desteklemediği sonuçlar; her biri iddialarla
+ * düzeltilmiş. Trace'in ayrımını öğretiyor: ölçülen ile yorumlanan, denenen
+ * ile genellenen.
+ */
+export const misreadingTraps = ["interpretation-as-result", "beyond-tested", "number", "mechanism"] as const;
+export const misreadingSchema = z.object({
+  id: z.string(),
+  /** Hatanın türü: yorumu sonuç sanmak, denenenin ötesine genellemek, bir sayıyı yanlış okumak, mekanizmayı yanlış anlamak. */
+  trap: z.enum(misreadingTraps),
+  /** Okuyucunun söyleyeceği biçimde, tek cümle. */
+  misreading: z.string(),
+  /** Makalenin gerçekte gösterdiği ve kanıtın nerede durduğu. */
+  correction: z.string(),
+  claimIds: z.array(z.string()).min(1),
+});
+export const misreadingsSchema = z.object({
+  title: z.string(),
+  intro: z.string(),
+  items: z.array(misreadingSchema).min(2).max(8),
+});
+
 /** "Bunu kendi projemde nasıl kullanırım." */
 export const applicationGuideSchema = z.object({
   title: z.string(),
@@ -674,6 +697,7 @@ export const researchProjectSchema = generationResultSchema.extend({
   primer: primerSchema.optional(),
   derivations: z.array(derivationSchema).max(6).optional(),
   quiz: quizSchema.optional(),
+  misreadings: misreadingsSchema.optional(),
   interactives: z.array(interactiveSchema).max(8).optional(),
   applicationGuide: applicationGuideSchema.optional(),
   figures: z.array(figureSchema).max(6).optional(),
@@ -716,12 +740,14 @@ export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
 export type Interactive = z.infer<typeof interactiveSchema>;
 export type InteractiveParameter = z.infer<typeof interactiveParameterSchema>;
 export type ApplicationGuide = z.infer<typeof applicationGuideSchema>;
+export type Misreadings = z.infer<typeof misreadingsSchema>;
+export type Misreading = z.infer<typeof misreadingSchema>;
 export type Figure = z.infer<typeof figureSchema>;
 export type ResearchProject = z.infer<typeof researchProjectSchema>;
 
 /** `depth` başına hangi öğrenme bloklarının zorunlu olduğu. */
 export const LEARNING_REQUIREMENTS = {
   concise: ["primer"],
-  standard: ["primer", "derivations", "quiz"],
-  deep: ["primer", "derivations", "quiz", "interactives", "applicationGuide"],
+  standard: ["primer", "derivations", "quiz", "misreadings"],
+  deep: ["primer", "derivations", "quiz", "misreadings", "interactives", "applicationGuide"],
 } as const satisfies Record<ResearchProject["depth"], readonly string[]>;

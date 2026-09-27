@@ -13,6 +13,7 @@ import {
   figuresBySection,
   InteractiveRenderer,
   MathText,
+  MisreadingsView,
   PermalinkButton,
   PrimerView,
   QuizView,
@@ -68,7 +69,7 @@ export function ViewerShell({
   // Kanıttan üretilen okuma alıştırması öğrenme katmanı olmayan projede de var.
   const drill = useMemo(() => readingDrillFor(project), [project]);
   const hasPractice = Boolean(
-    project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.applicationGuide || drill,
+    project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.misreadings || project.applicationGuide || drill,
   );
   const tabs: Tab[] = ["lab", "story", "study", ...(hasPractice ? (["practice"] as Tab[]) : []), ...(project.technicalAppendix ? (["technical"] as Tab[]) : [])];
   /**
@@ -555,6 +556,12 @@ function PracticeTab({ project, drill }: { project: ResearchProject; drill?: Qui
           {project.interactives.map((interactive) => (
             <InteractiveRenderer interactive={interactive} key={interactive.id} />
           ))}
+        </section>
+      ) : null}
+
+      {project.misreadings ? (
+        <section className="viewer-block">
+          <MisreadingsView misreadings={project.misreadings} claims={project.evidence.claims} />
         </section>
       ) : null}
 

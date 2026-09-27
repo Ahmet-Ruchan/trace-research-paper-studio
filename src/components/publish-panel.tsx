@@ -39,7 +39,7 @@ function availableBlocks(project: ResearchProject) {
     {
       key: "learning",
       label: "Learning layer",
-      present: Boolean(project.primer || project.derivations?.length || project.quiz || project.interactives?.length || project.applicationGuide),
+      present: Boolean(project.primer || project.derivations?.length || project.quiz || project.misreadings || project.interactives?.length || project.applicationGuide),
     },
     { key: "figures", label: "The paper's own figures", present: Boolean(project.figures?.length) },
   ] as const;

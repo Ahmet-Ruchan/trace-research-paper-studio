@@ -43,6 +43,7 @@ running on the coding agent you already use, with no second API key.
 | **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
 | **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
 | **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review across your whole library: a day later, then at growing intervals while you keep remembering it. Papers are mixed in one queue. |
+| **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
 | **[Learning health](#see-what-a-reader-cannot-learn-from)** | The learning counterpart of evidence health: unchecked sections, a quiz that never asks about limitations, playgrounds that show nothing, derivations that restate themselves, concepts nothing uses. Each finding opens its fix. |
 | **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
 | **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
@@ -136,7 +137,7 @@ The studio has the same search under the upload box: type a title, a DOI, an arX
 
 Every analysis comes with a learning layer, sized by the depth you pick: the prior knowledge the
 paper assumes, the key results derived step by step, playgrounds that run its formulas, a quiz whose
-every answer shows its page, and a guide to using the method. It is written from the evidence alone
+every answer shows its page, the paper's common misreadings, and a guide to using the method. It is written from the evidence alone
 and checked like everything else: every item cites existing claims, a formula must parse and give a
 finite value at the paper's own setting, and a derivation step that only restates its formula is
 refused. A number a reader would take for the paper's own (a playground's "paper value", a table
@@ -180,6 +181,22 @@ every project has them, even one without a learning layer, and every answer can 
 page.
 
 ![Evidence-linked quiz](docs/images/quiz.jpg)
+
+### See through the common misreadings
+
+Every paper has conclusions that are easy to draw and wrong. The attention paper does not show that
+training breaks down without the `√d_k` scaling; the authors suspect it and scale as a precaution.
+Sinusoidal position encodings do not beat learned ones; the two came out nearly identical.
+Self-attention is not faster at every length; only while the sequence is shorter than the
+representation. **Common misreadings** lists these for each paper, each labelled with the kind of
+mistake (an interpretation read as a result, a claim beyond what was tested, a misread number, a
+misunderstood mechanism) and corrected from the claims it cites. The correction stays hidden until
+you ask why the sentence is wrong, so you get to spot the problem yourself first. The block is part
+of the learning layer at standard and deep depth, is checked like the rest (existing claims, a
+correction that says something new, at least two kinds of mistake), and the Anki export turns each
+item into a "Does the paper show this?" card.
+
+![Common misreadings](docs/images/misreadings.jpg)
 
 ### Study it step by step
 
@@ -964,9 +981,9 @@ the server.
 ## Status
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
-learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), a guided
-study path with saved progress, spaced review across the library, a learning health panel, a reading
-drill made from the evidence, terms defined where they are used, the
+learning layer (primer, derivations, playgrounds, simulations, quiz, common misreadings, application
+guide), a guided study path with saved progress, spaced review across the library, a learning health
+panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
 review queue, questions answered from the collected evidence only, exports (Markdown and printable

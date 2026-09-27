@@ -1275,6 +1275,7 @@ test.describe("learning layer", () => {
     const project = projectNamed(id) as Partial<ResearchProject>;
     delete project.primer;
     delete project.quiz;
+    delete project.misreadings;
     delete project.derivations;
     delete project.interactives;
     delete project.applicationGuide;
@@ -1290,7 +1291,7 @@ test.describe("learning layer", () => {
         { type: "progress", stage: "story", progress: 40, title: "Writing the quiz.", detail: "Part 2/3 of the learning layer." },
         {
           type: "learning",
-          blocks: { primer: example.primer, quiz: example.quiz, derivations: example.derivations },
+          blocks: { primer: example.primer, quiz: example.quiz, misreadings: example.misreadings, derivations: example.derivations },
           failed: [],
           evidenceFingerprint: evidenceFingerprint(project.evidence),
         },
@@ -1302,15 +1303,15 @@ test.describe("learning layer", () => {
     // Ön bilgisi olmayan projede Lab'de "Primer" yok; öneri genel bakışta.
     await expect(page.locator(".lab-nav > button", { hasText: "Primer" })).toHaveCount(0);
     const offer = page.getByRole("region", { name: "Learning layer" });
-    await expect(offer).toContainText("missing the primer, the quiz and the derivations");
+    await expect(offer).toContainText("missing the primer, the quiz, the common misreadings and the derivations");
     await offer.getByRole("button", { name: "Add the learning layer" }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog.locator(".learning-plan li")).toHaveText([/Primer/, /Quiz/, /Derivations/]);
+    await expect(dialog.locator(".learning-plan li")).toHaveText([/Primer/, /Quiz/, /Common misreadings/, /Derivations/]);
     await dialog.getByLabel("Gemini API key").fill("test-key");
     await dialog.getByRole("button", { name: "Write the learning layer" }).click();
-    await expect(dialog).toContainText("Added the primer, the quiz and the derivations.");
-    expect(sent[0]).toMatchObject({ blocks: ["primer", "quiz", "derivations"], apiKey: "test-key", assignment: { provider: "gemini" } });
+    await expect(dialog).toContainText("Added the primer, the quiz, the common misreadings and the derivations.");
+    expect(sent[0]).toMatchObject({ blocks: ["primer", "quiz", "misreadings", "derivations"], apiKey: "test-key", assignment: { provider: "gemini" } });
 
     await dialog.getByRole("button", { name: "Start with the primer" }).click();
     await expect(page.locator(".primer")).toBeVisible();
@@ -1325,6 +1326,25 @@ test.describe("learning layer", () => {
     await expect(page.getByRole("region", { name: "Learning layer" })).toHaveCount(0);
     await page.getByRole("button", { name: "Version history" }).click();
     await expect(page.locator(".history-list")).toContainText("Before the learning layer was added");
+  });
+
+  test("shows what a hurried reader gets wrong, and asks them to think before showing why", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-misreadings"));
+    const item = project.misreadings!.items[0];
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Learn & Try" }).click();
+    const block = page.locator("section.misreadings");
+    await expect(block.locator("h3")).toHaveText(project.misreadings!.title);
+    await expect(block.locator(".misreading")).toHaveCount(project.misreadings!.items.length);
+    const first = block.locator(".misreading").first();
+    await expect(first.locator(".misreading-trap")).toHaveText("An interpretation read as a result");
+    await expect(first.locator(".misreading-text")).toHaveText(`Tempting to conclude: ${item.misreading}`);
+    await expect(first.locator(".misreading-sentence")).toHaveText(item.misreading);
+    await expect(first).not.toContainText(item.correction);
+    await first.getByRole("button", { name: "Why this is wrong" }).click();
+    await expect(first.locator(".misreading-correction")).toContainText(item.correction);
+    await first.locator(".evidence-note summary").click();
+    await expect(first.locator(".evidence-note")).toContainText(project.evidence.claims.find((claim) => claim.id === item.claimIds[0])!.statement);
   });
 
   test("tells the reader which numbers are illustrative and which are the paper's", async ({ page, request }) => {

@@ -204,7 +204,7 @@ export function validateTechnicalAppendixIntegrity(
  * yarım proje de: öğrenme blokları anlatı ve rapor bitmeden yazılıyor.
  */
 export type LearningIntegrityInput = Pick<ResearchProject, "evidence" | "depth"> &
-  Partial<Pick<ResearchProject, "technicalAppendix" | "figures" | "primer" | "derivations" | "quiz" | "interactives" | "applicationGuide">>;
+  Partial<Pick<ResearchProject, "technicalAppendix" | "figures" | "primer" | "derivations" | "quiz" | "misreadings" | "interactives" | "applicationGuide">>;
 
 export function validateLearningIntegrity(
   project: LearningIntegrityInput,
@@ -427,6 +427,23 @@ export function validateLearningIntegrity(
         checkReference(interactive.sourceRef, `${owner}.sourceRef`, sourceIds, issues);
       }
     });
+  }
+
+  if (project.misreadings) {
+    const items = project.misreadings.items;
+    const repeated = duplicates(items.map((item) => item.id));
+    if (repeated.length) issues.push(`misreadings: duplicate id ${repeated.join(", ")}`);
+    const normalised = (text: string) => text.replace(/\s+/g, " ").trim().toLowerCase();
+    items.forEach((item) => {
+      checkClaims(item.claimIds, `misreadings.${item.id}`);
+      if (normalised(item.misreading) === normalised(item.correction)) {
+        issues.push(`misreadings.${item.id}: the correction repeats the misreading; say what the paper actually shows`);
+      }
+    });
+    // Tek bir tuzak türü okuyucuya tek bir ayrım öğretir; en az iki tür.
+    if (items.length >= 3 && new Set(items.map((item) => item.trap)).size < 2) {
+      issues.push("misreadings: every item uses the same trap; use at least two kinds of mistake");
+    }
   }
 
   if (project.applicationGuide) {

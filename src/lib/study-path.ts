@@ -13,7 +13,7 @@ import type { Primer, Quiz, QuizQuestion, ResearchProject } from "./schema";
  *   hazırlan — soru ve tez, sonra makalenin varsaydığı kavramlar (ön koşul sırasıyla)
  *   oku      — hikâye bölümleri; her birinin ardından aynı iddialara dayanan bir soru
  *   çalış    — türetimler ve etkileşimli keşifler
- *   sına     — bölümlere dağıtılmamış quiz soruları
+ *   sına     — sık yapılan yanlış okumalar ve bölümlere dağıtılmamış quiz soruları
  *   uygula   — uygulama rehberi
  *   gözden geçir — ilk denemede kaçan yerler ve atlananlar
  *
@@ -30,6 +30,7 @@ export type StudyStep =
   | { id: string; kind: "section"; phase: "read"; sectionId: string; title: string; checkId?: string }
   | { id: string; kind: "derivation"; phase: "work"; derivationId: string; title: string }
   | { id: string; kind: "interactive"; phase: "work"; interactiveId: string; title: string }
+  | { id: "misreadings"; kind: "misreadings"; phase: "check"; title: string }
   | { id: "quiz"; kind: "quiz"; phase: "check"; questionIds: string[] }
   | { id: "guide"; kind: "guide"; phase: "apply"; title: string }
   | { id: "finish"; kind: "finish"; phase: "review" };
@@ -105,6 +106,8 @@ export function studyPath(project: ResearchProject, drill?: Quiz): StudyPath {
   for (const interactive of project.interactives ?? []) {
     steps.push({ id: `interactive:${interactive.id}`, kind: "interactive", phase: "work", interactiveId: interactive.id, title: interactive.title });
   }
+  // Yanlış okumalar son sınavdan önce: okuyucu tuzakları görüp sonra sınanıyor.
+  if (project.misreadings) steps.push({ id: "misreadings", kind: "misreadings", phase: "check", title: project.misreadings.title });
   const rest = quiz.filter((question) => !used.has(question.id));
   if (rest.length) {
     for (const question of rest) questions.set(question.id, question);

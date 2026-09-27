@@ -299,7 +299,7 @@ export function describeProjectChanges(from: ResearchProject, to: ResearchProjec
     }
   }
 
-  const blockChange = (key: "primer" | "derivations" | "quiz" | "interactives" | "applicationGuide" | "figures", label: string) => {
+  const blockChange = (key: "primer" | "derivations" | "quiz" | "misreadings" | "interactives" | "applicationGuide" | "figures", label: string) => {
     const left = from[key];
     const right = to[key];
     if (same(left, right)) return false;
@@ -349,6 +349,18 @@ export function describeProjectChanges(from: ResearchProject, to: ResearchProjec
       textField("options", (question) => question.options
         .map((option) => `${option.correct ? "✓" : "✗"} ${option.label} — ${option.explanation}`)
         .join("\n")),
+      sortedClaims(),
+    ], changes);
+  }
+  if (blockChange("misreadings", "Common misreadings")) {
+    compareHeader("learning", "Common misreadings", from.misreadings!, to.misreadings!, [
+      textField("title", (block) => block.title),
+      textField("intro", (block) => block.intro),
+    ], changes);
+    compareItems("learning", "Misreading", from.misreadings!.items, to.misreadings!.items, (item) => item.misreading, [
+      textField("misreading", (item) => item.misreading),
+      dataField("trap", (item) => item.trap),
+      textField("correction", (item) => item.correction),
       sortedClaims(),
     ], changes);
   }

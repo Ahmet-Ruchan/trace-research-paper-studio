@@ -5,14 +5,22 @@ import { loadExampleProject } from "./example-fixture";
 describe("Anki export", () => {
   const project = loadExampleProject("attention-is-all-you-need.en.trace.json");
 
-  it("her kavram, soru ve sözlük girdisi için bir kart üretir", () => {
+  it("her kavram, soru, yanlış okuma ve sözlük girdisi için bir kart üretir", () => {
     const cards = ankiCards(project);
     expect(cards).toHaveLength(
-      (project.primer?.concepts.length ?? 0) + (project.quiz?.questions.length ?? 0) + project.evidence.glossary.length,
+      (project.primer?.concepts.length ?? 0) +
+        (project.quiz?.questions.length ?? 0) +
+        (project.misreadings?.items.length ?? 0) +
+        project.evidence.glossary.length,
     );
     // Arka yüz kaynağı gösterir: alıntı ve sayfa.
     const quizCard = cards.find((card) => card.tags.includes("quiz"))!;
     expect(quizCard.back).toMatch(/<small>“.+” — p\. \d+<\/small>/);
+    // Yanlış okuma kartı: önde okuyucunun cümlesi, arkada "hayır" ve kaynağı.
+    const misreading = cards.find((card) => card.tags.includes("misreading"))!;
+    expect(misreading.front).toContain(project.misreadings!.items[0].misreading);
+    expect(misreading.back).toMatch(/^<b>No\.<\/b> /);
+    expect(misreading.back).toMatch(/<small>“.+” — p\. \d+<\/small>/);
   });
 
   it("Anki'nin içe aktardığı biçimi üretir: başlık satırları ve üç sütun", () => {

@@ -391,3 +391,19 @@
 @media (prefers-reduced-motion: reduce) {
   .study-bar i { transition: none; }
 }
+
+/* --- Sık yapılan yanlış okumalar ------------------------------------- */
+.misreadings { margin: 34px 0; }
+.misreading-list { display: grid; gap: 12px; margin: 18px 0 0; padding: 0; list-style: none; }
+.misreading { padding: 16px 18px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 12px; background: var(--surface); color: var(--ink); }
+.misreading.is-open { border-left-color: var(--green); }
+.misreading-trap { display: inline-block; padding: 3px 9px; border-radius: 20px; background: color-mix(in srgb, var(--amber) 14%, var(--field)); color: var(--amber); font-size: var(--text-2xs); letter-spacing: .1em; text-transform: uppercase; }
+.misreading .misreading-text { margin: 10px 0 0; font: var(--text-lg)/1.6 Georgia, serif; }
+.misreading .misreading-label { margin-right: 4px; color: var(--muted); font-size: var(--text-sm); font-style: italic; }
+/* Açılınca yanlış cümle üstü çizili kalıyor: okuyucu neyin yanlış olduğunu da görmeye devam ediyor. */
+.misreading.is-open .misreading-sentence { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.misreading-reveal { margin-top: 12px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.misreading-reveal:hover { border-color: var(--accent); color: var(--accent-ink); }
+.misreading-correction { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.misreading-correction strong { color: var(--green); font-size: var(--text-sm); }
+.misreading .misreading-correction > p { margin: 6px 0 10px; font-size: var(--text-md); line-height: 1.65; }

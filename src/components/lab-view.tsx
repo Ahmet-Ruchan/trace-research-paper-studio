@@ -38,6 +38,7 @@ import {
   DerivationView,
   InteractiveRenderer,
   MathText,
+  MisreadingsView,
   PrimerView,
   QuizView,
   StudyView,
@@ -203,6 +204,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     project.derivations?.length ||
       project.interactives?.length ||
       project.quiz ||
+      project.misreadings ||
       project.applicationGuide ||
       drill,
   );
@@ -660,6 +662,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 ))}
               </>
             ) : null}
+
+            {project.misreadings ? <MisreadingsView misreadings={project.misreadings} claims={project.evidence.claims} /> : null}
 
             {project.quiz ? <QuizView quiz={project.quiz} claims={project.evidence.claims} sections={project.story.sections} renderAction={(id) => regenerateButton("quiz", id, "question")} /> : null}
 

@@ -6,6 +6,7 @@ import {
   DERIVATION_RULES,
   INTERACTIVE_RULES,
   LEARNING_EVIDENCE_RULES,
+  MISREADING_RULES,
   PRIMER_RULES,
   QUIZ_RULES,
 } from "./learning-rules";
@@ -15,6 +16,7 @@ import {
   applicationGuideSchema,
   derivationSchema,
   interactiveSchema,
+  misreadingsSchema,
   primerSchema,
   quizSchema,
   type PaperEvidence,
@@ -33,7 +35,7 @@ import { sectionEvidenceView } from "./section-regeneration";
  * kilitli (PDF gönderilmiyor), kendi şemasıyla ve eklentinin kullandığı aynı
  * bütünlük denetimiyle doğrulanıyor.
  */
-export const learningBlockIds = ["primer", "quiz", "derivations", "interactives", "applicationGuide"] as const;
+export const learningBlockIds = ["primer", "quiz", "misreadings", "derivations", "interactives", "applicationGuide"] as const;
 export type LearningBlockId = (typeof learningBlockIds)[number];
 export type LearningBlocks = Partial<Pick<ResearchProject, LearningBlockId>>;
 
@@ -50,9 +52,10 @@ export type LearningContext = {
   rejectedClaimIds?: readonly string[];
 };
 
-const counts: Record<"primer" | "quiz" | "derivations" | "interactives", Record<Depth, string>> = {
+const counts: Record<"primer" | "quiz" | "misreadings" | "derivations" | "interactives", Record<Depth, string>> = {
   primer: { concise: "3–5", standard: "4–7", deep: "5–9" },
   quiz: { concise: "4–5", standard: "5–8", deep: "8–12" },
+  misreadings: { concise: "2–3", standard: "3–5", deep: "4–6" },
   derivations: { concise: "1", standard: "1–2", deep: "2–4" },
   interactives: { concise: "1–2", standard: "2–3", deep: "2–4" },
 };
@@ -100,6 +103,19 @@ const specs: Record<LearningBlockId, BlockSpec> = {
       `Build a comprehension quiz of ${counts.quiz[depth]} questions. Cover the method, the main results and at least one limitation, and include at least one question about something the evidence does NOT establish. Mix the kinds: at least one multi or true-false question. Wrong options are plausible misreadings of the paper, never jokes. title and intro say what the quiz checks.`,
     rules: QUIZ_RULES,
     toBlocks: (value) => ({ quiz: value as NonNullable<ResearchProject["quiz"]> }),
+  },
+  misreadings: {
+    noun: "the common misreadings",
+    title: "Writing the common misreadings",
+    schema: misreadingsSchema,
+    schemaName: "trace_misreadings",
+    expectedCharacters: 2_700,
+    maxOutputTokens: 8_192,
+    usesTechnicalAppendix: false,
+    task: (depth) =>
+      `List ${counts.misreadings[depth]} common misreadings of this paper: conclusions a careful but hurried reader would plausibly draw that the evidence does not support. Each one is corrected from the claims it cites. title and intro tell the reader that these are the traps of this particular paper and why they are easy to fall into.`,
+    rules: MISREADING_RULES,
+    toBlocks: (value) => ({ misreadings: value as NonNullable<ResearchProject["misreadings"]> }),
   },
   derivations: {
     noun: "the derivations",
@@ -249,6 +265,7 @@ function citedClaimIds(blocks: LearningBlocks) {
   return [
     ...(blocks.primer?.concepts.flatMap((concept) => concept.claimIds) ?? []),
     ...(blocks.quiz?.questions.flatMap((question) => question.claimIds) ?? []),
+    ...(blocks.misreadings?.items.flatMap((item) => item.claimIds) ?? []),
     ...(blocks.derivations?.flatMap((derivation) => derivation.claimIds) ?? []),
     ...(blocks.interactives?.flatMap((interactive) => interactive.claimIds) ?? []),
     ...(blocks.applicationGuide

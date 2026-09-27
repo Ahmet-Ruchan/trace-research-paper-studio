@@ -28,6 +28,7 @@ const context: LearningContext = {
 const answers: Record<LearningBlockId, unknown> = {
   primer: example.primer,
   quiz: example.quiz,
+  misreadings: example.misreadings,
   derivations: { derivations: example.derivations },
   interactives: { interactives: example.interactives },
   applicationGuide: example.applicationGuide,
@@ -36,13 +37,13 @@ const answers: Record<LearningBlockId, unknown> = {
 describe("learning layer generation", () => {
   it("writes the blocks each depth requires, those that need the technical appendix last", () => {
     expect(learningBlocksFor("concise")).toEqual(["primer"]);
-    expect(learningBlocksFor("standard")).toEqual(["primer", "quiz", "derivations"]);
-    expect(learningBlocksFor("deep")).toEqual(["primer", "quiz", "derivations", "interactives", "applicationGuide"]);
+    expect(learningBlocksFor("standard")).toEqual(["primer", "quiz", "misreadings", "derivations"]);
+    expect(learningBlocksFor("deep")).toEqual(["primer", "quiz", "misreadings", "derivations", "interactives", "applicationGuide"]);
   });
 
   it("lists what a project still lacks", () => {
     expect(missingLearningBlocks(example)).toEqual([]);
-    expect(missingLearningBlocks({ depth: "standard", primer: example.primer, derivations: [] })).toEqual(["quiz", "derivations"]);
+    expect(missingLearningBlocks({ depth: "standard", primer: example.primer, derivations: [] })).toEqual(["quiz", "misreadings", "derivations"]);
   });
 
   it("accepts the shipped example's blocks as a model answer", () => {

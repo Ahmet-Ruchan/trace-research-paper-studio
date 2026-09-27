@@ -563,5 +563,35 @@
    "When sequential generation latency is critical: the Transformer parallelises training, but inference still emits one token at a time — the paper leaves 'making generation less sequential' to future work.",
    "When carrying the paper's numbers to another model family: all results are specific to 2017 hardware and these datasets, and the FLOP estimates do not hold on today's hardware."
   ]
+ },
+ "misreadings": {
+  "title": "Common misreadings",
+  "intro": "Six conclusions a quick reader easily draws from this paper and the evidence does not support. Under each one: what the paper actually shows, and where its evidence stops.",
+  "items": {
+   "m-scaling": [
+    "The paper shows that without the √d_k scaling, softmax saturates and training breaks down.",
+    "Nothing like this is measured. The authors write that they suspect large dot products push softmax into regions of extremely small gradients, and they scale by √d_k as a precaution based on that supposition; the paper has no run without the scaling."
+   ],
+   "m-positional": [
+    "Sinusoidal position encodings beat learned ones; that is why the Transformer uses them.",
+    "Learned positional embeddings gave nearly identical results. The authors chose the sinusoidal version because it may let the model extrapolate to sequences longer than those seen in training, a hypothesis the paper does not test."
+   ],
+   "m-faster": [
+    "Self-attention is faster than a recurrent layer, whatever the length of the sequence.",
+    "Only while the sequence length n is smaller than the representation dimension d. Table 1 puts self-attention at O(n² · d) per layer, so the advantage disappears on long sequences, and the restricted attention proposed for them was not tried in this paper."
+   ],
+   "m-heads-cost": [
+    "With 8 heads, multi-head attention costs about eight times as much as a single head.",
+    "Each head works in a reduced dimension, d_k = d_v = d_model / h = 64, so the total computational cost stays comparable to single-head attention at full dimensionality."
+   ],
+   "m-more-heads": [
+    "The ablations show that more attention heads are always better.",
+    "Single-head attention is 0.9 BLEU worse than the best setting, but quality also drops when the number of heads is pushed too high; the paper finds a middle, not a trend."
+   ],
+   "m-flops": [
+    "The training costs in Table 2 were measured: the base model took 3.3 · 10^18 FLOPs.",
+    "They are estimates. The paper derives them by multiplying training time, the number of GPUs and an assumed sustained single-precision throughput per GPU; no FLOP count was measured."
+   ]
+  }
  }
 }

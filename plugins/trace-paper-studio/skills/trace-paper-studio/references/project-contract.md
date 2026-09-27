@@ -201,13 +201,13 @@ Optional. A map from claim id to a human reviewer's decision, made in the studio
 
 # Learning layer
 
-Five optional root blocks turn a summary into something the reader can learn from and experiment with. Which ones are **required** depends on `depth`:
+Six optional root blocks turn a summary into something the reader can learn from and experiment with. Which ones are **required** depends on `depth`:
 
 | `depth` | Required blocks |
 | --- | --- |
 | `concise` | `primer` |
-| `standard` | `primer`, `derivations`, `quiz` |
-| `deep` | `primer`, `derivations`, `quiz`, `interactives`, `applicationGuide` |
+| `standard` | `primer`, `derivations`, `quiz`, `misreadings` |
+| `deep` | `primer`, `derivations`, `quiz`, `misreadings`, `interactives`, `applicationGuide` |
 
 `validate --strict` enforces this. Plain `validate` does not, so projects authored before this layer still pass.
 
@@ -319,6 +319,29 @@ Every row's `cells` array must match the column count, and a `number` column may
 `kind` is `single` | `multi` | `true-false`. `single` and `true-false` need exactly one correct option; `multi` needs at least two; `true-false` needs exactly two options. Every option needs an `explanation`, including the correct one — the reader who guessed right still needs to know why.
 
 Answers are visible in the JSON. That is deliberate: the project must stay portable and inspectable. This is a self-check, not a proctored exam.
+
+## `misreadings`
+
+`{ title, intro, items }` with 2–8 items: the conclusions a careful but hurried reader would plausibly draw from this paper that the evidence does not support, each corrected from the claims it cites.
+
+```json
+{
+  "id": "m-scaling",
+  "trap": "interpretation-as-result",
+  "misreading": "The paper shows that without the √d_k scaling, softmax saturates and training breaks down.",
+  "correction": "Nothing like this is measured. The authors write that they suspect ..., and scale by √d_k as a precaution; the paper has no run without the scaling.",
+  "claimIds": ["claim-interpretation-01", "claim-method-05"]
+}
+```
+
+`trap` names the kind of mistake: `interpretation-as-result` (taking the authors' interpretation, hypothesis or supposition for a measured result), `beyond-tested` (generalising beyond the settings, data, scale or comparisons the paper tested), `number` (misreading a number, a unit, an estimate or the size of a difference), `mechanism` (misunderstanding how the method works). With three or more items, use at least two traps.
+
+- `misreading` is one sentence, written the way the reader would say it. Never a strawman: a mistake nobody would make teaches nothing.
+- `correction` says what the paper actually shows and where its evidence stops. It may not add a fact the cited claims do not carry, and it may not repeat the misreading.
+- A misreading may quote a wrong number, as the reader would; the correction's numbers come from the evidence. The misreading's own numbers are not checked.
+- Prefer the distinctions this paper most invites getting wrong: measured versus interpreted, tested versus extrapolated.
+
+The reader sees the misreading first and opens the correction after thinking about it; the Anki export turns each item into a "Does the paper show this?" card.
 
 ## `applicationGuide`
 

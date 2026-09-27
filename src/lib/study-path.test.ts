@@ -76,7 +76,7 @@ describe("the study path", () => {
   });
 
   it("still gives a paper without a learning layer a path, with questions drawn from its evidence", () => {
-    const bare = { ...example, primer: undefined, quiz: undefined, derivations: undefined, interactives: undefined, applicationGuide: undefined };
+    const bare = { ...example, primer: undefined, quiz: undefined, misreadings: undefined, derivations: undefined, interactives: undefined, applicationGuide: undefined };
     const plain = studyPath(bare, readingDrillFor(bare));
     expect(plain.steps.map((step) => step.kind)).toEqual(["start", ...bare.story.sections.map(() => "section"), "finish"]);
     const checks = plain.steps.flatMap((step) => (step.kind === "section" && step.checkId ? [step.checkId] : []));

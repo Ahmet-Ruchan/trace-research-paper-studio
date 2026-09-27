@@ -117,6 +117,7 @@ export function projectForPublication(project: ResearchProject, include: Publica
     delete copy.primer;
     delete copy.derivations;
     delete copy.quiz;
+    delete copy.misreadings;
     delete copy.interactives;
     delete copy.applicationGuide;
   }

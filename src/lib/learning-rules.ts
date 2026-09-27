@@ -47,6 +47,14 @@ export const INTERACTIVE_RULES = [
   "dataset-explorer: 2–8 columns and 2–40 rows, each row with exactly one cell per column. A number column holds only numbers, never \"n/a\" or \"—\"; drop rows or columns rather than inventing placeholders. Every number appears in the evidence metrics or claims; leave out a row whose numbers the evidence does not have. sourceRef points at the paper's table: sourceId \"paper\", its page and a short excerpt.",
 ] as const;
 
+export const MISREADING_RULES = [
+  "A misreading is a conclusion a careful but hurried reader would plausibly draw from the paper, and that the evidence contradicts or does not support. Never a strawman, a joke or a mistake nobody would make.",
+  "trap names the kind of mistake: interpretation-as-result (taking the authors' interpretation, hypothesis or supposition for a measured result), beyond-tested (generalising beyond the settings, data, scale or comparisons the paper tested), number (misreading a number, a unit, an estimate or the size of a difference), mechanism (misunderstanding how the method works).",
+  "misreading is one sentence, written the way the reader would say it, without hedging. correction says what the paper actually shows and where its evidence stops; it may not add a fact the claims in claimIds do not carry.",
+  "Prefer the distinctions that matter most for this paper: what was measured versus what the authors interpret, and what was tested versus what is extrapolated. Use at least two different traps.",
+  "Item IDs are unique. A misreading may quote a wrong number as the reader would; the correction's numbers come from the evidence.",
+] as const;
+
 export const APPLICATION_GUIDE_RULES = [
   "recipe has 2–8 steps a practitioner would follow. A step may carry code { language, source }; code is explanatory, never presented as the authors' or a runnable library's code. Showing the wrong way beside the right way teaches the most.",
   "hyperparameters (at most 8): paperValue and range come from the paper, and every number in paperValue appears in the evidence. If a parameter was never ablated, say so in guidance instead of recommending a range.",

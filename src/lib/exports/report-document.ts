@@ -1,4 +1,5 @@
 import { evidenceHealth } from "../evidence-health";
+import { misreadingTrapLabels } from "../misreadings";
 import type { Claim, ResearchProject, SourceReference } from "../schema";
 
 /**
@@ -113,6 +114,18 @@ export function reportDocument(project: ResearchProject): ReportBlock[] {
 
   push({ type: "heading", level: 2, text: "Findings" }, { type: "list", items: evidence.findings });
   push({ type: "heading", level: 2, text: "Limitations" }, { type: "list", items: evidence.limitations });
+
+  // Yanlış okumalar sınırlılıkların hemen ardından: ikisi de "makale neyi göstermiyor" sorusu.
+  if (project.misreadings) {
+    push({ type: "heading", level: 2, text: project.misreadings.title }, { type: "paragraph", text: project.misreadings.intro });
+    for (const item of project.misreadings.items) {
+      push(
+        { type: "heading", level: 3, text: `Misreading: ${item.misreading}` },
+        { type: "paragraph", text: item.correction },
+        { type: "note", text: `${misreadingTrapLabels[item.trap]} · ${item.claimIds.map((id) => `[${id}]`).join(" ")}` },
+      );
+    }
+  }
 
   push({ type: "heading", level: 2, text: "Evidence ledger" });
   const unlocated = new Set(health.excerpts.unlocatedClaims.map((item) => item.claim.id));
