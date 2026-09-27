@@ -1,7 +1,8 @@
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import { E2E_DATA_MARKER } from "./e2e/fresh-library";
 
 /**
  * Arayüzün uçtan uca testleri.
@@ -15,14 +16,25 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * Sunucu derlenmiş uygulamayı çalıştırıyor (`npm run build` önce gelir) ve
  * her koşuda GEÇİCİ bir veri dizini kullanıyor: testler kullanıcının
- * `~/.trace` kütüphanesine asla yazmamalı.
+ * `~/.trace` kütüphanesine asla yazmamalı. Her test bu dizini boşaltıp boş
+ * bir kütüphaneyle başlıyor (`e2e/fresh-library.ts`); dizin yalnızca testler
+ * için açıldığını söyleyen işareti taşıyorsa boşaltılıyor.
  */
 const PORT = Number(process.env.TRACE_E2E_PORT ?? 3217);
-const dataDirectory = process.env.TRACE_E2E_DATA_DIR ?? mkdtempSync(join(tmpdir(), "trace-e2e-"));
-process.env.TRACE_E2E_DATA_DIR = dataDirectory;
+if (!process.env.TRACE_E2E_DATA_DIR) {
+  // Dizini bu koşu açtı; bitince `e2e/global-teardown.ts` siliyor.
+  process.env.TRACE_E2E_DATA_DIR = mkdtempSync(join(tmpdir(), "trace-e2e-"));
+  process.env.TRACE_E2E_OWNS_DATA_DIR = "1";
+}
+const dataDirectory = process.env.TRACE_E2E_DATA_DIR;
+if (!existsSync(dataDirectory) || !readdirSync(dataDirectory).length) {
+  mkdirSync(dataDirectory, { recursive: true });
+  writeFileSync(join(dataDirectory, E2E_DATA_MARKER), "Created for Trace's end-to-end tests; emptied before every test.\n");
+}
 
 export default defineConfig({
   testDir: "./e2e",
+  globalTeardown: "./e2e/global-teardown.ts",
   // Testler aynı sunucuyu ve veri dizinini paylaşıyor; sırayla koşmalı.
   fullyParallel: false,
   workers: 1,

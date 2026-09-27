@@ -8,6 +8,7 @@ import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 import { readingDrillFor } from "../src/lib/reading-drill";
 import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
 import { completeStep, questionSignature, recordAnswer, studyPath, type StudyProgress } from "../src/lib/study-path";
+import { emptyTestLibrary } from "./fresh-library";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -19,6 +20,9 @@ import { completeStep, questionSignature, recordAnswer, studyPath, type StudyPro
 const example = JSON.parse(
   readFileSync(join(process.cwd(), "public/examples/attention-is-all-you-need.en.trace.json"), "utf8"),
 ) as ResearchProject;
+
+// Her test yalnızca kendi eklediğini görüyor.
+test.beforeEach(() => emptyTestLibrary());
 
 function projectNamed(id: string): ResearchProject {
   return { ...structuredClone(example), id };
@@ -41,6 +45,27 @@ async function openStory(page: Page, projectId: string) {
   // görünürse uygulama etkileşime hazırdır.
   await expect(page.locator(".regen-trigger").first()).toBeVisible();
 }
+
+test.describe("test isolation", () => {
+  // İki test sırayla koşuyor: ilkinin bıraktığı hiçbir şey ikincide yok.
+  test("leaves a paper, a tag, study progress and a concept alias behind", async ({ request }) => {
+    const project = await seed(request, projectNamed("e2e-left-behind"));
+    expect((await request.put(`/api/library/tags?id=${project.id}`, { data: { tags: ["Left behind"] } })).ok()).toBe(true);
+    const progress = completeStep(undefined, "start", "next", new Date().toISOString());
+    expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
+    const [a, b] = project.primer!.concepts;
+    expect((await request.put("/api/library/aliases", { data: { a: a.term, b: b.term, decision: "same" } })).ok()).toBe(true);
+  });
+
+  test("starts the next test with an empty library", async ({ request }) => {
+    expect((await (await request.get("/api/library")).json()).projects).toEqual([]);
+    expect((await (await request.get("/api/library/study")).json()).projects).toEqual([]);
+    expect((await (await request.get("/api/library/tags")).json()).projects).toEqual([]);
+    const aliases = await (await request.get("/api/library/aliases")).json();
+    expect(aliases.decisions).toEqual([]);
+    expect(aliases.names).toEqual([]);
+  });
+});
 
 test.describe("story editor", () => {
   test("keeps its two shortcuts from covering each other", async ({ page, request }) => {
