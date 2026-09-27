@@ -9,8 +9,20 @@ import { MathText } from "../math";
  * dayanan kavramdan önce gelir. Böylece okuyucu listeyi baştan sona takip
  * edebilir.
  */
-/** `renderAction` stüdyoda kavram başına bir eylem (yeniden üretim) ekler; görüntüleyici vermez. */
-export function PrimerView({ primer, renderAction }: { primer: Primer; renderAction?: (conceptId: string) => ReactNode }) {
+/**
+ * `renderAction` stüdyoda kavram başına bir eylem (yeniden üretim) ekler;
+ * `renderNote` kavramın kütüphanedeki başka makalelerde nerede çalışıldığını.
+ * Görüntüleyici ikisini de vermez.
+ */
+export function PrimerView({
+  primer,
+  renderAction,
+  renderNote,
+}: {
+  primer: Primer;
+  renderAction?: (conceptId: string) => ReactNode;
+  renderNote?: (conceptId: string) => ReactNode;
+}) {
   const t = useStrings();
   const [openId, setOpenId] = useState<string | null>(primer.concepts[0]?.id ?? null);
   const ordered = orderByPrerequisites(primer.concepts);
@@ -36,6 +48,7 @@ export function PrimerView({ primer, renderAction }: { primer: Primer; renderAct
               {open ? (
                 <div className="primer-body">
                   <ConceptBody concept={concept} prerequisites={prerequisites} />
+                  {renderNote?.(concept.id)}
                   {renderAction?.(concept.id)}
                 </div>
               ) : null}

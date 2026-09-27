@@ -38,6 +38,7 @@ export function StudyView({
   onSave,
   note,
   sectionExtra,
+  conceptExtra,
 }: {
   project: ResearchProject;
   /** Kanıttan üretilen okuma alıştırması; quiz'in yetmediği bölümlere soru sağlıyor. */
@@ -49,6 +50,8 @@ export function StudyView({
   note?: string;
   /** Stüdyo verir: bölüm adımının sonunda "kendi cümlelerinle anlat". Görüntüleyicide model yok. */
   sectionExtra?: (sectionId: string) => ReactNode;
+  /** Stüdyo verir: kavramın kütüphanedeki başka makalelerde çalışılıp çalışılmadığı. */
+  conceptExtra?: (conceptId: string) => ReactNode;
 }) {
   const t = useStrings();
   const path = useMemo(() => studyPath(project, drill), [project, drill]);
@@ -174,6 +177,7 @@ export function StudyView({
           onAnswer={answer}
           onGo={go}
           sectionExtra={sectionExtra}
+          conceptExtra={conceptExtra}
         />
       </div>
 
@@ -215,9 +219,10 @@ type StepContentProps = {
   onAnswer: (question: QuizQuestion, result: QuestionResult) => void;
   onGo: (stepId: string) => void;
   sectionExtra?: (sectionId: string) => ReactNode;
+  conceptExtra?: (conceptId: string) => ReactNode;
 };
 
-function StepContent({ step, project, terms, figures, questions, progress, summary, pathSteps, stepTitle, onAnswer, onGo, sectionExtra }: StepContentProps) {
+function StepContent({ step, project, terms, figures, questions, progress, summary, pathSteps, stepTitle, onAnswer, onGo, sectionExtra, conceptExtra }: StepContentProps) {
   const t = useStrings();
   const { evidence, story } = project;
 
@@ -255,6 +260,7 @@ function StepContent({ step, project, terms, figures, questions, progress, summa
       <article className="study-concept">
         <span className={`primer-level level-${concept.level}`}>{t.levels[concept.level]}</span>
         <h2 className="study-title" lang={project.language}>{concept.term}</h2>
+        {conceptExtra?.(concept.id)}
         <div className="primer-body" lang={project.language}>
           <ConceptBody concept={concept} prerequisites={prerequisiteTerms(project.primer, concept)} />
         </div>

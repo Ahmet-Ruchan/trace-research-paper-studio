@@ -14,11 +14,14 @@ const inputSchema = z.object({
   doi: z.string().max(200).optional(),
   title: z.string().min(1).max(400),
   authors: z.array(z.string().max(200)).max(50).optional(),
+  /** Her yönde kaç çalışma; kavram önerileri daha geniş bir kaynak listesine bakıyor. */
+  limit: z.number().int().min(4).max(50).optional(),
 });
 
 export async function POST(request: Request) {
   const parsed = inputSchema.safeParse(await request.json().catch(() => undefined));
   if (!parsed.success) return Response.json({ error: "A paper title is required." }, { status: 400 });
-  const graph = await fetchCitationGraph(parsed.data, { limit: 12 });
+  const { limit, ...paper } = parsed.data;
+  const graph = await fetchCitationGraph(paper, { limit: limit ?? 12 });
   return Response.json(graph, { headers: { "Cache-Control": "no-store" } });
 }

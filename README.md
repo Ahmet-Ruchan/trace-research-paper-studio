@@ -44,6 +44,7 @@ running on the coding agent you already use, with no second API key.
 | **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
 | **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim. Your agent can do it too (`explain`). |
 | **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review across your whole library: a day later, then at growing intervals while you keep remembering it. Papers are mixed in one queue. |
+| **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references for works that teach what you have not studied yet. Your agent has it too (`concepts`). |
 | **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next before it shows it. The answers come from the formulas themselves, not from a model. |
 | **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
 | **[Learning health](#see-what-a-reader-cannot-learn-from)** | The learning counterpart of evidence health: unchecked sections, a quiz that never asks about limitations, playgrounds that show nothing, derivations that restate themselves, concepts nothing uses. Each finding opens its fix. |
@@ -268,6 +269,33 @@ concept, so a rewritten question or a deleted paper simply drops out of the queu
 kept next to your study progress, never in the project file.
 
 ![Review across the library](docs/images/review.jpg)
+
+### Connect what you learn across papers
+
+Every paper explains the concepts it assumes from scratch, so the tenth paper you read teaches you
+softmax for the tenth time. Trace remembers where you already learned it. **Concepts** in the Lab
+lists what this paper assumes and, for each one, whether you studied it here, studied it in another
+paper of your library (with a link to that paper), or can find it explained in a paper you have not
+studied yet. The primer and the study path say the same thing where the concept appears: *you
+studied this in …, skim it here or move on*.
+
+For the concepts you have not studied anywhere, **Look in the references** goes through the works the
+paper cites (the 50 most-cited, from OpenAlex) for titles that name them, and offers each with
+**Analyze it**; a work already in your library opens instead of being analysed twice. **Concepts** in
+the library header is the map across all of it: every concept more than one paper explains, with the
+papers that explain it and a check mark where you studied it.
+
+Nothing here is generated. Concepts are matched by name, from each paper's primer and glossary, with
+case, hyphens, British and American spellings and plurals folded, never by meaning: two names for one
+idea stay apart rather than risk joining two different ideas under one name. A suggested reference is
+a match on its title, not a judgement of the work. Your study progress stays in your library, never
+in a project file. Your agent reads the same links from your library:
+
+```text
+Which concepts in this Trace project have I already studied in my other papers, and what should I read next? Use the Trace plugin.
+```
+
+![Concepts across the library](docs/images/concepts.jpg)
 
 ### Read it as a narrative, with the source one click away
 
@@ -832,6 +860,11 @@ npm run trace:agent -- graph --project "paper.trace.json"
 # How each model's quotes held up across the library, and what was left out
 npm run trace:agent -- record
 
+# Which of a project's concepts the reader studied in other papers, and the library's concept map;
+# --suggest looks through the paper's references for works that teach the rest
+npm run trace:agent -- concepts --project "paper.trace.json" --suggest
+npm run trace:agent -- concepts
+
 # --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"
 npm run trace:agent -- deliver --project ".trace/jobs/paper/paper.trace.json"
@@ -1018,7 +1051,8 @@ the server.
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, common misreadings, application
-guide), a guided study path with saved progress, spaced review across the library, a learning health
+guide), a guided study path with saved progress, spaced review across the library, concepts linked
+across papers with reading suggestions from the references, a learning health
 panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim

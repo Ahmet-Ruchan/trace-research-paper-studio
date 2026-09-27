@@ -84,7 +84,7 @@ export async function downloadCandidate(candidate: PaperCandidate): Promise<File
   return new File([await response.blob()], `${name}.pdf`, { type: "application/pdf" });
 }
 
-export async function loadCitationGraph(paper: { doi?: string; title: string; authors: string[] }): Promise<CitationGraph> {
+export async function loadCitationGraph(paper: { doi?: string; title: string; authors: string[]; limit?: number }): Promise<CitationGraph> {
   const response = await fetch("/api/citations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

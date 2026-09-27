@@ -1757,3 +1757,72 @@ test.describe("learning health", () => {
     await expect(page.getByRole("dialog").locator("textarea")).toHaveValue(/Give every step a rationale/);
   });
 });
+
+test.describe("concepts across the library", () => {
+  test("says where the reader already studied a concept, suggests cited papers for the rest, and maps the library", async ({ page, request }) => {
+    // Kütüphane diğer testlerin kopyalarını da taşıyor; bu iki makaleye özgü adlar eşleşmeyi yalnızca onlarla sınırlıyor.
+    const rename = (project: ResearchProject, terms: Record<string, string>) => ({
+      ...project,
+      primer: { ...project.primer!, concepts: project.primer!.concepts.map((concept) => ({ ...concept, term: terms[concept.id] ?? concept.term })) },
+    });
+    const first = await seed(request, rename(projectNamed("e2e-concepts-a"), { softmax: "Zeta softmax", "dot-product": "Zeta dot product" }));
+    const second = await seed(request, {
+      ...rename(projectNamed("e2e-concepts-b"), { softmax: "Zeta softmax", "dot-product": "Zeta dot products", variance: "Zeta variance only here" }),
+      evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Zeta dot products: a second paper" } },
+    });
+    const progress = completeStep(undefined, "concept:softmax", "concept:variance", new Date().toISOString());
+    expect((await request.put(`/api/library/study?id=${second.id}`, { data: { progress } })).ok()).toBe(true);
+    await page.route("**/api/citations", async (route) => {
+      const node = (title: string, year: number, citationCount: number) => ({ openAlexId: title, title, year, citationCount, authors: [], authorCount: 0, pdfAvailable: true, identifier: title });
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ok: true, retrievedAt: new Date().toISOString(), source: "OpenAlex", paper: node(first.evidence.paper.title, 2017, 1),
+          referenceCount: 4, citedByCount: 0, citedBy: [], note: "", openAlexUrl: "",
+          references: [
+            node("Layer Normalization", 2016, 10_000), node("Deep Residual Learning for Image Recognition", 2016, 200_000),
+            node("Adam: A Method for Stochastic Optimization", 2015, 100_000), node("Zeta Dot Products: A Second Paper", 2018, 12),
+          ],
+        }),
+      });
+    });
+
+    await page.goto(`/?project=${first.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Concepts" }).click();
+    // Satırlar terimle seçiliyor: ikinci makalenin başlığı da "Zeta dot products" diye başlıyor.
+    const row = (term: string) => page.locator(".concept-rows li").filter({ has: page.locator("strong", { hasText: new RegExp(`^${term}$`) }) });
+    const softmax = row("Zeta softmax");
+    await expect(softmax.locator(".concept-status")).toHaveText("Studied in another paper");
+    await expect(softmax.locator(".concept-where")).toHaveText("Zeta dot products: a second paper ✓");
+    await expect(row("Zeta dot product").locator(".concept-status")).toHaveText("In 1 other paper, not studied yet");
+
+    await page.getByRole("button", { name: "Look in the references" }).click();
+    const suggestion = page.locator(".concept-suggestions li", { hasText: "Layer Normalization" });
+    await expect(suggestion.locator(".concept-for")).toHaveText("Residual connections and layer normalisation");
+    await expect(suggestion).toContainText("the title names “layer normalization”");
+    await expect(suggestion.getByRole("button", { name: "Analyze it" })).toBeVisible();
+    await expect(page.locator(".concept-suggestions li", { hasText: "Deep Residual Learning" })).toHaveCount(0);
+    // Kütüphanede zaten olan bir çalışma analiz edilmiyor, açılıyor.
+    const owned = page.locator(".concept-suggestions li", { hasText: "Zeta Dot Products: A Second Paper" });
+    await expect(owned.locator(".concept-for")).toHaveText("Zeta dot product");
+    await expect(owned).toContainText("already in your library");
+    await expect(owned.getByRole("link", { name: "Open it" })).toHaveAttribute("href", `/?project=${second.id}`);
+    await expect(owned.getByRole("button", { name: "Analyze it" })).toHaveCount(0);
+
+    // Ön bilgide de: kavramın kütüphanedeki izi.
+    await page.locator(".lab-nav > button", { hasText: "Primer" }).click();
+    await page.locator(".primer-item button", { hasText: "Zeta softmax" }).click();
+    await expect(page.locator(".primer-item.is-open .concept-note")).toContainText("You studied this in Zeta dot products: a second paper");
+
+    // Kütüphanenin kavram haritası.
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Concepts", exact: true }).click();
+    const zeta = page.locator(".shared-concepts > li", { hasText: /zeta softmax/i });
+    await expect(zeta.locator(".shared-concept-head span")).toHaveText("2 papers");
+    await expect(zeta.locator(".shared-concept-papers button")).toHaveCount(2);
+    await expect(zeta.locator(".shared-concept-papers button.is-studied")).toContainText("Zeta dot products: a second paper");
+    await zeta.locator(".shared-concept-papers button", { hasText: "Attention Is All You Need" }).click();
+    await expect(page.locator(".lab-section-header h1")).toHaveText(first.evidence.paper.title);
+  });
+});

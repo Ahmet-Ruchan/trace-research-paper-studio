@@ -28,6 +28,7 @@ import { CompareView } from "./compare-view";
 import { LiteratureMapView } from "./literature-map-view";
 import { LibraryView } from "./library-view";
 import { ReviewView } from "./review-view";
+import { ConceptMapView } from "./concept-map-view";
 import { ModelRecordView } from "./model-record-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
@@ -35,7 +36,7 @@ import { StoryView } from "./story-view";
 import { DisplayControl } from "./display-control";
 
 type WorkspaceMode = "lab" | "story" | "preview";
-type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review";
+type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "concepts";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
 
@@ -533,6 +534,9 @@ export function AppShell() {
   if (screen === "models") {
     return <ModelRecordView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />;
   }
+  if (screen === "concepts") {
+    return <ConceptMapView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />;
+  }
   if (screen === "review") {
     const scoped = reviewScope && project?.id === reviewScope;
     return (
@@ -559,6 +563,7 @@ export function AppShell() {
           setReviewScope(undefined);
           setScreen("review");
         }}
+        onConcepts={() => setScreen("concepts")}
         onOpen={openProject}
         onOpenClaim={openClaim}
         onModelRecord={() => setScreen("models")}
@@ -634,7 +639,7 @@ export function AppShell() {
       </header>
       {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
       <div className="workspace-content">
-        {mode === "lab" && <LabView project={project} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} />}
+        {mode === "lab" && <LabView project={project} library={projects} onAnalysePaper={analyseFromGraph} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} />}
         {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
         {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
       </div>

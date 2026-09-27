@@ -20141,6 +20141,179 @@ function libraryModelRecord(inputs) {
 }
 
 //#endregion
+//#region src/lib/concept-links.ts
+/** Karşılaştırma biçimi: katlanmış, tireler boşluk, İngiliz yazımı ve çoğul eki eşitlenmiş. */
+function normalizePhrase(text) {
+	return foldForSearch(text).replace(/[-‐‑‒–—_/]+/g, " ").replace(/[^\p{L}\p{N}\s]+/gu, " ").replace(/\s+/g, " ").trim().split(" ").map((word) => word.replace(/isations?$/, (ending) => ending.replace("is", "iz")).replace(/(?<=\p{L}{3})(?<!s)s$/u, "")).join(" ");
+}
+const bareDoi = (value) => value?.trim().toLowerCase().replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:)/, "") || void 0;
+/**
+* Bir makalenin kimliği: DOI'si, yoksa katlanmış başlığı. Aynı makalenin iki
+* analizi (başka bir dilde, başka bir modelle) iki makale değil; yoksa her
+* kavramı kendi kopyasıyla "paylaşılmış" görünürdü.
+*/
+function paperKey(project) {
+	const doi = bareDoi(project.evidence.paper.doi);
+	return doi ? `doi:${doi}` : `title:${normalizePhrase(project.evidence.paper.title)}`;
+}
+/** Baştaki artikel bir kavramın adı değil: "The sequential computation bottleneck". */
+const withoutArticle = (phrase) => phrase.replace(/^(?:the|a|an)\s+/, "");
+function spellingsOf(term) {
+	const match = term.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+	return match ? [match[1], match[2]] : [term];
+}
+/** Bir terimin yazımları: "Layer normalization (LayerNorm)" → iki anahtar. */
+function conceptKeys(term) {
+	return [...new Set(spellingsOf(term).map((spelling) => withoutArticle(normalizePhrase(spelling))).filter((key) => key.replace(/\s/g, "").length >= 3))];
+}
+function sources(project) {
+	const base = {
+		projectId: project.id,
+		paper: paperKey(project),
+		paperTitle: project.evidence.paper.title,
+		year: project.evidence.paper.year
+	};
+	return [...(project.primer?.concepts ?? []).map((concept) => ({
+		...base,
+		kind: "primer",
+		conceptId: concept.id,
+		term: concept.term,
+		definition: concept.intuition
+	})), ...project.evidence.glossary.map((item) => ({
+		...base,
+		kind: "glossary",
+		term: item.term,
+		definition: item.definition
+	}))];
+}
+/** Anahtar → o kavramı anlatan kaynaklar, bütün kütüphane boyunca. */
+function libraryConceptIndex(library) {
+	const index = /* @__PURE__ */ new Map();
+	for (const project of library) for (const source of sources(project)) for (const key of conceptKeys(source.term)) index.set(key, [...index.get(key) ?? [], source]);
+	return index;
+}
+function conceptKnowledge(progress, conceptId) {
+	if (!progress || !conceptId) return void 0;
+	const review = progress.reviews?.find((item) => item.id === `c:${conceptId}`);
+	const studied = Boolean(review) || progress.done.includes(`concept:${conceptId}`);
+	return studied ? {
+		studied,
+		...review ? { box: review.box } : {}
+	} : void 0;
+}
+/** Bir makale için tek kaynak: çalışılmış olan, sonra ön bilgi (çalışılabilen o), sonra sözlük. */
+const rank = (source) => (source.knowledge?.studied ? 4 : 0) + (source.knowledge?.box ?? 0) / 10 + (source.kind === "primer" ? 1 : 0);
+/** Kaynakları makaleye göre tekilleştiriyor: aynı makalenin analizleri ve aynı makaledeki iki yazım bir kez. */
+function onePerPaper(list, study) {
+	const byPaper = /* @__PURE__ */ new Map();
+	for (const source of list) {
+		const linked = {
+			...source,
+			knowledge: conceptKnowledge(study.get(source.projectId), source.conceptId)
+		};
+		const existing = byPaper.get(source.paper);
+		if (!existing || rank(linked) > rank(existing)) byPaper.set(source.paper, linked);
+	}
+	return byPaper;
+}
+/**
+* Projenin ön bilgi kavramlarının kütüphanedeki karşılıkları. Aynı makale
+* bir kavramı hem ön bilgide hem sözlükte taşıyabiliyor, ve aynı makale
+* kütüphanede birden çok analizle bulunabiliyor; her makale bir kez sayılıyor.
+* Bu makalenin başka analizleri "başka bir makale" değil.
+*/
+function conceptLinks(project, library, study) {
+	const own = paperKey(project);
+	const index = libraryConceptIndex(library.filter((item) => item.id !== project.id && paperKey(item) !== own));
+	return (project.primer?.concepts ?? []).map((concept) => {
+		const elsewhere = [...onePerPaper(conceptKeys(concept.term).flatMap((key) => index.get(key) ?? []), study).values()].sort((left, right) => Number(Boolean(right.knowledge?.studied)) - Number(Boolean(left.knowledge?.studied)) || (right.knowledge?.box ?? -1) - (left.knowledge?.box ?? -1) || Number(right.kind === "primer") - Number(left.kind === "primer") || left.paperTitle.localeCompare(right.paperTitle));
+		return {
+			conceptId: concept.id,
+			term: concept.term,
+			here: conceptKnowledge(study.get(project.id), concept.id),
+			elsewhere,
+			studiedIn: elsewhere.find((source) => source.knowledge?.studied)
+		};
+	});
+}
+/**
+* Kütüphanenin kavram haritası: en az iki makalede anlatılan kavramlar, en
+* çok makaleyi bağlayan önce. Her makale, kaç analizi olursa olsun, bir kez
+* sayılıyor.
+*/
+function sharedConcepts(library, study) {
+	const index = libraryConceptIndex(library);
+	const seen = /* @__PURE__ */ new Set();
+	const shared = [];
+	for (const [key, list] of index) {
+		const byPaper = onePerPaper(list, study);
+		if (byPaper.size < 2) continue;
+		const signature = [...byPaper.values()].map((source) => `${source.projectId}:${source.term}`).sort().join("|");
+		if (seen.has(signature)) continue;
+		seen.add(signature);
+		const sources = [...byPaper.values()].sort((left, right) => left.paperTitle.localeCompare(right.paperTitle));
+		const term = sources.find((source) => source.kind === "primer")?.term ?? sources[0].term;
+		shared.push({
+			key,
+			term,
+			sources,
+			papers: sources.length,
+			studied: sources.some((source) => source.knowledge?.studied)
+		});
+	}
+	return shared.sort((left, right) => right.papers - left.papers || left.term.localeCompare(right.term));
+}
+/**
+* Önerilen çalışma kütüphanede zaten var mı: DOI ya da katlanmış başlık aynı.
+* Varsa okuyucuya "analiz et" değil "aç" deniyor; aynı makale iki kez
+* analiz edilmiyor.
+*/
+function libraryPaperFor(reference, library) {
+	const title = normalizePhrase(reference.title);
+	const doi = bareDoi(reference.identifier);
+	return library.find((project) => {
+		const own = bareDoi(project.evidence.paper.doi);
+		return own !== void 0 && own === doi || normalizePhrase(project.evidence.paper.title) === title;
+	});
+}
+/**
+* Bir kavramın başlıkta aranacak parçaları. "Residual connections and layer
+* normalisation" iki parça; tek kelimelik bir parça en az beş harf olmalı,
+* yoksa "the", "RNN" gibi her başlıkta geçen sözcükler eşleşirdi.
+*/
+function conceptPhrases(term) {
+	return [...new Set(spellingsOf(term).flatMap((spelling) => {
+		const parts = spelling.split(/\s*(?:,|&|\band\b|\bve\b|\bund\b|\bet\b)\s*/i).map((part) => withoutArticle(normalizePhrase(part))).filter(Boolean);
+		if (parts.length === 1) return parts[0].includes(" ") || parts[0].length >= 5 ? parts : [];
+		return parts.filter((part) => part.includes(" "));
+	}))];
+}
+/**
+* Henüz çalışılmamış kavramlar için makalenin kaynaklarından öneri: başlığı
+* kavramın bir parçasını bütün kelimelerle anan çalışma. Kavram başına en çok
+* atıf alan iki çalışma.
+*/
+function suggestReferences(links, references) {
+	const titles = references.map((reference) => ({
+		reference,
+		title: ` ${normalizePhrase(reference.title)} `
+	}));
+	const suggestions = [];
+	for (const link of links) {
+		if (link.here?.studied || link.studiedIn) continue;
+		const matches = [];
+		for (const phrase of conceptPhrases(link.term)) for (const { reference, title } of titles) if (title.includes(` ${phrase} `) && !matches.some((item) => item.reference.title === reference.title)) matches.push({
+			conceptId: link.conceptId,
+			term: link.term,
+			phrase,
+			reference
+		});
+		suggestions.push(...matches.sort((left, right) => (right.reference.citationCount ?? 0) - (left.reference.citationCount ?? 0)).slice(0, 2));
+	}
+	return suggestions;
+}
+
+//#endregion
 //#region src/lib/canonical-json.ts
 /**
 * Anahtarları sıralanmış JSON.
@@ -20173,6 +20346,85 @@ function fnv1a(text, seed) {
 }
 function stableHash(text) {
 	return `${fnv1a(text, 2166136261)}${fnv1a(text, 1523705862)}`;
+}
+
+//#endregion
+//#region src/lib/review-schedule.ts
+/**
+* Aralıklı tekrar zamanlaması.
+*
+* Bir makaleyi çalışmak bir haftada unutuluyor; hatırlamayı kalıcı yapan,
+* unutmak üzereyken yeniden hatırlamak. Burada Leitner kutuları kullanılıyor:
+* hatırlanan kart bir sonraki kutuya geçiyor ve daha geç dönüyor, hatırlanmayan
+* ilk kutuya düşüyor ve ertesi gün dönüyor. Aralıklar gün cinsinden; saat
+* önemsiz, okuyucu kartları gün içinde ne zaman isterse görüyor.
+*
+* Kartlar çalışma modunda doğuyor: yanıtlanan her soru ve okunan her kavram.
+* Okuyucunun hiç görmediği bir şey "tekrar" edilemez.
+*/
+const REVIEW_INTERVALS_DAYS = [
+	1,
+	3,
+	7,
+	16,
+	35,
+	90
+];
+const MAX_REVIEW_BOX = REVIEW_INTERVALS_DAYS.length - 1;
+const studyReviewSchema = object({
+	/** `q:<soru kimliği>` ya da `c:<kavram kimliği>`. */
+	id: string().min(3).max(300),
+	box: number().int().min(0).max(MAX_REVIEW_BOX),
+	due: string().max(40),
+	lapses: number().int().min(0).max(9999),
+	reviews: number().int().min(0).max(9999),
+	last: string().max(40).optional(),
+	/** Sorunun mührü: soru yeniden yazılırsa kart baştan başlıyor. */
+	sig: string().max(40).optional()
+});
+
+//#endregion
+//#region src/lib/study-path.ts
+const MAX_ID = 300;
+const MAX_ENTRIES = 400;
+const studyAnswerSchema = object({
+	id: string().min(1).max(MAX_ID),
+	correct: boolean(),
+	attempts: number().int().min(1).max(99),
+	revealed: boolean(),
+	at: string().max(40),
+	/** Sorunun içeriğinin mührü: soru yeniden yazılırsa eski yanıt geçersiz. */
+	sig: string().max(40)
+});
+const studyProgressSchema = object({
+	version: literal(1),
+	current: string().max(MAX_ID).optional(),
+	done: array(string().max(MAX_ID)).max(MAX_ENTRIES),
+	answers: array(studyAnswerSchema).max(MAX_ENTRIES),
+	startedAt: string().max(40),
+	updatedAt: string().max(40),
+	finishedAt: string().max(40).optional(),
+	/** Tekrar kartları (`review-schedule.ts`); çalışmada yanıtlanan sorular ve okunan kavramlar. */
+	reviews: array(studyReviewSchema).max(MAX_ENTRIES).optional()
+});
+const studyFileSchema = object({
+	version: literal(1),
+	projects: array(unknown())
+});
+const studyEntrySchema = object({
+	id: string().min(1).max(MAX_ID),
+	progress: studyProgressSchema
+});
+/** Proje kimliği → ilerleme. Nesne değil `Map`: kimlik serbest metin ve "__proto__" da olabilir. */
+function parseStudyFile(raw) {
+	const entries = /* @__PURE__ */ new Map();
+	const file = studyFileSchema.safeParse(raw);
+	if (!file.success) return entries;
+	for (const item of file.data.projects) {
+		const entry = studyEntrySchema.safeParse(item);
+		if (entry.success) entries.set(entry.data.id, entry.data.progress);
+	}
+	return entries;
 }
 
 //#endregion
@@ -21340,4 +21592,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, libraryModelRecord, narrativeTemplateSchema, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, shouldSnapshot, spliceSectionObject, splitPages, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

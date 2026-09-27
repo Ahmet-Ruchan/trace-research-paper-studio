@@ -12,6 +12,12 @@ import {
   buildExplanationBrief,
   buildSectionBrief,
   checkExplanationFeedback,
+  conceptLinks,
+  libraryPaperFor,
+  paperKey,
+  parseStudyFile,
+  sharedConcepts,
+  suggestReferences,
   builtInTemplates,
   ankiCards,
   applyExcerptCheck,
@@ -307,6 +313,7 @@ Usage:
   node trace-agent.mjs export --project <project.trace.json> --format md|html|slides|ipynb|bib|ris|anki [--out <file>]
   node trace-agent.mjs anki --project <project.trace.json> [--out <deck.anki.txt>]
   node trace-agent.mjs record
+  node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
@@ -359,6 +366,17 @@ Usage:
             the evidence is consistent with, the same paper analysed by
             different models, and every project left out with its reason.
             Reads the library only. No network, no model.
+  concepts  Links concepts across the Trace library by name. With --project:
+            for each primer concept of that project, the other papers that
+            explain it and whether the reader studied it there (from the
+            studio's study progress). Without: the concepts more than one
+            paper explains. Reads the library only. No model.
+            --suggest also looks through the paper's references (the 50
+            most-cited, from OpenAlex) for works whose titles name a concept
+            the reader has not studied in any paper; --references <file>
+            does the same offline with a list you give it (a JSON array of
+            titles or { title, year } objects, or one title per line). A
+            work already in the library is marked inLibrary.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -431,7 +449,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures"].includes(key)) {
+    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest"].includes(key)) {
       args[key] = true;
       continue;
     }
@@ -1641,6 +1659,177 @@ function printModelRecord() {
   }, null, 2));
 }
 
+/** Kütüphanedeki projeler (okunamayanlar sayılıyor) ve kütüphanenin çalışma kayıtları. */
+function readLibrary() {
+  const library = traceLibraryDirectory();
+  const projects = [];
+  const files = new Map();
+  let unreadable = 0;
+  let entries = [];
+  try {
+    entries = readdirSync(library, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".trace.json")) continue;
+    const outcome = (() => {
+      try {
+        return validateProjectObject(JSON.parse(readFileSync(join(library, entry.name), "utf8")));
+      } catch {
+        return { ok: false };
+      }
+    })();
+    if (!outcome.ok) {
+      unreadable += 1;
+      continue;
+    }
+    projects.push(outcome.project);
+    files.set(outcome.project.id, join(library, entry.name));
+  }
+  let study = new Map();
+  try {
+    study = parseStudyFile(JSON.parse(readFileSync(join(library, "study.json"), "utf8")));
+  } catch {
+    // Çalışma kaydı yoksa ya da okunamıyorsa hiçbir kavram "çalışılmış" sayılmıyor.
+  }
+  return { library, projects, files, unreadable, study };
+}
+
+/**
+ * Kaynakça listesi dosyadan: JSON dizi (başlık dizgeleri ya da { title, year,
+ * identifier } nesneleri, ya da { references: [...] }) veya her satırda bir
+ * başlık. Ajan kaynakçayı makalenin metninden okuyabiliyor; ağ gerekmiyor.
+ */
+function readReferenceList(path) {
+  if (!existsSync(path)) throw new Error(`reference list not found: ${path}`);
+  const text = readFileSync(path, "utf8");
+  let items;
+  try {
+    const parsed = JSON.parse(text);
+    items = Array.isArray(parsed) ? parsed : parsed?.references;
+  } catch {
+    items = text.split(/\r?\n/);
+  }
+  if (!Array.isArray(items)) {
+    throw new Error("--references must be a JSON array of titles or { title, year } objects, or a text file with one title per line.");
+  }
+  return items
+    .map((item) => (typeof item === "string" ? { title: item } : item))
+    .filter((item) => item && typeof item.title === "string" && item.title.trim())
+    .map((item) => {
+      const year = Number.parseInt(item.year, 10);
+      return {
+        title: item.title.trim(),
+        ...(Number.isFinite(year) ? { year } : {}),
+        ...(typeof item.identifier === "string" && item.identifier.trim() ? { identifier: item.identifier.trim() } : {}),
+        ...(typeof item.url === "string" && item.url.trim() ? { url: item.url.trim() } : {}),
+        ...(Number.isFinite(item.citationCount) ? { citationCount: item.citationCount } : {}),
+      };
+    });
+}
+
+/**
+ * Henüz çalışılmamış kavramlar için makalenin kaynaklarından öneri: stüdyonun
+ * "Look in the references" düğmesiyle aynı eşleşme. Kaynaklar OpenAlex'ten
+ * (`--suggest`) ya da ajanın verdiği listeden (`--references`). Grafik bir
+ * bonus: OpenAlex'e ulaşılamazsa kavram bağları yine yazılıyor.
+ */
+async function conceptSuggestions(args, project, links, projects, files) {
+  let references;
+  let source;
+  if (args.references) {
+    references = readReferenceList(resolve(args.references));
+    source = "file";
+  } else {
+    const { fetchCitationGraph } = await import("./lib/citation-graph.mjs");
+    const { paper } = project.evidence;
+    const graph = await fetchCitationGraph({ doi: paper.doi, title: paper.title, authors: paper.authors }, { limit: 50 });
+    if (!graph.ok) {
+      return { ok: false, reason: graph.skipped ? `OpenAlex has no certain record of this paper (${graph.skipped}).` : graph.error ?? "The references could not be loaded." };
+    }
+    references = graph.references;
+    source = "OpenAlex";
+  }
+  const others = projects.filter((item) => item.id !== project.id);
+  return {
+    ok: true,
+    source,
+    references: references.length,
+    items: suggestReferences(links, references).map((item) => {
+      const owned = libraryPaperFor(item.reference, others);
+      return {
+        conceptId: item.conceptId,
+        term: item.term,
+        phrase: item.phrase,
+        title: item.reference.title,
+        year: item.reference.year ?? null,
+        citationCount: item.reference.citationCount ?? null,
+        identifier: item.reference.identifier ?? null,
+        inLibrary: owned ? { paper: owned.evidence.paper.title, projectId: owned.id, file: files.get(owned.id) } : null,
+      };
+    }),
+    note: "Cited works whose titles name a concept the reader has not studied in any paper: a match on the title, not a judgement of the work. A work that is inLibrary is already analysed: point the reader to it instead of analysing it again. Otherwise prepare --source <identifier> analyses it.",
+  };
+}
+
+/**
+ * Makaleler arası kavram bağları. `--project` ile o projenin ön bilgi
+ * kavramlarının kütüphanedeki karşılıkları ve okuyucunun onları nerede
+ * çalıştığı; onsuz kütüphanenin kavram haritası. Kütüphaneyi yalnızca okur;
+ * model yok. Ağa yalnızca `--suggest` gidiyor.
+ */
+async function printConcepts(args) {
+  if ((args.suggest || args.references) && !args.project) throw new Error("--suggest and --references need --project <project.trace.json>.");
+  const { library, projects, files, unreadable, study } = readLibrary();
+  const paper = (source) => ({ paper: source.paperTitle, projectId: source.projectId, file: files.get(source.projectId), kind: source.kind, studied: Boolean(source.knowledge?.studied) });
+  if (args.project) {
+    const outcome = validateProjectObject(readJsonFile(resolve(args.project), "project"));
+    if (!outcome.ok) {
+      console.error(JSON.stringify({ ok: false, issueCount: outcome.issues.length, issues: outcome.issues }, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+    const links = conceptLinks(outcome.project, projects, study);
+    const suggestions = args.suggest || args.references ? await conceptSuggestions(args, outcome.project, links, projects, files) : undefined;
+    console.log(JSON.stringify({
+      ok: true,
+      library,
+      papers: new Set(projects.map(paperKey)).size,
+      projects: projects.length,
+      unreadable,
+      project: outcome.project.evidence.paper.title,
+      summary: {
+        concepts: links.length,
+        studiedHere: links.filter((link) => link.here?.studied).length,
+        studiedElsewhere: links.filter((link) => !link.here?.studied && link.studiedIn).length,
+        inOtherPapersNotStudied: links.filter((link) => !link.here?.studied && !link.studiedIn && link.elsewhere.length).length,
+        onlyHere: links.filter((link) => !link.elsewhere.length).length,
+      },
+      concepts: links.map((link) => ({
+        conceptId: link.conceptId,
+        term: link.term,
+        studiedHere: Boolean(link.here?.studied),
+        studiedIn: link.studiedIn ? paper(link.studiedIn) : null,
+        alsoIn: link.elsewhere.map(paper),
+      })),
+      ...(suggestions ? { suggestions } : {}),
+      note: "Concepts are matched by name across the library, never by meaning. Tell the reader which of this paper's concepts they already studied in other papers, and where, and which are new to them. This is about the reader, not the paper: do not write it into the project.",
+    }, null, 2));
+    return;
+  }
+  const shared = sharedConcepts(projects, study);
+  console.log(JSON.stringify({
+    ok: true,
+    library,
+    papers: new Set(projects.map(paperKey)).size,
+    projects: projects.length,
+    unreadable,
+    shared: shared.map((concept) => ({ term: concept.term, papers: concept.sources.map(paper), studied: concept.studied })),
+    note: "Concepts that more than one paper in the library explains, from primers and glossaries, matched by name. studied: the reader studied it in that paper.",
+  }, null, 2));
+}
+
 async function main() {
 try {
   const [command, ...rest] = process.argv.slice(2);
@@ -1663,6 +1852,7 @@ try {
   else if (command === "anki") exportAnki(args);
   else if (command === "export") exportProject(args);
   else if (command === "record") printModelRecord();
+  else if (command === "concepts") await printConcepts(args);
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

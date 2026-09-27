@@ -17,6 +17,8 @@ export { applyExcerptCheck, splitPages } from "./paper-text";
 export { ankiCards, buildAnkiDeck } from "./anki-export";
 export { exportDefinitions, findExport } from "./exports";
 export { libraryModelRecord } from "./model-record";
+export { conceptLinks, libraryPaperFor, paperKey, sharedConcepts, suggestReferences } from "./concept-links";
+export { parseStudyFile } from "./study-path";
 export {
   defaultPublicationInclude,
   expiryFromDays,

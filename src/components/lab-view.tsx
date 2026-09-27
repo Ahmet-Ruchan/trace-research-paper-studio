@@ -23,6 +23,7 @@ import {
   Sparkles,
   TriangleAlert,
   UserCheck,
+  Waypoints,
 } from "lucide-react";
 import type { RevisionReason } from "@/lib/project-revisions";
 import type { Claim, ResearchProject } from "@/lib/schema";
@@ -52,12 +53,15 @@ import { useSectionRegeneration } from "./section-regenerator";
 import { LearningGenerator } from "./learning-generator";
 import { LearningHealthView } from "./learning-health-view";
 import { ExplainPanel } from "./explain-panel";
+import { ConceptNote } from "./concept-note";
+import { ConceptsView } from "./concepts-view";
+import { conceptLinks } from "@/lib/concept-links";
 import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
 import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
 import { studyPath, studySummary } from "@/lib/study-path";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
-import { useStudyProgress } from "./study-progress";
+import { useLibraryStudy, useStudyProgress } from "./study-progress";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -70,6 +74,10 @@ type LabViewProps = {
   onPaperFile?: (file: File) => void;
   /** Bu makalenin tekrar kartları (stüdyonun tekrar ekranı). */
   onReview?: () => void;
+  /** Kütüphanedeki bütün makaleler: kavram bağları için. */
+  library?: readonly ResearchProject[];
+  /** Kaynaklardan önerilen bir makaleyi analiz etmek (ana ekrandaki arama). */
+  onAnalysePaper?: (work: { identifier: string; title: string }) => void;
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
@@ -89,7 +97,7 @@ const reportKindLabels = {
   implication: "Implication",
 } as const;
 
-export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview }: LabViewProps) {
+export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview, library, onAnalysePaper }: LabViewProps) {
   const t = stringsFor(project.language);
   const regeneration = useSectionRegeneration(project, onProjectChange);
   /** Öğrenme katmanı öğeleri için aynı tetikleyici; görüntüleyicide hiç çizilmiyor. */
@@ -195,6 +203,15 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   const terms = useMemo(() => termIndex(project), [project]);
   const study = useStudyProgress(project.id);
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
+  // Kavram bağları: bu makalenin kavramları kütüphanenin başka makalelerinde.
+  const libraryStudy = useLibraryStudy();
+  const links = useMemo(() => {
+    if (!library) return [];
+    const study = new Map(libraryStudy ?? []);
+    if (studyProgress) study.set(project.id, studyProgress);
+    return conceptLinks(project, library, study);
+  }, [project, library, libraryStudy, studyProgress]);
+  const linkFor = (conceptId: string) => links.find((link) => link.conceptId === conceptId);
   const [openedAt] = useState(() => new Date().toISOString());
   const studyStatus = useMemo(() => {
     const path = studyPath(project, drill);
@@ -214,6 +231,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     { id: "overview", label: "Overview", icon: Lightbulb },
     { id: "study", label: t.tabStudy, icon: Route },
     ...(project.primer ? [{ id: "primer", label: t.navPrimer, icon: GraduationCap }] : []),
+    ...(library && project.primer ? [{ id: "concepts", label: "Concepts", icon: Waypoints }] : []),
     ...(hasPractice ? [{ id: "practice", label: t.navPractice, icon: SlidersHorizontal }] : []),
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
     { id: "claims", label: "Claims", icon: Quote },
@@ -369,6 +387,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 onSave={study.save}
                 note="Your progress is saved in your library, next to this paper. It is not part of the project file, so exports and published pages never carry your answers."
                 sectionExtra={(sectionId) => <ExplainPanel project={project} target={{ kind: "story", sectionId }} onClaimSelect={onClaimSelect} />}
+                conceptExtra={library ? (conceptId) => <ConceptNote link={linkFor(conceptId)} /> : undefined}
               />
             ) : null}
             {study.saveError ? <p className="regen-error" role="status">Progress not saved: {study.saveError}</p> : null}
@@ -501,6 +520,17 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 ? (item) => regeneration.open({ kind: item.area, sectionId: item.id }, { goal: "strengthen" })
                 : undefined}
             />
+          </section>
+        )}
+
+        {section === "concepts" && library && project.primer && (
+          <section className="lab-block">
+            <div className="block-title"><Waypoints size={16} /> Concepts across your papers</div>
+            <p className="section-intro">
+              The concepts this paper assumes, and where else your library explains them. Nothing is generated: concepts are
+              matched by name across your papers, and each paper&apos;s study progress says what you have already studied.
+            </p>
+            <ConceptsView project={project} links={links} library={library} onAnalyse={onAnalysePaper} />
           </section>
         )}
 
@@ -640,7 +670,11 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         {section === "primer" && project.primer && (
           <section className="lab-block">
             {regeneration.undoBar}
-            <PrimerView primer={project.primer} renderAction={(id) => regenerateButton("primer", id, "concept")} />
+            <PrimerView
+              primer={project.primer}
+              renderAction={(id) => regenerateButton("primer", id, "concept")}
+              renderNote={library ? (id) => <ConceptNote link={linkFor(id)} /> : undefined}
+            />
           </section>
         )}
 

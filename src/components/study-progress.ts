@@ -88,13 +88,12 @@ export async function readLibraryStudy(): Promise<Map<string, StudyProgress>> {
 }
 
 /**
- * Kütüphane başlığındaki tekrar özeti. Okunamazsa hiçbir şey gösterilmiyor:
- * bu bir hatırlatma, kütüphanenin çalışması ona bağlı değil.
+ * Bütün kütüphanenin çalışma kayıtları, bir kez okunmuş. Okunamazsa
+ * `undefined` kalıyor: tekrar özeti ve kavram bağları birer ek, sayfanın
+ * çalışması onlara bağlı değil.
  */
-export function useReviewForecast(projects: readonly ResearchProject[]) {
+export function useLibraryStudy() {
   const [study, setStudy] = useState<Map<string, StudyProgress>>();
-  // Zaman açılışta bir kez alınıyor; çizim sırasında saat okunmuyor.
-  const [now] = useState(() => new Date().toISOString());
   useEffect(() => {
     let cancelled = false;
     readLibraryStudy().then((entries) => {
@@ -104,5 +103,13 @@ export function useReviewForecast(projects: readonly ResearchProject[]) {
       cancelled = true;
     };
   }, []);
+  return study;
+}
+
+/** Kütüphane başlığındaki tekrar özeti. */
+export function useReviewForecast(projects: readonly ResearchProject[]) {
+  const study = useLibraryStudy();
+  // Zaman açılışta bir kez alınıyor; çizim sırasında saat okunmuyor.
+  const [now] = useState(() => new Date().toISOString());
   return useMemo(() => (study ? { ...reviewForecast(reviewCards(projects, study), now), now } : undefined), [projects, study, now]);
 }

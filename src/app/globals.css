@@ -976,3 +976,51 @@ html[data-text-size="larger"] { font-size: 125%; }
 .explain-group.is-misstated h5, .explain-group.is-unsupported h5 { color: var(--danger); }
 .explain-note { margin: 6px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; }
 .explain-quote { margin: 0; padding-left: 10px; border-left: 2px solid var(--danger-edge); color: var(--ink); font: italic var(--text-md)/1.55 Georgia, serif; }
+
+/* Kavram bağları: ön bilgi ve çalışma notu, Lab'deki "Concepts" ve kütüphanenin kavram haritası. */
+.concept-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0; padding: 8px 11px; border-radius: 9px; background: var(--surface-2); color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
+.concept-note > svg { flex: 0 0 auto; margin-top: 3px; color: var(--accent-ink); }
+.concept-note.is-studied > svg { color: var(--green); }
+.concept-note a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.concepts-summary { margin: 0 0 16px; color: var(--ink-soft); font-size: var(--text-md); line-height: 1.6; }
+.concept-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.concept-rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; align-items: baseline; padding: 12px 15px; border: 1px solid var(--line); border-left: 2px solid var(--line-dark); border-radius: 10px; background: var(--surface); }
+.concept-rows li.is-studied { border-left-color: var(--green); }
+.concept-rows li.is-elsewhere { border-left-color: var(--amber); }
+.concept-rows strong { font-size: var(--text-md); }
+.concept-status { color: var(--muted); font-size: var(--text-sm); white-space: nowrap; }
+.concept-where { grid-column: 1 / -1; color: var(--ink-soft); font-size: var(--text-sm); }
+.concept-where a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.concept-suggest { margin-top: 28px; }
+.concept-suggest h4 { margin: 0 0 8px; color: var(--muted); font-size: var(--text-sm); letter-spacing: .12em; text-transform: uppercase; }
+.concept-suggest > p { margin: 0 0 12px; max-width: 74ch; color: var(--ink-soft); font-size: var(--text-md); line-height: 1.6; }
+.concept-look { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 0; border-radius: 8px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); }
+.concept-look:disabled { opacity: .4; cursor: default; }
+.concept-suggestions { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.concept-suggestions li { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.concept-for { color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; }
+.concept-work strong { display: block; font-size: var(--text-md); }
+.concept-work small { color: var(--muted); font-size: var(--text-xs); }
+.concept-actions { display: flex; align-items: center; gap: 8px; }
+.concept-actions button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
+.concept-actions button:hover { border-color: var(--accent); }
+.concept-actions a { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; color: var(--ink-soft); }
+.concept-actions a.concept-open { width: auto; height: auto; padding: 6px 12px; border-color: color-mix(in srgb, var(--green) 55%, var(--line)); border-radius: 20px; color: var(--ink); font-size: var(--text-sm); text-decoration: none; white-space: nowrap; }
+.concept-actions a.concept-open:hover { border-color: var(--green); }
+.shared-concepts { display: grid; gap: 10px; max-width: 960px; margin: 0 auto 60px; padding: 0; list-style: none; }
+.shared-concepts > li { padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.shared-concepts > li.is-studied { border-left: 3px solid var(--green); }
+.shared-concept-head { display: flex; align-items: center; gap: 9px; }
+.shared-concept-head svg { color: var(--accent-ink); }
+.shared-concept-head strong { font: 1.25rem/1.25 Georgia, serif; }
+.shared-concept-head span { margin-left: auto; color: var(--muted); font-size: var(--text-sm); }
+.shared-concept-papers { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.shared-concept-papers button { display: grid; gap: 2px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--ink); cursor: pointer; font-size: var(--text-sm); text-align: left; }
+.shared-concept-papers button:hover { border-color: var(--accent); }
+.shared-concept-papers button.is-studied { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+.shared-concept-papers small { color: var(--muted); font-size: var(--text-xs); }
+@media (max-width: 760px) {
+  .concept-suggestions li { grid-template-columns: 1fr; }
+  .concept-rows li { grid-template-columns: 1fr; }
+  .concept-status { white-space: normal; }
+}

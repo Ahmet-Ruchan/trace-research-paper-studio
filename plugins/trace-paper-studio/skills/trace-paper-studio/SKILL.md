@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Converts research-paper PDFs into evidence-grounded Trace projects, portable .trace.json files, and automatically opened local interactive websites. Use when an agent must analyze a paper, inspect equations or methods, create cited explanations and visual architectures, validate or import a .trace.json project, or deliver a finished research experience using the active Codex, Claude Code, or Antigravity CLI model instead of an external LLM API. Also use it to rewrite one story or report section, primer concept, quiz question, derivation or equation of an existing Trace project with its evidence locked, to generate with or save a narrative template, to publish a shareable link to a project, to check a project's quotes against the text of its PDF, to resolve a paper from a DOI or an open-access repository link, to export a project as a Markdown or printable report, slides, a Jupyter notebook, a BibTeX/RIS citation or Anki flashcards, to show a paper's citation graph, and to report how each model's quotes held up across the Trace library.
+description: Turns a research paper (a PDF, a title, a DOI or a repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite one section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; and to tell a reader which concepts they already studied in other papers and which cited works teach the rest.
 ---
 
 # Trace Paper Studio
@@ -191,6 +191,20 @@ node scripts/trace-agent.mjs explain-check --brief "<briefPath>"
 ```
 
 `explain-check` applies the studio's own rules: every claim id must exist, "left out" may only name the claims the section rests on, and every quoted phrase must be the user's exact words. If it returns `ok: false`, fix the feedback file and run it again. When it succeeds, tell the user what they conveyed, what they left out and where the evidence says otherwise, each with the claim and its page, and say plainly that this is a model's reading of their text against the collected evidence, not a grade. Nothing is written to the project.
+
+## Concepts across the library
+
+When the user asks what they already know from other papers, which concepts of a project are new to them, or what to read next, run:
+
+```bash
+node scripts/trace-agent.mjs concepts --project "<project.trace.json>" --suggest
+```
+
+For each primer concept of the project it lists `studiedHere`, `studiedIn` (another paper of the library where the user studied it, from the studio's study progress) and `alsoIn` (other papers that explain it). `--suggest` adds `suggestions`: works among the paper's references (the 50 most-cited, from OpenAlex) whose titles name a concept the user has not studied anywhere. Without network, pass `--references <file>` instead: a JSON array of titles or `{ "title", "year" }` objects, or one title per line, read from the paper's bibliography. Without `--project` it prints the library's concept map, the concepts more than one paper explains.
+
+- Say where each concept was studied, with the paper's title, and suggest skimming those parts. Concepts are matched by name, never by meaning: do not claim that two differently named concepts are the same, and do not add links it did not report.
+- Present a suggestion as a work whose title names the concept, not as a recommendation of its quality. A suggestion with `inLibrary` is already analysed: point to that project instead of analysing it again. Otherwise offer `prepare --source <identifier>` for it.
+- This is about the user, not the paper: never write it into the project.
 
 ## Model record
 
