@@ -6,10 +6,17 @@
 # çalıştırılıyor (bkz. scripts/plugin-smoke.mjs). Codex bir açıklamayı
 # kestiğinde ya da bir alanı uyarıyla attığında burada kırmızı görünüyor.
 #
-# Push ve PR'larda CLI sürümleri sabit: kırmızı bir sonuç bu depodaki bir
-# değişikliği gösteriyor. Haftalık çalıştırma en son sürümlerle koşuyor: bir
-# ajanın yeni sürümü eklentiyi bozarsa kullanıcılardan önce burada görülüyor.
-# Antigravity'nin kurulum betiği her zaman son sürümü kuruyor.
+# Push ve PR'larda üç CLI'ın da sürümü sabit: kırmızı bir sonuç bu depodaki
+# bir değişikliği gösteriyor. Antigravity'nin kurulum betiği sürüm seçtirmiyor;
+# sabit sürümün paketi doğrudan indiriliyor ve sağlama toplamı denetleniyor.
+# Haftalık çalıştırma en son sürümlerle koşuyor: bir ajanın yeni sürümü
+# eklentiyi bozarsa kullanıcılardan önce burada görülüyor. Denenen sürümler
+# iş özetinde.
+#
+# Gerçek model oturumu (`--live`) yalnızca haftalık ve elle başlatılan
+# çalıştırmada, depo sırlarında OPENAI_API_KEY / ANTHROPIC_API_KEY varsa
+# açılıyor; yoksa "skip". Antigravity'de denenmiyor: `agy -p` bir Google
+# girişi istiyor.
 name: plugins
 
 on:
@@ -30,11 +37,16 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     name: plugin on Codex, Claude Code and Antigravity CLI
     env:
+      LATEST: ${{ github.event_name == 'schedule' }}
       CODEX_VERSION: ${{ github.event_name == 'schedule' && 'latest' || '0.157.1' }}
       CLAUDE_CODE_VERSION: ${{ github.event_name == 'schedule' && 'latest' || '2.1.283' }}
+      # Antigravity CLI 1.2.12, linux-x64 (kurulum betiğinin manifestinden).
+      AGY_URL: https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.12-5784551402897408/linux-x64/cli_linux_x64.tar.gz
+      AGY_SHA512: d5f0fe7433cb7c43ea878c07627a4fdb82d218f3bef5e6436266f5d9fdd2df145523453b9be0c4250391a64a007f5f42f7faff797bc2b2d502e7efb4874e383a
+      LIVE: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -48,11 +60,23 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/agents" --no-audit --no-fund \
             "@openai/codex@$CODEX_VERSION" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
-          curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --dir "$RUNNER_TEMP/agy"
+          if [ "$LATEST" = "true" ]; then
+            curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --dir "$RUNNER_TEMP/agy"
+          else
+            mkdir -p "$RUNNER_TEMP/agy"
+            curl -fsSL -o "$RUNNER_TEMP/agy.tar.gz" "$AGY_URL"
+            echo "$AGY_SHA512  $RUNNER_TEMP/agy.tar.gz" | sha512sum -c -
+            tar -xzf "$RUNNER_TEMP/agy.tar.gz" -C "$RUNNER_TEMP/agy" antigravity
+            mv "$RUNNER_TEMP/agy/antigravity" "$RUNNER_TEMP/agy/agy"
+          fi
 
       - name: Install the plugin into each agent and run it
+        env:
+          OPENAI_API_KEY: ${{ env.LIVE == 'true' && secrets.OPENAI_API_KEY || '' }}
+          ANTHROPIC_API_KEY: ${{ env.LIVE == 'true' && secrets.ANTHROPIC_API_KEY || '' }}
         run: >
           node scripts/plugin-smoke.mjs
           --codex "$RUNNER_TEMP/agents/node_modules/.bin/codex"
           --claude "$RUNNER_TEMP/agents/node_modules/.bin/claude"
           --agy "$RUNNER_TEMP/agy/agy"
+          ${{ env.LIVE == 'true' && '--live' || '' }}

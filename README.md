@@ -991,7 +991,7 @@ npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
 npm run version:set -- 0.23.0  # write one version into the package and every plugin manifest
-npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)"
+npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 
 `test:plugins` installs the plugin into each agent CLI you pass, in a throwaway home directory, the
@@ -999,8 +999,17 @@ way a user would. It then asks the agent how it sees the plugin (version, skill,
 starter prompts) and treats any warning that names the plugin as a failure, because an agent that
 cuts a description short or drops a field says so only in a log line. Finally it runs the bridge
 from the installed copy, outside the repository, so a copy that depends on a repository file fails
-there. The `plugins` workflow runs it on every push with pinned CLI versions, and weekly with the
-latest ones.
+there. The `plugins` workflow runs it on every push with pinned CLI versions (Antigravity's installer
+always takes the latest, so its pinned release is downloaded directly and checked against its
+SHA-512), and weekly with the latest ones; the job summary lists the versions tried.
+
+Add `--live` to also open a real model session: the agent is asked to export the example project
+with the skill, and the file must be byte for byte what the bridge writes, so a model that wrote it
+by hand fails. It needs `OPENAI_API_KEY` for Codex and `ANTHROPIC_API_KEY` for Claude Code, and
+reports `skip` without them; the weekly and manual runs pass `--live` with the repository secrets of
+those names. Antigravity CLI is not tried live: `agy -p` needs a Google sign-in, not a key. There
+the check stops at what can be verified without one: the plugin installs, its skill is processed and
+the bridge runs from the installed copy.
 
 <details>
 <summary><b>Architecture notes worth knowing before contributing</b></summary>

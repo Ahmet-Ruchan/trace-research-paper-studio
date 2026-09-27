@@ -14,12 +14,22 @@
  *      başlangıç istemleri) ve eklentiyi anan her uyarıyı hata sayıyor,
  *   3. köprüyü KURULAN kopyadan, depo dışında bir dizinde çalıştırıyor: kopya
  *      depodaki bir dosyaya dayanıyorsa burada düşüyor.
+ *   4. `--live` verilirse ve anahtar varsa gerçek bir model oturumu açıyor
+ *      (Codex: OPENAI_API_KEY, Claude Code: ANTHROPIC_API_KEY): modelden
+ *      beceriyle bir dışa aktarım istiyor ve dosyanın köprünün ürettiğiyle
+ *      birebir aynı olduğuna bakıyor. Beceri modele gerçekten ulaşıyor mu,
+ *      model köprüyü bulup çalıştırabiliyor mu, ancak böyle görülüyor.
+ *
+ * Sınırlar: Antigravity CLI'da gerçek oturum denenmiyor; `agy -p` bir Google
+ * girişi istiyor ve anahtarla açılmıyor, girişsiz beklemede kalıyor. Orada
+ * doğrulanan, eklentinin kurulup becerisinin işlendiği ve köprünün kurulan
+ * kopyadan çalıştığı. Anahtarsız koşuda gerçek oturum "skip" olarak yazılıyor.
  *
  * Verilmeyen CLI atlanıyor; hiçbiri verilmezse betik hata veriyor. Yalnızca
  * Node'un kendi modüllerini kullanıyor, `npm ci` gerektirmiyor.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,6 +65,10 @@ function parseArgs(values) {
   const args = {};
   for (let index = 0; index < values.length; index += 1) {
     const key = values[index].replace(/^--/, "");
+    if (key === "live") {
+      args.live = true;
+      continue;
+    }
     args[key] = values[index + 1];
     index += 1;
   }
@@ -64,6 +78,8 @@ function parseArgs(values) {
 const stripAnsi = (text) => text.replace(/\u001b\[[0-9;]*m/g, "");
 
 let failures = 0;
+/** Ajan başına özet: sürüm, düşen denetim sayısı, gerçek oturumun sonucu (CI iş özeti). */
+const summary = [];
 function check(label, condition, detail = "") {
   if (condition) console.log(`  ok    ${label}`);
   else {
@@ -71,6 +87,10 @@ function check(label, condition, detail = "") {
     console.log(`  FAIL  ${label}${detail ? `\n        ${String(detail).split("\n").join("\n        ")}` : ""}`);
   }
   return condition;
+}
+
+function skip(label, reason) {
+  console.log(`  skip  ${label} (${reason})`);
 }
 
 function run(command, args, options = {}) {
@@ -136,6 +156,32 @@ function bridgeSmoke(agent, bridge) {
   }
 }
 
+/**
+ * Gerçek bir model oturumu: model beceriyle makaleyi BibTeX'e aktarıyor.
+ * Dosyanın köprünün kendi çıktısıyla birebir aynı olması, modelin dosyayı
+ * elle yazmadığını, becerinin talimatıyla köprüyü bulup çalıştırdığını
+ * gösteriyor.
+ */
+const LIVE_PROMPT =
+  "Use the trace-paper-studio skill: export the Trace project paper.trace.json in the current directory as BibTeX to refs.bib, " +
+  "by running the skill's bridge script as its instructions say. Do not write refs.bib yourself. Reply DONE when the bridge has written it.";
+
+function liveSmoke(agent, bridge, ask) {
+  const workspace = mkdtempSync(join(tmpdir(), `trace-live-${agent}-`));
+  try {
+    cpSync(EXAMPLE, join(workspace, "paper.trace.json"));
+    const expected = join(tmpdir(), `trace-live-${agent}-expected.bib`);
+    run(process.execPath, [bridge, "export", "--project", join(workspace, "paper.trace.json"), "--format", "bib", "--out", expected]);
+    const answer = ask(workspace);
+    const written = join(workspace, "refs.bib");
+    const same = existsSync(written) && existsSync(expected) && readFileSync(written, "utf8") === readFileSync(expected, "utf8");
+    rmSync(expected, { force: true });
+    return check(`${agent}: a real model session used the skill and ran the bridge`, same, output(answer));
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+}
+
 /** Codex app-server'a stdio üzerinden `plugin/read` soruyor; stderr uyarılarıyla birlikte döner. */
 function codexPluginRead(codex, env) {
   return new Promise((resolvePromise) => {
@@ -182,8 +228,11 @@ function codexPluginRead(codex, env) {
   });
 }
 
-async function smokeCodex(codex, want) {
-  console.log(`\nCodex (${run(codex, ["--version"]).stdout.trim()})`);
+async function smokeCodex(codex, want, live) {
+  const version = run(codex, ["--version"]).stdout.trim();
+  console.log(`\nCodex (${version})`);
+  const before = failures;
+  const row = { agent: "Codex", version, live: "not asked" };
   const home = mkdtempSync(join(tmpdir(), "trace-smoke-codex-"));
   const env = { ...process.env, CODEX_HOME: home, RUST_LOG: "warn" };
   try {
@@ -220,13 +269,32 @@ async function smokeCodex(codex, want) {
 
     const bridge = findFile(join(home, "plugins", "cache"), "trace-agent.mjs");
     if (check("codex: the installed copy has the bridge", Boolean(bridge))) bridgeSmoke("codex", bridge);
+
+    const key = process.env.OPENAI_API_KEY;
+    if (!live) skip("codex: real model session", "run with --live");
+    else if (!key) {
+      skip("codex: real model session", "no OPENAI_API_KEY");
+      row.live = "skipped: no key";
+    } else if (bridge) {
+      const login = run(codex, ["login", "--with-api-key"], { env, input: key });
+      if (check("codex: login with the API key", login.status === 0, output(login))) {
+        const passed = liveSmoke("codex", bridge, (workspace) =>
+          run(codex, ["exec", "--skip-git-repo-check", "--ephemeral", "-s", "workspace-write", "-C", workspace, LIVE_PROMPT], { env, input: "", timeout: 600_000 }),
+        );
+        row.live = passed ? "passed" : "failed";
+      }
+    }
   } finally {
     rmSync(home, { recursive: true, force: true });
+    summary.push({ ...row, failed: failures - before });
   }
 }
 
-function smokeClaude(claude, want) {
-  console.log(`\nClaude Code (${run(claude, ["--version"]).stdout.trim()})`);
+function smokeClaude(claude, want, live) {
+  const version = run(claude, ["--version"]).stdout.trim();
+  console.log(`\nClaude Code (${version})`);
+  const before = failures;
+  const row = { agent: "Claude Code", version, live: "not asked" };
   const home = mkdtempSync(join(tmpdir(), "trace-smoke-claude-"));
   const env = { ...process.env, HOME: home };
   delete env.CLAUDE_CONFIG_DIR;
@@ -250,15 +318,30 @@ function smokeClaude(claude, want) {
 
     const bridge = entry?.installPath ? findFile(entry.installPath, "trace-agent.mjs") : undefined;
     if (check("claude: the installed copy has the bridge", Boolean(bridge))) bridgeSmoke("claude", bridge);
+
+    if (!live) skip("claude: real model session", "run with --live");
+    else if (!process.env.ANTHROPIC_API_KEY) {
+      skip("claude: real model session", "no ANTHROPIC_API_KEY");
+      row.live = "skipped: no key";
+    } else if (bridge) {
+      // İzinler atlanmıyor: yalnızca becerinin gerektirdiği araçlara izin var.
+      const passed = liveSmoke("claude", bridge, (workspace) =>
+        run(claude, ["-p", LIVE_PROMPT, "--output-format", "text", "--no-session-persistence", "--max-budget-usd", "1", "--allowedTools", "Skill", "Bash", "Read", "Glob", "Grep"], { env, cwd: workspace, input: "", timeout: 600_000 }),
+      );
+      row.live = passed ? "passed" : "failed";
+    }
   } finally {
     rmSync(home, { recursive: true, force: true });
+    summary.push({ ...row, failed: failures - before });
   }
 }
 
 function smokeAntigravity(agy, want) {
   const home = mkdtempSync(join(tmpdir(), "trace-smoke-agy-"));
   const env = { ...process.env, HOME: home };
-  console.log(`\nAntigravity CLI (${run(agy, ["--version"], { env }).stdout.trim()})`);
+  const version = run(agy, ["--version"], { env }).stdout.trim();
+  console.log(`\nAntigravity CLI (${version})`);
+  const before = failures;
   try {
     const validate = run(agy, ["plugin", "validate", PLUGIN_DIR], { env });
     const validated = stripAnsi(validate.stdout + validate.stderr);
@@ -275,20 +358,27 @@ function smokeAntigravity(agy, want) {
     check("agy: installed manifest as written", manifest.description === want.pluginDescription);
     const bridge = findFile(copy, "trace-agent.mjs");
     if (check("agy: the installed copy has the bridge", Boolean(bridge))) bridgeSmoke("agy", bridge);
+    skip("agy: real model session", "agy -p needs a Google sign-in, not an API key");
   } finally {
     rmSync(home, { recursive: true, force: true });
+    summary.push({ agent: "Antigravity CLI", version, live: "not possible: needs a Google sign-in", failed: failures - before });
   }
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.codex && !args.claude && !args.agy) {
-  console.error("Usage: node scripts/plugin-smoke.mjs [--codex <bin>] [--claude <bin>] [--agy <bin>] (at least one)");
+  console.error("Usage: node scripts/plugin-smoke.mjs [--codex <bin>] [--claude <bin>] [--agy <bin>] [--live] (at least one CLI)");
   process.exit(2);
 }
 const want = expected();
 console.log(`Trace plugin ${want.version}: installing it into each agent and running its bridge from the installed copy.`);
-if (args.codex) await smokeCodex(args.codex, want);
-if (args.claude) smokeClaude(args.claude, want);
+if (args.codex) await smokeCodex(args.codex, want, args.live);
+if (args.claude) smokeClaude(args.claude, want, args.live);
 if (args.agy) smokeAntigravity(args.agy, want);
 console.log(failures ? `\n${failures} check(s) failed.` : "\nEvery check passed.");
+// CI'da hangi sürümlerin denendiği iş özetinde kalıyor; en son sürümle koşan haftalık çalıştırmada önemli.
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const rows = summary.map((row) => `| ${row.agent} | ${row.version || "?"} | ${row.failed ? `${row.failed} failed` : "passed"} | ${row.live} |`);
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, [`### Trace plugin ${want.version}`, "", "| Agent | Version | Checks | Real model session |", "| --- | --- | --- | --- |", ...rows, ""].join("\n"));
+}
 process.exit(failures ? 1 : 0);
