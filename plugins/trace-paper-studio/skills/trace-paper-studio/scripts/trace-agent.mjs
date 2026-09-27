@@ -16,8 +16,15 @@ import {
   learningStats,
   REVIEW_INTERVALS_DAYS,
   recordCheckedExplanation,
+  aliasMap,
+  conceptKeys,
   conceptLinks,
+  conceptNames,
+  decideAlias,
+  forgetAlias,
+  isAliasFile,
   libraryPaperFor,
+  parseAliasFile,
   paperKey,
   parseStudyFile,
   readFirst,
@@ -330,6 +337,8 @@ Usage:
   node trace-agent.mjs record
   node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
   node trace-agent.mjs progress
+  node trace-agent.mjs concepts --names
+  node trace-agent.mjs alias --a "<name>" --b "<name>" [--different | --forget] [--proposed-by model] [--reason "<why>"]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
@@ -394,6 +403,10 @@ Usage:
             it (a JSON array of titles or { title, year, abstract } objects,
             or one title per line). A work already in the library is marked
             inLibrary.
+  alias     Records the reader's decision that two concept names are the
+            same concept (or --different, or --forget a decision). Only after
+            the reader confirms: concepts are otherwise matched by name.
+            concepts --names lists the names and the decisions so far.
   progress  Prints the reader's learning statistics from the studio's study
             progress: papers finished and in progress, reviews remembered,
             questions right on the first try, where the review cards are
@@ -477,7 +490,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest", "no-save"].includes(key)) {
+    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest", "no-save", "names", "different", "forget"].includes(key)) {
       args[key] = true;
       continue;
     }
@@ -1767,7 +1780,56 @@ function readLibrary() {
   } catch {
     // Çalışma kaydı yoksa ya da okunamıyorsa hiçbir kavram "çalışılmış" sayılmıyor.
   }
-  return { library, projects, files, unreadable, study };
+  let aliasFile = parseAliasFile(undefined);
+  try {
+    aliasFile = parseAliasFile(JSON.parse(readFileSync(join(library, "aliases.json"), "utf8")));
+  } catch {
+    // Eş kaydı yoksa kavramlar yalnızca ada göre eşleşiyor.
+  }
+  return { library, projects, files, unreadable, study, aliasFile, aliases: aliasMap(aliasFile) };
+}
+
+/**
+ * Okuyucunun kavram eşi kararı (`concept-aliases.ts`): stüdyonun
+ * `aliases.json`'ına, aynı kilit ve bozuk dosyayı kenara alma kuralıyla. Ajan
+ * bunu YALNIZCA okuyucu açıkça onayladıktan sonra çağırıyor.
+ */
+function recordAlias(args) {
+  if (!args.a || !args.b) throw new Error("alias needs --a \"<name>\" and --b \"<name>\".");
+  const decision = args.forget ? "forget" : args.different ? "different" : "same";
+  const { library, projects } = readLibrary();
+  const known = new Set(projects.flatMap((project) => [...(project.primer?.concepts ?? []).map((concept) => concept.term), ...project.evidence.glossary.map((item) => item.term)]).flatMap(conceptKeys));
+  if (decision !== "forget" && ![args.a, args.b].every((term) => conceptKeys(term).some((key) => known.has(key)))) {
+    throw new Error("Both names must be concepts (primer or glossary) of a paper in the Trace library. Run concepts --names to see them.");
+  }
+  const proposedBy = args["proposed-by"] === "model" ? "model" : "reader";
+  const release = acquireDirectoryLock(library, "aliases.lock", "The concept links are busy. Please retry in a moment.");
+  try {
+    const path = join(library, "aliases.json");
+    let raw;
+    let exists = true;
+    try {
+      raw = JSON.parse(readFileSync(path, "utf8"));
+    } catch (error) {
+      if (error?.code === "ENOENT") exists = false;
+      else if (!(error instanceof SyntaxError)) throw error;
+    }
+    const current = parseAliasFile(raw);
+    const next = decision === "forget"
+      ? forgetAlias(current, args.a, args.b)
+      : decideAlias(current, args.a, args.b, decision, proposedBy, new Date().toISOString(), typeof args.reason === "string" ? args.reason : undefined);
+    if (exists && !isAliasFile(raw)) renameSync(path, join(library, `aliases.damaged-${new Date().toISOString().replace(/[-:.]/g, "")}.json`));
+    atomicWrite(path, `${JSON.stringify(next, null, 2)}\n`);
+    console.log(JSON.stringify({
+      ok: true,
+      decision,
+      terms: [args.a, args.b],
+      linked: next.decisions.filter((item) => item.decision === "same").map((item) => item.terms),
+      note: decision === "same" ? "The two names now count as one concept in the concept links, the concept map and the reading order." : decision === "different" ? "The pair will not be proposed again." : "The decision was removed.",
+    }, null, 2));
+  } finally {
+    release();
+  }
 }
 
 /**
@@ -1858,7 +1920,7 @@ async function conceptSuggestions(args, project, links, projects, files) {
  */
 async function printConcepts(args) {
   if ((args.suggest || args.references) && !args.project) throw new Error("--suggest and --references need --project <project.trace.json>.");
-  const { library, projects, files, unreadable, study } = readLibrary();
+  const { library, projects, files, unreadable, study, aliasFile, aliases } = readLibrary();
   const paper = (source) => ({ paper: source.paperTitle, projectId: source.projectId, file: files.get(source.projectId), kind: source.kind, studied: Boolean(source.knowledge?.studied) });
   const libraryPaper = (project) => ({ paper: project.evidence.paper.title, projectId: project.id, file: files.get(project.id), year: project.evidence.paper.year });
   if (args.project) {
@@ -1868,7 +1930,7 @@ async function printConcepts(args) {
       process.exitCode = 1;
       return;
     }
-    const links = conceptLinks(outcome.project, projects, study);
+    const links = conceptLinks(outcome.project, projects, study, aliases);
     const suggestions = args.suggest || args.references ? await conceptSuggestions(args, outcome.project, links, projects, files) : undefined;
     console.log(JSON.stringify({
       ok: true,
@@ -1891,7 +1953,7 @@ async function printConcepts(args) {
         studiedIn: link.studiedIn ? paper(link.studiedIn) : null,
         alsoIn: link.elsewhere.map(paper),
       })),
-      readFirst: readFirst(outcome.project, projects, study).map((item) => ({
+      readFirst: readFirst(outcome.project, projects, study, aliases).map((item) => ({
         ...libraryPaper(item.project),
         status: item.status,
         defines: item.concepts,
@@ -1901,8 +1963,18 @@ async function printConcepts(args) {
     }, null, 2));
     return;
   }
-  const shared = sharedConcepts(projects, study);
-  const order = readingOrder(projects, study);
+  if (args.names) {
+    console.log(JSON.stringify({
+      ok: true,
+      library,
+      names: conceptNames(projects, aliasFile).map((name) => ({ term: name.term, paper: name.paper, kind: name.kind, papers: name.papers, definition: name.definition })),
+      decided: aliasFile.decisions,
+      note: "Concept names across the library, one per concept, with their paper's definition. If two different names clearly mean the same concept, ASK the reader; only after they confirm, record it with alias --a <name> --b <name> --proposed-by model. Never link on your own, and skip pairs already in decided.",
+    }, null, 2));
+    return;
+  }
+  const shared = sharedConcepts(projects, study, aliases);
+  const order = readingOrder(projects, study, aliases);
   console.log(JSON.stringify({
     ok: true,
     library,
@@ -1987,6 +2059,7 @@ try {
   else if (command === "record") printModelRecord();
   else if (command === "concepts") await printConcepts(args);
   else if (command === "progress") printProgress();
+  else if (command === "alias") recordAlias(args);
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

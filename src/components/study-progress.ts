@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import type { ResearchProject } from "@/lib/schema";
 import { parseStudyFile, parseStudyProgress, type StudyProgress } from "@/lib/study-path";
+import { aliasMap, parseAliasFile, type AliasFile } from "@/lib/concept-aliases";
 
 export type StudyState =
   | { status: "loading" }
@@ -131,4 +132,46 @@ export function useReviewForecast(projects: readonly ResearchProject[]) {
   // Zaman açılışta bir kez alınıyor; çizim sırasında saat okunmuyor.
   const [now] = useState(() => new Date().toISOString());
   return useMemo(() => (study ? { ...reviewForecast(reviewCards(projects, study), now), now } : undefined), [projects, study, now]);
+}
+
+export type ConceptAliasesState =
+  | { status: "loading" }
+  | { status: "ready"; file: AliasFile; names: string[] }
+  | { status: "failed"; message: string };
+
+/**
+ * Okuyucunun kavram eşleri (`concept-aliases.ts`) ve eşlenebilecek adlar.
+ * Okunamazsa eşleşme yalnızca ada göre kalıyor; sayfalar ona bağlı değil.
+ */
+export function useConceptAliases() {
+  const [state, setState] = useState<ConceptAliasesState>({ status: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/library/aliases", { cache: "no-store" })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => undefined)) as (AliasFile & { names?: string[]; error?: string }) | undefined;
+        if (!response.ok || !data) throw new Error(data?.error ?? "The concept links could not be read.");
+        if (!cancelled) setState({ status: "ready", file: parseAliasFile(data), names: data.names ?? [] });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : "The concept links could not be read." });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const decide = useCallback(async (a: string, b: string, decision: "same" | "different" | "forget", proposedBy: "reader" | "model" = "reader", reason?: string) => {
+    const response = await fetch("/api/library/aliases", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ a, b, decision, proposedBy, reason }),
+    });
+    const data = (await response.json().catch(() => undefined)) as (AliasFile & { error?: string }) | undefined;
+    if (!response.ok || !data) throw new Error(data?.error ?? "The concept link could not be saved.");
+    setState((current) => (current.status === "ready" ? { ...current, file: parseAliasFile(data) } : current));
+  }, []);
+
+  const map = useMemo(() => (state.status === "ready" ? aliasMap(state.file) : undefined), [state]);
+  return { state, map, decide };
 }

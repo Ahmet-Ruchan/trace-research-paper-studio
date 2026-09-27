@@ -62,7 +62,7 @@ import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
 import { studyPath, studySummary } from "@/lib/study-path";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
-import { useLibraryStudy, useStudyProgress } from "./study-progress";
+import { useConceptAliases, useLibraryStudy, useStudyProgress } from "./study-progress";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -206,14 +206,16 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
   // Kavram bağları: bu makalenin kavramları kütüphanenin başka makalelerinde.
   const libraryStudy = useLibraryStudy();
+  // Okuyucunun "aynı kavram" dediği adlar; okunamazsa eşleşme yalnızca ada göre.
+  const { map: aliases } = useConceptAliases();
   const studyByPaper = useMemo(() => {
     const study = new Map(libraryStudy ?? []);
     if (studyProgress) study.set(project.id, studyProgress);
     return study;
   }, [project.id, libraryStudy, studyProgress]);
-  const links = useMemo(() => (library ? conceptLinks(project, library, studyByPaper) : []), [project, library, studyByPaper]);
+  const links = useMemo(() => (library ? conceptLinks(project, library, studyByPaper, aliases) : []), [project, library, studyByPaper, aliases]);
   // Bu makaleden önce okunabilecekler: varsaydığını sözlüğünde tanımlayan makaleler.
-  const firstReads = useMemo(() => (library ? readFirst(project, library, studyByPaper) : []), [project, library, studyByPaper]);
+  const firstReads = useMemo(() => (library ? readFirst(project, library, studyByPaper, aliases) : []), [project, library, studyByPaper, aliases]);
   const linkFor = (conceptId: string) => links.find((link) => link.conceptId === conceptId);
   const [openedAt] = useState(() => new Date().toISOString());
   const studyStatus = useMemo(() => {

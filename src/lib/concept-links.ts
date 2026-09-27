@@ -88,6 +88,18 @@ export function conceptKeys(term: string) {
   return [...new Set(spellingsOf(term).map((spelling) => withoutArticle(normalizePhrase(spelling))).filter((key) => key.replace(/\s/g, "").length >= 3))];
 }
 
+/**
+ * Okuyucunun "aynı kavram" dediği adlar (`concept-aliases.ts`): anahtar →
+ * grubun temsilcisi. Verilmezse eşleşme yalnızca ada göre.
+ */
+export type ConceptAliases = ReadonlyMap<string, string>;
+
+/** Terimin anahtarları, okuyucunun eşleri uygulanmış hâliyle. */
+export function canonicalKeys(term: string, aliases?: ConceptAliases) {
+  const keys = conceptKeys(term);
+  return aliases?.size ? [...new Set(keys.map((key) => aliases.get(key) ?? key))] : keys;
+}
+
 function sources(project: ResearchProject): ConceptSource[] {
   const base = { projectId: project.id, paper: paperKey(project), paperTitle: project.evidence.paper.title, year: project.evidence.paper.year };
   return [
@@ -97,11 +109,11 @@ function sources(project: ResearchProject): ConceptSource[] {
 }
 
 /** Anahtar → o kavramı anlatan kaynaklar, bütün kütüphane boyunca. */
-export function libraryConceptIndex(library: readonly ResearchProject[]) {
+export function libraryConceptIndex(library: readonly ResearchProject[], aliases?: ConceptAliases) {
   const index = new Map<string, ConceptSource[]>();
   for (const project of library) {
     for (const source of sources(project)) {
-      for (const key of conceptKeys(source.term)) index.set(key, [...(index.get(key) ?? []), source]);
+      for (const key of canonicalKeys(source.term, aliases)) index.set(key, [...(index.get(key) ?? []), source]);
     }
   }
   return index;
@@ -138,11 +150,12 @@ export function conceptLinks(
   project: ResearchProject,
   library: readonly ResearchProject[],
   study: ReadonlyMap<string, StudyProgress>,
+  aliases?: ConceptAliases,
 ): ConceptLink[] {
   const own = paperKey(project);
-  const index = libraryConceptIndex(library.filter((item) => item.id !== project.id && paperKey(item) !== own));
+  const index = libraryConceptIndex(library.filter((item) => item.id !== project.id && paperKey(item) !== own), aliases);
   return (project.primer?.concepts ?? []).map((concept) => {
-    const found = onePerPaper(conceptKeys(concept.term).flatMap((key) => index.get(key) ?? []), study);
+    const found = onePerPaper(canonicalKeys(concept.term, aliases).flatMap((key) => index.get(key) ?? []), study);
     const elsewhere = [...found.values()].sort(
       (left, right) =>
         Number(Boolean(right.knowledge?.studied)) - Number(Boolean(left.knowledge?.studied)) ||
@@ -167,8 +180,8 @@ export type SharedConcept = { key: string; term: string; sources: LinkedSource[]
  * çok makaleyi bağlayan önce. Her makale, kaç analizi olursa olsun, bir kez
  * sayılıyor.
  */
-export function sharedConcepts(library: readonly ResearchProject[], study: ReadonlyMap<string, StudyProgress>): SharedConcept[] {
-  const index = libraryConceptIndex(library);
+export function sharedConcepts(library: readonly ResearchProject[], study: ReadonlyMap<string, StudyProgress>, aliases?: ConceptAliases): SharedConcept[] {
+  const index = libraryConceptIndex(library, aliases);
   const seen = new Set<string>();
   const shared: SharedConcept[] = [];
   for (const [key, list] of index) {

@@ -1,4 +1,4 @@
-import { conceptKeys, paperKey } from "./concept-links";
+import { canonicalKeys, paperKey, type ConceptAliases } from "./concept-links";
 import { paperYear } from "./library-order";
 import type { ResearchProject } from "./schema";
 import type { StudyProgress } from "./study-path";
@@ -43,18 +43,18 @@ function representatives(library: readonly ResearchProject[], study: ReadonlyMap
 }
 
 /** Makalenin varsaydığı kavramlar: anahtar → ön bilgideki adı. */
-function assumed(project: ResearchProject) {
+function assumed(project: ResearchProject, aliases?: ConceptAliases) {
   const keys = new Map<string, string>();
-  for (const concept of project.primer?.concepts ?? []) for (const key of conceptKeys(concept.term)) keys.set(key, concept.term);
+  for (const concept of project.primer?.concepts ?? []) for (const key of canonicalKeys(concept.term, aliases)) keys.set(key, concept.term);
   return keys;
 }
 
 /** Makalenin tanımladığı ama kendisi varsaymadığı kavramlar: anahtar → sözlükteki adı. */
-function defined(project: ResearchProject) {
-  const own = assumed(project);
+function defined(project: ResearchProject, aliases?: ConceptAliases) {
+  const own = assumed(project, aliases);
   const keys = new Map<string, string>();
   for (const item of project.evidence.glossary) {
-    const itemKeys = conceptKeys(item.term);
+    const itemKeys = canonicalKeys(item.term, aliases);
     if (itemKeys.some((key) => own.has(key))) continue;
     for (const key of itemKeys) keys.set(key, item.term);
   }
@@ -69,10 +69,10 @@ export type DefinedConcept = {
 };
 
 /** `to`'nun varsaydığı ve `from`'un tanımladığı kavramlar; aynı kavramın iki yazımı bir kez. */
-function conceptsBetween(from: ResearchProject, to: ResearchProject): DefinedConcept[] {
-  const definitions = defined(from);
+function conceptsBetween(from: ResearchProject, to: ResearchProject, aliases?: ConceptAliases): DefinedConcept[] {
+  const definitions = defined(from, aliases);
   const found = new Map<string, DefinedConcept>();
-  for (const [key, term] of assumed(to)) {
+  for (const [key, term] of assumed(to, aliases)) {
     const definedAs = definitions.get(key);
     if (definedAs && !found.has(term)) found.set(term, { term, definedAs });
   }
@@ -91,10 +91,15 @@ export type ReadFirst = { project: ResearchProject; concepts: DefinedConcept[]; 
  * tanımlayanlar, en çok kavramı karşılayan önce. Aynı makalenin başka
  * analizleri sayılmıyor.
  */
-export function readFirst(project: ResearchProject, library: readonly ResearchProject[], study: ReadonlyMap<string, StudyProgress>): ReadFirst[] {
+export function readFirst(
+  project: ResearchProject,
+  library: readonly ResearchProject[],
+  study: ReadonlyMap<string, StudyProgress>,
+  aliases?: ConceptAliases,
+): ReadFirst[] {
   const own = paperKey(project);
   return representatives(library.filter((item) => paperKey(item) !== own), study)
-    .map((from) => ({ project: from, concepts: conceptsBetween(from, project), status: studyStatus(study.get(from.id)) }))
+    .map((from) => ({ project: from, concepts: conceptsBetween(from, project, aliases), status: studyStatus(study.get(from.id)) }))
     .filter((item) => item.concepts.length)
     .sort((left, right) => right.concepts.length - left.concepts.length || byYearThenTitle(left.project, right.project));
 }
@@ -116,11 +121,11 @@ export type ReadingOrder = {
   unconnected: number;
 };
 
-export function readingOrder(library: readonly ResearchProject[], study: ReadonlyMap<string, StudyProgress>): ReadingOrder {
+export function readingOrder(library: readonly ResearchProject[], study: ReadonlyMap<string, StudyProgress>, aliases?: ConceptAliases): ReadingOrder {
   const papers = representatives(library, study);
   const links = papers.flatMap((to) =>
     papers.filter((from) => from !== to).flatMap((from) => {
-      const concepts = conceptsBetween(from, to);
+      const concepts = conceptsBetween(from, to, aliases);
       return concepts.length ? [{ from, to, concepts }] : [];
     }),
   );

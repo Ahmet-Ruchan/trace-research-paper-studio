@@ -1839,20 +1839,88 @@ test.describe("learning statistics", () => {
 });
 
 test.describe("concepts across the library", () => {
+  test("links two names for the same concept when the reader says so, and only then", async ({ page, request }) => {
+    const named = (id: string, title: string, term: string, other: string) => {
+      const base = projectNamed(id);
+      return {
+        ...base,
+        evidence: { ...example.evidence, paper: { ...example.evidence.paper, title }, glossary: [] },
+        primer: { ...base.primer!, concepts: base.primer!.concepts.map((concept) => ({ ...concept, term: concept.id === "dot-product" ? term : concept.id === "softmax" ? other : `${concept.term} of ${title}` })) },
+      };
+    };
+    const first = await seed(request, named("e2e-alias-a", "Alias paper one", "Omega scalar product", "Omega normalised exponential"));
+    await seed(request, named("e2e-alias-b", "Alias paper two", "Omega dot product", "Omega softmax function"));
+    await page.route("**/api/library/aliases/propose", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposals: [{
+            a: { term: "Omega normalised exponential", paper: "Alias paper one", definition: "Turns scores into weights." },
+            b: { term: "Omega softmax function", paper: "Alias paper two", definition: "Turns scores into weights that sum to one." },
+            why: "Both definitions describe the softmax.",
+          }],
+          names: 20,
+          model: "gemini-3.7-flash",
+        }),
+      });
+    });
+
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Concepts", exact: true }).click();
+    const panel = page.getByRole("region", { name: "Names for the same concept" });
+    await expect(page.locator(".shared-concepts > li", { hasText: /omega (dot|scalar) product/i })).toHaveCount(0);
+
+    // Elle: iki ad aynı kavram.
+    await panel.getByLabel("First name").fill("Omega dot product");
+    await panel.getByLabel("Second name").fill("Omega scalar product");
+    await panel.getByRole("button", { name: "Link them" }).click();
+    await expect(panel.locator(".alias-links li", { hasText: "Omega dot product" })).toContainText("linked by you");
+    const card = page.locator(".shared-concepts > li", { hasText: /omega (dot|scalar) product/i });
+    await expect(card.locator(".shared-concept-head span")).toHaveText("2 papers");
+    await expect(card.locator(".shared-concept-papers")).toContainText(/as “Omega (dot|scalar) product”/);
+
+    // Modelin önerisi: okuyucu onaylayınca bağlanıyor.
+    await panel.locator(".alias-ask summary").click();
+    await panel.getByLabel("Gemini API key").fill("test-key");
+    await panel.getByRole("button", { name: "Look for other names" }).click();
+    const proposal = panel.getByRole("list", { name: "Proposed pairs" }).locator("li");
+    await expect(proposal).toContainText("Both definitions describe the softmax.");
+    await proposal.getByRole("button", { name: "Same concept" }).click();
+    await expect(proposal).toHaveCount(0);
+    await expect(panel.locator(".alias-links li", { hasText: "Omega softmax function" })).toContainText("proposed by a model, confirmed by you");
+
+    // Lab: kavram artık öteki makalede de.
+    await page.goto(`/?project=${first.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Concepts" }).click();
+    const row = page.locator(".concept-rows li").filter({ has: page.locator("strong", { hasText: /^Omega scalar product$/ }) });
+    await expect(row.locator(".concept-status")).toHaveText("In 1 other paper, not studied yet");
+    await expect(row.locator(".concept-where")).toHaveText("Alias paper two");
+
+    // Bağlar kaldırılınca eşleşme yine yalnızca ada göre.
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Concepts", exact: true }).click();
+    for (const term of ["Omega dot product", "Omega softmax function"]) {
+      await panel.locator(".alias-links li", { hasText: term }).getByRole("button", { name: /Unlink/ }).click();
+    }
+    await expect(panel.locator(".alias-links li")).toHaveCount(0);
+    await expect(page.locator(".shared-concepts > li", { hasText: /omega (dot|scalar) product/i })).toHaveCount(0);
+  });
+
   test("orders the library so a paper comes after the one that defines what it assumes", async ({ page, request }) => {
     const foundations = await seed(request, {
       ...projectNamed("e2e-order-a"),
       evidence: {
         ...example.evidence,
-        paper: { ...example.evidence.paper, title: "Zeta foundations", year: "2015" },
-        glossary: [{ term: "Zeta attention", definition: "Attention over zeta-sized windows." }],
+        paper: { ...example.evidence.paper, title: "Omega foundations", year: "2015" },
+        glossary: [{ term: "Omega attention", definition: "Attention over zeta-sized windows." }],
       },
     });
     const base = projectNamed("e2e-order-b");
     const applied = await seed(request, {
       ...base,
-      evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Zeta applied", year: "2019" } },
-      primer: { ...base.primer!, concepts: base.primer!.concepts.map((concept) => (concept.id === "softmax" ? { ...concept, term: "Zeta attention" } : concept)) },
+      evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Omega applied", year: "2019" } },
+      primer: { ...base.primer!, concepts: base.primer!.concepts.map((concept) => (concept.id === "softmax" ? { ...concept, term: "Omega attention" } : concept)) },
     });
 
     // Lab: bu makaleden önce okunacak olan.
@@ -1860,8 +1928,8 @@ test.describe("concepts across the library", () => {
     await page.locator(".lab-nav > button", { hasText: "Concepts" }).click();
     const first = page.getByRole("region", { name: "Read first" });
     await expect(first.locator("li")).toHaveCount(1);
-    await expect(first.locator("li")).toContainText("Zeta foundations");
-    await expect(first.locator("li")).toContainText("2015 · defines Zeta attention");
+    await expect(first.locator("li")).toContainText("Omega foundations");
+    await expect(first.locator("li")).toContainText("2015 · defines Omega attention");
     await expect(first.locator(".read-first-status")).toHaveText("Not studied yet");
 
     // Kütüphane: okuma sırası.
@@ -1869,14 +1937,14 @@ test.describe("concepts across the library", () => {
     await page.getByRole("button", { name: "Concepts", exact: true }).click();
     const order = page.getByRole("region", { name: "A reading order" });
     // `allTextContents` beklemiyor: önce iki makalenin de listede olması bekleniyor.
-    await expect(order.locator(".reading-head button", { hasText: "Zeta applied" })).toBeVisible();
-    await expect(order.locator(".reading-head button", { hasText: "Zeta foundations" })).toBeVisible();
+    await expect(order.locator(".reading-head button", { hasText: "Omega applied" })).toBeVisible();
+    await expect(order.locator(".reading-head button", { hasText: "Omega foundations" })).toBeVisible();
     const titles = await order.locator(".reading-head button").allTextContents();
-    expect(titles.indexOf("Zeta foundations")).toBeGreaterThanOrEqual(0);
-    expect(titles.indexOf("Zeta foundations")).toBeLessThan(titles.indexOf("Zeta applied"));
-    const step = order.locator("li", { has: page.locator(".reading-head button", { hasText: "Zeta applied" }) });
-    await expect(step.locator(".reading-why")).toHaveText("After Zeta foundations: it assumes Zeta attention, which that paper defines.");
-    await order.locator(".reading-head button", { hasText: "Zeta foundations" }).click();
+    expect(titles.indexOf("Omega foundations")).toBeGreaterThanOrEqual(0);
+    expect(titles.indexOf("Omega foundations")).toBeLessThan(titles.indexOf("Omega applied"));
+    const step = order.locator("li", { has: page.locator(".reading-head button", { hasText: "Omega applied" }) });
+    await expect(step.locator(".reading-why")).toHaveText("After Omega foundations: it assumes Omega attention, which that paper defines.");
+    await order.locator(".reading-head button", { hasText: "Omega foundations" }).click();
     await expect(page.locator(".lab-section-header h1")).toHaveText(foundations.evidence.paper.title);
   });
 

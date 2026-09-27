@@ -1934,6 +1934,98 @@ function handleIntersectionResults(result, left, right) {
 	result.value = merged.data;
 	return result;
 }
+const $ZodTuple = /*@__PURE__*/ $constructor("$ZodTuple", (inst, def) => {
+	$ZodType.init(inst, def);
+	const items = def.items;
+	inst._zod.parse = (payload, ctx) => {
+		const input = payload.value;
+		if (!Array.isArray(input)) {
+			payload.issues.push({
+				input,
+				inst,
+				expected: "tuple",
+				code: "invalid_type"
+			});
+			return payload;
+		}
+		payload.value = [];
+		const proms = [];
+		const optinStart = getTupleOptStart(items, "optin");
+		const optoutStart = getTupleOptStart(items, "optout");
+		if (!def.rest) {
+			if (input.length < optinStart) {
+				payload.issues.push({
+					code: "too_small",
+					minimum: optinStart,
+					inclusive: true,
+					input,
+					inst,
+					origin: "array"
+				});
+				return payload;
+			}
+			if (input.length > items.length) payload.issues.push({
+				code: "too_big",
+				maximum: items.length,
+				inclusive: true,
+				input,
+				inst,
+				origin: "array"
+			});
+		}
+		const itemResults = new Array(items.length);
+		for (let i = 0; i < items.length; i++) {
+			const r = items[i]._zod.run({
+				value: input[i],
+				issues: []
+			}, ctx);
+			if (r instanceof Promise) proms.push(r.then((rr) => {
+				itemResults[i] = rr;
+			}));
+			else itemResults[i] = r;
+		}
+		if (def.rest) {
+			let i = items.length - 1;
+			const rest = input.slice(items.length);
+			for (const el of rest) {
+				i++;
+				const result = def.rest._zod.run({
+					value: el,
+					issues: []
+				}, ctx);
+				if (result instanceof Promise) proms.push(result.then((r) => handleTupleResult(r, payload, i)));
+				else handleTupleResult(result, payload, i);
+			}
+		}
+		if (proms.length) return Promise.all(proms).then(() => handleTupleResults(itemResults, payload, items, input, optoutStart));
+		return handleTupleResults(itemResults, payload, items, input, optoutStart);
+	};
+});
+function getTupleOptStart(items, key) {
+	for (let i = items.length - 1; i >= 0; i--) if (items[i]._zod[key] !== "optional") return i + 1;
+	return 0;
+}
+function handleTupleResult(result, final, index) {
+	if (result.issues.length) final.issues.push(...prefixIssues(index, result.issues));
+	final.value[index] = result.value;
+}
+function handleTupleResults(itemResults, final, items, input, optoutStart) {
+	for (let i = 0; i < items.length; i++) {
+		const r = itemResults[i];
+		const isPresent = i < input.length;
+		if (r.issues.length) {
+			if (!isPresent && i >= optoutStart) {
+				final.value.length = i;
+				break;
+			}
+			final.issues.push(...prefixIssues(i, r.issues));
+		}
+		final.value[i] = r.value;
+	}
+	for (let i = final.value.length - 1; i >= input.length; i--) if (items[i]._zod.optout === "optional" && final.value[i] === void 0) final.value.length = i;
+	else break;
+	return final;
+}
 const $ZodRecord = /*@__PURE__*/ $constructor("$ZodRecord", (inst, def) => {
 	$ZodType.init(inst, def);
 	inst._zod.parse = (payload, ctx) => {
@@ -3328,6 +3420,44 @@ const intersectionProcessor = (schema, ctx, json, params) => {
 	const isSimpleIntersection = (val) => "allOf" in val && Object.keys(val).length === 1;
 	json.allOf = [...isSimpleIntersection(a) ? a.allOf : [a], ...isSimpleIntersection(b) ? b.allOf : [b]];
 };
+const tupleProcessor = (schema, ctx, _json, params) => {
+	const json = _json;
+	const def = schema._zod.def;
+	json.type = "array";
+	const prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
+	const restPath = ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
+	const prefixItems = def.items.map((x, i) => process$1(x, ctx, {
+		...params,
+		path: [
+			...params.path,
+			prefixPath,
+			i
+		]
+	}));
+	const rest = def.rest ? process$1(def.rest, ctx, {
+		...params,
+		path: [
+			...params.path,
+			restPath,
+			...ctx.target === "openapi-3.0" ? [def.items.length] : []
+		]
+	}) : null;
+	if (ctx.target === "draft-2020-12") {
+		json.prefixItems = prefixItems;
+		if (rest) json.items = rest;
+	} else if (ctx.target === "openapi-3.0") {
+		json.items = { anyOf: prefixItems };
+		if (rest) json.items.anyOf.push(rest);
+		json.minItems = prefixItems.length;
+		if (!rest) json.maxItems = prefixItems.length;
+	} else {
+		json.items = prefixItems;
+		if (rest) json.additionalItems = rest;
+	}
+	const { minimum, maximum } = schema._zod.bag;
+	if (typeof minimum === "number") json.minItems = minimum;
+	if (typeof maximum === "number") json.maxItems = maximum;
+};
 const recordProcessor = (schema, ctx, _json, params) => {
 	const json = _json;
 	const def = schema._zod.def;
@@ -4059,6 +4189,25 @@ function intersection(left, right) {
 		type: "intersection",
 		left,
 		right
+	});
+}
+const ZodTuple = /*@__PURE__*/ $constructor("ZodTuple", (inst, def) => {
+	$ZodTuple.init(inst, def);
+	ZodType.init(inst, def);
+	inst._zod.processJSONSchema = (ctx, json, params) => tupleProcessor(inst, ctx, json, params);
+	inst.rest = (rest) => inst.clone({
+		...inst._zod.def,
+		rest
+	});
+});
+function tuple(items, _paramsOrRest, _params) {
+	const hasRest = _paramsOrRest instanceof $ZodType;
+	const params = hasRest ? _params : _paramsOrRest;
+	return new ZodTuple({
+		type: "tuple",
+		items,
+		rest: hasRest ? _paramsOrRest : null,
+		...normalizeParams(params)
 	});
 }
 const ZodRecord = /*@__PURE__*/ $constructor("ZodRecord", (inst, def) => {
@@ -20166,6 +20315,11 @@ function spellingsOf(term) {
 function conceptKeys(term) {
 	return [...new Set(spellingsOf(term).map((spelling) => withoutArticle(normalizePhrase(spelling))).filter((key) => key.replace(/\s/g, "").length >= 3))];
 }
+/** Terimin anahtarları, okuyucunun eşleri uygulanmış hâliyle. */
+function canonicalKeys(term, aliases) {
+	const keys = conceptKeys(term);
+	return aliases?.size ? [...new Set(keys.map((key) => aliases.get(key) ?? key))] : keys;
+}
 function sources(project) {
 	const base = {
 		projectId: project.id,
@@ -20187,9 +20341,9 @@ function sources(project) {
 	}))];
 }
 /** Anahtar → o kavramı anlatan kaynaklar, bütün kütüphane boyunca. */
-function libraryConceptIndex(library) {
+function libraryConceptIndex(library, aliases) {
 	const index = /* @__PURE__ */ new Map();
-	for (const project of library) for (const source of sources(project)) for (const key of conceptKeys(source.term)) index.set(key, [...index.get(key) ?? [], source]);
+	for (const project of library) for (const source of sources(project)) for (const key of canonicalKeys(source.term, aliases)) index.set(key, [...index.get(key) ?? [], source]);
 	return index;
 }
 function conceptKnowledge(progress, conceptId) {
@@ -20222,11 +20376,11 @@ function onePerPaper(list, study) {
 * kütüphanede birden çok analizle bulunabiliyor; her makale bir kez sayılıyor.
 * Bu makalenin başka analizleri "başka bir makale" değil.
 */
-function conceptLinks(project, library, study) {
+function conceptLinks(project, library, study, aliases) {
 	const own = paperKey(project);
-	const index = libraryConceptIndex(library.filter((item) => item.id !== project.id && paperKey(item) !== own));
+	const index = libraryConceptIndex(library.filter((item) => item.id !== project.id && paperKey(item) !== own), aliases);
 	return (project.primer?.concepts ?? []).map((concept) => {
-		const elsewhere = [...onePerPaper(conceptKeys(concept.term).flatMap((key) => index.get(key) ?? []), study).values()].sort((left, right) => Number(Boolean(right.knowledge?.studied)) - Number(Boolean(left.knowledge?.studied)) || (right.knowledge?.box ?? -1) - (left.knowledge?.box ?? -1) || Number(right.kind === "primer") - Number(left.kind === "primer") || left.paperTitle.localeCompare(right.paperTitle));
+		const elsewhere = [...onePerPaper(canonicalKeys(concept.term, aliases).flatMap((key) => index.get(key) ?? []), study).values()].sort((left, right) => Number(Boolean(right.knowledge?.studied)) - Number(Boolean(left.knowledge?.studied)) || (right.knowledge?.box ?? -1) - (left.knowledge?.box ?? -1) || Number(right.kind === "primer") - Number(left.kind === "primer") || left.paperTitle.localeCompare(right.paperTitle));
 		return {
 			conceptId: concept.id,
 			term: concept.term,
@@ -20241,8 +20395,8 @@ function conceptLinks(project, library, study) {
 * çok makaleyi bağlayan önce. Her makale, kaç analizi olursa olsun, bir kez
 * sayılıyor.
 */
-function sharedConcepts(library, study) {
-	const index = libraryConceptIndex(library);
+function sharedConcepts(library, study, aliases) {
+	const index = libraryConceptIndex(library, aliases);
 	const seen = /* @__PURE__ */ new Set();
 	const shared = [];
 	for (const [key, list] of index) {
@@ -20707,27 +20861,27 @@ function representatives(library, study) {
 	return [...byPaper.values()];
 }
 /** Makalenin varsaydığı kavramlar: anahtar → ön bilgideki adı. */
-function assumed(project) {
+function assumed(project, aliases) {
 	const keys = /* @__PURE__ */ new Map();
-	for (const concept of project.primer?.concepts ?? []) for (const key of conceptKeys(concept.term)) keys.set(key, concept.term);
+	for (const concept of project.primer?.concepts ?? []) for (const key of canonicalKeys(concept.term, aliases)) keys.set(key, concept.term);
 	return keys;
 }
 /** Makalenin tanımladığı ama kendisi varsaymadığı kavramlar: anahtar → sözlükteki adı. */
-function defined(project) {
-	const own = assumed(project);
+function defined(project, aliases) {
+	const own = assumed(project, aliases);
 	const keys = /* @__PURE__ */ new Map();
 	for (const item of project.evidence.glossary) {
-		const itemKeys = conceptKeys(item.term);
+		const itemKeys = canonicalKeys(item.term, aliases);
 		if (itemKeys.some((key) => own.has(key))) continue;
 		for (const key of itemKeys) keys.set(key, item.term);
 	}
 	return keys;
 }
 /** `to`'nun varsaydığı ve `from`'un tanımladığı kavramlar; aynı kavramın iki yazımı bir kez. */
-function conceptsBetween(from, to) {
-	const definitions = defined(from);
+function conceptsBetween(from, to, aliases) {
+	const definitions = defined(from, aliases);
 	const found = /* @__PURE__ */ new Map();
-	for (const [key, term] of assumed(to)) {
+	for (const [key, term] of assumed(to, aliases)) {
 		const definedAs = definitions.get(key);
 		if (definedAs && !found.has(term)) found.set(term, {
 			term,
@@ -20745,18 +20899,18 @@ const byYearThenTitle = (left, right) => {
 * tanımlayanlar, en çok kavramı karşılayan önce. Aynı makalenin başka
 * analizleri sayılmıyor.
 */
-function readFirst(project, library, study) {
+function readFirst(project, library, study, aliases) {
 	const own = paperKey(project);
 	return representatives(library.filter((item) => paperKey(item) !== own), study).map((from) => ({
 		project: from,
-		concepts: conceptsBetween(from, project),
+		concepts: conceptsBetween(from, project, aliases),
 		status: studyStatus(study.get(from.id))
 	})).filter((item) => item.concepts.length).sort((left, right) => right.concepts.length - left.concepts.length || byYearThenTitle(left.project, right.project));
 }
-function readingOrder(library, study) {
+function readingOrder(library, study, aliases) {
 	const papers = representatives(library, study);
 	const links = papers.flatMap((to) => papers.filter((from) => from !== to).flatMap((from) => {
-		const concepts = conceptsBetween(from, to);
+		const concepts = conceptsBetween(from, to, aliases);
 		return concepts.length ? [{
 			from,
 			to,
@@ -20790,6 +20944,185 @@ function readingOrder(library, study) {
 		unconnected: papers.length - connected.length
 	};
 }
+
+//#endregion
+//#region src/lib/concept-aliases.ts
+/**
+* Okuyucunun onayladığı kavram eşleri.
+*
+* Kavram bağları adla kuruluyor (`concept-links.ts`): "Scaled dot-product
+* attention" ile "Dot-product attention" iki ayrı kavram sayılıyor. Anlama göre
+* eşleştirmek bir model işi ve model yanılabilir; bu yüzden bir eşleşme ancak
+* okuyucu "aynı kavram" dediğinde geçerli. Model yalnızca ÖNERİYOR, okuyucu
+* karar veriyor; okuyucu iki adı kendisi de eşleyebiliyor. "Farklı" kararı da
+* saklanıyor: aynı öneri bir daha gelmiyor.
+*
+* Kararlar kütüphanenin yanında (`aliases.json`), projede değil: iki kavramın
+* aynı olduğu okuyucunun yargısı, makalenin iddiası değil.
+*/
+const MAX_ALIAS_DECISIONS = 500;
+const term = string().trim().min(1).max(200);
+const aliasDecisionSchema = object({
+	terms: tuple([term, term]),
+	decision: _enum(["same", "different"]),
+	/** Eşleşmeyi kim önerdi; kararı her zaman okuyucu veriyor. */
+	proposedBy: _enum(["reader", "model"]),
+	at: string().max(40),
+	/** Modelin gerekçesi, önerdiyse. */
+	reason: string().max(400).optional()
+});
+const aliasFileSchema = object({
+	version: literal(1),
+	decisions: array(aliasDecisionSchema).max(500)
+});
+const emptyAliasFile = () => ({
+	version: 1,
+	decisions: []
+});
+function isAliasFile(raw) {
+	return aliasFileSchema.safeParse(raw).success;
+}
+/** Tanınmayan dosya boş sayılıyor; yazan taraf onu kenara alıyor. */
+function parseAliasFile(raw) {
+	const parsed = aliasFileSchema.safeParse(raw);
+	return parsed.success ? parsed.data : emptyAliasFile();
+}
+/** Bir adın eşleşmedeki kimliği: ilk anahtarı (`concept-links.ts` biçimi). */
+const primaryKey = (value) => conceptKeys(value)[0];
+/** İki adın sırasız kimliği; aynı kavramın iki yazımıysa `undefined`. */
+function pairKey(left, right) {
+	const [a, b] = [primaryKey(left), primaryKey(right)];
+	if (!a || !b || a === b) return void 0;
+	return [a, b].sort().join("\0");
+}
+/** Kararı yazar; aynı çift için önceki kararın yerini alıyor. */
+function decideAlias(file, left, right, decision, proposedBy, at, reason) {
+	const key = pairKey(left, right);
+	if (!key) throw new Error("These are two spellings of the same name; there is nothing to link.");
+	const rest = file.decisions.filter((item) => pairKey(...item.terms) !== key);
+	const entry = {
+		terms: [left.trim(), right.trim()],
+		decision,
+		proposedBy,
+		at,
+		...reason ? { reason: reason.slice(0, 400) } : {}
+	};
+	return {
+		version: 1,
+		decisions: [...rest, entry].slice(-500)
+	};
+}
+function forgetAlias(file, left, right) {
+	const key = pairKey(left, right);
+	return {
+		version: 1,
+		decisions: file.decisions.filter((item) => pairKey(...item.terms) !== key)
+	};
+}
+/**
+* Anahtar → grubun temsilci anahtarı. "Aynı" kararları birleşiyor (A=B ve B=C
+* ise A=C); bir adın bütün yazımları (`Ad (KISALTMA)`) da gruba giriyor.
+* Temsilci alfabetik olarak ilk anahtar, böylece sıra karardan bağımsız.
+*/
+function aliasMap(file) {
+	const parent = /* @__PURE__ */ new Map();
+	const find = (key) => {
+		const up = parent.get(key);
+		if (!up || up === key) return key;
+		const root = find(up);
+		parent.set(key, root);
+		return root;
+	};
+	const union = (left, right) => {
+		const [a, b] = [find(left), find(right)];
+		if (a === b) return;
+		const [root, child] = a < b ? [a, b] : [b, a];
+		parent.set(child, root);
+	};
+	for (const item of file.decisions) {
+		if (item.decision !== "same") continue;
+		const keys = [...conceptKeys(item.terms[0]), ...conceptKeys(item.terms[1])];
+		for (const key of keys) {
+			if (!parent.has(key)) parent.set(key, key);
+			union(keys[0], key);
+		}
+	}
+	const map = /* @__PURE__ */ new Map();
+	for (const key of parent.keys()) {
+		const root = find(key);
+		if (root !== key) map.set(key, root);
+	}
+	return map;
+}
+
+//#endregion
+//#region src/lib/alias-proposals.ts
+/**
+* Model önerisi: kütüphanede farklı adlarla anlatılan aynı kavramlar.
+*
+* Model yalnızca ÖNERİYOR (`concept-aliases.ts`): okuyucu her çifte "aynı" ya
+* da "farklı" diyor ve ancak o zaman bağ kuruluyor. Model kavramların
+* adlarını ve makalelerin kendi tanımlarını görüyor, makaleleri değil. Kod
+* denetliyor: iki ad listede birebir olmalı, ikisi zaten bağlı ya da daha önce
+* karara bağlanmış olmamalı.
+*/
+const MAX_ALIAS_NAMES = 160;
+const MAX_ALIAS_PROPOSALS = 20;
+const MAX_DEFINITION = 220;
+const shorten = (text) => text.length > MAX_DEFINITION ? `${text.slice(0, 219).trimEnd()}…` : text;
+/**
+* Kütüphanedeki kavram adları, anahtar başına bir tane (ön bilgi önce): model
+* bunlar arasında aynı kavramı arıyor. Çoksa en çok makalede geçenler ve ön
+* bilgi kavramları kalıyor.
+*/
+function conceptNames(library, file) {
+	const aliases = aliasMap(file);
+	const byKey = /* @__PURE__ */ new Map();
+	for (const project of library) {
+		const entries = [...(project.primer?.concepts ?? []).map((concept) => ({
+			term: concept.term,
+			definition: concept.intuition,
+			kind: "primer"
+		})), ...project.evidence.glossary.map((item) => ({
+			term: item.term,
+			definition: item.definition,
+			kind: "glossary"
+		}))];
+		for (const entry of entries) {
+			const key = canonicalKeys(entry.term, aliases)[0];
+			if (!key) continue;
+			const existing = byKey.get(key);
+			if (existing) {
+				existing.paperKeys.add(paperKey(project));
+				if (existing.kind === "glossary" && entry.kind === "primer") Object.assign(existing, {
+					term: entry.term,
+					definition: entry.definition,
+					kind: "primer",
+					paper: project.evidence.paper.title
+				});
+				continue;
+			}
+			byKey.set(key, {
+				term: entry.term,
+				key,
+				definition: shorten(entry.definition.replace(/\s+/g, " ").trim()),
+				paper: project.evidence.paper.title,
+				kind: entry.kind,
+				papers: 1,
+				paperKeys: /* @__PURE__ */ new Set([paperKey(project)])
+			});
+		}
+	}
+	return [...byKey.values()].map(({ paperKeys, ...name }) => ({
+		...name,
+		papers: paperKeys.size
+	})).sort((left, right) => right.papers - left.papers || Number(right.kind === "primer") - Number(left.kind === "primer") || left.term.localeCompare(right.term)).slice(0, 160);
+}
+const aliasProposalSchema = object({ pairs: array(object({
+	a: string().min(1).max(200),
+	b: string().min(1).max(200),
+	why: string().min(1).max(400)
+})).max(20) });
 
 //#endregion
 //#region src/lib/seeded.ts
@@ -22405,4 +22738,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { REVIEW_INTERVALS_DAYS, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { REVIEW_INTERVALS_DAYS, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, decideAlias, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseAliasFile, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

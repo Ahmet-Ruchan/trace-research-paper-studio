@@ -2,11 +2,12 @@
 
 import { useMemo } from "react";
 import { ArrowLeft, ListOrdered, Waypoints } from "lucide-react";
-import { libraryConceptIndex, sharedConcepts } from "@/lib/concept-links";
+import { conceptKeys, libraryConceptIndex, sharedConcepts } from "@/lib/concept-links";
 import { readingOrder } from "@/lib/reading-order";
 import type { ResearchProject } from "@/lib/schema";
 import { studyStatusLabel } from "./concepts-view";
-import { useLibraryStudy } from "./study-progress";
+import { ConceptAliasesPanel } from "./concept-aliases-panel";
+import { useConceptAliases, useLibraryStudy } from "./study-progress";
 
 /**
  * Kütüphanenin kavram haritası: birden çok makalenin anlattığı kavramlar ve
@@ -24,9 +25,12 @@ export function ConceptMapView({
   onOpen: (project: ResearchProject) => void;
 }) {
   const study = useLibraryStudy();
-  const shared = useMemo(() => sharedConcepts(projects, study ?? new Map()), [projects, study]);
-  const total = useMemo(() => libraryConceptIndex(projects).size, [projects]);
-  const order = useMemo(() => readingOrder(projects, study ?? new Map()), [projects, study]);
+  const aliases = useConceptAliases();
+  const shared = useMemo(() => sharedConcepts(projects, study ?? new Map(), aliases.map), [projects, study, aliases.map]);
+  const total = useMemo(() => libraryConceptIndex(projects, aliases.map).size, [projects, aliases.map]);
+  const order = useMemo(() => readingOrder(projects, study ?? new Map(), aliases.map), [projects, study, aliases.map]);
+  // Kartta başka bir adla geçen kaynak ("as …"): eşleşme okuyucunun bağından geliyor.
+  const otherName = (cardTerm: string, sourceTerm: string) => conceptKeys(cardTerm)[0] !== conceptKeys(sourceTerm)[0];
   const byId = new Map(projects.map((project) => [project.id, project]));
 
   return (
@@ -91,6 +95,8 @@ export function ConceptMapView({
         </section>
       ) : null}
 
+      <ConceptAliasesPanel aliases={aliases} />
+
       {shared.length ? (
         <ul className="shared-concepts">
           {shared.map((concept) => (
@@ -112,7 +118,10 @@ export function ConceptMapView({
                       title={source.definition}
                     >
                       {source.knowledge?.studied ? "✓ " : ""}{source.paperTitle}
-                      <small>{source.kind === "primer" ? "primer" : "glossary"}{source.year ? ` · ${source.year}` : ""}</small>
+                      <small>
+                        {source.kind === "primer" ? "primer" : "glossary"}{source.year ? ` · ${source.year}` : ""}
+                        {otherName(concept.term, source.term) ? ` · as “${source.term}”` : ""}
+                      </small>
                     </button>
                   );
                 })}

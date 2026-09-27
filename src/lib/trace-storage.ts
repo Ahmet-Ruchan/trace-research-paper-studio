@@ -26,6 +26,7 @@ import {
   type RevisionSummary,
 } from "./project-revisions";
 import { isLibraryTagsFile, libraryTagsToJson, parseLibraryTags, tagListSchema } from "./library-tags";
+import { aliasFileSchema, isAliasFile, parseAliasFile, type AliasFile } from "./concept-aliases";
 import { findBuiltInTemplate, templateIssues } from "./narrative-templates";
 import { isStudyFile, parseStudyFile, studyFileToJson, studyProgressSchema, type StudyProgress } from "./study-path";
 import {
@@ -480,6 +481,49 @@ export async function saveStudyProgress(projectId: string, progress: StudyProgre
     if (next) current.set(projectId, next);
     else current.delete(projectId);
     await atomicWrite(join(directory, STUDY_FILE), `${JSON.stringify(studyFileToJson(current), null, 2)}\n`);
+    return next;
+  } finally {
+    await release();
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Kavram eşleri — ~/.trace/library/aliases.json
+ *
+ * Okuyucunun "aynı kavram" / "farklı" kararları (`concept-aliases.ts`).
+ * Etiketler gibi kütüphanenin bilgisi; aynı kilit ve bozuk dosyayı kenara
+ * alma kuralı.
+ * ------------------------------------------------------------------ */
+
+const ALIASES_FILE = "aliases.json";
+const ALIASES_LOCK = "aliases.lock";
+
+async function readAliasesFile(): Promise<{ exists: boolean; raw: unknown }> {
+  try {
+    return { exists: true, raw: JSON.parse(await readFile(join(traceLibraryDirectory(), ALIASES_FILE), "utf8")) as unknown };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { exists: false, raw: undefined };
+    if (error instanceof SyntaxError) return { exists: true, raw: undefined };
+    throw error;
+  }
+}
+
+export async function readConceptAliases(): Promise<AliasFile> {
+  return parseAliasFile((await readAliasesFile()).raw);
+}
+
+/** Kararları kilidin altında değiştirir; tanınmayan bir dosya kenara alınıyor, üzerine yazılmıyor. */
+export async function updateConceptAliases(change: (file: AliasFile) => AliasFile): Promise<AliasFile> {
+  const directory = traceLibraryDirectory();
+  const release = await acquireDirectoryLock(directory, ALIASES_LOCK, "The concept links are busy. Please retry in a moment.");
+  try {
+    const file = await readAliasesFile();
+    const next = aliasFileSchema.parse(change(parseAliasFile(file.raw)));
+    if (file.exists && !isAliasFile(file.raw)) {
+      const stamp = new Date().toISOString().replace(/[-:.]/g, "");
+      await rename(join(directory, ALIASES_FILE), join(directory, `aliases.damaged-${stamp}.json`));
+    }
+    await atomicWrite(join(directory, ALIASES_FILE), `${JSON.stringify(next, null, 2)}\n`);
     return next;
   } finally {
     await release();

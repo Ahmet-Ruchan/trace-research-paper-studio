@@ -41,6 +41,7 @@ running on the coding agent you already use, with no second API key.
 
 | | |
 | --- | --- |
+| **[One idea, two names](#connect-what-you-learn-across-papers)** | Link two names for the same concept yourself, or let a model propose pairs from the papers' own definitions; nothing is linked until you confirm. |
 | **[See what you have learned](#see-what-you-have-learned)** | Papers finished, reviews remembered, questions right on the first try, cards kept long-term, the week ahead and the cards you forget most, counted from your study progress. |
 | **[A reading order for your library](#connect-what-you-learn-across-papers)** | Each paper after the papers that define what it assumes, with the reason and the next paper to read. The Lab says which papers to read first. |
 | **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references, titles and abstracts, for works that teach what you have not studied yet. |
@@ -322,6 +323,16 @@ connects are left out. In the Lab, **Read first** names the papers of your libra
 this one assumes, and whether you have studied them.
 
 ![A reading order for the library](docs/images/reading-order.jpg)
+
+**One idea, two names.** Matching by name keeps "scalar product" and "dot product" apart. **Names for
+the same concept** on the concept map lets you link them: type the two names, or ask a model which names
+in your library may mean the same thing. The model sees only the names and the definitions their papers
+give; it proposes pairs with a reason, and each pair waits for you to say **Same concept** or
+**Different**. A pair you call different is not proposed again. Linked names then count as one concept
+everywhere: the concept notes, the map (where a paper's own name for it is shown), the reading order and
+the reference suggestions. The links live in your library, not in any paper, and **Unlink** undoes one.
+
+![Names for the same concept](docs/images/concept-aliases.jpg)
 
 Nothing here is generated. Concepts are matched by name, from each paper's primer and glossary, with
 case, hyphens, British and American spellings and plurals folded, never by meaning: two names for one
@@ -923,6 +934,10 @@ npm run trace:agent -- concepts
 
 # The reader's learning statistics: reviews remembered, cards kept, the week ahead
 npm run trace:agent -- progress
+
+# Concept names across the library, and the reader's decision that two of them are one concept
+npm run trace:agent -- concepts --names
+npm run trace:agent -- alias --a "Dot product" --b "Scalar product"
 
 # --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"
