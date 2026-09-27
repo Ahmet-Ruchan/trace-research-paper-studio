@@ -9,7 +9,7 @@ import { studyStatusLabel } from "./concepts-view";
 import { useLibraryStudyState } from "./study-progress";
 
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? "" : "s"}`;
-const dayFormat = new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const dayFormat = new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short" });
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 
 /** "4 of 6"; yüzde yalnızca en az on sayım varsa, küçük örneklemden oran okunmasın. */
@@ -155,7 +155,7 @@ export function LearningStatsView({
                 label="Cards due each day this week"
                 rows={stats.week.map((day, index) => ({
                   key: day.day,
-                  label: index === 0 ? "Today" : index === 1 ? "Tomorrow" : dayFormat.format(new Date(`${day.day}T00:00:00.000Z`)),
+                  label: index === 0 ? "Today" : index === 1 ? "Tomorrow" : dayFormat.format(new Date(day.start)),
                   value: day.due,
                 }))}
               />

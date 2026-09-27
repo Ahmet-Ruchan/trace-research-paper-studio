@@ -1853,6 +1853,11 @@ test.describe("learning health", () => {
 });
 
 test.describe("learning statistics", () => {
+  // UTC tarihinin okuyucunun tarihinden farklı olduğu bir saat dilimi: gün
+  // sınırları UTC'ye göre çizilseydi haftanın günleri bir kayardı.
+  const farZone = new Date().getUTCHours() >= 10 ? "Pacific/Kiritimati" : "Pacific/Pago_Pago";
+  test.use({ timezoneId: farZone });
+
   test("counts what the reader studied, remembered and forgot, across the library", async ({ page, request }) => {
     const base = projectNamed("e2e-progress");
     const concept = base.primer!.concepts[0];
@@ -1883,7 +1888,11 @@ test.describe("learning statistics", () => {
     await expect(row.locator("td").nth(2)).toHaveText("2 · 1 due");
     await expect(row.locator("td").nth(3)).toHaveText("4 of 7");
     await expect(page.getByRole("list", { name: "Cards by the time until their next review" }).locator("li")).toHaveCount(6);
-    await expect(page.getByRole("list", { name: "Cards due each day this week" }).locator("li")).toHaveCount(7);
+    const week = page.getByRole("list", { name: "Cards due each day this week" }).locator(".stat-bar-label");
+    await expect(week).toHaveCount(7);
+    const localDay = new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short", timeZone: farZone });
+    await expect(week.nth(0)).toHaveText("Today");
+    await expect(week.nth(2)).toHaveText(localDay.format(new Date(now + 2 * 86_400_000)));
     await expect(page.locator(".stats-hardest li", { hasText: "Zeta forgotten concept" })).toContainText("forgotten 3 of 4 reviews");
 
     await row.getByRole("button", { name: "Progress paper" }).click();

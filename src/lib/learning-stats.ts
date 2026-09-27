@@ -1,6 +1,6 @@
 import { readingDrillFor } from "./reading-drill";
 import { reviewCards, type ReviewCard } from "./review-queue";
-import { addDays, isDue, MAX_REVIEW_BOX, REVIEW_INTERVALS_DAYS } from "./review-schedule";
+import { isDue, MAX_REVIEW_BOX, REVIEW_INTERVALS_DAYS } from "./review-schedule";
 import { studyStatus, type StudyStatus } from "./reading-order";
 import type { ResearchProject } from "./schema";
 import { studyPath, studySummary, type StudyProgress } from "./study-path";
@@ -48,8 +48,8 @@ export type LearningStats = {
   };
   /** Kutulara göre kart sayısı (0 → yarın, son kutu → 90 gün). */
   boxes: number[];
-  /** Önümüzdeki yedi gün: bugün (vadesi geçmişler dahil) ve sonraki altı gün. */
-  week: Array<{ day: string; due: number }>;
+  /** Önümüzdeki yedi yerel gün: bugün (vadesi geçmişler dahil) ve sonraki altı gün. */
+  week: Array<{ day: string; start: string; due: number }>;
   /** En çok unutulan kartlar. */
   hardest: ReviewCard[];
   /** Birden çok kez anlatılan bölümler: ilk ve son anlatışta aktarılan iddialar. */
@@ -58,9 +58,31 @@ export type LearningStats = {
 
 const HARDEST = 8;
 
-const startOfDay = (iso: string) => `${iso.slice(0, 10)}T00:00:00.000Z`;
+export type LocalDay = { day: string; start: string; end: string };
 
-export function learningStats(projects: readonly ResearchProject[], study: ReadonlyMap<string, StudyProgress>, now: string): LearningStats {
+const pad = (value: number) => String(value).padStart(2, "0");
+
+/**
+ * Okuyucunun günleri, kendi saatine göre: bugünün başından itibaren `count`
+ * gün. UTC günü İstanbul'da gece üçte, Los Angeles'ta akşam beşte bitiyor;
+ * "bugün" okuyucunun takvimindeki gün olmalı. Yaz saatine geçilen gün 23,
+ * dönülen gün 25 saat.
+ */
+export function localDays(now: string, count = 7): LocalDay[] {
+  const at = new Date(now);
+  return Array.from({ length: count }, (_, offset) => {
+    const start = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset);
+    const end = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset + 1);
+    return { day: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`, start: start.toISOString(), end: end.toISOString() };
+  });
+}
+
+export function learningStats(
+  projects: readonly ResearchProject[],
+  study: ReadonlyMap<string, StudyProgress>,
+  now: string,
+  days: readonly LocalDay[] = localDays(now),
+): LearningStats {
   const cards = reviewCards(projects, study);
   const papers: PaperStats[] = [];
   const gain: ExplanationGain = { sections: 0, before: 0, after: 0, total: 0 };
@@ -102,15 +124,12 @@ export function learningStats(projects: readonly ResearchProject[], study: Reado
 
   const sum = (pick: (paper: PaperStats) => number) => papers.reduce((total, paper) => total + pick(paper), 0);
   const boxes = Array.from({ length: MAX_REVIEW_BOX + 1 }, (_, box) => cards.filter((card) => card.review.box === box).length);
-  const today = startOfDay(now);
-  const week = Array.from({ length: 7 }, (_, offset) => {
-    const start = addDays(today, offset);
-    const end = addDays(today, offset + 1);
-    return {
-      day: start.slice(0, 10),
-      due: cards.filter((card) => (offset === 0 ? card.review.due < end : card.review.due >= start && card.review.due < end)).length,
-    };
-  });
+  const at = (iso: string) => Date.parse(iso);
+  const week = days.map(({ day, start, end }, offset) => ({
+    day,
+    start,
+    due: cards.filter((card) => (offset === 0 || at(card.review.due) >= at(start)) && at(card.review.due) < at(end)).length,
+  }));
   const hardest = cards
     .filter((card) => card.review.lapses > 0)
     .sort((left, right) => right.review.lapses - left.review.lapses || right.review.reviews - left.review.reviews || left.key.localeCompare(right.key))

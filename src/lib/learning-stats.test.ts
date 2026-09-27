@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadExampleProject } from "./example-fixture";
-import { LONG_TERM_BOX, learningStats } from "./learning-stats";
+import { LONG_TERM_BOX, learningStats, localDays } from "./learning-stats";
 import { recordReview, reviewCards } from "./review-queue";
 import { addDays } from "./review-schedule";
 import { completeStep, recordAnswer, studyFileToJson, type StudyProgress } from "./study-path";
@@ -66,10 +66,35 @@ describe("learning statistics", () => {
   it("lists the cards forgotten most, and the week ahead", () => {
     expect(stats.hardest.map((card) => [card.review.id, card.review.lapses])).toEqual([[`c:${english.primer!.concepts[0].id}`, 2]]);
     expect(stats.week).toHaveLength(7);
-    expect(stats.week[0].day).toBe(now.slice(0, 10));
+    expect(stats.week.map((day) => day.day)).toEqual(localDays(now).map((day) => day.day));
     // Bugün vadesi geçmişler de sayılıyor; hafta toplamı kartlardan fazla olamaz.
     expect(stats.week.reduce((total, day) => total + day.due, 0)).toBeLessThanOrEqual(stats.totals.cards);
     expect(stats.week[0].due).toBeGreaterThanOrEqual(stats.totals.due);
+  });
+
+  it("counts days on the reader's own clock, not in UTC", () => {
+    const zone = process.env.TZ;
+    try {
+      // Auckland'da 2026-09-27 yaz saatine geçilen gün: 23 saat.
+      process.env.TZ = "Pacific/Auckland";
+      const late = "2026-09-26T13:00:00.000Z"; // Auckland'da 27 Eylül, 01:00
+      const days = localDays(late, 2);
+      expect(days.map((day) => day.day)).toEqual(["2026-09-27", "2026-09-28"]);
+      expect(days[0]).toMatchObject({ start: "2026-09-26T12:00:00.000Z", end: "2026-09-27T11:00:00.000Z" });
+      // Los Angeles'ta akşam beşte UTC günü bitiyor ama okuyucunun günü sürüyor.
+      process.env.TZ = "America/Los_Angeles";
+      const evening = "2026-10-02T00:30:00.000Z"; // Los Angeles'ta 1 Ekim, 17:30
+      expect(localDays(evening, 1)[0]).toMatchObject({ day: "2026-10-01", start: "2026-10-01T07:00:00.000Z", end: "2026-10-02T07:00:00.000Z" });
+      // Aynı gece geç saatte vadesi gelen kart "bugün"de, UTC'ye göre yarında olurdu.
+      let progress: StudyProgress | undefined = recordAnswer(undefined, q1, { correct: false, attempts: 2, revealed: true }, "2026-09-30T06:00:00.000Z");
+      progress = { ...progress, reviews: progress.reviews!.map((review) => ({ ...review, due: "2026-10-02T05:00:00.000Z" })) };
+      const week = learningStats([english], new Map([[english.id, progress]]), evening).week;
+      expect(week[0]).toMatchObject({ day: "2026-10-01", due: 1 });
+      expect(week[1].due).toBe(0);
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
   });
 
   it("says what explaining a section again added", () => {
@@ -96,10 +121,20 @@ describe("learning statistics for agents", () => {
       writeFileSync(join(workspace, "data", "library", "study.json"), JSON.stringify(studyFileToJson(library())));
       const run = spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "progress"], {
         encoding: "utf8",
-        env: { ...process.env, TRACE_DATA_DIR: join(workspace, "data") },
+        env: { ...process.env, TRACE_DATA_DIR: join(workspace, "data"), TZ: "America/Los_Angeles" },
       });
       expect(run.status).toBe(0);
-      const report = JSON.parse(run.stdout) as { totals: Record<string, number>; cardsByNextReview: Array<{ inDays: number; cards: number }>; hardest: Array<{ kind: string; forgotten: number }>; papers: unknown[] };
+      const report = JSON.parse(run.stdout) as {
+        totals: Record<string, number>;
+        cardsByNextReview: Array<{ inDays: number; cards: number }>;
+        hardest: Array<{ kind: string; forgotten: number }>;
+        papers: unknown[];
+        timeZone: string;
+        week: Array<{ day: string; due: number }>;
+      };
+      // Günler makinenin saatine göre; ajan hangi saat dilimi olduğunu görüyor.
+      expect(report.timeZone).toBe("America/Los_Angeles");
+      expect(report.week).toHaveLength(7);
       expect(report.totals).toMatchObject({ reviews: 6, remembered: 4, cards: 3, finished: 1, started: 1 });
       expect(report.cardsByNextReview.map((item) => item.inDays)).toEqual([1, 3, 7, 16, 35, 90]);
       expect(report.hardest).toMatchObject([{ kind: "concept", forgotten: 2 }]);

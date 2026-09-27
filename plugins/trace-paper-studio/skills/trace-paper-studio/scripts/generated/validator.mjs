@@ -20571,10 +20571,6 @@ const studyReviewSchema = object({
 	/** Sorunun mührü: soru yeniden yazılırsa kart baştan başlıyor. */
 	sig: string().max(40).optional()
 });
-const DAY_MS = 864e5;
-function addDays(now, days) {
-	return new Date(Date.parse(now) + days * DAY_MS).toISOString();
-}
 function isDue(review, now) {
 	return Date.parse(review.due) <= Date.parse(now);
 }
@@ -21376,8 +21372,26 @@ function reviewCards(projects, progress) {
 /** Bu kutudan itibaren kart "uzun süreli": bir sonraki tekrarı iki haftadan sonra. */
 const LONG_TERM_BOX = REVIEW_INTERVALS_DAYS.findIndex((days) => days >= 14);
 const HARDEST = 8;
-const startOfDay = (iso) => `${iso.slice(0, 10)}T00:00:00.000Z`;
-function learningStats(projects, study, now) {
+const pad = (value) => String(value).padStart(2, "0");
+/**
+* Okuyucunun günleri, kendi saatine göre: bugünün başından itibaren `count`
+* gün. UTC günü İstanbul'da gece üçte, Los Angeles'ta akşam beşte bitiyor;
+* "bugün" okuyucunun takvimindeki gün olmalı. Yaz saatine geçilen gün 23,
+* dönülen gün 25 saat.
+*/
+function localDays(now, count = 7) {
+	const at = new Date(now);
+	return Array.from({ length: count }, (_, offset) => {
+		const start = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset);
+		const end = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset + 1);
+		return {
+			day: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+			start: start.toISOString(),
+			end: end.toISOString()
+		};
+	});
+}
+function learningStats(projects, study, now, days = localDays(now)) {
 	const cards = reviewCards(projects, study);
 	const papers = [];
 	const gain = {
@@ -21432,15 +21446,12 @@ function learningStats(projects, study, now) {
 	papers.sort((left, right) => right.lastStudied.localeCompare(left.lastStudied));
 	const sum = (pick) => papers.reduce((total, paper) => total + pick(paper), 0);
 	const boxes = Array.from({ length: MAX_REVIEW_BOX + 1 }, (_, box) => cards.filter((card) => card.review.box === box).length);
-	const today = startOfDay(now);
-	const week = Array.from({ length: 7 }, (_, offset) => {
-		const start = addDays(today, offset);
-		const end = addDays(today, offset + 1);
-		return {
-			day: start.slice(0, 10),
-			due: cards.filter((card) => offset === 0 ? card.review.due < end : card.review.due >= start && card.review.due < end).length
-		};
-	});
+	const at = (iso) => Date.parse(iso);
+	const week = days.map(({ day, start, end }, offset) => ({
+		day,
+		start,
+		due: cards.filter((card) => (offset === 0 || at(card.review.due) >= at(start)) && at(card.review.due) < at(end)).length
+	}));
 	const hardest = cards.filter((card) => card.review.lapses > 0).sort((left, right) => right.review.lapses - left.review.lapses || right.review.reviews - left.review.reviews || left.key.localeCompare(right.key)).slice(0, HARDEST);
 	return {
 		papers,

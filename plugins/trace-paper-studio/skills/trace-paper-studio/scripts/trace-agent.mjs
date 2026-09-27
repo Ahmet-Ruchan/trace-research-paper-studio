@@ -410,9 +410,10 @@ Usage:
   progress  Prints the reader's learning statistics from the studio's study
             progress: papers finished and in progress, reviews remembered,
             questions right on the first try, where the review cards are
-            (next review in 1 to 90 days), the week ahead, the cards forgotten
-            most, and what explaining a section again added. Counts only;
-            reads the library only. No network, no model.
+            (next review in 1 to 90 days), the week ahead (days on this
+            machine's clock, named in timeZone), the cards forgotten most, and
+            what explaining a section again added. Counts only; reads the
+            library only. No network, no model.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -2009,7 +2010,9 @@ function printProgress() {
     unreadable,
     totals: stats.totals,
     cardsByNextReview: stats.boxes.map((cards, box) => ({ inDays: REVIEW_INTERVALS_DAYS[box], cards })),
-    week: stats.week,
+    // Günler bu makinenin saatine göre; "bugün" okuyucunun takvimindeki gün.
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    week: stats.week.map(({ day, due }) => ({ day, due })),
     hardest: stats.hardest.map((card) => ({
       kind: card.kind,
       text: card.kind === "concept" ? card.concept.term : card.question.prompt,
