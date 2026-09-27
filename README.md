@@ -36,38 +36,26 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**0.22**
+**0.22 — learn the paper, not just read it**
 
 | | |
 | --- | --- |
-| **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
-| **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
-| **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim. Your agent can do it too (`explain`). |
-| **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review across your whole library: a day later, then at growing intervals while you keep remembering it. Papers are mixed in one queue. |
-| **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references for works that teach what you have not studied yet. Your agent has it too (`concepts`). |
-| **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next before it shows it. The answers come from the formulas themselves, not from a model. |
+| **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references for works that teach what you have not studied yet. |
+| **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim and page. |
+| **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next. The answers come from the formulas themselves, not from a model. |
 | **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
 | **[Learning health](#see-what-a-reader-cannot-learn-from)** | The learning counterpart of evidence health: unchecked sections, a quiz that never asks about limitations, playgrounds that show nothing, derivations that restate themselves, concepts nothing uses. Each finding opens its fix. |
-| **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
-| **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
+| **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review a day later, then at growing intervals while you keep remembering it, with every paper of your library in one queue. |
+| **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
 | **[Explain it differently](#rewrite-one-section-without-touching-the-evidence)** | One click asks for a section simpler, with an analogy, with a worked example or more technical, with the evidence still locked. |
-| **[Search what your papers claim](#search-what-your-papers-claim)** | The library search looks through every claim of every paper, with its quote, page and trust marks. Click a result and the project opens on that claim. |
-| **[Group papers with tags](#group-papers-with-tags)** | A tag is a collection: filter by it, search only its claims, or compare and map it in one click. |
-| **[See how each model's quotes held up](#see-how-each-models-quotes-held-up)** | **Model record** adds up, per model, how many of its quotes were found on their page, with an honest range for small samples. Your agent has it too (`record`). |
-| **[Keep a growing library in order](#keep-a-growing-library-in-order)** | Sort by title or by the paper's year, switch to a compact list, and undo a deletion for eight seconds. |
-| **[Read it the way you like](#read-it-the-way-you-like)** | A dark theme, four text sizes, a readable colour for every paper, and a section menu on phones. |
-| **[The analysis screen remembers you](#the-full-application)** | Your last reader, depth, language, models and template come back for the next paper. API keys never do. |
+| **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
+| **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
+| **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio includes the learning layer, written by a fifth **Teaching** model from the evidence alone. Every number in it comes from the paper or says it is illustrative. Older projects offer **Add the learning layer**. |
 | **[The plugin, checked on all three agents](#install-in-under-a-minute)** | Installed and run on Claude Code, Codex and Antigravity CLI. Codex had been cutting the skill's description off mid-sentence and ignoring half of its starter prompts; both now fit its limits, and a test keeps them there. |
 
-**0.21**
-
-| | |
-| --- | --- |
-| **[Take it with you](#take-it-with-you)** | One **Export** menu: a Markdown report for Obsidian or Notion, a printable report you save as PDF, a slide deck for a paper club, BibTeX and RIS for Zotero, Anki flashcards, and the interactive site. Every claim keeps its quote and page in all of them. |
-| **[The paper's equations as runnable code](#take-it-with-you)** | A Jupyter notebook generated from the playgrounds: NumPy functions that start at the paper's own values, with the same sweep the playground draws. Translated from the parsed formula, never pasted as text. |
-| **Citations for the whole graph** | The citation graph downloads the paper and the works around it as one `.bib` file. |
-
-All formats work from your agent too (`export --format`).
+Your agent has the new parts too: `explain` checks your own explanation, `concepts` links a paper to
+what you studied in the others, and `validate --strict` expects common misreadings at standard and
+deep depth.
 
 ---
 
@@ -98,7 +86,7 @@ flowchart LR
     A["Paper name<br/>or PDF"] --> B["Find on arXiv<br/>+ published context"]
     B --> C["Read page by page<br/>evidence + quotes"]
     C --> D["Report · appendix<br/>visual story"]
-    D --> E["Primer · derivations<br/>playgrounds · quiz"]
+    D --> E["Primer · derivations<br/>playgrounds · quiz<br/>misreadings"]
     E --> F["Validate"]
     F --> G["Local site opens"]
     F --> H["Portable<br/>.trace.json"]
@@ -444,9 +432,10 @@ Export my Trace project as slides using the Trace plugin.
 
 ### Study it with Anki
 
-**Export → Anki flashcards** in the studio downloads an import file with one card per primer concept, quiz question and
-glossary term. The back of every card carries the quote and the page it rests on. In Anki, choose
-File → Import; the file sets the deck, the note type and the tags itself.
+**Export → Anki flashcards** in the studio downloads an import file with one card per primer concept,
+quiz question and glossary term, and a "Does the paper show this?" card for every common misreading.
+The back of every card carries the quote and the page it rests on. In Anki, choose File → Import; the
+file sets the deck, the note type and the tags itself.
 
 ```text
 Make Anki flashcards from my Trace project using the Trace plugin.
@@ -611,7 +600,7 @@ theme.
 - **A readable colour for every paper.** Each paper has its own accent colour, and many of the
   palette's colours are pale. Fills and icons use the colour as it is. Text uses the same hue at a
   lightness that can be read: darker on the light theme, lighter on the dark one.
-- **On a phone**, the Lab's sections (up to thirteen) are a labelled menu at the top instead of a
+- **On a phone**, the Lab's sections (up to sixteen) are a labelled menu at the top instead of a
   row of unlabelled icons.
 
 In both themes, text reaches at least 4.5:1 against its background (3:1 for large headings), the
@@ -703,6 +692,14 @@ Rewrite section 4 of that Trace project so it names the quadratic cost plainly.
 ```
 
 ```text
+Here is how I understand section 2 of that Trace project: … Did I get it right?
+```
+
+```text
+Which concepts of that paper have I already studied in my other Trace papers, and what should I read next?
+```
+
+```text
 Publish a link to it without the paper's figures, expiring in 30 days.
 ```
 
@@ -719,7 +716,8 @@ no server to start. The same folder keeps a portable `.trace.json` you can archi
 | Provenance | Prose you have to trust | Page + exact quote per claim |
 | Claim types | Blended together | Measured result / interpretation / background, labelled |
 | Uncertainty | Hidden | Unsupported statements stay `needs-review` |
-| Your role | Read | Read, run the equations, test yourself |
+| Your role | Read | Predict, run the equations, test yourself, explain it back |
+| Afterwards | Forgotten | Reviewed at growing intervals, linked to your other papers |
 | Missing data | Plausible guess | Source dropped rather than guessed |
 | Cost | Another API key | The model your agent already runs |
 
@@ -779,9 +777,10 @@ configuration.
 The plugin is one way in. The web app adds generation with your own provider keys, an editable
 narrative, and a local library. Projects are stored as files under `~/.trace/library`, shared by
 Codex, Claude Code, Antigravity and every Trace Studio launch directory. Existing browser-only
-projects migrate there automatically; removing a Library item removes its stored file and its
-version history and its tags, after an eight-second window to undo it. Earlier versions live
-under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`, saved templates under
+projects migrate there automatically; removing a Library item removes its stored file, its
+version history, its tags and your study progress on it, after an eight-second window to undo it.
+Earlier versions live under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`,
+study progress and review cards in `~/.trace/library/study.json`, saved templates under
 `~/.trace/templates`.
 
 ```bash
@@ -796,8 +795,10 @@ example project* (or add `?sample=1`) and the fully enriched *Attention Is All Y
 English or Turkish, chosen from your browser language. Both files also ship as plain downloads
 at `/examples/`, and any `.trace.json` imports through **Library → Trace JSON**.
 
-**Workspaces:** `Lab` inspects the evidence, `Story` edits the narrative, `Preview` is the
-reading experience. **Regenerate** on a story section, or on a deep report section in `Lab`,
+**Workspaces:** `Lab` inspects the evidence and holds **Study**, **Concepts** and the learning
+blocks, `Story` edits the narrative, `Preview` is the reading experience. The library header opens
+**Review** (the cards due today, from every paper) and **Concepts** (the map of what your papers
+share). **Regenerate** on a story section, or on a deep report section in `Lab`,
 rewrites only that section against the locked evidence. The same button appears on primer
 concepts, quiz questions, derivations and equations, and **Strengthen** in the evidence health
 panel rewrites a thin section with more evidence. The history button in the header opens
@@ -861,6 +862,11 @@ npm run trace:agent -- graph --project "paper.trace.json"
 # How each model's quotes held up across the library, and what was left out
 npm run trace:agent -- record
 
+# Check a reader's own explanation of a section against the evidence: write a brief, let the agent
+# write the feedback, then check it with the app's own rules
+npm run trace:agent -- explain --project "paper.trace.json" --target story:<section-id> --text "<explanation>"
+npm run trace:agent -- explain-check --brief "explanations/story-<section-id>.brief.json"
+
 # Which of a project's concepts the reader studied in other papers, and the library's concept map;
 # --suggest looks through the paper's references for works that teach the rest
 npm run trace:agent -- concepts --project "paper.trace.json" --suggest
@@ -920,7 +926,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.17.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.22.0  # write one version into the package and every plugin manifest
 ```
 
 <details>
@@ -969,7 +975,7 @@ src/
 │   ├── tokens.css              #   type scale, colours and the dark theme
 │   ├── visual-renderer.tsx     #   eleven visual grammars
 │   ├── interactive/            #   playground · simulation · data explorer
-│   ├── teaching/               #   primer · derivations · quiz · application guide
+│   ├── teaching/               #   primer · derivations · quiz · misreadings · study path · guide
 │   ├── math.tsx                #   LaTeX → MathML with an output allowlist
 │   └── chart.ts                #   dependency-free SVG scales and paths
 └── lib/
@@ -1052,9 +1058,10 @@ the server.
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, common misreadings, application
-guide), a guided study path with saved progress, spaced review across the library, concepts linked
-across papers with reading suggestions from the references, a learning health
-panel, a reading drill made from the evidence, terms defined where they are used, the
+guide), predictions before every chart and derivation step, a guided study path with saved
+progress, explanations in the reader's own words checked against the evidence, spaced review across
+the library, concepts linked across papers with reading suggestions from the references, a learning
+health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
 review queue, questions answered from the collected evidence only, exports (Markdown and printable
@@ -1067,8 +1074,7 @@ per-claim and per-section permalinks, resolution from a paper's name, DOI or rep
 (arXiv, bioRxiv, medRxiv, PubMed Central, ACL Anthology), literature maps of up to six projects,
 citation graphs, a local library with claim search across papers, tags, sorting, a list view and
 undoable deletion, a per-model record of how quotes held up, a dark theme and an adjustable text
-size, exports, the native plugin for Codex / Claude Code /
-Antigravity CLI, and generation through Gemini, OpenAI, Claude, OpenRouter and a local model
+size, the native plugin for Codex / Claude Code / Antigravity CLI, and generation through Gemini, OpenAI, Claude, OpenRouter and a local model
 server (Ollama, LM Studio, llama.cpp).
 
 A local model can run every stage, so an analysis can stay on your machine from start to finish.
@@ -1112,6 +1118,7 @@ the two from mixing.
 - [x] Claim search across the library, tags, and a per-model quote record
 - [x] Dark theme, adjustable text size, contrast-checked colours
 - [x] Learning in the studio: a teaching model, traced numbers, a quiz that teaches, terms in place, a guided study path, spaced review
+- [x] Learning that sticks: predictions first, common misreadings, learning health, explaining it back, concepts across papers
 - [ ] Team review with accounts and shared annotations
 
 ---
