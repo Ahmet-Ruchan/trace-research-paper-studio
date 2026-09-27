@@ -35,21 +35,6 @@ running on the coding agent you already use, with no second API key.
 
 ---
 
-## What's new
-
-**0.24 — a work timer and your profile**
-
-| | |
-| --- | --- |
-| **[Work in focused rounds, with breaks](#work-in-focused-rounds-with-breaks)** | Focus rounds and short and long breaks that follow each other on their own, a countdown, a stopwatch with laps and alarms on chosen days, one click away in the header of every screen, in eleven colours. |
-| **[A calendar of the days you worked](#your-profile-and-a-calendar-of-the-days-you-worked)** | Every minute you work is kept on your computer and drawn like a contribution graph, in the colour you choose: streaks, today against your goal, any past year, and the sessions behind each day. |
-| **[Your profile](#your-profile-and-a-calendar-of-the-days-you-worked)** | Your name, role, institution, field and a photo, your goal and sounds; kept in `~/.trace` with a daily backup, and downloadable in one file to take to another computer. |
-| **[Days on your own clock](#see-what-you-have-learned)** | Progress counts "today" and the week ahead in your time zone, not in UTC. |
-| **[Every concept name, in a large library](#connect-what-you-learn-across-papers)** | A model is asked about every name, in parts that fit one request; names with similar definitions are compared together. |
-| **[The plugin, tried with a real model](#development)** | The weekly check can open a real Codex and Claude Code session and make it use the skill; Antigravity CLI is pinned to a checked release. |
-
----
-
 ## The problem
 
 Summarising a paper takes seconds. Trusting the summary takes hours.
@@ -1176,7 +1161,9 @@ Working today: evidence contracts, deep report, technical appendix, eleven visua
 learning layer (primer, derivations, playgrounds, simulations, quiz, common misreadings, application
 guide), predictions before every chart and derivation step, a guided study path with saved
 progress, explanations in the reader's own words checked against the evidence, spaced review across
-the library, concepts linked across papers with reading suggestions from the references, a learning
+the library, concepts linked across papers with reading suggestions from the references and a reading order for
+the library, learning statistics, a work timer (focus rounds with breaks, countdown, stopwatch,
+alarms) with a profile and a calendar of the days worked, a learning
 health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
@@ -1235,6 +1222,8 @@ the two from mixing.
 - [x] Dark theme, adjustable text size, contrast-checked colours
 - [x] Learning in the studio: a teaching model, traced numbers, a quiz that teaches, terms in place, a guided study path, spaced review
 - [x] Learning that sticks: predictions first, common misreadings, learning health, explaining it back, concepts across papers
+- [x] Study across the library: reading order, confirmed concept aliases, learning statistics, progress carried between devices
+- [x] A work timer and a profile: focus rounds with breaks, countdown, stopwatch, alarms, and a calendar of the days worked
 - [ ] Team review with accounts and shared annotations
 
 ---
