@@ -2304,6 +2304,43 @@ test.describe("focus timer and profile", () => {
     await expect(page.locator(".focus-today strong").first()).toHaveText("1m");
   });
 
+  test("keeps counting in a background tab, and in one the browser froze, but not after the page was gone", async ({ page, request }) => {
+    await setProfile(request, (profile) => ({
+      ...profile,
+      preferences: { ...profile.preferences, sound: "none", focus: { ...profile.preferences.focus, work: 1, autoStartBreaks: false } },
+    }));
+    await page.clock.install();
+    await page.goto("/?focus=1");
+    await page.getByRole("button", { name: "Start focus" }).click();
+    await page.clock.runFor(1_000);
+    const pageNow = () => page.evaluate(() => Date.now());
+
+    // Sekme arka planda: pencere zamanlayıcıları çalışmıyor, sayacı ayrı iş parçacığı ilerletiyor.
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.clock.setSystemTime((await pageNow()) + 61_000);
+    await expect(page.locator(".focus-alert", { hasText: "Focus round done" })).toBeVisible();
+    await expect.poll(async () => (await sessions(request)).map((session) => Date.parse(session.end) - Date.parse(session.start))).toEqual([60_000]);
+    await page.getByRole("button", { name: "Stop" }).last().click();
+
+    // Tarayıcı sekmeyi beş dakika dondurdu; sekme açıktı, süre sayılıyor.
+    await page.getByRole("tab", { name: "Stopwatch" }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.evaluate(() => document.dispatchEvent(new Event("freeze")));
+    await page.clock.setSystemTime((await pageNow()) + 5 * 60_000);
+    await expect(page.locator(".focus-time")).toContainText(/^05:0\d/);
+    await expect(page.locator(".focus-alert", { hasText: "was paused" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Reset" }).click();
+
+    // Donma olmadan beş dakikalık bir boşluk: sayfa kapalıydı ya da makine uyudu; sayılmıyor.
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.clock.setSystemTime((await pageNow()) + 5 * 60_000);
+    await expect(page.locator(".focus-alert", { hasText: "Your stopwatch was paused" })).toBeVisible();
+    await expect(page.locator(".focus-time")).toContainText(/^00:0\d/);
+  });
+
   test("counts down, says when time is up, and rings an alarm on its minute", async ({ page, request }) => {
     const at = new Date(Date.now() + 60_000);
     const time = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;

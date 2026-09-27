@@ -89,6 +89,11 @@ export type FocusStore = {
   alerts: FocusAlert[];
   /** Sunucuya henüz yazılamamış oturumlar. */
   pending: WorkSession[];
+  /**
+   * Tarayıcı arka plandaki sekmeyi dondurdu (Chrome'un enerji tasarrufu, bellek
+   * tasarrufu). Sekme kapanmadı: donmuş kaldığı süre de çalışılmış sayılıyor.
+   */
+  frozenAt?: number;
 };
 
 const freshStore = (now: number): FocusStore => ({ version: 1, lastAlive: now, alarmCheck: now, snoozes: [], alerts: [], pending: [] });
@@ -350,22 +355,24 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     if (!readyRef.current || !loadedRef.current || !isLeader(at)) return;
     const profileNow = profileRef.current;
     let current = storeRef.current;
+    // Dondurulan sekme yeniden çalıştı: arada sayfa açıktı, süre kesintisiz sayılıyor.
+    const lastAlive = current.frozenAt ? at : current.lastAlive;
     const segments: Segment[] = [];
     const events: TimerEvent[] = [];
     if (current.focus) {
-      const step = advanceFocus(current.focus, profileNow.preferences.focus, at, current.lastAlive);
+      const step = advanceFocus(current.focus, profileNow.preferences.focus, at, lastAlive);
       current = { ...current, focus: step.run };
       segments.push(...step.segments);
       events.push(...step.events);
     }
     if (current.timer && !current.timer.done) {
-      const step = advanceCountdown(current.timer, at, current.lastAlive);
+      const step = advanceCountdown(current.timer, at, lastAlive);
       current = { ...current, timer: step.run };
       segments.push(...step.segments);
       events.push(...step.events);
     }
     if (current.stopwatch) {
-      const step = advanceStopwatch(current.stopwatch, at, current.lastAlive);
+      const step = advanceStopwatch(current.stopwatch, at, lastAlive);
       current = { ...current, stopwatch: step.run };
       segments.push(...step.segments);
       events.push(...step.events);
@@ -395,8 +402,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       lastRing.current = at;
     }
     // Yalnızca bir şey olduysa React durumu değişiyor; canlılık damgası beş saniyede bir diske.
-    const changed = segments.length > 0 || events.length > 0 || alerts.length > 0 || snoozed.length > 0;
-    current = { ...current, lastAlive: at, alarmCheck: at };
+    const changed = segments.length > 0 || events.length > 0 || alerts.length > 0 || snoozed.length > 0 || current.frozenAt !== undefined;
+    current = { ...current, lastAlive: at, alarmCheck: at, frozenAt: undefined };
     if (changed) commit(current);
     else {
       storeRef.current = current;
@@ -416,7 +423,11 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     // Durum bir sonraki turda okunuyor: stüdyonun açılışı gibi (`app-shell.tsx`), etkinin gövdesinde değil.
     const opening = window.setTimeout(() => {
       const opened = Date.now();
-      const initial = readStore(opened);
+      const read = readStore(opened);
+      // Donmuş sekme tarayıcı tarafından atılıp yeniden yüklendiyse sayfa hep açıktı; okuyucu
+      // kapattıysa donduğu an son canlı an.
+      const discarded = Boolean((document as Document & { wasDiscarded?: boolean }).wasDiscarded);
+      const initial = read.frozenAt && !discarded ? { ...read, frozenAt: undefined } : read;
       storeRef.current = initial;
       loadedRef.current = true;
       setStore(initial);
@@ -459,7 +470,30 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const interval = window.setInterval(tick, 500);
+    /**
+     * Arka plandaki sekmede tarayıcı pencere zamanlayıcılarını dakikada bire
+     * kadar yavaşlatıyor; tur bittiğinde zil bir dakika geç çalardı. Ayrı bir
+     * iş parçacığının (Web Worker) saniyede bir gönderdiği ileti yavaşlatılmıyor:
+     * sekme gizliyken sayaç onunla ilerliyor. Worker açılamazsa pencere sayacı yetiyor.
+     */
+    let worker: Worker | undefined;
+    let workerUrl: string | undefined;
+    try {
+      workerUrl = URL.createObjectURL(new Blob(["setInterval(function () { postMessage(0); }, 1000);"], { type: "text/javascript" }));
+      worker = new Worker(workerUrl);
+      worker.onmessage = () => {
+        if (document.visibilityState === "hidden") tick();
+      };
+    } catch {
+      worker = undefined;
+    }
     const onVisible = () => tick();
+    // Donma: sekme kapanmıyor, yalnızca bir süre çalışmıyor (bkz. `frozenAt`).
+    const onFreeze = () => {
+      const frozen = { ...storeRef.current, lastAlive: Date.now(), frozenAt: Date.now() };
+      storeRef.current = frozen;
+      writeStore(frozen);
+    };
     const onStorage = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY || !event.newValue) return;
       const next = readStore(Date.now());
@@ -468,14 +502,20 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     };
     // Kapanış anı canlılığın son anı: sayfa kapandıktan sonrası sayılmasın.
     const onHide = () => {
-      if (storeRef.current.focus || storeRef.current.timer || storeRef.current.stopwatch) writeStore({ ...storeRef.current, lastAlive: Date.now() });
+      if (storeRef.current.focus || storeRef.current.timer || storeRef.current.stopwatch) writeStore({ ...storeRef.current, lastAlive: Date.now(), frozenAt: undefined });
     };
     document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("freeze", onFreeze);
+    document.addEventListener("resume", onVisible);
     window.addEventListener("storage", onStorage);
     window.addEventListener("pagehide", onHide);
     return () => {
       window.clearInterval(interval);
+      worker?.terminate();
+      if (workerUrl) URL.revokeObjectURL(workerUrl);
       document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("freeze", onFreeze);
+      document.removeEventListener("resume", onVisible);
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("pagehide", onHide);
     };

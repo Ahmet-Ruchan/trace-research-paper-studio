@@ -294,8 +294,9 @@ yellow, blue, red, green, orange, purple, lilac, light blue, navy, burgundy and 
 The timer keeps running while you read a paper: the header shows the time left, the browser tab
 shows it too, and when a round ends a note says what comes next, with a chime (and a desktop
 notification if you allow it). Only focus time counts as work, never a break; a countdown or the
-stopwatch count if you want them to. Time counts only while Trace is open: if the tab is closed or
-the computer sleeps, the timer pauses at that moment and says so, instead of adding the night to
+stopwatch count if you want them to. A tab in the background keeps counting and rings on time, even
+when the browser slows its timers or freezes the tab to save energy. Only when the tab is closed or
+the computer sleeps does the timer pause at that moment, and say so, instead of adding the night to
 your day.
 
 ![The work timer](docs/images/focus.jpg)
