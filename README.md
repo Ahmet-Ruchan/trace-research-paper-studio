@@ -43,6 +43,7 @@ running on the coding agent you already use, with no second API key.
 | **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
 | **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
 | **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review across your whole library: a day later, then at growing intervals while you keep remembering it. Papers are mixed in one queue. |
+| **[Learning health](#see-what-a-reader-cannot-learn-from)** | The learning counterpart of evidence health: unchecked sections, a quiz that never asks about limitations, playgrounds that show nothing, derivations that restate themselves, concepts nothing uses. Each finding opens its fix. |
 | **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
 | **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
 | **[Explain it differently](#rewrite-one-section-without-touching-the-evidence)** | One click asks for a section simpler, with an analogy, with a worked example or more technical, with the evidence still locked. |
@@ -245,6 +246,25 @@ refused. Where the evidence does not back a sentence, the model narrows the sent
 ```text
 Strengthen the thin sections of my Trace project using the Trace plugin.
 ```
+
+### See what a reader cannot learn from
+
+Evidence health asks whether every sentence is tied to a page. **Learning health** asks whether a
+reader can learn from the result, and like evidence health it is computed from the project alone:
+which story sections no quiz question checks, whether the quiz asks about measured results, the
+authors' interpretations and the paper's limitations (or only about the method), which playgrounds
+show the same thing whatever the sliders say (every slider is swept over its range), which derivation
+steps only restate their own formula, and which primer concepts nothing in the story, the report or
+the quiz needs.
+
+Each finding opens its fix with the request already written: **Point a question here** rewrites a
+question that another question already duplicates so that it tests the unchecked section,
+**Rewrite derivation** asks for rationales that say why each step follows, **Tie it to the paper**
+rewrites a concept around the claims the paper relies on. The request is visible and editable in the
+regenerate dialog, and the evidence stays locked. The shipped example has one honest finding: no
+question asks about the training recipe. The screenshot adds two defects to show the other checks.
+
+![Learning health](docs/images/learning-health.jpg)
 
 ### Check every quote against its page
 
@@ -945,8 +965,8 @@ the server.
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), a guided
-study path with saved progress, spaced review across the library, a reading drill made from the
-evidence, terms defined where they are used, the
+study path with saved progress, spaced review across the library, a learning health panel, a reading
+drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
 review queue, questions answered from the collected evidence only, exports (Markdown and printable

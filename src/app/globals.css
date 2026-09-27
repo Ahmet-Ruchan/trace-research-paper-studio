@@ -943,3 +943,11 @@ html[data-text-size="larger"] { font-size: 125%; }
   .library-stats { width: 100%; }
   .learning-offer button, .study-offer button { grid-column: 1 / -1; justify-self: start; }
 }
+
+/* Öğrenme sağlığı: kanıt sağlığının satırları, daha uzun alan etiketleriyle. */
+.learning-health .health-thin li { grid-template-columns: 88px 1fr auto; }
+@media (min-width: 761px) {
+  .learning-health .health-thin li:has(.health-strengthen) { grid-template-columns: 88px 1fr auto auto; }
+}
+.learning-health-clear { margin-top: 24px; padding: 14px 16px; border-radius: 10px; background: color-mix(in srgb, var(--green) 10%, var(--surface)); color: var(--ink); }
+.learning-health > .health-stats { margin-top: 20px; }

@@ -1611,3 +1611,41 @@ test.describe("review", () => {
     }).toEqual({ done: [], answers: 0, reviews: 2 });
   });
 });
+
+test.describe("learning health", () => {
+  test("finds what a reader cannot learn from, and opens the fix with the request filled in", async ({ page, request }) => {
+    const project = projectNamed("e2e-learning-health");
+    const [first, ...rest] = project.derivations!;
+    project.derivations = [{ ...first, steps: first.steps.map((step, index) => (index === 1 ? { ...step, rationale: step.plain } : step)) }, ...rest];
+    await seed(request, project);
+    let sent: { target: { kind: string }; claimPolicy: string; instruction: string } | undefined;
+    await page.route("**/api/regenerate", async (route) => {
+      sent = route.request().postDataJSON() as typeof sent;
+      await route.fulfill({ status: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Not in this test." }) });
+    });
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Learning health" }).click();
+    const panel = page.locator(".learning-health");
+    const unchecked = panel.locator(".health-block", { hasText: "Sections no question checks" });
+    await expect(unchecked).toContainText("A recipe running from 12 hours to 3.5 days");
+    await expect(panel.locator(".health-block", { hasText: "Derivation steps that only restate their formula" })).toContainText(first.title);
+    await expect(panel.locator(".health-stat", { hasText: "Sections a question checks" })).toContainText("7/8");
+
+    await unchecked.getByRole("button", { name: "Point a question here" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Regenerate quiz question" })).toBeVisible();
+    await expect(dialog.locator("textarea")).toHaveValue(/tests the section "A recipe running from 12 hours to 3\.5 days"/);
+    await expect(dialog.getByRole("radio", { name: /Choose from all evidence/ })).toBeChecked();
+    await dialog.getByLabel("Gemini API key").fill("test-key");
+    await dialog.getByRole("button", { name: "Regenerate", exact: true }).click();
+    await expect.poll(() => sent?.claimPolicy).toBe("open");
+    expect(sent!.target.kind).toBe("quiz");
+    expect(sent!.instruction).toContain("claim-method-09");
+    await dialog.getByRole("button", { name: "Close" }).click();
+
+    await panel.getByRole("button", { name: "Rewrite derivation" }).click();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Regenerate derivation" })).toBeVisible();
+    await expect(page.getByRole("dialog").locator("textarea")).toHaveValue(/Give every step a rationale/);
+  });
+});

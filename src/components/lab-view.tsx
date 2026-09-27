@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   ArrowRight,
   BookMarked,
   BookOpenCheck,
@@ -48,6 +49,7 @@ import { AskPanel } from "./ask-panel";
 import type { SectionKind } from "@/lib/section-regeneration";
 import { useSectionRegeneration } from "./section-regenerator";
 import { LearningGenerator } from "./learning-generator";
+import { LearningHealthView } from "./learning-health-view";
 import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
 import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
@@ -213,6 +215,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
     { id: "claims", label: "Claims", icon: Quote },
     { id: "health", label: t.navHealth, icon: ShieldCheck },
+    // Öğrenme sağlığı düzeltmeleri yeniden üretimle yapılıyor; salt okunur görünümde yok.
+    ...(onProjectChange ? [{ id: "learning", label: "Learning health", icon: Activity }] : []),
     { id: "ask", label: "Ask", icon: MessageCircleQuestion },
     // İnceleme projeyi değiştiriyor; salt okunur görünümde kuyruk gösterilmez.
     ...(onProjectChange ? [{ id: "review", label: "Review", icon: UserCheck }] : []),
@@ -492,6 +496,24 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
               onStrengthen={regeneration.enabled
                 ? (item) => regeneration.open({ kind: item.area, sectionId: item.id }, { goal: "strengthen" })
                 : undefined}
+            />
+          </section>
+        )}
+
+        {section === "learning" && onProjectChange && (
+          <section className="lab-block">
+            <div className="block-title"><Activity size={16} /> Learning health</div>
+            <p className="section-intro">
+              Evidence health asks whether every sentence is tied to a page. This asks whether a reader can learn from the result:
+              whether a question checks every section, whether the quiz asks about results, interpretations and limitations,
+              whether the playgrounds respond and the derivations explain. It is computed from the project; no model is asked.
+            </p>
+            {regeneration.undoBar}
+            <LearningHealthView
+              project={project}
+              onRewrite={regeneration.enabled ? (target, options) => regeneration.open(target, options) : undefined}
+              onAddLearning={missingLearning.length ? () => setLearningOpen(true) : undefined}
+              onOpenPractice={() => setSection("practice")}
             />
           </section>
         )}
