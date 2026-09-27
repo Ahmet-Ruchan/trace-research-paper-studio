@@ -895,6 +895,40 @@ html[data-text-size="larger"] { font-size: 125%; }
 .learning-offer button, .study-offer button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 0; border-radius: 8px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
 .learning-offer button:hover, .study-offer button:hover { opacity: .88; }
 .study-offer { border-left-color: var(--ink); }
+.study-offer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.study-offer .study-offer-secondary { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+.library-stats { display: flex; align-items: flex-end; gap: 28px; }
+.library-review { border: 0; border-top: 1px solid var(--accent); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.library-review strong { color: var(--ink); }
+.library-review span { display: inline-flex; align-items: center; gap: 4px; }
+.library-review:hover span { color: var(--ink); }
+.review-status { color: var(--muted); font-size: var(--text-sm); }
+.review-card, .review-empty { max-width: 760px; margin: 0 auto 60px; padding: 26px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.review-card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.review-kind { padding: 4px 10px; border-radius: 20px; background: var(--surface-2); color: var(--ink-soft); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .1em; }
+.review-paper { overflow: hidden; padding: 0; border: 0; background: none; color: var(--muted); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; font: italic var(--text-sm) Georgia, serif; }
+.review-paper:hover { color: var(--ink); text-decoration: underline; }
+.review-count { margin-left: auto; color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.review-card .quiz-score { display: none; }
+.review-progress { height: 4px; margin: 14px 0 20px; overflow: hidden; border-radius: 4px; background: var(--surface-2); }
+.review-progress i { display: block; height: 100%; background: var(--accent); }
+.review-card .quiz-list { margin: 0; }
+.review-prompt { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.review-concept h2 { margin: 8px 0 18px; font: 2rem/1.15 Georgia, serif; }
+.review-concept .primer-body { padding: 0; }
+.review-grade { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.review-grade button { padding: 10px 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--field); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.review-grade button:first-child { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.review-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.review-card-foot p { margin: 0; color: var(--ink-soft); font-size: var(--text-md); }
+.review-next { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 10px 18px; border: 0; border-radius: 22px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); }
+.review-skip { margin-left: auto; padding: 0; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--muted); cursor: pointer; font-size: var(--text-sm); }
+.review-empty { display: grid; justify-items: start; gap: 12px; }
+.review-empty > svg { color: var(--accent-ink); }
+.review-empty p { margin: 0; font: var(--text-lg)/1.6 Georgia, serif; }
+.review-empty > button, .review-actions button { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); }
+.review-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-actions .review-secondary { border: 1px solid var(--line); background: transparent; color: var(--ink); }
 .study-offer button:disabled { opacity: .45; cursor: default; }
 .learning-plan { display: grid; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
 .learning-plan li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
@@ -902,5 +936,10 @@ html[data-text-size="larger"] { font-size: 125%; }
 .learning-plan span { color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.45; }
 @media (max-width: 760px) {
   .learning-offer, .study-offer { grid-template-columns: auto minmax(0, 1fr); }
+  .study-offer-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .review-card, .review-empty { padding: 18px; }
+  .review-card-head { grid-template-columns: auto minmax(0, 1fr); }
+  .review-count { display: none; }
+  .library-stats { width: 100%; }
   .learning-offer button, .study-offer button { grid-column: 1 / -1; justify-self: start; }
 }

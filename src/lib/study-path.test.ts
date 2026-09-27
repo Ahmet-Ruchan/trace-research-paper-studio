@@ -170,6 +170,8 @@ describe("study progress API", () => {
     expect(await get("study-api")).toEqual({ progress: null });
 
     await put("study-api", { progress });
+    // Kimliksiz okuma bütün kütüphaneyi veriyor: tekrar kuyruğu bunu kullanıyor.
+    expect(await GET(new Request(base)).then((response) => response.json())).toEqual({ version: 1, projects: [{ id: "study-api", progress }] });
     await deleteStoredProject("study-api");
     expect(await get("study-api")).toEqual({ progress: null });
   });
@@ -180,7 +182,7 @@ describe("study progress API", () => {
     expect((await put("study-bad", { progress: { version: 1 } })).status).toBe(400);
     expect((await put("study-bad", "{")).status).toBe(400);
     expect((await put("study-bad", JSON.stringify({ progress, padding: "x".repeat(300_000) }))).status).toBe(413);
-    expect((await GET(new Request(base))).status).toBe(400);
+    expect((await PUT(new Request(base, { method: "PUT", body: JSON.stringify({ progress }) }))).status).toBe(400);
   });
 
   it("sets a damaged file aside instead of writing over it", async () => {

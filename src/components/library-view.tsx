@@ -23,6 +23,8 @@ import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
 import { claimKindLabels } from "./evidence-drawer";
 import { DisplayControl } from "./display-control";
+import { useReviewForecast } from "./study-progress";
+import { describeDue } from "@/lib/review-schedule";
 
 type LibraryViewProps = {
   projects: ResearchProject[];
@@ -31,6 +33,8 @@ type LibraryViewProps = {
   onOpenClaim: (project: ResearchProject, claimId: string) => void;
   /** Modellerin alıntı karnesi: kütüphanedeki bütün projelerden hesaplanıyor. */
   onModelRecord: () => void;
+  /** Tekrar ekranı; kütüphanedeki bütün makalelerin kartları. */
+  onReview: () => void;
   /** Kart hemen kayboluyor; silme geri alma süresi dolunca sunucuya gidiyor. */
   onDelete: (projectId: string) => void;
   pendingDeletion?: ResearchProject;
@@ -66,7 +70,8 @@ function count(value: number, noun: string) {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+  const review = useReviewForecast(projects);
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("papers");
   // Kütüphane yalnızca istemcide, açılış ekranından sonra çiziliyor; depolama okunabilir.
@@ -216,7 +221,20 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onDe
           <h1>Your paper library.</h1>
           <p>Every evidence map, deep report and interactive explanation you have produced, in one place.</p>
         </div>
-        <div className="library-stat"><strong>{projects.length}</strong><span>saved projects</span></div>
+        <div className="library-stats">
+          {review?.total ? (
+            <button className="library-stat library-review" onClick={onReview} title="Review what you studied, across the library">
+              <strong>{review.due}</strong>
+              <span>
+                {review.due
+                  ? `${review.due === 1 ? "card" : "cards"} to review`
+                  : `to review · next ${review.nextDue ? describeDue(review.nextDue, review.now) : "later"}`}
+                {" "}<ArrowRight size={12} />
+              </span>
+            </button>
+          ) : null}
+          <div className="library-stat"><strong>{projects.length}</strong><span>saved projects</span></div>
+        </div>
       </section>
 
       <section className="library-toolbar">

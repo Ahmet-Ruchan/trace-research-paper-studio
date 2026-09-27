@@ -27,6 +27,7 @@ import { CitationPanel } from "./citation-panel";
 import { CompareView } from "./compare-view";
 import { LiteratureMapView } from "./literature-map-view";
 import { LibraryView } from "./library-view";
+import { ReviewView } from "./review-view";
 import { ModelRecordView } from "./model-record-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
@@ -34,7 +35,7 @@ import { StoryView } from "./story-view";
 import { DisplayControl } from "./display-control";
 
 type WorkspaceMode = "lab" | "story" | "preview";
-type AppScreen = "home" | "library" | "workspace" | "compare" | "models";
+type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
 
@@ -61,6 +62,8 @@ export function AppShell() {
   const [project, setProject] = useState<ResearchProject>();
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [screen, setScreen] = useState<AppScreen>("home");
+  /** Tekrar ekranı tek bir makaleyle sınırlıysa onun kimliği (Lab'den gelindi). */
+  const [reviewScope, setReviewScope] = useState<string>();
   const [comparison, setComparison] = useState<ResearchProject[]>();
   const [citationsOpen, setCitationsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -160,6 +163,7 @@ export function AppShell() {
           });
         }
         if (search.get("library") === "1") setScreen("library");
+        if (search.get("review") === "1") setScreen("review");
         if (search.get("team") === "1") setInitialTeam(true);
 
         /**
@@ -236,7 +240,8 @@ export function AppShell() {
   useEffect(() => {
     if (!hydrated) return;
     const url = new URL(window.location.href);
-    for (const key of ["sample", "new", "library", "team", "mode", "import"]) url.searchParams.delete(key);
+    for (const key of ["sample", "new", "library", "team", "mode", "import", "review"]) url.searchParams.delete(key);
+    if (screen === "review" && !reviewScope) url.searchParams.set("review", "1");
     if (screen === "workspace" && project) {
       url.searchParams.set("project", project.id);
       if (mode !== "lab") url.searchParams.set("mode", mode);
@@ -256,7 +261,7 @@ export function AppShell() {
       url.hash = "";
     }
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [hydrated, screen, project, mode, selectedClaimId]);
+  }, [hydrated, screen, project, mode, selectedClaimId, reviewScope]);
 
   /**
    * Sayfa içindeki bir kalıcı bağlantıya tıklamak belgeyi yeniden yüklemez;
@@ -528,10 +533,32 @@ export function AppShell() {
   if (screen === "models") {
     return <ModelRecordView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />;
   }
+  if (screen === "review") {
+    const scoped = reviewScope && project?.id === reviewScope;
+    return (
+      <ReviewView
+        projects={projects}
+        projectId={scoped ? reviewScope : undefined}
+        backLabel={scoped ? "Back to the paper" : "Library"}
+        onBack={() => {
+          setReviewScope(undefined);
+          setScreen(scoped ? "workspace" : "library");
+        }}
+        onOpen={(target) => {
+          setReviewScope(undefined);
+          openProject(target);
+        }}
+      />
+    );
+  }
   if (screen === "library") {
     return (
       <LibraryView
         projects={projects}
+        onReview={() => {
+          setReviewScope(undefined);
+          setScreen("review");
+        }}
         onOpen={openProject}
         onOpenClaim={openClaim}
         onModelRecord={() => setScreen("models")}
@@ -607,7 +634,7 @@ export function AppShell() {
       </header>
       {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
       <div className="workspace-content">
-        {mode === "lab" && <LabView project={project} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} />}
+        {mode === "lab" && <LabView project={project} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} />}
         {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
         {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
       </div>

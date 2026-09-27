@@ -7,7 +7,7 @@ import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
 import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 import { readingDrillFor } from "../src/lib/reading-drill";
 import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
-import { studyPath } from "../src/lib/study-path";
+import { completeStep, recordAnswer, studyPath, type StudyProgress } from "../src/lib/study-path";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -1489,13 +1489,16 @@ test.describe("study mode", () => {
     await revisit.locator("button", { hasText: firstSection.title }).click();
     await expect(study.locator(".study-title")).toHaveText(firstSection.title);
 
-    // Baştan başlamak kaydı siliyor.
+    // Baştan başlamak yolu ve yanıtları siliyor; yanıtlanan sorunun tekrar kartı kalıyor.
     await study.locator(".study-outline summary").click();
     await study.locator(".study-outline button", { hasText: "How it went" }).click();
     await study.getByRole("button", { name: "Start over" }).click();
     await study.getByRole("button", { name: "Clear", exact: true }).click();
     await expect(study.locator(".study-title")).toHaveText("What this paper asks");
-    await expect.poll(async () => ((await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress: unknown }).progress).toBeNull();
+    await expect.poll(async () => {
+      const { progress } = (await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress: StudyProgress | null };
+      return progress && { done: progress.done, answers: progress.answers.length, reviews: progress.reviews?.map((review) => review.id) };
+    }).toEqual({ done: [], answers: 0, reviews: [`q:${question.id}`] });
   });
 
   test("works in a published page too, keeping progress in the reader's browser", async ({ page, request }) => {
@@ -1521,5 +1524,90 @@ test.describe("study mode", () => {
     await page.locator(".viewer-tabs button", { hasText: "Study" }).click();
     await expect(page.locator("section.study .study-meta")).toContainText(`Step 3 of ${path.steps.length}`);
     await expect(page.locator("section.study .study-bar")).toHaveAttribute("aria-valuenow", "2");
+  });
+});
+
+test.describe("review", () => {
+  /** Üç gün önce çalışılmış gibi: yanlış yanıtlanan soru ve okunan kavram bugün vadeli. */
+  const threeDaysAgo = () => new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  async function studied(request: APIRequestContext, project: ResearchProject, withConcept: boolean) {
+    const at = threeDaysAgo();
+    let progress: StudyProgress = recordAnswer(undefined, project.quiz!.questions[0], { correct: false, attempts: 1, revealed: true }, at);
+    if (withConcept) progress = completeStep(progress, `concept:${project.primer!.concepts[0].id}`, "start", at);
+    const response = await request.put(`/api/library/study?id=${project.id}`, { data: { progress } });
+    expect(response.ok()).toBe(true);
+  }
+
+  test("brings back what was studied, across the library, mixing papers", async ({ page, request }) => {
+    const first = await seed(request, projectNamed("e2e-review-a"));
+    const second = await seed(request, { ...projectNamed("e2e-review-b"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "A second paper to review" } } });
+    await studied(request, first, true);
+    await studied(request, second, false);
+
+    await page.goto("/?library=1");
+    const badge = page.locator(".library-review");
+    await expect(badge).toContainText("3");
+    await expect(badge).toContainText("cards to review");
+    await badge.click();
+    await expect(page.locator(".compare-hero h1")).toHaveText("3 cards to review from 2 papers.");
+
+    const papers: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const card = page.locator(".review-card");
+      await expect(card.locator(".review-count")).toHaveText(`${index + 1} / 3`);
+      papers.push((await card.locator(".review-paper").textContent()) ?? "");
+      if ((await card.locator(".review-kind").textContent()) === "Question") {
+        const question = example.quiz!.questions[0];
+        await card.getByText(question.options.find((option) => option.correct)!.label, { exact: true }).click();
+        await card.getByRole("button", { name: "Check answer" }).click();
+        await expect(card.locator(".review-card-foot")).toContainText("Remembered. This card comes back in 3 days.");
+      } else {
+        await expect(card.locator(".review-concept h2")).toHaveText(example.primer!.concepts[0].term);
+        await card.getByRole("button", { name: "Show the answer" }).click();
+        await expect(card).toContainText(example.primer!.concepts[0].intuition);
+        await card.getByRole("button", { name: "Not yet" }).click();
+        await expect(card.locator(".review-card-foot")).toContainText("Not yet. This card comes back tomorrow.");
+      }
+      await card.getByRole("button", { name: index < 2 ? "Next card" : "Finish" }).click();
+    }
+    // Aynı makalenin kartları arka arkaya gelmiyor.
+    expect(papers[0]).not.toBe(papers[1]);
+    await expect(page.locator(".compare-hero h1")).toHaveText("Done for now.");
+    await expect(page.locator(".review-empty")).toContainText("You remembered 2 of 3 cards.");
+    await expect(page.locator(".review-empty")).toContainText("The next review is tomorrow.");
+
+    // Sonuçlar makalelerin kaydına yazıldı; kütüphane artık vadeli kart göstermiyor.
+    await expect.poll(async () => {
+      const { progress } = (await (await request.get(`/api/library/study?id=${first.id}`)).json()) as { progress: StudyProgress };
+      return progress.reviews!.map((review) => [review.id, review.box]).sort();
+    }).toEqual([[`c:${first.primer!.concepts[0].id}`, 0], [`q:${first.quiz!.questions[0].id}`, 1]]);
+    await page.getByRole("button", { name: "Library" }).first().click();
+    await expect(page.locator(".library-review")).toContainText("to review · next tomorrow");
+  });
+
+  test("reviews one paper from its Lab, and starting the path over keeps the cards", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-review-lab"));
+    await studied(request, project, true);
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".study-offer").getByRole("button", { name: "Review 2 cards" }).click();
+    await expect(page.locator(".landing-eyebrow")).toContainText(`Review · ${project.evidence.paper.title}`);
+    await expect(page.locator(".compare-hero h1")).toHaveText("2 cards to review.");
+    await page.locator(".review-card").getByRole("button", { name: "Skip for now" }).click();
+    await page.locator(".review-card").getByRole("button", { name: "Skip for now" }).click();
+    await expect(page.locator(".review-empty")).toContainText("You skipped every card; they stay due.");
+    await page.getByRole("button", { name: "Back to the paper" }).first().click();
+    await expect(page.locator(".study-offer")).toBeVisible();
+
+    await page.locator(".study-offer").getByRole("button", { name: "Continue studying" }).click();
+    const study = page.locator("section.study");
+    await study.locator(".study-outline summary").click();
+    await study.locator(".study-outline button", { hasText: "How it went" }).click();
+    await study.getByRole("button", { name: "Start over" }).click();
+    await study.getByRole("button", { name: "Clear", exact: true }).click();
+    await expect.poll(async () => {
+      const { progress } = (await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress: StudyProgress | null };
+      return progress && { done: progress.done, answers: progress.answers.length, reviews: progress.reviews?.length };
+    }).toEqual({ done: [], answers: 0, reviews: 2 });
   });
 });

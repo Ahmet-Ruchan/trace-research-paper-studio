@@ -42,6 +42,7 @@ running on the coding agent you already use, with no second API key.
 | --- | --- |
 | **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
 | **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
+| **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review across your whole library: a day later, then at growing intervals while you keep remembering it. Papers are mixed in one queue. |
 | **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
 | **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
 | **[Explain it differently](#rewrite-one-section-without-touching-the-evidence)** | One click asks for a section simpler, with an analogy, with a worked example or more technical, with the evidence still locked. |
@@ -196,6 +197,23 @@ published site and the exported page have **Study** too, and keep progress in th
 browser.
 
 ![Study mode](docs/images/study.jpg)
+
+### Remember it weeks later
+
+Understanding a paper on Monday does not mean you can explain it next month. Everything you answer
+and read in **Study** becomes a card: a question you got right on the first try comes back in three
+days, one you missed and each concept you read come back the next day. Remember it and the gap grows
+to 7, 16, 35 and 90 days; miss it and it starts again from tomorrow.
+
+The library shows how many cards are due, and **Review** asks them one at a time, from every paper at
+once, alternating between papers so one answer does not give away the next. A question counts as
+remembered only when it is right on the first try. A concept card shows the term, you try to recall
+what it means and why the paper needs it, then open it and say honestly whether you did. The Lab has
+the same queue for a single paper. Nothing is generated: a card is the project's own question or
+concept, so a rewritten question or a deleted paper simply drops out of the queue. The schedule is
+kept next to your study progress, never in the project file.
+
+![Review across the library](docs/images/review.jpg)
 
 ### Read it as a narrative, with the source one click away
 
@@ -927,8 +945,8 @@ the server.
 
 Working today: evidence contracts, deep report, technical appendix, eleven visual grammars, the
 learning layer (primer, derivations, playgrounds, simulations, quiz, application guide), a guided
-study path with saved progress, a reading drill made from the evidence, terms defined where they are
-used, the
+study path with saved progress, spaced review across the library, a reading drill made from the
+evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
 review queue, questions answered from the collected evidence only, exports (Markdown and printable
@@ -985,7 +1003,7 @@ the two from mixing.
 - [x] Exports: reports, slides, runnable notebook, citations
 - [x] Claim search across the library, tags, and a per-model quote record
 - [x] Dark theme, adjustable text size, contrast-checked colours
-- [x] Learning in the studio: a teaching model, traced numbers, a quiz that teaches, terms in place, a guided study path
+- [x] Learning in the studio: a teaching model, traced numbers, a quiz that teaches, terms in place, a guided study path, spaced review
 - [ ] Team review with accounts and shared annotations
 
 ---

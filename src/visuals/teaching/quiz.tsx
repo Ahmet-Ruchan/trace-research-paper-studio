@@ -59,8 +59,8 @@ export function QuizView({
   return (
     <section className="quiz" aria-label={quiz.title}>
       <header className="quiz-head">
-        <h3>{quiz.title}</h3>
-        <p>{quiz.intro}</p>
+        {quiz.title ? <h3>{quiz.title}</h3> : null}
+        {quiz.intro ? <p>{quiz.intro}</p> : null}
         {attempted.length ? <p className="quiz-score">{t.score(firstTry, attempted.length)}</p> : null}
       </header>
 

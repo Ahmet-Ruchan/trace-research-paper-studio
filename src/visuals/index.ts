@@ -13,7 +13,7 @@ export { LanguageProvider, useStrings } from "./language-context";
 export { stringsFor, type Language, type Strings } from "./i18n";
 export { InteractiveRenderer } from "./interactive-renderer";
 export { MathText, sanitizeMathML } from "./math";
-export { PrimerView } from "./teaching/primer";
+export { ConceptBody, PrimerView } from "./teaching/primer";
 export { DerivationView } from "./teaching/derivations";
 export { QuizView } from "./teaching/quiz";
 export { StudyView } from "./teaching/study";

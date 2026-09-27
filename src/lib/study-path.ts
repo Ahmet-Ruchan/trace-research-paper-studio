@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { canonicalJson, stableHash } from "./canonical-json";
+import { conceptCardId, questionCardId, scheduleFirst, studyReviewSchema, type StudyReview } from "./review-schedule";
 import type { Primer, Quiz, QuizQuestion, ResearchProject } from "./schema";
 
 /**
@@ -145,8 +146,18 @@ export const studyProgressSchema = z.object({
   startedAt: z.string().max(40),
   updatedAt: z.string().max(40),
   finishedAt: z.string().max(40).optional(),
+  /** Tekrar kartları (`review-schedule.ts`); çalışmada yanıtlanan sorular ve okunan kavramlar. */
+  reviews: z.array(studyReviewSchema).max(MAX_ENTRIES).optional(),
 });
 export type StudyProgress = z.infer<typeof studyProgressSchema>;
+
+/** Kartı yoksa ekler; varsa dokunmuyor (tekrar geçmişi çalışmada yeniden okumakla silinmemeli). */
+function withReview(progress: StudyProgress, review: StudyReview, replaceIf?: (existing: StudyReview) => boolean) {
+  const reviews = progress.reviews ?? [];
+  const existing = reviews.find((item) => item.id === review.id);
+  if (existing && !replaceIf?.(existing)) return progress;
+  return { ...progress, reviews: [...reviews.filter((item) => item.id !== review.id), review].slice(-MAX_ENTRIES) };
+}
 
 export function parseStudyProgress(raw: unknown): StudyProgress | undefined {
   const parsed = studyProgressSchema.safeParse(raw);
@@ -180,7 +191,9 @@ export function visitStep(progress: StudyProgress | undefined, stepId: string, n
 export function completeStep(progress: StudyProgress | undefined, stepId: string, nextId: string | undefined, now: string): StudyProgress {
   const base = progress ?? emptyStudyProgress(now);
   const done = base.done.includes(stepId) ? base.done : [...base.done, stepId].slice(-MAX_ENTRIES);
-  return visitStep({ ...base, done }, nextId ?? stepId, now);
+  // Okunan kavram ertesi gün bir tekrar kartı olarak dönüyor.
+  const learned = stepId.startsWith("concept:") ? withReview({ ...base, done }, scheduleFirst(conceptCardId(stepId.slice("concept:".length)), 0, now)) : { ...base, done };
+  return visitStep(learned, nextId ?? stepId, now);
 }
 
 export type QuestionResult = { correct: boolean; attempts: number; revealed: boolean };
@@ -197,7 +210,9 @@ export function recordAnswer(progress: StudyProgress | undefined, question: Quiz
     sig: questionSignature(question),
   };
   const answers = [...base.answers.filter((item) => item.id !== question.id), answer].slice(-MAX_ENTRIES);
-  return { ...base, answers, updatedAt: now };
+  // İlk denemede bilinen soru üç gün, gerisi ertesi gün dönüyor. Soru yeniden yazıldıysa kart baştan.
+  const card = scheduleFirst(questionCardId(question.id), isFirstTry(answer) ? 1 : 0, now, answer.sig);
+  return withReview({ ...base, answers, updatedAt: now }, card, (existing) => existing.sig !== answer.sig);
 }
 
 /** Kaldığı yer: kayıtlı adım hâlâ yoldaysa o, değilse ilk bitmemiş adım. */

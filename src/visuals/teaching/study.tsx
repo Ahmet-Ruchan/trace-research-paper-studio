@@ -11,6 +11,7 @@ import { QuizView } from "./quiz";
 import { sectionPrerequisites, termIndex } from "@/lib/term-index";
 import {
   completeStep,
+  emptyStudyProgress,
   recordAnswer,
   resumeStepId,
   savedAnswer,
@@ -100,7 +101,8 @@ export function StudyView({
     moved.current = true;
     setConfirmReset(false);
     setStepId(path.steps[0].id);
-    setProgress(undefined);
+    // Tekrar kartları kalıyor: yolu baştan yürümek, aylardır süren tekrarları silmemeli.
+    setProgress((previous) => (previous?.reviews?.length ? { ...emptyStudyProgress(now()), reviews: previous.reviews } : undefined));
   }
 
   function title(item: StudyStep) {

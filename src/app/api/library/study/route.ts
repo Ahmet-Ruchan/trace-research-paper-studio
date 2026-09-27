@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { studyProgressSchema } from "@/lib/study-path";
-import { readStoredProject, readStudyProgress, saveStudyProgress } from "@/lib/trace-storage";
+import { studyFileToJson, studyProgressSchema } from "@/lib/study-path";
+import { readAllStudyProgress, readStoredProject, readStudyProgress, saveStudyProgress } from "@/lib/trace-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,10 +20,11 @@ function projectIdOf(request: Request) {
   return new URL(request.url).searchParams.get("id")?.trim();
 }
 
+/** `?id=` ile bir projenin ilerlemesi; kimliksiz bütün kütüphaneninki (tekrar kuyruğu için). */
 export async function GET(request: Request) {
   const projectId = projectIdOf(request);
-  if (!projectId) return noStore({ error: "A project id is required." }, { status: 400 });
   try {
+    if (!projectId) return noStore(studyFileToJson(await readAllStudyProgress()));
     return noStore({ progress: (await readStudyProgress(projectId)) ?? null });
   } catch (error) {
     return noStore({ error: error instanceof Error ? error.message : "The study progress could not be read." }, { status: 500 });

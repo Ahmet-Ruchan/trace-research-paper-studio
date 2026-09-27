@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { parseStudyProgress, type StudyProgress } from "@/lib/study-path";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { reviewCards, reviewForecast } from "@/lib/review-queue";
+import type { ResearchProject } from "@/lib/schema";
+import { parseStudyFile, parseStudyProgress, type StudyProgress } from "@/lib/study-path";
 
 export type StudyState =
   | { status: "loading" }
@@ -75,4 +77,32 @@ export function useStudyProgress(projectId: string) {
   useEffect(() => () => flush(true), [flush]);
 
   return { state, save, saveError };
+}
+
+/** Kütüphanenin bütün çalışma kayıtları; tekrar kuyruğu ve kütüphane özeti için. */
+export async function readLibraryStudy(): Promise<Map<string, StudyProgress>> {
+  const response = await fetch("/api/library/study", { cache: "no-store" });
+  const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
+  if (!response.ok) throw new Error(data?.error ?? "The review cards could not be read.");
+  return parseStudyFile(data);
+}
+
+/**
+ * Kütüphane başlığındaki tekrar özeti. Okunamazsa hiçbir şey gösterilmiyor:
+ * bu bir hatırlatma, kütüphanenin çalışması ona bağlı değil.
+ */
+export function useReviewForecast(projects: readonly ResearchProject[]) {
+  const [study, setStudy] = useState<Map<string, StudyProgress>>();
+  // Zaman açılışta bir kez alınıyor; çizim sırasında saat okunmuyor.
+  const [now] = useState(() => new Date().toISOString());
+  useEffect(() => {
+    let cancelled = false;
+    readLibraryStudy().then((entries) => {
+      if (!cancelled) setStudy(entries);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return useMemo(() => (study ? { ...reviewForecast(reviewCards(projects, study), now), now } : undefined), [projects, study, now]);
 }

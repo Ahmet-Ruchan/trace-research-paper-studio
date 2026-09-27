@@ -52,6 +52,7 @@ import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generat
 import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
 import { studyPath, studySummary } from "@/lib/study-path";
+import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import { useStudyProgress } from "./study-progress";
 
 type LabViewProps = {
@@ -63,6 +64,8 @@ type LabViewProps = {
   onProjectChange?: (project: ResearchProject, reason?: RevisionReason) => void;
   /** Alıntı denetimi için verilen PDF; içe aktarılmış projede alıntıları sayfada göstermeyi de açar. */
   onPaperFile?: (file: File) => void;
+  /** Bu makalenin tekrar kartları (stüdyonun tekrar ekranı). */
+  onReview?: () => void;
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
@@ -82,7 +85,7 @@ const reportKindLabels = {
   implication: "Implication",
 } as const;
 
-export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile }: LabViewProps) {
+export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview }: LabViewProps) {
   const t = stringsFor(project.language);
   const regeneration = useSectionRegeneration(project, onProjectChange);
   /** Öğrenme katmanı öğeleri için aynı tetikleyici; görüntüleyicide hiç çizilmiyor. */
@@ -188,10 +191,12 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   const terms = useMemo(() => termIndex(project), [project]);
   const study = useStudyProgress(project.id);
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
+  const [openedAt] = useState(() => new Date().toISOString());
   const studyStatus = useMemo(() => {
     const path = studyPath(project, drill);
-    return { steps: path.steps.length, summary: studySummary(project, path, studyProgress) };
-  }, [project, drill, studyProgress]);
+    const cards = studyProgress ? reviewCards([project], new Map([[project.id, studyProgress]])) : [];
+    return { steps: path.steps.length, summary: studySummary(project, path, studyProgress), review: reviewForecast(cards, openedAt) };
+  }, [project, drill, studyProgress, openedAt]);
   const hasPractice = Boolean(
     project.derivations?.length ||
       project.interactives?.length ||
@@ -285,9 +290,20 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                     : `A guided path in ${studyStatus.steps} steps: what the paper assumes, each section with one question after it, then what to read again.`}
                 </p>
               </div>
-              <button onClick={() => setSection("study")} disabled={study.state.status === "loading"}>
-                {studyProgress ? (studyProgress.finishedAt ? "See your results" : "Continue studying") : "Start studying"} <ArrowRight size={14} />
-              </button>
+              <div className="study-offer-actions">
+                {onReview && studyStatus.review.due ? (
+                  <button onClick={onReview}>
+                    Review {studyStatus.review.due} {studyStatus.review.due === 1 ? "card" : "cards"} <ArrowRight size={14} />
+                  </button>
+                ) : null}
+                <button
+                  className={onReview && studyStatus.review.due ? "study-offer-secondary" : undefined}
+                  onClick={() => setSection("study")}
+                  disabled={study.state.status === "loading"}
+                >
+                  {studyProgress ? (studyProgress.finishedAt ? "See your results" : "Continue studying") : "Start studying"} <ArrowRight size={14} />
+                </button>
+              </div>
             </section>
             <section className="thesis-card">
               <span>Core thesis</span>
