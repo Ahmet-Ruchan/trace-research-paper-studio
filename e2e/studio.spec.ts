@@ -1203,36 +1203,117 @@ test.describe("colour themes", () => {
     expect(await paper(page)).toBe(PAPER.light);
   });
 
+  /**
+   * Ölçülecek ekranların verisi: iddia kararları, çalışma kaydı ve unutulan
+   * kartlar (Progress, tekrar), aynı kavramı anlatan ikinci bir makale (kavram
+   * haritası, okuma sırası) ve okuyucunun bağladığı iki ad.
+   */
+  async function seedContrastLibrary(request: APIRequestContext, theme: string) {
+    const project = projectNamed(`e2e-contrast-${theme}`);
+    project.claimReviews = {
+      [project.evidence.claims[0].id]: { status: "approved", by: "Ada", at: "2026-09-01T00:00:00.000Z" },
+      [project.evidence.claims[1].id]: { status: "rejected", by: "Ada", at: "2026-09-01T00:00:00.000Z" },
+    };
+    await seed(request, project);
+    // Öncül makale: kavramları sözlüğünde tanımlıyor, ön bilgisi yok; okuma sırasında önce geliyor.
+    const companion: ResearchProject = {
+      ...projectNamed(`e2e-contrast-${theme}-companion`),
+      evidence: {
+        ...example.evidence,
+        paper: { ...example.evidence.paper, title: "Contrast companion", year: "2014" },
+        glossary: [...example.evidence.glossary, { term: "Contrast scaled scores", definition: "Scores divided by the square root of their dimension." }],
+      },
+      primer: undefined,
+    };
+    await seed(request, companion);
+    const concept = project.primer!.concepts[0];
+    const question = project.quiz!.questions[0];
+    const now = Date.now();
+    const iso = (days: number) => new Date(now + days * 86_400_000).toISOString();
+    const progress: StudyProgress = {
+      ...completeStep(undefined, `concept:${concept.id}`, "next", iso(-20)),
+      reviews: [
+        { id: `c:${concept.id}`, box: 0, due: iso(-1), lapses: 2, reviews: 3, last: iso(-2) },
+        { id: `q:${question.id}`, box: 4, due: iso(3), lapses: 0, reviews: 4, last: iso(-3), sig: questionSignature(question) },
+      ],
+    };
+    expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
+    expect((await request.put(`/api/library/study?id=${companion.id}`, { data: { progress: { ...completeStep(undefined, "start", "finish", iso(-9)), finishedAt: iso(-8) } } })).ok()).toBe(true);
+    expect((await request.put("/api/library/aliases", { data: { a: project.primer!.concepts[1].term, b: "Contrast scaled scores", decision: "same" } })).ok()).toBe(true);
+    return project;
+  }
+
   for (const theme of ["dark", "light"] as const) {
     test(`keeps every visible text readable in the ${theme} theme`, async ({ page, request }) => {
-      const project = projectNamed(`e2e-contrast-${theme}`);
-      project.claimReviews = {
-        [project.evidence.claims[0].id]: { status: "approved", by: "Ada", at: "2026-09-01T00:00:00.000Z" },
-        [project.evidence.claims[1].id]: { status: "rejected", by: "Ada", at: "2026-09-01T00:00:00.000Z" },
-      };
-      await seed(request, project);
+      test.setTimeout(90_000);
+      const project = await seedContrastLibrary(request, theme);
       await page.addInitScript((chosen) => { if (chosen !== "light") window.localStorage.setItem("trace-theme", chosen); }, theme);
-      const screens: Array<[string, string?]> = [
-        ["/"],
-        ["/?library=1"],
-        [`/?project=${project.id}`],
-        [`/?project=${project.id}`, "Claims"],
-        [`/?project=${project.id}`, "Review"],
-        [`/?project=${project.id}`, "Evidence health"],
-        [`/?project=${project.id}&mode=story`],
-        [`/?project=${project.id}&mode=preview`],
+      await page.route("**/api/library/aliases/propose", async (route) => {
+        await route.fulfill({
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            proposals: [{
+              a: { term: "Softmax", paper: project.evidence.paper.title, definition: "Turns scores into weights." },
+              b: { term: "Normalised exponential", paper: "Contrast companion", definition: "Turns scores into weights that sum to one." },
+              why: "Both definitions describe the same function.",
+            }],
+            names: 20,
+            model: "gemini-3.7-flash",
+          }),
+        });
+      });
+      type Screen = { name: string; url: string; section?: string; ready?: string; open?: () => Promise<void> };
+      const lab = (section: string, ready?: string): Screen => ({ name: section, url: `/?project=${project.id}`, section, ready });
+      const screens: Screen[] = [
+        { name: "home", url: "/" },
+        { name: "library", url: "/?library=1", ready: ".library-card" },
+        { name: "lab", url: `/?project=${project.id}` },
+        lab("Study"),
+        lab("Primer"),
+        lab("Concepts", ".concept-rows li"),
+        lab("Learn & Try"),
+        lab("Claims"),
+        lab("Learning health"),
+        lab("Review"),
+        lab("Evidence health"),
+        { name: "story", url: `/?project=${project.id}&mode=story` },
+        { name: "preview", url: `/?project=${project.id}&mode=preview` },
+        { name: "progress", url: "/?progress=1", ready: ".stats-table" },
+        {
+          name: "review cards",
+          url: "/?review=1",
+          ready: ".review-card",
+          // Kartın yanıtı da ölçülsün: açıklama ve "hatırladım" düğmeleri ancak açılınca görünüyor.
+          open: async () => { await page.getByRole("button", { name: "Show the answer" }).click(); },
+        },
+        {
+          name: "concept map",
+          url: "/?library=1",
+          ready: ".alias-proposals li",
+          open: async () => {
+            await page.getByRole("button", { name: "Concepts", exact: true }).click();
+            await expect(page.locator(".reading-order li").first()).toBeVisible();
+            const panel = page.getByRole("region", { name: "Names for the same concept" });
+            await expect(panel.locator(".alias-links li").first()).toBeVisible();
+            await panel.locator(".alias-ask summary").click();
+            await panel.getByLabel("Gemini API key").fill("test-key");
+            await panel.getByRole("button", { name: "Look for other names" }).click();
+          },
+        },
       ];
-      for (const [url, section] of screens) {
-        await page.goto(url);
+      for (const screen of screens) {
+        await page.goto(screen.url);
         await expect(page.locator(".boot-screen")).toHaveCount(0);
-        if (section) await page.locator(".lab-nav button", { hasText: section }).first().click();
-        // Kütüphane listesi sunucudan geliyor; yüklü bir makinede 400 ms yetmiyordu ve sayfanın yalnızca başlığı ölçülüyordu.
-        if (url.includes("library=1")) await expect(page.locator(".library-card").first()).toBeVisible();
+        if (screen.section) await page.locator(".lab-nav button", { hasText: screen.section }).first().click();
+        await screen.open?.();
+        // Liste sunucudan geliyor; yüklü bir makinede 400 ms yetmiyordu ve sayfanın yalnızca başlığı ölçülüyordu.
+        if (screen.ready) await expect(page.locator(screen.ready).first()).toBeVisible();
         // Geçişler bitsin: renkler yarı yoldayken ölçülmesin.
         await page.waitForTimeout(400);
         const { checked, failures } = await unreadableTexts(page);
-        expect(checked, `${url} ${section ?? ""}`).toBeGreaterThan(20);
-        expect(failures, `${theme} · ${url} ${section ?? ""}`).toEqual([]);
+        expect(checked, screen.name).toBeGreaterThan(20);
+        expect(failures, `${theme} · ${screen.name}`).toEqual([]);
       }
     });
   }

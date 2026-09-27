@@ -91,7 +91,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .key-note { margin: 8px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
 .form-error { margin: 12px 0 0; padding: 9px 11px; border-left: 2px solid var(--accent); background: var(--danger-bg-soft); color: var(--danger); font-size: var(--text-md); }
 .primary-action { width: 100%; height: 49px; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 18px; border: 0; border-radius: 9px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-base); font-weight: 650; }
-.primary-action:hover { background: var(--accent); }
+/* Üzerine gelince makalenin rengi, ama yazı okunacak tonda: parlak turuncu beyaz yazıyla 3,5:1 kalıyordu. */
+.primary-action:hover { background: var(--accent-ink); }
 .landing-proof { min-height: 66px; display: flex; align-items: center; justify-content: center; gap: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.12em; }
 .landing-proof i { width: 34px; height: 1px; background: var(--line-dark); }
 
@@ -504,7 +505,7 @@ span.library-tag { cursor: default; }
 .regen-actions .regen-count { margin-right: auto; }
 .regen-primary, .regen-secondary { min-height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 15px; border-radius: 9px; cursor: pointer; font-size: var(--text-base); font-weight: 600; }
 .regen-primary { border: 0; background: var(--ink); color: var(--on-ink); }
-.regen-primary:hover { background: var(--accent); }
+.regen-primary:hover { background: var(--accent-ink); }
 .regen-secondary { border: 1px solid var(--line); background: transparent; color: var(--ink); }
 .regen-running-title { margin: 6px 0 0; font: 500 1.3125rem/1.25 Georgia, serif; }
 .regen-body .generation-meter { margin-top: 20px; }
