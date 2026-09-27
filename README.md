@@ -323,7 +323,9 @@ this one assumes, and whether you have studied them.
 the same concept** on the concept map lets you link them: type the two names, or ask a model which names
 in your library may mean the same thing. The model sees only the names and the definitions their papers
 give; it proposes pairs with a reason, and each pair waits for you to say **Same concept** or
-**Different**. A pair you call different is not proposed again. Linked names then count as one concept
+**Different**. A pair you call different is not proposed again. A large library's names are asked in
+parts that fit one request, names with similar definitions in the same part, and the panel says if a
+part could not be read. Linked names then count as one concept
 everywhere: the concept notes, the map (where a paper's own name for it is shown), the reading order and
 the reference suggestions. The links live in your library, not in any paper, and **Unlink** undoes one.
 
@@ -930,7 +932,7 @@ npm run trace:agent -- concepts
 # The reader's learning statistics: reviews remembered, cards kept, the week ahead
 npm run trace:agent -- progress
 
-# Concept names across the library, and the reader's decision that two of them are one concept
+# Concept names across the library (in parts for a large one: --part 2), and the reader's decision that two of them are one concept
 npm run trace:agent -- concepts --names
 npm run trace:agent -- alias --a "Dot product" --b "Scalar product"
 

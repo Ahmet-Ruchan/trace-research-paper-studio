@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as PROPOSE } from "@/app/api/library/aliases/propose/route";
 import { GET, PUT } from "@/app/api/library/aliases/route";
-import { conceptNames, validateAliasProposals } from "./alias-proposals";
+import { conceptNames, MAX_ALIAS_NAMES, validateAliasProposals } from "./alias-proposals";
 import { aliasMap, decideAlias, decisionFor, emptyAliasFile, forgetAlias, pairKey, type AliasFile } from "./concept-aliases";
 import { conceptLinks, sharedConcepts } from "./concept-links";
 import { loadExampleProject } from "./example-fixture";
@@ -15,7 +15,7 @@ import { readFirst } from "./reading-order";
 import type { ResearchProject } from "./schema";
 import { saveStoredProject } from "./trace-storage";
 
-const state = vi.hoisted(() => ({ answers: [] as unknown[], prompts: [] as string[] }));
+const state = vi.hoisted(() => ({ answers: [] as unknown[], prompts: [] as string[], answer: undefined as ((prompt: string) => unknown) | undefined }));
 vi.mock("@/lib/server/model-runtime", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/model-runtime")>();
   return {
@@ -26,7 +26,7 @@ vi.mock("@/lib/server/model-runtime", async (importOriginal) => {
       cleanup: async () => undefined,
       generateStructured: async (request: { prompt: string }) => {
         state.prompts.push(request.prompt);
-        return JSON.stringify(state.answers.shift());
+        return JSON.stringify(state.answer ? state.answer(request.prompt) : state.answers.shift());
       },
     })),
   };
@@ -118,6 +118,7 @@ describe("the concept alias endpoints", () => {
     process.env.TRACE_DATA_DIR = workspace;
     state.answers = [];
     state.prompts = [];
+    state.answer = undefined;
   });
   afterEach(() => {
     if (previous === undefined) delete process.env.TRACE_DATA_DIR;
@@ -167,7 +168,125 @@ describe("the concept alias endpoints", () => {
   });
 });
 
+/** Büyük bir kütüphane: iki makaleye ek olarak her biri 70 terim tanımlayan üç makale. */
+async function saveLargeLibrary() {
+  await saveStoredProject(english);
+  await saveStoredProject(second());
+  for (let paper = 0; paper < 3; paper += 1) {
+    await saveStoredProject({
+      ...english,
+      id: `large-${paper}`,
+      evidence: {
+        ...english.evidence,
+        paper: { ...english.evidence.paper, title: `Large paper ${paper}` },
+        glossary: Array.from({ length: 70 }, (_, index) => ({ term: `Large term ${paper} ${index} ${"q".repeat(index % 7 + 1)}`, definition: `A definition about subject${paper * 100 + index} in paper ${paper}.` })),
+      },
+      primer: undefined,
+    });
+  }
+}
+
+const listedNames = (prompt: string) => prompt.split("\n").filter((line) => line.startsWith('- "')).length;
+const proposeRequest = () => PROPOSE(new Request("http://127.0.0.1/api/library/aliases/propose", {
+  method: "POST",
+  body: JSON.stringify({ assignment: { provider: "gemini", model: "gemini-3.7-flash" }, apiKey: "key" }),
+}));
+
+describe("asking about a large library", () => {
+  let workspace: string;
+  let previous: string | undefined;
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "trace-aliases-large-"));
+    previous = process.env.TRACE_DATA_DIR;
+    process.env.TRACE_DATA_DIR = workspace;
+    state.answers = [];
+    state.prompts = [];
+    // Model yalnızca iki adı birlikte gördüğünde önerebiliyor.
+    state.answer = (prompt) => ({
+      pairs: prompt.includes('"Dot product"') && prompt.includes('"Scalar product"') ? [{ a: "Dot product", b: "Scalar product", why: "Both multiply matching entries and add them up." }] : [],
+    });
+  });
+  afterEach(() => {
+    state.answer = undefined;
+    if (previous === undefined) delete process.env.TRACE_DATA_DIR;
+    else process.env.TRACE_DATA_DIR = previous;
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it("asks about every name, in parts that fit one request", async () => {
+    await saveLargeLibrary();
+    const response = await proposeRequest();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { proposals: Array<{ a: { term: string }; b: { term: string } }>; names: number; parts: number; failedParts: number; unread: number };
+    expect(body.names).toBeGreaterThan(MAX_ALIAS_NAMES);
+    expect(body.parts).toBeGreaterThan(1);
+    expect(body).toMatchObject({ failedParts: 0, unread: 0 });
+    expect(state.prompts).toHaveLength(body.parts);
+    expect(state.prompts.every((prompt) => listedNames(prompt) <= MAX_ALIAS_NAMES)).toBe(true);
+    expect(state.prompts.reduce((total, prompt) => total + listedNames(prompt), 0)).toBeGreaterThanOrEqual(body.names);
+    expect(body.proposals.map((item) => [item.a.term, item.b.term])).toEqual([["Dot product", "Scalar product"]]);
+  });
+
+  it("returns the parts that were read when another part fails, and says how many failed", async () => {
+    await saveLargeLibrary();
+    const answer = state.answer!;
+    state.answer = (prompt) => {
+      if (!prompt.includes('"Scalar product"')) throw new Error("The provider refused this part.");
+      return answer(prompt);
+    };
+    const response = await proposeRequest();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { proposals: unknown[]; parts: number; failedParts: number };
+    expect(body.failedParts).toBe(state.prompts.filter((prompt) => !prompt.includes('"Scalar product"')).length);
+    expect(body.failedParts).toBeGreaterThan(0);
+    expect(body.proposals).toHaveLength(1);
+
+    state.prompts = [];
+    state.answer = () => { throw new Error("The provider refused this part."); };
+    expect((await proposeRequest()).status).toBe(502);
+  });
+});
+
 describe("concept aliases for agents", () => {
+  it("lists a large library's names in parts, every name in one of them", () => {
+    const root = fileURLToPath(new URL("../..", import.meta.url));
+    const workspace = mkdtempSync(join(tmpdir(), "trace-aliases-parts-"));
+    try {
+      const library = join(workspace, "data", "library");
+      spawnSync("mkdir", ["-p", library]);
+      const large = (paper: number) => ({
+        ...english,
+        id: `large-${paper}`,
+        evidence: {
+          ...english.evidence,
+          paper: { ...english.evidence.paper, title: `Large paper ${paper}` },
+          glossary: Array.from({ length: 70 }, (_, index) => ({ term: `Large term ${paper} ${index}`, definition: `A definition about subject${paper * 100 + index}.` })),
+        },
+        primer: undefined,
+      });
+      for (const paper of [0, 1, 2]) writeFileSync(join(library, `large-${paper}.trace.json`), JSON.stringify(large(paper)));
+      const bridge = (...args: string[]) =>
+        spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), ...args], {
+          encoding: "utf8",
+          env: { ...process.env, TRACE_DATA_DIR: join(workspace, "data") },
+        });
+      type Part = { totalNames: number; part: number; parts: number; names: Array<{ term: string }>; note: string };
+      const first = JSON.parse(bridge("concepts", "--names").stdout) as Part;
+      expect(first.totalNames).toBe(210);
+      expect(first.parts).toBe(2);
+      expect(first.note).toContain("then run concepts --names --part 2");
+      const second = JSON.parse(bridge("concepts", "--names", "--part", "2").stdout) as Part;
+      expect(second.part).toBe(2);
+      expect([first, second].every((part) => part.names.length <= MAX_ALIAS_NAMES)).toBe(true);
+      expect(new Set([...first.names, ...second.names].map((item) => item.term)).size).toBe(210);
+      const outside = bridge("concepts", "--names", "--part", "3");
+      expect(outside.status).toBe(1);
+      expect(outside.stdout + outside.stderr).toContain("--part must be a whole number from 1 to 2");
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
   it("lists the names and records a decision only when asked to", () => {
     const root = fileURLToPath(new URL("../..", import.meta.url));
     const workspace = mkdtempSync(join(tmpdir(), "trace-aliases-bridge-"));
@@ -182,9 +301,10 @@ describe("concept aliases for agents", () => {
           encoding: "utf8",
           env: { ...process.env, TRACE_DATA_DIR: join(workspace, "data") },
         });
-      const names = JSON.parse(bridge("concepts", "--names").stdout) as { names: Array<{ term: string }>; decided: unknown[] };
+      const names = JSON.parse(bridge("concepts", "--names").stdout) as { names: Array<{ term: string }>; decided: unknown[]; part: number; parts: number };
       expect(names.names.map((item) => item.term)).toContain("Scalar product");
       expect(names.decided).toEqual([]);
+      expect(names).toMatchObject({ part: 1, parts: 1 });
 
       const dotElsewhere = () =>
         (JSON.parse(bridge("concepts", "--project", join(workspace, "paper.trace.json")).stdout) as { concepts: Array<{ conceptId: string; alsoIn: unknown[] }> }).concepts.find(

@@ -21,7 +21,7 @@ export { conceptLinks, libraryPaperFor, paperKey, sharedConcepts, suggestReferen
 export { isStudyFile, parseStudyFile } from "./study-path";
 export { readFirst, readingOrder } from "./reading-order";
 export { aliasMap, decideAlias, forgetAlias, isAliasFile, parseAliasFile } from "./concept-aliases";
-export { conceptNames } from "./alias-proposals";
+export { aliasBatches, conceptNames } from "./alias-proposals";
 export { conceptKeys } from "./concept-links";
 export { learningStats } from "./learning-stats";
 export { REVIEW_INTERVALS_DAYS } from "./review-schedule";

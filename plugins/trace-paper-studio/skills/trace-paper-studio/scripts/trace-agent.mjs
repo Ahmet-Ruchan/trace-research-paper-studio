@@ -16,6 +16,7 @@ import {
   learningStats,
   REVIEW_INTERVALS_DAYS,
   recordCheckedExplanation,
+  aliasBatches,
   aliasMap,
   conceptKeys,
   conceptLinks,
@@ -337,7 +338,7 @@ Usage:
   node trace-agent.mjs record
   node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
   node trace-agent.mjs progress
-  node trace-agent.mjs concepts --names
+  node trace-agent.mjs concepts --names [--part <n>]
   node trace-agent.mjs alias --a "<name>" --b "<name>" [--different | --forget] [--proposed-by model] [--reason "<why>"]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
@@ -406,7 +407,9 @@ Usage:
   alias     Records the reader's decision that two concept names are the
             same concept (or --different, or --forget a decision). Only after
             the reader confirms: concepts are otherwise matched by name.
-            concepts --names lists the names and the decisions so far.
+            concepts --names lists the names and the decisions so far;
+            in a large library the names come in parts (--part <n>),
+            names with similar definitions in the same part.
   progress  Prints the reader's learning statistics from the studio's study
             progress: papers finished and in progress, reviews remembered,
             questions right on the first try, where the review cards are
@@ -1965,12 +1968,22 @@ async function printConcepts(args) {
     return;
   }
   if (args.names) {
+    // Büyük bir kütüphanenin adları stüdyodaki gibi parçalara bölünüyor; tanımları benzeyen adlar aynı parçada.
+    const names = conceptNames(projects, aliasFile);
+    const parts = aliasBatches(names);
+    const part = args.part === undefined ? 1 : Number(args.part);
+    if (!Number.isInteger(part) || part < 1 || part > Math.max(1, parts.length)) {
+      throw new Error(`--part must be a whole number from 1 to ${Math.max(1, parts.length)}.`);
+    }
     console.log(JSON.stringify({
       ok: true,
       library,
-      names: conceptNames(projects, aliasFile).map((name) => ({ term: name.term, paper: name.paper, kind: name.kind, papers: name.papers, definition: name.definition })),
+      totalNames: names.length,
+      part,
+      parts: parts.length,
+      names: (parts[part - 1] ?? []).map((name) => ({ term: name.term, paper: name.paper, kind: name.kind, papers: name.papers, definition: name.definition })),
       decided: aliasFile.decisions,
-      note: "Concept names across the library, one per concept, with their paper's definition. If two different names clearly mean the same concept, ASK the reader; only after they confirm, record it with alias --a <name> --b <name> --proposed-by model. Never link on your own, and skip pairs already in decided.",
+      note: `Concept names across the library, one per concept, with their paper's definition${parts.length > 1 ? `: part ${part} of ${parts.length}, names with similar definitions grouped in the same part. Look for pairs within this part, then run concepts --names --part ${part < parts.length ? part + 1 : 1}` : ""}. If two different names clearly mean the same concept, ASK the reader; only after they confirm, record it with alias --a <name> --b <name> --proposed-by model. Never link on your own, and skip pairs already in decided.`,
     }, null, 2));
     return;
   }

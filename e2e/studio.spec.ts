@@ -1259,6 +1259,9 @@ test.describe("colour themes", () => {
               why: "Both definitions describe the same function.",
             }],
             names: 20,
+            parts: 2,
+            failedParts: 0,
+            unread: 0,
             model: "gemini-3.7-flash",
           }),
         });
@@ -2028,7 +2031,10 @@ test.describe("concepts across the library", () => {
             b: { term: "Omega softmax function", paper: "Alias paper two", definition: "Turns scores into weights that sum to one." },
             why: "Both definitions describe the softmax.",
           }],
-          names: 20,
+          names: 412,
+          parts: 3,
+          failedParts: 1,
+          unread: 0,
           model: "gemini-3.7-flash",
         }),
       });
@@ -2054,6 +2060,10 @@ test.describe("concepts across the library", () => {
     await panel.getByRole("button", { name: "Look for other names" }).click();
     const proposal = panel.getByRole("list", { name: "Proposed pairs" }).locator("li");
     await expect(proposal).toContainText("Both definitions describe the softmax.");
+    // Büyük bir kütüphane parçalar hâlinde okunuyor; okunamayan parça söyleniyor.
+    await expect(panel.locator(".alias-coverage")).toHaveText(
+      "412 names, read in 3 parts; names with similar definitions were kept in the same part. 1 of 3 parts could not be read; ask again to try them.",
+    );
     await proposal.getByRole("button", { name: "Same concept" }).click();
     await expect(proposal).toHaveCount(0);
     await expect(panel.locator(".alias-links li", { hasText: "Omega softmax function" })).toContainText("proposed by a model, confirmed by you");

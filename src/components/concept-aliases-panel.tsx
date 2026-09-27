@@ -8,7 +8,17 @@ import { ModelKeyFields, useRememberedAssignment } from "./model-key-fields";
 
 type Side = { term: string; paper: string; definition: string };
 type Proposal = { a: Side; b: Side; why: string };
-type Lookup = { status: "idle" } | { status: "loading" } | { status: "done"; proposals: Proposal[]; model: string } | { status: "failed"; message: string };
+type Coverage = { names: number; parts: number; failedParts: number; unread: number };
+type Lookup = { status: "idle" } | { status: "loading" } | ({ status: "done"; proposals: Proposal[]; model: string } & Coverage) | { status: "failed"; message: string };
+
+/** Büyük bir kütüphanede adlar parçalar hâlinde okunuyor; okuyucu hangisinin okunmadığını bilmeli. */
+function coverageNote({ names, parts, failedParts, unread }: Coverage) {
+  if (parts <= 1 && !unread) return null;
+  const notes = [`${names} names, read in ${parts} parts; names with similar definitions were kept in the same part.`];
+  if (failedParts) notes.push(`${failedParts} of ${parts} parts could not be read; ask again to try them.`);
+  if (unread) notes.push(`${unread} names did not fit in the parts a model is asked at once; link them yourself above if you know another name for one.`);
+  return notes.join(" ");
+}
 
 /**
  * Farklı adlarla anlatılan aynı kavram (`concept-aliases.ts`). Okuyucu iki
@@ -50,9 +60,17 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignment, apiKey: apiKey.trim() }),
       });
-      const data = (await response.json().catch(() => undefined)) as { proposals?: Proposal[]; model?: string; error?: string } | undefined;
+      const data = (await response.json().catch(() => undefined)) as ({ proposals?: Proposal[]; model?: string; error?: string } & Partial<Coverage>) | undefined;
       if (!response.ok || !data?.proposals) throw new Error(data?.error ?? "The model could not be asked.");
-      setLookup({ status: "done", proposals: data.proposals, model: data.model ?? assignment.model });
+      setLookup({
+        status: "done",
+        proposals: data.proposals,
+        model: data.model ?? assignment.model,
+        names: data.names ?? names.length,
+        parts: data.parts ?? 1,
+        failedParts: data.failedParts ?? 0,
+        unread: data.unread ?? 0,
+      });
     } catch (caught) {
       setLookup({ status: "failed", message: caught instanceof Error ? caught.message : "The model could not be asked." });
     }
@@ -112,9 +130,10 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
         <p>The model sees the names of the concepts in your library and the definitions their papers give, nothing else.</p>
         <ModelKeyFields assignment={assignment} onAssignment={choose} apiKey={apiKey} onApiKey={setApiKey} />
         <button type="button" className="regen-primary" disabled={lookup.status === "loading"} onClick={() => { void propose(); }}>
-          {lookup.status === "loading" ? "Reading the names…" : "Look for other names"}
+          {lookup.status === "loading" ? `Reading ${names.length} names…` : "Look for other names"}
         </button>
         {lookup.status === "failed" ? <p className="regen-error" role="alert">{lookup.message}</p> : null}
+        {lookup.status === "done" && coverageNote(lookup) ? <p className="alias-coverage" role="status">{coverageNote(lookup)}</p> : null}
         {lookup.status === "done" ? (
           lookup.proposals.length ? (
             <ul className="alias-proposals" aria-label="Proposed pairs">
