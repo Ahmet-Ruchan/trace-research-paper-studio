@@ -209,6 +209,16 @@ For each primer concept of the project it lists `studiedHere`, `studiedIn` (anot
 - When the user asks what to read next, lead with `readingOrder.next` and say why, from `after`: which concepts it defines that a later paper assumes. Papers in `together` each define something the other assumes; suggest reading them side by side.
 - This is about the user, not the paper: never write it into the project.
 
+## Learning progress
+
+When the user asks how their studying is going, what they keep forgetting or what to review, run:
+
+```bash
+node scripts/trace-agent.mjs progress
+```
+
+It reads the studio's study progress and prints counts, nothing estimated: papers finished and in progress, reviews remembered (`totals.remembered` of `totals.reviews`), questions right on the first try, cards by the days until their next review, the week ahead, the cards forgotten most (`hardest`), and what explaining a section again added. Give every share with its counts ("26 of 34 reviews remembered"); a percentage from a handful of reviews says little. For the hardest cards, suggest rereading where they come from in that paper rather than only reviewing again.
+
 ## Model record
 
 When the user asks which model to trust, how reliable the quotes of the models they used have been, or whether a model makes up quotes, run:

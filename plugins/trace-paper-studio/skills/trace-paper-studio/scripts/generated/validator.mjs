@@ -20417,9 +20417,132 @@ const studyReviewSchema = object({
 	/** Sorunun mührü: soru yeniden yazılırsa kart baştan başlıyor. */
 	sig: string().max(40).optional()
 });
+const DAY_MS = 864e5;
+function addDays(now, days) {
+	return new Date(Date.parse(now) + days * DAY_MS).toISOString();
+}
+function isDue(review, now) {
+	return Date.parse(review.due) <= Date.parse(now);
+}
 
 //#endregion
 //#region src/lib/study-path.ts
+/**
+* Ön koşullar önce gelecek biçimde sıralar. Doğrulayıcı döngüyü reddediyor;
+* yine de bozuk bir veri sonsuz döngüye değil özgün sıraya düşüyor.
+*/
+function orderByPrerequisites(concepts) {
+	const byId = new Map(concepts.map((concept) => [concept.id, concept]));
+	const result = [];
+	const placed = /* @__PURE__ */ new Set();
+	const visiting = /* @__PURE__ */ new Set();
+	const visit = (concept) => {
+		if (placed.has(concept.id) || visiting.has(concept.id)) return;
+		visiting.add(concept.id);
+		for (const id of concept.prerequisiteIds) {
+			const prerequisite = byId.get(id);
+			if (prerequisite) visit(prerequisite);
+		}
+		visiting.delete(concept.id);
+		placed.add(concept.id);
+		result.push(concept);
+	};
+	concepts.forEach(visit);
+	return result.length === concepts.length ? result : concepts;
+}
+/** Bölümle en çok iddiayı paylaşan, henüz kullanılmamış soru; eşitlikte listede önce gelen. */
+function bestCheck(claimIds, pool, used) {
+	const claims = new Set(claimIds);
+	let best;
+	let bestScore = 0;
+	for (const question of pool) {
+		if (used.has(question.id)) continue;
+		const score = question.claimIds.filter((id) => claims.has(id)).length;
+		if (score > bestScore) {
+			best = question;
+			bestScore = score;
+		}
+	}
+	return best;
+}
+function studyPath(project, drill) {
+	const questions = /* @__PURE__ */ new Map();
+	const used = /* @__PURE__ */ new Set();
+	const quiz = project.quiz?.questions ?? [];
+	const drillQuestions = (drill?.questions ?? []).filter((question) => !quiz.some((item) => item.id === question.id));
+	const steps = [{
+		id: "start",
+		kind: "start",
+		phase: "prepare"
+	}];
+	for (const concept of orderByPrerequisites(project.primer?.concepts ?? [])) steps.push({
+		id: `concept:${concept.id}`,
+		kind: "concept",
+		phase: "prepare",
+		conceptId: concept.id,
+		title: concept.term
+	});
+	for (const section of project.story.sections) {
+		const check = bestCheck(section.claimIds, quiz, used) ?? bestCheck(section.claimIds, drillQuestions, used);
+		if (check) {
+			used.add(check.id);
+			questions.set(check.id, check);
+		}
+		steps.push({
+			id: `section:${section.id}`,
+			kind: "section",
+			phase: "read",
+			sectionId: section.id,
+			title: section.title,
+			checkId: check?.id
+		});
+	}
+	for (const derivation of project.derivations ?? []) steps.push({
+		id: `derivation:${derivation.id}`,
+		kind: "derivation",
+		phase: "work",
+		derivationId: derivation.id,
+		title: derivation.title
+	});
+	for (const interactive of project.interactives ?? []) steps.push({
+		id: `interactive:${interactive.id}`,
+		kind: "interactive",
+		phase: "work",
+		interactiveId: interactive.id,
+		title: interactive.title
+	});
+	if (project.misreadings) steps.push({
+		id: "misreadings",
+		kind: "misreadings",
+		phase: "check",
+		title: project.misreadings.title
+	});
+	const rest = quiz.filter((question) => !used.has(question.id));
+	if (rest.length) {
+		for (const question of rest) questions.set(question.id, question);
+		steps.push({
+			id: "quiz",
+			kind: "quiz",
+			phase: "check",
+			questionIds: rest.map((question) => question.id)
+		});
+	}
+	if (project.applicationGuide) steps.push({
+		id: "guide",
+		kind: "guide",
+		phase: "apply",
+		title: project.applicationGuide.title
+	});
+	steps.push({
+		id: "finish",
+		kind: "finish",
+		phase: "review"
+	});
+	return {
+		steps,
+		questions
+	};
+}
 const MAX_ID = 300;
 const MAX_ENTRIES = 400;
 const studyAnswerSchema = object({
@@ -20472,6 +20595,47 @@ function emptyStudyProgress(now) {
 		answers: [],
 		startedAt: now,
 		updatedAt: now
+	};
+}
+function questionSignature(question) {
+	return stableHash(canonicalJson({
+		prompt: question.prompt,
+		options: question.options
+	}));
+}
+/** Kayıtlı yanıt, yalnızca soru o yanıttan beri değişmediyse. */
+function savedAnswer(progress, question) {
+	const answer = progress?.answers.find((item) => item.id === question.id);
+	return answer && answer.sig === questionSignature(question) ? answer : void 0;
+}
+function isFirstTry(answer) {
+	return answer.correct && answer.attempts === 1;
+}
+function studySummary(project, path, progress) {
+	const learning = path.steps.filter((step) => step.kind !== "finish");
+	const done = new Set(progress?.done ?? []);
+	const answers = [...path.questions.values()].map((question) => savedAnswer(progress, question));
+	const missed = [...path.questions.values()].filter((question, index) => answers[index] && !isFirstTry(answers[index]));
+	const revisit = /* @__PURE__ */ new Set();
+	for (const question of missed) {
+		const claims = new Set(question.claimIds);
+		for (const step of path.steps) {
+			if (step.kind !== "section") continue;
+			const section = project.story.sections.find((item) => item.id === step.sectionId);
+			if (step.checkId === question.id || section?.claimIds.some((id) => claims.has(id))) revisit.add(step.id);
+		}
+		for (const concept of project.primer?.concepts ?? []) if (concept.claimIds.some((id) => claims.has(id))) revisit.add(`concept:${concept.id}`);
+	}
+	return {
+		total: learning.length,
+		done: learning.filter((step) => done.has(step.id)).length,
+		checks: {
+			total: path.questions.size,
+			answered: answers.filter(Boolean).length,
+			firstTry: answers.filter((answer) => answer && isFirstTry(answer)).length
+		},
+		revisit: path.steps.filter((step) => revisit.has(step.id)),
+		skipped: learning.filter((step) => !done.has(step.id))
 	};
 }
 const studyFileSchema = object({
@@ -20624,6 +20788,329 @@ function readingOrder(library, study) {
 		steps,
 		next: steps.find((step) => step.status !== "finished")?.project,
 		unconnected: papers.length - connected.length
+	};
+}
+
+//#endregion
+//#region src/lib/seeded.ts
+/**
+* Tohumlu sözde rastgelelik. Aynı proje her açılışta aynı soruları aynı
+* sırayla soruyor: okuyucu yeniden baktığında bir önceki denemesini
+* tanıyabilmeli, testler de sonucu sabitleyebilmeli.
+*/
+/** Küçük, tohumlanabilir bir sözde rastgele üreteç (mulberry32). */
+function seededRandom(seed) {
+	let state = 0;
+	for (const character of seed) state = Math.imul(state, 31) + character.charCodeAt(0) | 0;
+	return () => {
+		state = state + 1831565813 | 0;
+		let value = Math.imul(state ^ state >>> 15, 1 | state);
+		value = value + Math.imul(value ^ value >>> 7, 61 | value) ^ value;
+		return ((value ^ value >>> 14) >>> 0) / 4294967296;
+	};
+}
+function seededShuffle(items, next) {
+	const copy = [...items];
+	for (let index = copy.length - 1; index > 0; index -= 1) {
+		const other = Math.floor(next() * (index + 1));
+		[copy[index], copy[other]] = [copy[other], copy[index]];
+	}
+	return copy;
+}
+
+//#endregion
+//#region src/lib/reading-drill.ts
+/**
+* "Hakem gibi oku": kanıtın kendisinden üretilen sorular.
+*
+* Trace'in öğrettiği asıl beceri bir makaleyi kanıtıyla okumak: bir cümle
+* ölçülmüş bir sonuç mu yoksa yazarların yorumu mu, hangi cümleye dayanıyor,
+* makale tam olarak hangi sayıyı veriyor. Bu sorular model yazmıyor; iddia
+* türünden, alıntılardan ve metriklerden kod üretiyor. Doğru yanıt bu yüzden
+* tanım gereği doğru ve her proje (öğrenme katmanı olmayan da) bunları alıyor.
+*
+* Seçim projenin kimliğiyle tohumlanıyor: aynı proje her açılışta aynı
+* soruları gösteriyor, tekrar eden okuyucu kaldığı yerden devam edebiliyor.
+*/
+const KIND_TEXT = {
+	"reported-result": {
+		option: "A reported result: something the authors measured",
+		meaning: "A reported result is something the authors measured, usually a number or a comparison."
+	},
+	"author-interpretation": {
+		option: "The authors' interpretation of what a result means",
+		meaning: "An interpretation is the authors' reading of a result; it goes beyond what was measured."
+	},
+	method: {
+		option: "The method: what the authors built or did",
+		meaning: "The method is what the authors built or did, not what came out of it."
+	},
+	background: {
+		option: "Background the paper builds on",
+		meaning: "Background is earlier work or prior knowledge the paper relies on, not its own finding."
+	},
+	limitation: {
+		option: "A limitation the paper concedes",
+		meaning: "A limitation is a boundary the paper concedes: what it did not test, or where it may not hold."
+	}
+};
+const KINDS$1 = Object.keys(KIND_TEXT);
+const random = seededRandom;
+const shuffle = seededShuffle;
+const quoted = (text) => `“${text.trim()}”`;
+const pageOf = (claim) => claim.sourceRefs.find((reference) => reference.page)?.page;
+const onPage = (page) => page ? ` (p. ${page})` : "";
+function kindQuestion(claim, next) {
+	const others = shuffle(KINDS$1.filter((kind) => kind !== claim.kind), next).slice(0, 3);
+	const options = shuffle([claim.kind, ...others], next).map((kind) => ({
+		label: KIND_TEXT[kind].option,
+		correct: kind === claim.kind,
+		explanation: kind === claim.kind ? `${KIND_TEXT[kind].meaning} That is what this sentence is${onPage(pageOf(claim))}.` : `${KIND_TEXT[kind].meaning} That is not what this sentence does.`
+	}));
+	return {
+		id: `drill-kind-${claim.id}`,
+		prompt: `What kind of statement is this? ${quoted(claim.statement)}`,
+		kind: "single",
+		options,
+		claimIds: [claim.id],
+		page: pageOf(claim)
+	};
+}
+function quoteQuestion(claim, pool, next) {
+	const own = claim.sourceRefs.find((reference) => reference.sourceId === "paper" && reference.excerpt.trim().length >= 20);
+	if (!own) return void 0;
+	const excerpt = own.excerpt.trim();
+	const distractors = shuffle(pool.filter((other) => other.id !== claim.id && other.sourceRefs.every((reference) => reference.excerpt.trim() !== excerpt)), next).sort((left, right) => Number(right.kind === claim.kind) - Number(left.kind === claim.kind)).flatMap((other) => {
+		const reference = other.sourceRefs.find((candidate) => candidate.excerpt.trim().length >= 20);
+		return reference ? [{
+			claim: other,
+			excerpt: reference.excerpt.trim()
+		}] : [];
+	}).filter((item, index, all) => all.findIndex((entry) => entry.excerpt === item.excerpt) === index).slice(0, 3);
+	if (distractors.length < 2) return void 0;
+	const options = shuffle([{
+		label: quoted(excerpt),
+		correct: true,
+		explanation: `This is the sentence the claim rests on${onPage(own.page)}.`
+	}, ...distractors.map(({ claim: other, excerpt: text }) => ({
+		label: quoted(text),
+		correct: false,
+		explanation: `This sentence supports a different claim: ${quoted(other.statement)}`
+	}))], next);
+	return {
+		id: `drill-quote-${claim.id}`,
+		prompt: `Which sentence from the paper supports this claim? ${quoted(claim.statement)}`,
+		kind: "single",
+		options,
+		claimIds: [claim.id],
+		page: own.page
+	};
+}
+function numberQuestion(metric, metrics, claims, next) {
+	const unit = metric.unit.trim().toLowerCase();
+	const alternatives = shuffle(metrics.filter((other) => other.id !== metric.id && other.unit.trim().toLowerCase() === unit && other.value !== metric.value), next).filter((item, index, all) => all.findIndex((entry) => entry.displayValue === item.displayValue) === index && item.displayValue !== metric.displayValue);
+	if (alternatives.length < 2) return void 0;
+	const options = shuffle([{
+		label: metric.displayValue,
+		correct: true,
+		explanation: `${metric.context}. The paper: ${quoted(metric.sourceRef.excerpt)}${onPage(metric.sourceRef.page)}`
+	}, ...alternatives.slice(0, 3).map((other) => ({
+		label: other.displayValue,
+		correct: false,
+		explanation: `That is the paper's figure for ${other.label}.`
+	}))], next);
+	const carrier = claims.find((claim) => claim.statement.includes(metric.displayValue) || claim.sourceRefs.some((reference) => reference.excerpt.includes(metric.displayValue)));
+	return {
+		id: `drill-number-${metric.id}`,
+		prompt: `Which number does the paper report for ${metric.label}?`,
+		kind: "single",
+		options,
+		claimIds: carrier ? [carrier.id] : [],
+		page: metric.sourceRef.page
+	};
+}
+const READING_DRILL_TITLE = "Read it like a reviewer";
+/**
+* En fazla `limit` soru: tür, alıntı ve sayı soruları sırayla. Soru
+* üretilecek kadar kanıt yoksa (üçten az soru) hiç gösterilmiyor.
+*/
+function readingDrill(evidence, options) {
+	const next = random(options.seed);
+	const rejected = new Set(options.rejectedClaimIds ?? []);
+	const usable = evidence.claims.filter((claim) => !rejected.has(claim.id));
+	const ordered = shuffle(usable, next).sort((left, right) => Number(right.confidence === "verified") - Number(left.confidence === "verified"));
+	const byKind = [
+		"author-interpretation",
+		"reported-result",
+		"limitation",
+		"method",
+		"background"
+	].flatMap((kind) => ordered.filter((claim) => claim.kind === kind).slice(0, 1));
+	const kindQuestions = byKind.map((claim) => kindQuestion(claim, next));
+	const quoteQuestions = ordered.filter((claim) => !byKind.slice(0, 2).includes(claim)).map((claim) => quoteQuestion(claim, usable, next)).filter((question) => Boolean(question));
+	const numberQuestions = shuffle(evidence.metrics, next).map((metric) => numberQuestion(metric, evidence.metrics, usable, next)).filter((question) => Boolean(question));
+	const limit = options.limit ?? 6;
+	const questions = [];
+	for (let round = 0; questions.length < limit && round < limit; round += 1) for (const source of [
+		kindQuestions,
+		quoteQuestions,
+		numberQuestions
+	]) if (questions.length < limit && source[round]) questions.push(source[round]);
+	if (questions.length < 3) return void 0;
+	return {
+		title: READING_DRILL_TITLE,
+		intro: "Questions made from the evidence itself, not by a model: what kind of statement a claim is, which sentence of the paper it rests on, and which number the paper reports. Every answer can be checked on its page.",
+		questions
+	};
+}
+/** Projenin kendi drili: kimliğiyle tohumlanmış, bir insanın reddettiği iddialar hariç. */
+function readingDrillFor(project) {
+	const rejected = Object.entries(project.claimReviews ?? {}).filter(([, review]) => review.status === "rejected").map(([id]) => id);
+	return readingDrill(project.evidence, {
+		seed: project.id,
+		rejectedClaimIds: rejected
+	});
+}
+
+//#endregion
+//#region src/lib/review-queue.ts
+function reviewCards(projects, progress) {
+	const cards = [];
+	for (const project of projects) {
+		const reviews = progress.get(project.id)?.reviews ?? [];
+		if (!reviews.length) continue;
+		const questions = new Map([...project.quiz?.questions ?? [], ...readingDrillFor(project)?.questions ?? []].map((question) => [question.id, question]));
+		const concepts = new Map((project.primer?.concepts ?? []).map((concept) => [concept.id, concept]));
+		const base = {
+			projectId: project.id,
+			paperTitle: project.evidence.paper.title,
+			language: project.language
+		};
+		for (const review of reviews) {
+			const key = `${project.id}\u0000${review.id}`;
+			if (review.id.startsWith("q:")) {
+				const question = questions.get(review.id.slice(2));
+				if (question && review.sig === questionSignature(question)) cards.push({
+					...base,
+					key,
+					kind: "question",
+					question,
+					review
+				});
+			} else if (review.id.startsWith("c:")) {
+				const concept = concepts.get(review.id.slice(2));
+				if (concept) cards.push({
+					...base,
+					key,
+					kind: "concept",
+					concept,
+					review
+				});
+			}
+		}
+	}
+	return cards;
+}
+
+//#endregion
+//#region src/lib/learning-stats.ts
+/**
+* Öğrenme istatistikleri: kütüphanedeki çalışmanın dökümü.
+*
+* Hepsi sayım, tahmin yok: çalışma kaydında (`study.json`) ne varsa o. Tekrar
+* kartında her tekrar ve her unutuş sayılıyor, dolayısıyla "hatırlanan"
+* tekrarlar = tekrarlar − unutuşlar tam bir sayı. Oranlar hep sayılarıyla
+* birlikte veriliyor: üç tekrardan bir oran, üç yüz tekrardan bir oran değil.
+*
+* Kartlar projenin bugünkü içeriğinden okunuyor (`review-queue.ts`): yeniden
+* yazılan soru ya da silinen makale sayılmıyor.
+*/
+/** Bu kutudan itibaren kart "uzun süreli": bir sonraki tekrarı iki haftadan sonra. */
+const LONG_TERM_BOX = REVIEW_INTERVALS_DAYS.findIndex((days) => days >= 14);
+const HARDEST = 8;
+const startOfDay = (iso) => `${iso.slice(0, 10)}T00:00:00.000Z`;
+function learningStats(projects, study, now) {
+	const cards = reviewCards(projects, study);
+	const papers = [];
+	const gain = {
+		sections: 0,
+		before: 0,
+		after: 0,
+		total: 0
+	};
+	for (const project of projects) {
+		const progress = study.get(project.id);
+		if (!progress) continue;
+		const path = studyPath(project, readingDrillFor(project));
+		const summary = studySummary(project, path, progress);
+		const own = cards.filter((card) => card.projectId === project.id);
+		const bySection = /* @__PURE__ */ new Map();
+		for (const item of progress.explanations ?? []) bySection.set(item.target, [...bySection.get(item.target) ?? [], item]);
+		const again = [...bySection.values()].filter((items) => items.length > 1);
+		for (const items of again) {
+			const ordered = [...items].sort((left, right) => left.at.localeCompare(right.at));
+			gain.sections += 1;
+			gain.before += ordered[0].covered.length;
+			gain.after += ordered.at(-1).covered.length;
+			gain.total += ordered.at(-1).total;
+		}
+		papers.push({
+			project,
+			status: studyStatus(progress),
+			steps: {
+				done: summary.done,
+				total: summary.total
+			},
+			checks: {
+				answered: summary.checks.answered,
+				firstTry: summary.checks.firstTry
+			},
+			cards: {
+				total: own.length,
+				due: own.filter((card) => isDue(card.review, now)).length,
+				longTerm: own.filter((card) => card.review.box >= LONG_TERM_BOX).length
+			},
+			recalls: {
+				reviews: own.reduce((sum, card) => sum + card.review.reviews, 0),
+				remembered: own.reduce((sum, card) => sum + card.review.reviews - card.review.lapses, 0)
+			},
+			explanations: {
+				sections: bySection.size,
+				again: again.length
+			},
+			lastStudied: [progress.updatedAt, ...(progress.reviews ?? []).map((review) => review.last ?? "")].sort().at(-1)
+		});
+	}
+	papers.sort((left, right) => right.lastStudied.localeCompare(left.lastStudied));
+	const sum = (pick) => papers.reduce((total, paper) => total + pick(paper), 0);
+	const boxes = Array.from({ length: MAX_REVIEW_BOX + 1 }, (_, box) => cards.filter((card) => card.review.box === box).length);
+	const today = startOfDay(now);
+	const week = Array.from({ length: 7 }, (_, offset) => {
+		const start = addDays(today, offset);
+		const end = addDays(today, offset + 1);
+		return {
+			day: start.slice(0, 10),
+			due: cards.filter((card) => offset === 0 ? card.review.due < end : card.review.due >= start && card.review.due < end).length
+		};
+	});
+	const hardest = cards.filter((card) => card.review.lapses > 0).sort((left, right) => right.review.lapses - left.review.lapses || right.review.reviews - left.review.reviews || left.key.localeCompare(right.key)).slice(0, HARDEST);
+	return {
+		papers,
+		totals: {
+			finished: papers.filter((paper) => paper.status === "finished").length,
+			started: papers.filter((paper) => paper.status === "started").length,
+			cards: cards.length,
+			due: cards.filter((card) => isDue(card.review, now)).length,
+			longTerm: cards.filter((card) => card.review.box >= LONG_TERM_BOX).length,
+			reviews: sum((paper) => paper.recalls.reviews),
+			remembered: sum((paper) => paper.recalls.remembered),
+			answered: sum((paper) => paper.checks.answered),
+			firstTry: sum((paper) => paper.checks.firstTry)
+		},
+		boxes,
+		week,
+		hardest,
+		explanationGain: gain
 	};
 }
 
@@ -21918,4 +22405,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, isStudyFile, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { REVIEW_INTERVALS_DAYS, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

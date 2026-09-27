@@ -28,6 +28,7 @@ import { CompareView } from "./compare-view";
 import { LiteratureMapView } from "./literature-map-view";
 import { LibraryView } from "./library-view";
 import { ReviewView } from "./review-view";
+import { LearningStatsView } from "./learning-stats-view";
 import { ConceptMapView } from "./concept-map-view";
 import { ModelRecordView } from "./model-record-view";
 import { Onboarding, type GenerationOptions } from "./onboarding";
@@ -36,7 +37,7 @@ import { StoryView } from "./story-view";
 import { DisplayControl } from "./display-control";
 
 type WorkspaceMode = "lab" | "story" | "preview";
-type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "concepts";
+type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "concepts" | "progress";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
 
@@ -165,6 +166,7 @@ export function AppShell() {
         }
         if (search.get("library") === "1") setScreen("library");
         if (search.get("review") === "1") setScreen("review");
+        if (search.get("progress") === "1") setScreen("progress");
         if (search.get("team") === "1") setInitialTeam(true);
 
         /**
@@ -254,8 +256,9 @@ export function AppShell() {
   useEffect(() => {
     if (!hydrated) return;
     const url = new URL(window.location.href);
-    for (const key of ["sample", "new", "library", "team", "mode", "import", "review"]) url.searchParams.delete(key);
+    for (const key of ["sample", "new", "library", "team", "mode", "import", "review", "progress"]) url.searchParams.delete(key);
     if (screen === "review" && !reviewScope) url.searchParams.set("review", "1");
+    if (screen === "progress") url.searchParams.set("progress", "1");
     if (screen === "workspace" && project) {
       url.searchParams.set("project", project.id);
       if (mode !== "lab") url.searchParams.set("mode", mode);
@@ -550,6 +553,19 @@ export function AppShell() {
   if (screen === "concepts") {
     return <ConceptMapView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />;
   }
+  if (screen === "progress") {
+    return (
+      <LearningStatsView
+        projects={projects}
+        onBack={() => setScreen("library")}
+        onOpen={openProject}
+        onReview={() => {
+          setReviewScope(undefined);
+          setScreen("review");
+        }}
+      />
+    );
+  }
   if (screen === "review") {
     const scoped = reviewScope && project?.id === reviewScope;
     return (
@@ -577,6 +593,7 @@ export function AppShell() {
           setScreen("review");
         }}
         onConcepts={() => setScreen("concepts")}
+        onProgress={() => setScreen("progress")}
         onOpen={openProject}
         onOpenClaim={openClaim}
         onModelRecord={() => setScreen("models")}

@@ -106,6 +106,25 @@ export function useLibraryStudy() {
   return study;
 }
 
+/** Kütüphanenin çalışma kaydı, okuma durumuyla: okunamazsa bunu söyleyebilmek için. */
+export function useLibraryStudyState() {
+  const [state, setState] = useState<{ status: "loading" } | { status: "ready"; study: Map<string, StudyProgress> } | { status: "failed"; message: string }>({ status: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    readLibraryStudy()
+      .then((study) => {
+        if (!cancelled) setState({ status: "ready", study });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : "Your study progress could not be read." });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return state;
+}
+
 /** Kütüphane başlığındaki tekrar özeti. */
 export function useReviewForecast(projects: readonly ResearchProject[]) {
   const study = useLibraryStudy();

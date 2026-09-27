@@ -13,6 +13,8 @@ import {
   buildSectionBrief,
   checkExplanationFeedback,
   isStudyFile,
+  learningStats,
+  REVIEW_INTERVALS_DAYS,
   recordCheckedExplanation,
   conceptLinks,
   libraryPaperFor,
@@ -327,6 +329,7 @@ Usage:
   node trace-agent.mjs anki --project <project.trace.json> [--out <deck.anki.txt>]
   node trace-agent.mjs record
   node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
+  node trace-agent.mjs progress
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
   node trace-agent.mjs deliver --project <project.trace.json> [--out <site-directory>] [--mode lab|story]
                               [--no-open] [--no-app] [--install-app] [--app <trace-repo>] [--app-url <http://...>]
@@ -391,6 +394,12 @@ Usage:
             it (a JSON array of titles or { title, year, abstract } objects,
             or one title per line). A work already in the library is marked
             inLibrary.
+  progress  Prints the reader's learning statistics from the studio's study
+            progress: papers finished and in progress, reviews remembered,
+            questions right on the first try, where the review cards are
+            (next review in 1 to 90 days), the week ahead, the cards forgotten
+            most, and what explaining a section again added. Counts only;
+            reads the library only. No network, no model.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -1915,6 +1924,45 @@ async function printConcepts(args) {
   }, null, 2));
 }
 
+/**
+ * Öğrenme istatistikleri (`learning-stats.ts`): stüdyonun "Progress" ekranı
+ * ile aynı sayımlar, kütüphanenin çalışma kaydından.
+ */
+function printProgress() {
+  const { library, projects, files, unreadable, study } = readLibrary();
+  const stats = learningStats(projects, study, new Date().toISOString());
+  console.log(JSON.stringify({
+    ok: true,
+    library,
+    unreadable,
+    totals: stats.totals,
+    cardsByNextReview: stats.boxes.map((cards, box) => ({ inDays: REVIEW_INTERVALS_DAYS[box], cards })),
+    week: stats.week,
+    hardest: stats.hardest.map((card) => ({
+      kind: card.kind,
+      text: card.kind === "concept" ? card.concept.term : card.question.prompt,
+      paper: card.paperTitle,
+      projectId: card.projectId,
+      forgotten: card.review.lapses,
+      reviews: card.review.reviews,
+    })),
+    explanationGain: stats.explanationGain,
+    papers: stats.papers.map((paper) => ({
+      paper: paper.project.evidence.paper.title,
+      projectId: paper.project.id,
+      file: files.get(paper.project.id),
+      status: paper.status,
+      steps: paper.steps,
+      checks: paper.checks,
+      cards: paper.cards,
+      recalls: paper.recalls,
+      explanations: paper.explanations,
+      lastStudied: paper.lastStudied,
+    })),
+    note: "Counts from the reader's study progress, nothing estimated. Give shares with their counts (\"4 of 6 reviews remembered\"); a percentage from a handful of reviews says little. For the cards forgotten most, suggest rereading where they come from before another review.",
+  }, null, 2));
+}
+
 async function main() {
 try {
   const [command, ...rest] = process.argv.slice(2);
@@ -1938,6 +1986,7 @@ try {
   else if (command === "export") exportProject(args);
   else if (command === "record") printModelRecord();
   else if (command === "concepts") await printConcepts(args);
+  else if (command === "progress") printProgress();
   else usage(1);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

@@ -41,6 +41,7 @@ running on the coding agent you already use, with no second API key.
 
 | | |
 | --- | --- |
+| **[See what you have learned](#see-what-you-have-learned)** | Papers finished, reviews remembered, questions right on the first try, cards kept long-term, the week ahead and the cards you forget most, counted from your study progress. |
 | **[A reading order for your library](#connect-what-you-learn-across-papers)** | Each paper after the papers that define what it assumes, with the reason and the next paper to read. The Lab says which papers to read first. |
 | **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references, titles and abstracts, for works that teach what you have not studied yet. |
 | **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim and page. Explain it again later and Trace shows what you added since. |
@@ -271,6 +272,24 @@ concept, so a rewritten question or a deleted paper simply drops out of the queu
 kept next to your study progress, never in the project file.
 
 ![Review across the library](docs/images/review.jpg)
+
+### See what you have learned
+
+**Progress** in the library header adds up your study: papers finished and in progress, how many of
+your reviews you remembered, how many questions you got right on the first try, and how many cards you
+keep long-term (the ones that now come back after sixteen days or more). It shows where your cards are
+on the schedule, what comes due each day of the week ahead, the cards you forget most (with the paper
+they come from, because rereading helps them more than another review), what explaining a section
+again added, and a table of every paper you have studied.
+
+All of it is counted from your study progress, nothing is estimated, and a share is shown as a
+percentage only from ten counts up: three reviews say little. Your agent reads the same numbers:
+
+```text
+How is my studying going across my Trace papers, and what should I review? Use the Trace plugin.
+```
+
+![Your learning](docs/images/progress.jpg)
 
 ### Connect what you learn across papers
 
@@ -901,6 +920,9 @@ npm run trace:agent -- explain-check --brief "explanations/story-<section-id>.br
 # --suggest looks through the paper's references for works that teach the rest
 npm run trace:agent -- concepts --project "paper.trace.json" --suggest
 npm run trace:agent -- concepts
+
+# The reader's learning statistics: reviews remembered, cards kept, the week ahead
+npm run trace:agent -- progress
 
 # --strict also requires the learning blocks the depth mandates
 npm run trace:agent -- validate --strict --project ".trace/jobs/paper/paper.trace.json"

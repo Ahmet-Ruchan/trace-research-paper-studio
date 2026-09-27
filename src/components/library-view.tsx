@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import {
   LIBRARY_LAYOUT_KEY,
@@ -37,6 +37,7 @@ type LibraryViewProps = {
   onReview: () => void;
   /** Kavram haritası: birden çok makalenin anlattığı kavramlar. */
   onConcepts: () => void;
+  onProgress: () => void;
   /** Kart hemen kayboluyor; silme geri alma süresi dolunca sunucuya gidiyor. */
   onDelete: (projectId: string) => void;
   pendingDeletion?: ResearchProject;
@@ -72,7 +73,7 @@ function count(value: number, noun: string) {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onConcepts, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onConcepts, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const review = useReviewForecast(projects);
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("papers");
@@ -208,6 +209,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
             void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : "Could not import the Trace project."));
           }} />
           <DisplayControl />
+          <button className="library-import-button" title="What you studied, remembered and have to review" onClick={onProgress}><BarChart3 size={15} /> Progress</button>
           <button className="library-import-button" title="Concepts more than one paper explains" onClick={onConcepts}><Waypoints size={15} /> Concepts</button>
           <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>

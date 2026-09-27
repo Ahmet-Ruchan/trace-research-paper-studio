@@ -7,7 +7,7 @@ import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
 import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 import { readingDrillFor } from "../src/lib/reading-drill";
 import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
-import { completeStep, recordAnswer, studyPath, type StudyProgress } from "../src/lib/study-path";
+import { completeStep, questionSignature, recordAnswer, studyPath, type StudyProgress } from "../src/lib/study-path";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -1796,6 +1796,45 @@ test.describe("learning health", () => {
     await panel.getByRole("button", { name: "Rewrite derivation" }).click();
     await expect(page.getByRole("dialog").getByRole("heading", { name: "Regenerate derivation" })).toBeVisible();
     await expect(page.getByRole("dialog").locator("textarea")).toHaveValue(/Give every step a rationale/);
+  });
+});
+
+test.describe("learning statistics", () => {
+  test("counts what the reader studied, remembered and forgot, across the library", async ({ page, request }) => {
+    const base = projectNamed("e2e-progress");
+    const concept = base.primer!.concepts[0];
+    const project = await seed(request, {
+      ...base,
+      evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Progress paper" } },
+      primer: { ...base.primer!, concepts: base.primer!.concepts.map((item) => (item.id === concept.id ? { ...item, term: "Zeta forgotten concept" } : item)) },
+    });
+    const question = example.quiz!.questions[0];
+    const now = Date.now();
+    const iso = (days: number) => new Date(now + days * 86_400_000).toISOString();
+    const progress: StudyProgress = {
+      ...completeStep(undefined, `concept:${concept.id}`, "next", iso(-30)),
+      reviews: [
+        { id: `c:${concept.id}`, box: 0, due: iso(-1), lapses: 3, reviews: 4, last: iso(-2) },
+        { id: `q:${question.id}`, box: 4, due: iso(20), lapses: 0, reviews: 3, last: iso(-3), sig: questionSignature(question) },
+      ],
+    };
+    expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
+
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Progress", exact: true }).click();
+    await expect(page).toHaveURL(/progress=1/);
+    await expect(page.locator(".compare-hero h1")).toContainText("You remembered");
+
+    const row = page.locator(".stats-table tbody tr", { hasText: "Progress paper" });
+    await expect(row.locator("td").nth(0)).toContainText("Studying · 1 of");
+    await expect(row.locator("td").nth(2)).toHaveText("2 · 1 due");
+    await expect(row.locator("td").nth(3)).toHaveText("4 of 7");
+    await expect(page.getByRole("list", { name: "Cards by the time until their next review" }).locator("li")).toHaveCount(6);
+    await expect(page.getByRole("list", { name: "Cards due each day this week" }).locator("li")).toHaveCount(7);
+    await expect(page.locator(".stats-hardest li", { hasText: "Zeta forgotten concept" })).toContainText("forgotten 3 of 4 reviews");
+
+    await row.getByRole("button", { name: "Progress paper" }).click();
+    await expect(page.locator(".lab-section-header h1")).toHaveText("Progress paper");
   });
 });
 
