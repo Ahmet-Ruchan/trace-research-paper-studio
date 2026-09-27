@@ -5,6 +5,7 @@ import { ArrowLeft, Columns2, Gauge, ListX } from "lucide-react";
 import { documentTaskRoles, type ModelTeam } from "@/lib/model-providers";
 import { exclusionDescriptions, modelIdentity, modelLabel, modelRecord, type ExclusionReason, type ModelIdentity, type ModelRecord } from "@/lib/model-record";
 import type { ResearchProject } from "@/lib/schema";
+import { StudioNav } from "./focus/studio-nav";
 
 const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
 
@@ -47,6 +48,7 @@ export function ModelRecordView({
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <StudioNav />
         </div>
       </header>
 

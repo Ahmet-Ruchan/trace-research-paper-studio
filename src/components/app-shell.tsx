@@ -35,9 +35,14 @@ import { Onboarding, type GenerationOptions } from "./onboarding";
 import { StoryEditor } from "./story-editor";
 import { StoryView } from "./story-view";
 import { DisplayControl } from "./display-control";
+import { FocusAlerts } from "./focus/focus-alerts";
+import { FocusProvider } from "./focus/focus-provider";
+import { FocusView } from "./focus/focus-view";
+import { ProfileView } from "./focus/profile-view";
+import { StudioNav, StudioNavProvider, type StudioNavTarget } from "./focus/studio-nav";
 
 type WorkspaceMode = "lab" | "story" | "preview";
-type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "concepts" | "progress";
+type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "concepts" | "progress" | "focus" | "profile";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
 
@@ -60,10 +65,26 @@ function download(name: string, content: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
+/**
+ * Çalışma saati bütün ekranların üstünde: sağlayıcı kökte, sayaç okuyucu
+ * ekran değiştirse de sürüyor (`focus/focus-provider.tsx`).
+ */
 export function AppShell() {
+  return (
+    <FocusProvider>
+      <Studio />
+    </FocusProvider>
+  );
+}
+
+const returnLabels: Partial<Record<AppScreen, string>> = { home: "Home", library: "Library", workspace: "Back to the paper", progress: "Progress", concepts: "Concepts", models: "Model record", review: "Review", focus: "Focus", profile: "Profile" };
+
+function Studio() {
   const [project, setProject] = useState<ResearchProject>();
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [screen, setScreen] = useState<AppScreen>("home");
+  /** Çalışma saati ve profilden dönülecek ekran: makaledeyken açılan sayaç makaleye geri dönüyor. */
+  const [returnTo, setReturnTo] = useState<AppScreen>("library");
   /** Tekrar ekranı tek bir makaleyle sınırlıysa onun kimliği (Lab'den gelindi). */
   const [reviewScope, setReviewScope] = useState<string>();
   const [comparison, setComparison] = useState<ResearchProject[]>();
@@ -167,6 +188,8 @@ export function AppShell() {
         if (search.get("library") === "1") setScreen("library");
         if (search.get("review") === "1") setScreen("review");
         if (search.get("progress") === "1") setScreen("progress");
+        if (search.get("focus") === "1") setScreen("focus");
+        if (search.get("profile") === "1") setScreen("profile");
         if (search.get("team") === "1") setInitialTeam(true);
 
         /**
@@ -256,9 +279,11 @@ export function AppShell() {
   useEffect(() => {
     if (!hydrated) return;
     const url = new URL(window.location.href);
-    for (const key of ["sample", "new", "library", "team", "mode", "import", "review", "progress"]) url.searchParams.delete(key);
+    for (const key of ["sample", "new", "library", "team", "mode", "import", "review", "progress", "focus", "profile"]) url.searchParams.delete(key);
     if (screen === "review" && !reviewScope) url.searchParams.set("review", "1");
     if (screen === "progress") url.searchParams.set("progress", "1");
+    if (screen === "focus") url.searchParams.set("focus", "1");
+    if (screen === "profile") url.searchParams.set("profile", "1");
     if (screen === "workspace" && project) {
       url.searchParams.set("project", project.id);
       if (mode !== "lab") url.searchParams.set("mode", mode);
@@ -533,28 +558,55 @@ export function AppShell() {
 
   const t = stringsFor(project?.language);
 
+  function openWork(target: StudioNavTarget) {
+    if (screen !== "focus" && screen !== "profile") setReturnTo(screen === "compare" ? "library" : screen);
+    setScreen(target);
+  }
+  const backFromWork = returnTo === "workspace" && !project ? "library" : returnTo;
+  /** Her ekran üst menüyü ve zamanlayıcının bildirimlerini taşıyor. */
+  const withWork = (content: React.ReactNode) => (
+    <StudioNavProvider value={{ open: openWork, current: screen === "focus" || screen === "profile" ? screen : undefined }}>
+      {content}
+      <FocusAlerts onOpen={() => openWork("focus")} />
+    </StudioNavProvider>
+  );
+
   if (!hydrated) return <div className="boot-screen"><span>trace</span></div>;
+  if (screen === "focus") {
+    return withWork(<FocusView projects={projects} backLabel={returnLabels[backFromWork] ?? "Library"} onBack={() => setScreen(backFromWork)} onProfile={() => setScreen("profile")} />);
+  }
+  if (screen === "profile") {
+    return withWork(
+      <ProfileView
+        projects={projects}
+        backLabel={returnLabels[backFromWork] ?? "Library"}
+        onBack={() => setScreen(backFromWork)}
+        onFocus={() => setScreen("focus")}
+        onProgress={() => setScreen("progress")}
+      />,
+    );
+  }
   if (screen === "compare" && comparison && comparison.length > 2) {
-    return <LiteratureMapView projects={comparison} onBack={() => setScreen("library")} onOpen={openProject} />;
+    return withWork(<LiteratureMapView projects={comparison} onBack={() => setScreen("library")} onOpen={openProject} />);
   }
   if (screen === "compare" && comparison?.length === 2) {
-    return (
+    return withWork(
       <CompareView
         left={comparison[0]}
         right={comparison[1]}
         onBack={() => setScreen("library")}
         onOpen={openProject}
-      />
+      />,
     );
   }
   if (screen === "models") {
-    return <ModelRecordView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />;
+    return withWork(<ModelRecordView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />);
   }
   if (screen === "concepts") {
-    return <ConceptMapView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />;
+    return withWork(<ConceptMapView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />);
   }
   if (screen === "progress") {
-    return (
+    return withWork(
       <LearningStatsView
         projects={projects}
         onBack={() => setScreen("library")}
@@ -563,12 +615,12 @@ export function AppShell() {
           setReviewScope(undefined);
           setScreen("review");
         }}
-      />
+      />,
     );
   }
   if (screen === "review") {
     const scoped = reviewScope && project?.id === reviewScope;
-    return (
+    return withWork(
       <ReviewView
         projects={projects}
         projectId={scoped ? reviewScope : undefined}
@@ -581,11 +633,11 @@ export function AppShell() {
           setReviewScope(undefined);
           openProject(target);
         }}
-      />
+      />,
     );
   }
   if (screen === "library") {
-    return (
+    return withWork(
       <LibraryView
         projects={projects}
         onReview={() => {
@@ -610,17 +662,17 @@ export function AppShell() {
           setComparison(chosen);
           setScreen("compare");
         }}
-      />
+      />,
     );
   }
   if (screen === "home" || !project) {
-    return <><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryProjects={projects} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>;
+    return withWork(<><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryProjects={projects} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>);
   }
 
   const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);
   const slug = project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trace-story";
 
-  return (
+  return withWork(
     <div className="workspace-shell" style={{ "--accent": project.story.accent } as React.CSSProperties}>
       <header className="workspace-header">
         <button className="workspace-brand" onClick={() => setScreen("home")}><span className="brand-glyph">t</span><span><strong>trace</strong><small>research studio</small></span></button>
@@ -665,6 +717,7 @@ export function AppShell() {
           <DisplayControl />
           <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
           <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
+          <StudioNav />
         </div>
       </header>
       {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
@@ -696,7 +749,7 @@ export function AppShell() {
         />
       )}
       {mode === "preview" && selectedClaim && <div className="drawer-overlay" onClick={() => setSelectedClaimId(undefined)}><div onClick={(event) => event.stopPropagation()}><EvidenceDrawer claim={selectedClaim} review={project.claimReviews?.[selectedClaim.id]} evidence={project.evidence} fileUrl={fileUrl} onClose={() => setSelectedClaimId(undefined)} /></div></div>}
-    </div>
+    </div>,
   );
 }
 

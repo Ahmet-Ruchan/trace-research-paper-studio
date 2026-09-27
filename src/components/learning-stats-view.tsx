@@ -7,6 +7,7 @@ import { REVIEW_INTERVALS_DAYS } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
 import { studyStatusLabel } from "./concepts-view";
 import { useLibraryStudyState } from "./study-progress";
+import { StudioNav } from "./focus/studio-nav";
 
 const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? "" : "s"}`;
 const dayFormat = new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", month: "short" });
@@ -74,6 +75,7 @@ export function LearningStatsView({
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <StudioNav />
         </div>
       </header>
 

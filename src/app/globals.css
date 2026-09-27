@@ -824,6 +824,9 @@ span.library-tag { cursor: default; }
      tek satıra sığmıyor: ikinci satıra geçiyorlar, sayfa yana kaymıyor. */
   .library-header { height: auto; min-height: 72px; flex-wrap: wrap; gap: 10px; padding: 12px 0; }
   .library-header-actions { flex-wrap: wrap; justify-content: flex-end; }
+  /* Çalışma saati ve profil düğmeleri de başlıkta: açılış başlığı da gerekince ikinci satıra geçiyor. */
+  .landing-header { height: auto; min-height: 72px; flex-wrap: wrap; gap: 10px; padding: 12px 0; }
+  .landing-header-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
 
 /* --- Yazı boyutu seçimi ---------------------------------------------- *

@@ -28,6 +28,7 @@ import { QuoteTrackRecord } from "./model-record-view";
 import { TeamProbe } from "./team-probe";
 import { DisplayControl } from "./display-control";
 import { TemplateEditor } from "./template-editor";
+import { StudioNav } from "./focus/studio-nav";
 
 export type GenerationOptions = {
   file: File;
@@ -288,6 +289,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
           <DisplayControl />
           <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> Library <span className="nav-count">{libraryCount}</span></button>
           <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? "Loading example…" : "Open the example project"} <ArrowRight size={15} /></button>
+          <StudioNav />
         </div>
       </header>
 

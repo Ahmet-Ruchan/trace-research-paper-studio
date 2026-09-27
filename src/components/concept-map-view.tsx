@@ -8,6 +8,7 @@ import type { ResearchProject } from "@/lib/schema";
 import { studyStatusLabel } from "./concepts-view";
 import { ConceptAliasesPanel } from "./concept-aliases-panel";
 import { useConceptAliases, useLibraryStudy } from "./study-progress";
+import { StudioNav } from "./focus/studio-nav";
 
 /**
  * Kütüphanenin kavram haritası: birden çok makalenin anlattığı kavramlar ve
@@ -42,6 +43,7 @@ export function ConceptMapView({
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <StudioNav />
         </div>
       </header>
 

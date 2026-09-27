@@ -25,6 +25,7 @@ import { claimKindLabels } from "./evidence-drawer";
 import { DisplayControl } from "./display-control";
 import { useReviewForecast } from "./study-progress";
 import { describeDue } from "@/lib/review-schedule";
+import { StudioNav } from "./focus/studio-nav";
 
 type LibraryViewProps = {
   projects: ResearchProject[];
@@ -214,6 +215,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
           <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>
           <button className="library-new-button" onClick={onNew}><Plus size={16} /> New paper</button>
+          <StudioNav />
         </div>
       </header>
 

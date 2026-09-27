@@ -8,6 +8,7 @@ import { REVIEW_INTERVALS_DAYS, describeDue } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyProgress } from "@/lib/study-path";
 import { readLibraryStudy } from "./study-progress";
+import { StudioNav } from "./focus/studio-nav";
 
 type Load = { status: "loading" } | { status: "failed"; message: string } | { status: "ready" };
 type Grade = { remembered: boolean; due: string; at: string };
@@ -139,6 +140,7 @@ export function ReviewView({
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {backLabel}</button>
+          <StudioNav />
         </div>
       </header>
 

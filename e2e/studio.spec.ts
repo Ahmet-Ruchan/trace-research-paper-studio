@@ -9,6 +9,8 @@ import { readingDrillFor } from "../src/lib/reading-drill";
 import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
 import { completeStep, questionSignature, recordAnswer, studyPath, type StudyProgress } from "../src/lib/study-path";
 import { emptyTestLibrary } from "./fresh-library";
+import type { Profile } from "../src/lib/profile";
+import { dayKey as dayKeyOf, type WorkLog } from "../src/lib/work-log";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -893,7 +895,7 @@ test.describe("reading comfort", () => {
 
   test("keeps every visible text at 12 px or more on the main screens", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-type-floor"));
-    for (const url of ["/", "/?library=1", `/?project=${project.id}`, `/?project=${project.id}&mode=story`, `/?project=${project.id}&mode=preview`]) {
+    for (const url of ["/", "/?library=1", `/?project=${project.id}`, `/?project=${project.id}&mode=story`, `/?project=${project.id}&mode=preview`, "/?focus=1", "/?profile=1"]) {
       await page.goto(url);
       await expect(page.locator(".boot-screen")).toHaveCount(0);
       const { smallest, where } = await smallestText(page);
@@ -916,7 +918,7 @@ test.describe("reading comfort", () => {
     const project = await seed(request, projectNamed("e2e-phone-larger"));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript(() => window.localStorage.setItem("trace-text-size", "larger"));
-    for (const url of ["/", "/?library=1", `/?project=${project.id}`, `/?project=${project.id}&mode=preview`]) {
+    for (const url of ["/", "/?library=1", `/?project=${project.id}`, `/?project=${project.id}&mode=preview`, "/?focus=1", "/?profile=1"]) {
       await page.goto(url);
       await expect(page.locator(".boot-screen")).toHaveCount(0);
       // Izgara sütunları içeriğin en küçük genişliğine göre büyüyüp ekranı aşıyordu.
@@ -1240,8 +1242,45 @@ test.describe("colour themes", () => {
     expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
     expect((await request.put(`/api/library/study?id=${companion.id}`, { data: { progress: { ...completeStep(undefined, "start", "finish", iso(-9)), finishedAt: iso(-8) } } })).ok()).toBe(true);
     expect((await request.put("/api/library/aliases", { data: { a: project.primer!.concepts[1].term, b: "Contrast scaled scores", decision: "same" } })).ok()).toBe(true);
+    // Çalışma saati ve profil: açık renkli dolgular (koyu yazı) ve koyu olanlar (beyaz yazı), bir alarm, bir yıllık kayıt.
+    const { profile } = (await (await request.get("/api/profile")).json()) as { profile: Profile };
+    expect((await request.put("/api/profile", {
+      data: {
+        profile: {
+          ...profile,
+          firstName: "Ada",
+          lastName: "Lovelace",
+          title: "PhD student",
+          field: "Machine learning",
+          bio: "Reading about attention.",
+          preferences: { ...profile.preferences, color: "yellow", sound: "none", colors: { focus: "sky", timer: "lilac", stopwatch: "navy", alarm: "burgundy" } },
+          alarms: [{ id: "contrast", time: "07:30", label: "Start reading", days: [1, 2, 3, 4, 5], enabled: true, color: "burgundy" }],
+        },
+      },
+    })).ok()).toBe(true);
+    const worked = Array.from({ length: 40 }, (_, index) => {
+      const begin = now - (index * 7 + 1) * 86_400_000;
+      return { id: `contrast-${index}`, start: iso((begin - now) / 86_400_000), end: new Date(begin + (index % 5 + 1) * 40 * 60_000).toISOString(), kind: "focus", label: "Contrast reading" };
+    });
+    expect((await request.post("/api/profile/sessions", { data: { sessions: worked } })).ok()).toBe(true);
     return project;
   }
+
+  /** Bu tarayıcıdaki sayaçlar: duraklatılmış bir tur, geri sayım, turları olan kronometre ve iki bildirim. */
+  const focusStore = (at: number) => JSON.stringify({
+    version: 1,
+    lastAlive: at,
+    alarmCheck: at,
+    snoozes: [],
+    pending: [],
+    focus: { phase: "work", completed: 2, clock: { running: false, since: 0, elapsed: 600_000 }, duration: 1_500_000, waiting: false, finished: false, label: "Chapter 3" },
+    timer: { duration: 600_000, clock: { running: false, since: 0, elapsed: 120_000 }, done: false, label: "Tea" },
+    stopwatch: { clock: { running: false, since: 0, elapsed: 185_000 }, laps: [60_000, 125_000, 185_000] },
+    alerts: [
+      { id: "contrast-phase", kind: "phase", title: "Time for a break", body: "Focus round 2 done.", color: "yellow", at, ringUntil: 0, action: "skip-break" },
+      { id: "contrast-alarm", kind: "alarm", title: "07:30 · Start reading", body: "Your alarm is ringing.", color: "navy", at, ringUntil: 0, action: "snooze" },
+    ],
+  });
 
   for (const theme of ["dark", "light"] as const) {
     test(`keeps every visible text readable in the ${theme} theme`, async ({ page, request }) => {
@@ -1302,6 +1341,25 @@ test.describe("colour themes", () => {
             await panel.locator(".alias-ask summary").click();
             await panel.getByLabel("Gemini API key").fill("test-key");
             await panel.getByRole("button", { name: "Look for other names" }).click();
+          },
+        },
+        {
+          name: "focus",
+          url: "/?focus=1",
+          ready: ".focus-alert",
+          open: async () => {
+            await page.evaluate((store) => window.localStorage.setItem("trace-focus-v1", store), focusStore(Date.now()));
+            await page.reload();
+            await expect(page.locator(".focus-dial-card")).toBeVisible();
+          },
+        },
+        ...(["Timer", "Stopwatch", "Alarms"] as const).map((tab) => ({ name: `focus ${tab}`, url: "/?focus=1", ready: ".focus-settings", open: async () => { await page.getByRole("tab", { name: tab }).click(); } })),
+        {
+          name: "profile",
+          url: "/?profile=1",
+          ready: ".work-calendar-grid",
+          open: async () => {
+            await page.locator(".work-cell.level-3, .work-cell.level-2").first().click();
           },
         },
       ];
@@ -2197,5 +2255,168 @@ test.describe("concepts across the library", () => {
     await expect(zeta.locator(".shared-concept-papers button.is-studied")).toContainText("Zeta dot products: a second paper");
     await zeta.locator(".shared-concept-papers button", { hasText: "Attention Is All You Need" }).click();
     await expect(page.locator(".lab-section-header h1")).toHaveText(first.evidence.paper.title);
+  });
+});
+
+test.describe("focus timer and profile", () => {
+  /** Profil ayarları: testler dakikalarca beklemesin diye bir dakikalık turlar. */
+  async function setProfile(request: APIRequestContext, change: (profile: Profile) => Profile) {
+    const { profile } = (await (await request.get("/api/profile")).json()) as { profile: Profile };
+    const response = await request.put("/api/profile", { data: { profile: change(profile) } });
+    expect(response.ok()).toBe(true);
+  }
+  const sessions = async (request: APIRequestContext) => ((await (await request.get("/api/profile/sessions")).json()) as { log: WorkLog }).log.sessions;
+
+  test("runs rounds and breaks on its own, keeps running on other screens, and saves the focus time", async ({ page, request }) => {
+    await setProfile(request, (profile) => ({
+      ...profile,
+      firstName: "Ada",
+      preferences: { ...profile.preferences, sound: "none", focus: { ...profile.preferences.focus, work: 1, shortBreak: 1, longBreak: 2, longEvery: 2 } },
+    }));
+    await page.clock.install();
+    await page.goto("/?focus=1");
+    await expect(page.locator(".focus-hero h1")).toContainText("Ada.");
+    await page.getByLabel("What are you working on?").fill("Chapter 3");
+    await page.getByRole("button", { name: "Start focus" }).click();
+    await page.clock.runFor(2_000);
+    const nav = page.locator(".studio-nav-focus");
+    await expect(nav).toHaveText("00:58");
+    await expect(nav).toHaveAttribute("aria-label", "Focus timer: 00:58 left in focus");
+
+    // Başka bir ekrana geçiliyor; sayaç sürüyor, tur orada bitiyor.
+    await page.locator(".library-header-actions .text-button", { hasText: "Library" }).click();
+    await expect(page.locator(".library-hero")).toBeVisible();
+    await page.clock.runFor(60_000);
+    const alert = page.locator(".focus-alert", { hasText: "Time for a break" });
+    await expect(alert).toContainText("Focus round 1 done. Your 1-minute short break has started.");
+    await expect(nav).toContainText("00:5");
+    await expect.poll(async () => (await sessions(request)).map((session) => [session.kind, session.label, Date.parse(session.end) - Date.parse(session.start)])).toEqual([["focus", "Chapter 3", 60_000]]);
+
+    // Moladan atlanıyor; ikinci tur başlıyor. Sayfa yenilense de kaldığı yerden.
+    await alert.getByRole("button", { name: "Skip the break" }).click();
+    await nav.click();
+    await expect(page.locator(".focus-phase")).toContainText("Round 2");
+    await page.clock.runFor(20_000);
+    await page.reload();
+    await expect(page.locator(".focus-time")).toHaveText(/00:(39|40)/);
+    await page.getByRole("button", { name: "Pause" }).click();
+    await expect.poll(async () => (await sessions(request)).length).toBe(2);
+    await expect(page.locator(".focus-today strong").first()).toHaveText("1m");
+  });
+
+  test("counts down, says when time is up, and rings an alarm on its minute", async ({ page, request }) => {
+    const at = new Date(Date.now() + 60_000);
+    const time = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+    await setProfile(request, (profile) => ({
+      ...profile,
+      preferences: { ...profile.preferences, sound: "none", timerSeconds: 5 },
+      alarms: [{ id: "e2e-alarm", time, label: "Stand up", days: [], enabled: true, color: "pink" }],
+    }));
+    await page.clock.install();
+    await page.goto("/?focus=1");
+    await page.getByRole("tab", { name: "Timer" }).click();
+    await expect(page.locator(".focus-time")).toHaveText("00:05");
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.clock.runFor(6_000);
+    const done = page.locator(".focus-alert", { hasText: "Time’s up" });
+    await expect(done).toBeVisible();
+    await done.getByRole("button", { name: "One more minute" }).click();
+    await expect(page.locator(".focus-time")).toHaveText(/01:00|00:59/);
+
+    await page.clock.runFor(65_000);
+    const alarm = page.locator(".focus-alert", { hasText: "Stand up" });
+    await expect(alarm).toHaveAttribute("role", "alert");
+    await alarm.getByRole("button", { name: "Stop" }).click();
+    await expect(alarm).toHaveCount(0);
+    // Bir kez çalan alarm kapanıyor.
+    await page.getByRole("tab", { name: "Alarms" }).click();
+    await expect(page.getByRole("switch", { name: `Alarm at ${time}, Stand up` })).toHaveAttribute("aria-checked", "false");
+  });
+
+  test("times laps, adds and removes alarms, and remembers colours", async ({ page }) => {
+    await page.goto("/?focus=1");
+    await page.getByRole("tab", { name: "Stopwatch" }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("button", { name: "Lap" }).click();
+    await page.getByRole("button", { name: "Lap" }).click();
+    await expect(page.locator(".focus-laps tbody tr")).toHaveCount(2);
+    await page.getByRole("radiogroup", { name: "Stopwatch colour" }).getByRole("radio", { name: "Navy" }).click();
+    await expect(page.locator(".focus-mode")).toHaveAttribute("style", /--focus: #1E3A8A/);
+
+    await page.getByRole("tab", { name: "Alarms" }).click();
+    await page.getByLabel("Time", { exact: true }).fill("06:45");
+    await page.getByLabel("Label", { exact: true }).fill("Read one paper");
+    for (const day of ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]) await page.getByRole("button", { name: day }).click();
+    await page.getByRole("button", { name: "Add the alarm" }).click();
+    const item = page.locator(".focus-alarm-list li", { hasText: "Read one paper" });
+    await expect(item).toContainText("06:45");
+    await expect(item).toContainText("Weekdays");
+    await page.reload();
+    await page.getByRole("tab", { name: "Stopwatch" }).click();
+    await expect(page.locator(".focus-mode")).toHaveAttribute("style", /--focus: #1E3A8A/);
+    await page.getByRole("tab", { name: "Alarms" }).click();
+    await page.getByRole("button", { name: "Delete the alarm at 06:45" }).click();
+    await expect(page.locator(".focus-alarm-list li", { hasText: "Read one paper" })).toHaveCount(0);
+  });
+
+  test("keeps a profile, a calendar of worked days in the chosen colour, and the sessions behind each day", async ({ page, request }) => {
+    const start = new Date();
+    start.setHours(0, 5, 0, 0);
+    const day = (offset: number) => new Date(start.getTime() - offset * 86_400_000);
+    const worked = [0, 1, 2, 9].map((offset) => ({ id: `e2e-${offset}`, start: day(offset).toISOString(), end: new Date(day(offset).getTime() + (offset + 1) * 30 * 60_000).toISOString(), kind: "focus", label: `Paper ${offset}` }));
+    expect((await request.post("/api/profile/sessions", { data: { sessions: worked } })).ok()).toBe(true);
+
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Profile" }).click();
+    await expect(page).toHaveURL(/profile=1/);
+    await page.getByRole("button", { name: "Edit profile" }).click();
+    await page.getByLabel("First name").fill("Grace");
+    await page.getByLabel("Last name").fill("Hopper");
+    await page.getByLabel("Role").fill("Research engineer");
+    // Bozuk bir adres kaydedilmiyor: tarayıcı formu göndermiyor, sunucu da geri çeviriyor (birim testi).
+    await page.getByLabel("Email").fill("not an email");
+    await page.getByRole("button", { name: "Save" }).click();
+    expect(await page.getByLabel("Email").evaluate((input) => (input as HTMLInputElement).validity.valid)).toBe(false);
+    await expect(page.locator(".profile-form")).toBeVisible();
+    await page.getByLabel("Email").fill("grace@example.org");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator(".profile-about h1")).toHaveText("Grace Hopper");
+    await expect(page.getByRole("button", { name: "Profile: Grace Hopper" })).toContainText("GH");
+
+    // Takvim: bugün yarım saat, dün bir saat; seri üç gün.
+    const tiles = page.getByRole("region", { name: "Work summary" });
+    await expect(tiles.locator(".stat-tile", { hasText: "Streak" }).locator("strong")).toHaveText("3 days");
+    const today = page.locator(".work-cell.is-today");
+    await expect(today).toHaveAttribute("aria-label", /^30m on /);
+    await expect(today).toHaveClass(/level-1/);
+    await today.click();
+    const sessionsBlock = page.getByRole("region", { name: "Sessions" });
+    await expect(sessionsBlock.locator("li")).toHaveCount(1);
+    await expect(sessionsBlock).toContainText("Paper 0");
+
+    await page.getByRole("radiogroup", { name: "Calendar colour" }).getByRole("radio", { name: "Purple" }).click();
+    await expect(page.locator(".work-calendar")).toHaveAttribute("style", /--focus: #7C3AED/);
+    await page.reload();
+    await expect(page.locator(".work-calendar")).toHaveAttribute("style", /--focus: #7C3AED/);
+
+    // Elle eklenen süre ve silinen oturum kayda yansıyor.
+    await page.locator(".work-cell.is-today").click();
+    await sessionsBlock.getByRole("button", { name: /^Delete the session/ }).click();
+    await expect(sessionsBlock).toContainText("No work recorded on this day.");
+    await expect.poll(async () => (await sessions(request)).map((session) => session.id).sort()).toEqual(["e2e-1", "e2e-2", "e2e-9"]);
+    const manual = page.getByRole("form", { name: "Add time by hand" });
+    await manual.getByLabel("Day", { exact: true }).fill(dayKeyOf(day(3)));
+    await manual.getByLabel("From", { exact: true }).fill("10:00");
+    await manual.getByLabel("Label", { exact: true }).fill("Library visit");
+    await manual.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(manual.getByRole("status")).toContainText("30m added");
+    await expect.poll(async () => (await sessions(request)).some((session) => session.kind === "manual" && session.label === "Library visit")).toBe(true);
+
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download my data" }).click();
+    const file = JSON.parse(readFileSync(await (await download).path(), "utf8")) as { kind: string; profile: Profile; log: WorkLog };
+    expect(file.kind).toBe("trace-work-data");
+    expect(file.profile.firstName).toBe("Grace");
+    expect(file.log.sessions).toHaveLength(4);
   });
 });

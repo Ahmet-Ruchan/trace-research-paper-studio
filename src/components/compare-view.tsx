@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { ArrowLeft, BookMarked, Gauge, ShieldCheck, TriangleAlert } from "lucide-react";
 import { compareProjects, formatDifference, type SharedMetric } from "@/lib/compare-projects";
 import type { Claim, ResearchProject } from "@/lib/schema";
+import { StudioNav } from "./focus/studio-nav";
 
 const kindLabels: Record<Claim["kind"], string> = {
   "reported-result": "Result",
@@ -53,6 +54,7 @@ export function CompareView({
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <StudioNav />
         </div>
       </header>
 

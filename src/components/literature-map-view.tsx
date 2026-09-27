@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { ArrowLeft, BookMarked, Gauge, Milestone, TriangleAlert } from "lucide-react";
 import { buildLiteratureMap, type TrackedMetric } from "@/lib/literature-map";
 import type { ResearchProject } from "@/lib/schema";
+import { StudioNav } from "./focus/studio-nav";
 
 /**
  * Üç ila altı makale, yıl sırasıyla.
@@ -34,6 +35,7 @@ export function LiteratureMapView({
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <StudioNav />
         </div>
       </header>
 
