@@ -36,7 +36,7 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**On `main` since 0.21**
+**0.22**
 
 | | |
 | --- | --- |
@@ -57,6 +57,7 @@ running on the coding agent you already use, with no second API key.
 | **[Keep a growing library in order](#keep-a-growing-library-in-order)** | Sort by title or by the paper's year, switch to a compact list, and undo a deletion for eight seconds. |
 | **[Read it the way you like](#read-it-the-way-you-like)** | A dark theme, four text sizes, a readable colour for every paper, and a section menu on phones. |
 | **[The analysis screen remembers you](#the-full-application)** | Your last reader, depth, language, models and template come back for the next paper. API keys never do. |
+| **[The plugin, checked on all three agents](#install-in-under-a-minute)** | Installed and run on Claude Code, Codex and Antigravity CLI. Codex had been cutting the skill's description off mid-sentence and ignoring half of its starter prompts; both now fit its limits, and a test keeps them there. |
 
 **0.21**
 
