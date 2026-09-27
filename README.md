@@ -42,6 +42,7 @@ running on the coding agent you already use, with no second API key.
 | --- | --- |
 | **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
 | **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
+| **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim. Your agent can do it too (`explain`). |
 | **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review across your whole library: a day later, then at growing intervals while you keep remembering it. Papers are mixed in one queue. |
 | **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next before it shows it. The answers come from the formulas themselves, not from a model. |
 | **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
@@ -229,6 +230,27 @@ published site and the exported page have **Study** too, and keep progress in th
 browser.
 
 ![Study mode](docs/images/study.jpg)
+
+### Explain it back in your own words
+
+Recognising the right answer in a quiz is easier than recalling it, and recalling it is easier than
+explaining it. At the end of every section in **Study**, **Explain it in your own words** lets you
+write what the section says, as you would to a friend. A model that sees only the collected evidence,
+not the paper, then shows which of the section's claims you conveyed, which you left out, where you
+said something the evidence contradicts (a hypothesis stated as a measured result, a changed number, a
+result stretched beyond what was tested) and what you added that no claim supports. Each point links
+to its claim and page.
+
+It is a model's reading, and the page says so, but the parts that can be checked are checked by code:
+every claim must exist, "left out" can only name the claims the section rests on, and every phrase it
+quotes back to you must be your own words, verbatim. Nothing is saved. Your agent can do the same
+with the active model:
+
+```text
+I'll explain the scaling section of my Trace project in my own words; check it against the evidence using the Trace plugin.
+```
+
+![Explain it back](docs/images/explain.jpg)
 
 ### Remember it weeks later
 

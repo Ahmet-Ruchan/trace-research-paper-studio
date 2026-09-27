@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useStrings } from "../language-context";
 import { InteractiveRenderer } from "../interactive-renderer";
 import { VisualRenderer } from "../visual-renderer";
@@ -37,6 +37,7 @@ export function StudyView({
   initialProgress,
   onSave,
   note,
+  sectionExtra,
 }: {
   project: ResearchProject;
   /** Kanıttan üretilen okuma alıştırması; quiz'in yetmediği bölümlere soru sağlıyor. */
@@ -46,6 +47,8 @@ export function StudyView({
   onSave: (progress: StudyProgress | undefined) => void;
   /** İlerlemenin nerede saklandığı; okuyucu bilmeli. */
   note?: string;
+  /** Stüdyo verir: bölüm adımının sonunda "kendi cümlelerinle anlat". Görüntüleyicide model yok. */
+  sectionExtra?: (sectionId: string) => ReactNode;
 }) {
   const t = useStrings();
   const path = useMemo(() => studyPath(project, drill), [project, drill]);
@@ -170,6 +173,7 @@ export function StudyView({
           stepTitle={title}
           onAnswer={answer}
           onGo={go}
+          sectionExtra={sectionExtra}
         />
       </div>
 
@@ -210,9 +214,10 @@ type StepContentProps = {
   stepTitle: (step: StudyStep) => string;
   onAnswer: (question: QuizQuestion, result: QuestionResult) => void;
   onGo: (stepId: string) => void;
+  sectionExtra?: (sectionId: string) => ReactNode;
 };
 
-function StepContent({ step, project, terms, figures, questions, progress, summary, pathSteps, stepTitle, onAnswer, onGo }: StepContentProps) {
+function StepContent({ step, project, terms, figures, questions, progress, summary, pathSteps, stepTitle, onAnswer, onGo, sectionExtra }: StepContentProps) {
   const t = useStrings();
   const { evidence, story } = project;
 
@@ -283,6 +288,7 @@ function StepContent({ step, project, terms, figures, questions, progress, summa
             onAnswer={onAnswer}
           />
         ) : null}
+        {sectionExtra?.(section.id)}
       </article>
     );
   }

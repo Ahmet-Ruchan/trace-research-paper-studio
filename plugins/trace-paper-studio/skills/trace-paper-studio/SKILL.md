@@ -175,6 +175,23 @@ If the project has a `template`, the prompt includes the section's slot, and `sp
 
 `splice` runs the app's own integrity checks. If it returns `ok: false`, the project file was not touched. Fix every listed issue in the section file and run `splice` again. Do not edit the project JSON directly to get around a lock. When it succeeds, run `deliver` again so the standalone site shows the new section. The studio's library copy is refreshed by `splice` itself. The version it replaced stays in the studio's version history, so the user can restore it.
 
+## Checking a reader's own explanation
+
+When the user explains a section of a project in their own words and asks whether they got it right, check it against the evidence, not against what you know about the paper:
+
+```bash
+node scripts/trace-agent.mjs explain --project "<project.trace.json>" --target story:<section-id> --text "<the user's explanation, verbatim>"
+```
+
+- `--target` is `story:<id>` or `report:<id>`. Pass the user's words exactly; use `--text-file <file>` for a long explanation (40–3000 characters).
+- Read the `promptPath` it reports and follow it. It holds only the evidence ledger, the section and the user's text: judge from those alone. Write the feedback object as JSON to `feedbackPath`, then run:
+
+```bash
+node scripts/trace-agent.mjs explain-check --brief "<briefPath>"
+```
+
+`explain-check` applies the studio's own rules: every claim id must exist, "left out" may only name the claims the section rests on, and every quoted phrase must be the user's exact words. If it returns `ok: false`, fix the feedback file and run it again. When it succeeds, tell the user what they conveyed, what they left out and where the evidence says otherwise, each with the claim and its page, and say plainly that this is a model's reading of their text against the collected evidence, not a grade. Nothing is written to the project.
+
 ## Model record
 
 When the user asks which model to trust, how reliable the quotes of the models they used have been, or whether a model makes up quotes, run:

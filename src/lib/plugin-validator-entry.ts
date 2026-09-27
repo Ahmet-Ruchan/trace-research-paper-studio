@@ -48,6 +48,17 @@ import {
   type RegeneratedSection,
 } from "./section-regeneration";
 import {
+  MAX_EXPLANATION_LENGTH,
+  MIN_EXPLANATION_LENGTH,
+  buildExplainPrompt,
+  explainedSection,
+  explanationCoverage,
+  explanationFeedbackSchema,
+  formatExplainTarget,
+  parseExplainTarget,
+  validateExplanationFeedback,
+} from "./explain-back";
+import {
   describeValidationError,
   validateDeepReportIntegrity,
   validateEvidenceIntegrity,
@@ -225,5 +236,92 @@ export function spliceSectionObject(
     return { ok: true, project: next, previous: previous! };
   } catch (error) {
     return { ok: false, issues: describeValidationError(error) };
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * "Kendi cümlelerinle anlat" — plugin tarafı
+ *
+ * Stüdyoda modeli uygulama çağırıyor; plugin'de ajanın kendi modeli. Akış
+ * bölüm yeniden üretimi gibi ikiye bölünüyor: `buildExplanationBrief` ajana
+ * yalnızca kanıtı içeren istemi veriyor, ajan geri bildirimi yazıyor,
+ * `checkExplanationFeedback` onu stüdyonun kullandığı AYNI denetimden
+ * geçiriyor (iddialar var mı, alıntılar okuyucunun metninde birebir geçiyor mu).
+ * ------------------------------------------------------------------ */
+
+const explanationBriefSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal("explanation"),
+  projectId: z.string(),
+  target: z.string(),
+  text: z.string().min(MIN_EXPLANATION_LENGTH).max(MAX_EXPLANATION_LENGTH),
+  evidenceFingerprint: z.string(),
+  prompt: z.string(),
+});
+
+export type ExplanationBrief = z.infer<typeof explanationBriefSchema>;
+
+export function buildExplanationBrief(input: unknown, rawTarget: string, rawText: string): Outcome<{ brief: ExplanationBrief }> {
+  const parsed = parseProject(input);
+  if (!parsed.ok) return parsed;
+  const { project } = parsed;
+  const text = rawText.trim();
+  if (text.length < MIN_EXPLANATION_LENGTH || text.length > MAX_EXPLANATION_LENGTH) {
+    return { ok: false, issues: [`The explanation must be ${MIN_EXPLANATION_LENGTH}–${MAX_EXPLANATION_LENGTH} characters; it is ${text.length}`] };
+  }
+  try {
+    const target = parseExplainTarget(rawTarget);
+    if (!explainedSection(project, target)) return { ok: false, issues: [`There is no ${target.kind} section with the id ${target.sectionId}`] };
+    return {
+      ok: true,
+      brief: {
+        version: 1,
+        kind: "explanation",
+        projectId: project.id,
+        target: formatExplainTarget(target),
+        text,
+        evidenceFingerprint: evidenceFingerprint(project.evidence),
+        prompt: buildExplainPrompt(project, target, text),
+      },
+    };
+  } catch (error) {
+    return { ok: false, issues: describeValidationError(error) };
+  }
+}
+
+export function checkExplanationFeedback(input: unknown, rawBrief: unknown, rawFeedback: unknown) {
+  const parsed = parseProject(input);
+  if (!parsed.ok) return parsed;
+  const brief = explanationBriefSchema.safeParse(rawBrief);
+  if (!brief.success) return { ok: false as const, issues: ["The brief is not a Trace explanation brief; create it with the explain command"] };
+  const { project } = parsed;
+  if (brief.data.projectId !== project.id) return { ok: false as const, issues: [`The brief belongs to project ${brief.data.projectId}, not ${project.id}`] };
+  if (brief.data.evidenceFingerprint !== evidenceFingerprint(project.evidence)) {
+    return { ok: false as const, issues: ["The project's evidence changed after the brief was written; run explain again"] };
+  }
+  const feedback = explanationFeedbackSchema.safeParse(rawFeedback);
+  if (!feedback.success) {
+    return { ok: false as const, issues: feedback.error.issues.map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`) };
+  }
+  try {
+    const target = parseExplainTarget(brief.data.target);
+    validateExplanationFeedback(project, target, brief.data.text, feedback.data);
+    const claim = (id: string) => {
+      const found = project.evidence.claims.find((item) => item.id === id);
+      return { claimId: id, statement: found?.statement ?? "", page: found?.sourceRefs[0]?.page ?? null, confidence: found?.confidence };
+    };
+    return {
+      ok: true as const,
+      target: brief.data.target,
+      section: explainedSection(project, target)!.title,
+      coverage: explanationCoverage(project, target, feedback.data),
+      summary: feedback.data.summary,
+      conveyed: feedback.data.covered.map((item) => ({ ...claim(item.claimId), note: item.note })),
+      leftOut: feedback.data.missed.map((item) => ({ ...claim(item.claimId), note: item.note })),
+      saidOtherwise: feedback.data.misstated.map((item) => ({ quote: item.quote, correction: item.correction, ...claim(item.claimId) })),
+      notInEvidence: feedback.data.unsupported,
+    };
+  } catch (error) {
+    return { ok: false as const, issues: describeValidationError(error) };
   }
 }

@@ -9,7 +9,9 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  buildExplanationBrief,
   buildSectionBrief,
+  checkExplanationFeedback,
   builtInTemplates,
   ankiCards,
   applyExcerptCheck,
@@ -312,6 +314,8 @@ Usage:
   node trace-agent.mjs section --project <project.trace.json> --target <kind>:<id>
                               [--claims locked|open] [--goal revise|strengthen] [--instruction "<what should change>"]
   node trace-agent.mjs splice --brief <revisions/…brief.json> [--section <section.json>]
+  node trace-agent.mjs explain --project <project.trace.json> --target story:<id> (--text "<explanation>" | --text-file <file>)
+  node trace-agent.mjs explain-check --brief <explanations/…brief.json> [--feedback <feedback.json>]
   node trace-agent.mjs templates
   node trace-agent.mjs publish --project <project.trace.json> [--expires-days 7|30|90]
                               [--no-report] [--no-appendix] [--no-learning] [--no-figures] [--app-url <http://...>]
@@ -386,6 +390,20 @@ Usage:
   splice    Validates the written section with the app's own rules and swaps
             it into the project. Nothing changes if any check fails. The
             replaced section is kept as …previous.json.
+
+  explain   The reader explains one story (or report) section in their own
+            words; this checks it against the evidence. Writes a brief and a
+            prompt under explanations/ next to the project: the prompt holds
+            only the evidence ledger, the section and the reader's text. Read
+            it, write the feedback as JSON to the reported feedbackPath, then
+            run explain-check.
+  explain-check
+            Checks the written feedback with the studio's own rules: every
+            claim id exists, "left out" only names the section's own claims,
+            and every quoted phrase is really in the reader's text. Prints
+            what they conveyed, what they left out and where the evidence
+            says otherwise, each with its claim and page. Nothing is saved
+            in the project.
 
   publish   Freezes a copy of the project as a shareable link served by the
             Trace studio at /p/<id>. Blocks can be left out; evidence quotes
@@ -1021,6 +1039,75 @@ function applySection(args) {
   }, null, 2));
 }
 
+function explanationPaths(projectPath, target) {
+  const directory = join(dirname(projectPath), "explanations");
+  const stem = slugify(target.replace(":", "-"));
+  return {
+    brief: join(directory, `${stem}.brief.json`),
+    prompt: join(directory, `${stem}.prompt.md`),
+    feedback: join(directory, `${stem}.feedback.json`),
+  };
+}
+
+/**
+ * "Kendi cümlelerinle anlat": okuyucunun açıklamasını kanıta karşı denetletmek
+ * için ajana yalnızca kanıtı içeren istemi yazar. Ajan geri bildirimi yazınca
+ * `explain-check` onu stüdyonun kullandığı aynı kurallarla denetler.
+ */
+function prepareExplanation(args) {
+  if (!args.project) throw new Error("--project <project.trace.json> is required.");
+  if (!args.target) throw new Error("--target story:<section-id> (or report:<section-id>) is required.");
+  if (!args.text && !args["text-file"]) throw new Error('--text "<the reader\'s explanation>" or --text-file <file> is required.');
+  const projectPath = resolve(args.project);
+  const text = args.text ?? readFileSync(resolve(args["text-file"]), "utf8");
+  const outcome = buildExplanationBrief(readJsonFile(projectPath, "project"), args.target, text);
+  if (!outcome.ok) {
+    console.error(JSON.stringify({ ok: false, issueCount: outcome.issues.length, issues: outcome.issues }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const paths = explanationPaths(projectPath, outcome.brief.target);
+  atomicWrite(paths.brief, `${JSON.stringify({ ...outcome.brief, projectPath }, null, 2)}\n`);
+  atomicWrite(
+    paths.prompt,
+    `${outcome.brief.prompt}\n\n---\n\nWrite the feedback object, and nothing else, as JSON to:\n${paths.feedback}\n\nThen run:\nnode ${SCRIPT_PATH} explain-check --brief ${paths.brief}\n`,
+  );
+  console.log(JSON.stringify({
+    ok: true,
+    target: outcome.brief.target,
+    briefPath: paths.brief,
+    promptPath: paths.prompt,
+    feedbackPath: paths.feedback,
+    next: `Read ${paths.prompt}, write the feedback to ${paths.feedback}, then run explain-check --brief ${paths.brief}`,
+  }, null, 2));
+}
+
+function checkExplanation(args) {
+  if (!args.brief) throw new Error("--brief <explanations/…brief.json> is required.");
+  const briefPath = resolve(args.brief);
+  const brief = readJsonFile(briefPath, "brief");
+  const projectPath = resolve(args.project ?? brief.projectPath ?? "");
+  const feedbackPath = resolve(args.feedback ?? briefPath.replace(/\.brief\.json$/, ".feedback.json"));
+  const outcome = checkExplanationFeedback(readJsonFile(projectPath, "project"), brief, readJsonFile(feedbackPath, "feedback"));
+  if (!outcome.ok) {
+    console.error(JSON.stringify({
+      ok: false,
+      feedbackPath,
+      issueCount: outcome.issues.length,
+      issues: outcome.issues,
+      note: "Fix the feedback file and run explain-check again. Quote the reader's words exactly and cite only claim ids from the ledger.",
+    }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  const { ok, ...report } = outcome;
+  console.log(JSON.stringify({
+    ok,
+    ...report,
+    note: "This is a model's reading of the explanation against the collected evidence, not a grade; it did not read the paper. Tell the reader what they conveyed, what they left out and where the evidence says otherwise, with each claim's page.",
+  }, null, 2));
+}
+
 /**
  * Stüdyonun sunacağı bir yayın kaydı yazar. Kayıt biçimi ve süzme kuralları
  * uygulamanınkiyle aynı kod; stüdyo çalışmıyorsa kayıt yine yazılır ve
@@ -1566,6 +1653,8 @@ try {
   else if (command === "serve") serve(args);
   else if (command === "section") prepareSection(args);
   else if (command === "splice") applySection(args);
+  else if (command === "explain") prepareExplanation(args);
+  else if (command === "explain-check") checkExplanation(args);
   else if (command === "templates") listTemplates();
   else if (command === "save-template") saveTemplateFromProject(args);
   else if (command === "publish") await publishProjectLink(args);

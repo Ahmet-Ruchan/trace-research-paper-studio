@@ -51,6 +51,7 @@ import type { SectionKind } from "@/lib/section-regeneration";
 import { useSectionRegeneration } from "./section-regenerator";
 import { LearningGenerator } from "./learning-generator";
 import { LearningHealthView } from "./learning-health-view";
+import { ExplainPanel } from "./explain-panel";
 import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
 import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
@@ -367,6 +368,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 initialProgress={study.state.progress}
                 onSave={study.save}
                 note="Your progress is saved in your library, next to this paper. It is not part of the project file, so exports and published pages never carry your answers."
+                sectionExtra={(sectionId) => <ExplainPanel project={project} target={{ kind: "story", sectionId }} onClaimSelect={onClaimSelect} />}
               />
             ) : null}
             {study.saveError ? <p className="regen-error" role="status">Progress not saved: {study.saveError}</p> : null}

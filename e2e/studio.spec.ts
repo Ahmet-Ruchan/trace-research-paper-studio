@@ -1563,6 +1563,52 @@ test.describe("study mode", () => {
     }).toEqual({ done: [], answers: 0, reviews: [`q:${question.id}`] });
   });
 
+  test("lets the reader explain a section in their own words and shows what the evidence says about it", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-explain"));
+    const explanation = "Attention scores are dot products divided by the square root of d_k. The paper measured that without this scaling training fails completely.";
+    let sent: { target: { kind: string; sectionId: string }; text: string } | undefined;
+    await page.route("**/api/explain", async (route) => {
+      sent = route.request().postDataJSON() as typeof sent;
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedback: {
+            summary: "The formula is right; the paper never measured a failure without the scaling.",
+            covered: [{ claimId: "claim-method-05", note: "Your first sentence gives the scaled dot product." }],
+            missed: [],
+            misstated: [{ quote: "The paper measured that without this scaling training fails completely.", claimId: "claim-interpretation-01", correction: "The authors only suspect it; the scaling is a precaution." }],
+            unsupported: [],
+          },
+          coverage: { covered: 1, total: 2 },
+          model: "gemini-3.7-flash",
+        }),
+      });
+    });
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".study-offer").getByRole("button", { name: "Start studying" }).click();
+    const study = page.locator("section.study");
+    await study.locator(".study-outline summary").click();
+    await study.locator(".study-outline button", { hasText: "Why the scaling was necessary" }).click();
+    const panel = study.locator("details.explain");
+    await panel.locator("summary").click();
+    await expect(panel.getByRole("button", { name: "Check my explanation" })).toBeDisabled();
+    await panel.getByLabel("Your explanation").fill(explanation);
+    await panel.getByLabel("Gemini API key").fill("test-key");
+    await panel.getByRole("button", { name: "Check my explanation" }).click();
+
+    const result = panel.getByRole("region", { name: "How your explanation compares with the evidence" });
+    await expect(result.locator(".explain-coverage")).toHaveText("1 of 2 claims this section rests on are in your explanation.");
+    await expect(result.locator(".explain-group.is-misstated")).toContainText("“The paper measured that without this scaling training fails completely.”");
+    await expect(result).toContainText("Checked by gemini-3.7-flash against the evidence only; it has not read the paper.");
+    expect(sent).toMatchObject({ target: { kind: "story", sectionId: "story-attention" }, text: explanation });
+
+    // İddiaya tıklamak kanıt çekmecesini açıyor.
+    await result.locator(".explain-group.is-covered button").click();
+    await expect(page.locator(".evidence-drawer")).toContainText(project.evidence.claims.find((claim) => claim.id === "claim-method-05")!.statement);
+  });
+
   test("works in a published page too, keeping progress in the reader's browser", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-study-published"));
     const created = await request.post("/api/publications", {

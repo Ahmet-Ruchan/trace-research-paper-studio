@@ -1,24 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Send, Server } from "lucide-react";
+import { Send } from "lucide-react";
 import { MAX_QUESTION_LENGTH } from "@/lib/evidence-qa";
-import { defaultModelByProvider, getProvider, providerCatalog, resolveProviderModel, type ModelAssignment, type ProviderId } from "@/lib/model-providers";
+import { getProvider } from "@/lib/model-providers";
 import type { ResearchProject } from "@/lib/schema";
-
-// Bölüm yeniden üretimiyle aynı tercih: kullanıcı modelini bir kez seçsin. Anahtar hiçbir zaman saklanmaz.
-const MODEL_PREFERENCE_KEY = "trace-regeneration-model-v1";
+import { ModelKeyFields, useRememberedAssignment } from "./model-key-fields";
 
 type Exchange = { question: string; answerable: boolean; answer: string; claimIds: string[]; model: string };
-
-function rememberedAssignment(): ModelAssignment {
-  try {
-    const value = JSON.parse(window.localStorage.getItem(MODEL_PREFERENCE_KEY) ?? "{}") as { provider?: unknown; model?: unknown };
-    return resolveProviderModel(String(value.provider ?? ""), String(value.model ?? "")) ?? { provider: "gemini", model: defaultModelByProvider.gemini };
-  } catch {
-    return { provider: "gemini", model: defaultModelByProvider.gemini };
-  }
-}
 
 /**
  * Makaleye soru sormak — ama cevap yalnızca toplanmış kanıttan gelir.
@@ -29,22 +18,13 @@ function rememberedAssignment(): ModelAssignment {
  * söylemiyor". Sorular ve cevaplar saklanmaz; sayfa yenilenince giderler.
  */
 export function AskPanel({ project, onClaimSelect }: { project: ResearchProject; onClaimSelect: (claimId: string) => void }) {
-  const [assignment, setAssignment] = useState<ModelAssignment>(rememberedAssignment);
+  const [assignment, choose] = useRememberedAssignment();
   const [apiKey, setApiKey] = useState("");
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const provider = getProvider(assignment.provider)!;
-
-  function choose(next: ModelAssignment) {
-    setAssignment(next);
-    try {
-      window.localStorage.setItem(MODEL_PREFERENCE_KEY, JSON.stringify(next));
-    } catch {
-      // Depolama kapalıysa tercih yalnızca bu oturumda kalır.
-    }
-  }
 
   async function ask() {
     const text = question.trim();
@@ -71,33 +51,7 @@ export function AskPanel({ project, onClaimSelect }: { project: ResearchProject;
 
   return (
     <div className="ask">
-      <div className="regen-model">
-        <div className="model-select provider-select">
-          <select aria-label="Provider" value={assignment.provider} onChange={(event) => choose({ provider: event.target.value as ProviderId, model: defaultModelByProvider[event.target.value as ProviderId] })}>
-            {providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select>
-        </div>
-        <div className="model-select">
-          {provider.freeformModel ? (
-            <input aria-label="Model" value={assignment.model} onChange={(event) => choose({ ...assignment, model: event.target.value })} spellCheck={false} />
-          ) : (
-            <select aria-label="Model" value={assignment.model} onChange={(event) => choose({ ...assignment, model: event.target.value })}>
-              {provider.models.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.note}</option>)}
-            </select>
-          )}
-        </div>
-        <div className="key-input">
-          {provider.local ? <Server size={14} /> : <KeyRound size={14} />}
-          <input
-            type={provider.local ? "text" : "password"}
-            aria-label={provider.keyLabel}
-            placeholder={provider.local ? "Local server address (optional)" : provider.keyLabel}
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            autoComplete="off"
-          />
-        </div>
-      </div>
+      <ModelKeyFields assignment={assignment} onAssignment={choose} apiKey={apiKey} onApiKey={setApiKey} />
 
       <div className="ask-box">
         <textarea
