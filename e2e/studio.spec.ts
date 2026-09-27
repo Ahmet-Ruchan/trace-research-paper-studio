@@ -1568,25 +1568,37 @@ test.describe("study mode", () => {
   test("lets the reader explain a section in their own words and shows what the evidence says about it", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-explain"));
     const explanation = "Attention scores are dot products divided by the square root of d_k. The paper measured that without this scaling training fails completely.";
+    const secondExplanation = "Scores are dot products scaled by one over the square root of d_k; the authors only suspect that large values would hurt training.";
     let sent: { target: { kind: string; sectionId: string }; text: string } | undefined;
+    let checks = 0;
     await page.route("**/api/explain", async (route) => {
       sent = route.request().postDataJSON() as typeof sent;
-      await route.fulfill({
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          feedback: {
+      checks += 1;
+      const feedback = checks === 1
+        ? {
             summary: "The formula is right; the paper never measured a failure without the scaling.",
             covered: [{ claimId: "claim-method-05", note: "Your first sentence gives the scaled dot product." }],
             missed: [],
             misstated: [{ quote: "The paper measured that without this scaling training fails completely.", claimId: "claim-interpretation-01", correction: "The authors only suspect it; the scaling is a precaution." }],
             unsupported: [],
-          },
-          coverage: { covered: 1, total: 2 },
-          model: "gemini-3.7-flash",
-        }),
+          }
+        : {
+            summary: "Both points, and the scaling is now a precaution.",
+            covered: [{ claimId: "claim-method-05", note: "The formula." }, { claimId: "claim-interpretation-01", note: "Now a suspicion, as in the paper." }],
+            missed: [],
+            misstated: [],
+            unsupported: [],
+          };
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback, coverage: { covered: feedback.covered.length, total: 2 }, model: "gemini-3.7-flash" }),
       });
     });
+    const savedExplanations = async () => {
+      const { progress } = (await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress?: StudyProgress };
+      return progress?.explanations?.map((item) => item.text) ?? [];
+    };
 
     await page.goto(`/?project=${project.id}`);
     await page.locator(".study-offer").getByRole("button", { name: "Start studying" }).click();
@@ -1609,6 +1621,33 @@ test.describe("study mode", () => {
     // İddiaya tıklamak kanıt çekmecesini açıyor.
     await result.locator(".explain-group.is-covered button").click();
     await expect(page.locator(".evidence-drawer")).toContainText(project.evidence.claims.find((claim) => claim.id === "claim-method-05")!.statement);
+
+    // Anlatış çalışma kaydında; projede değil.
+    await expect.poll(savedExplanations).toEqual([explanation]);
+    await expect(panel.locator(".explain-history > summary")).toHaveText("Your earlier explanations (1)");
+
+    // Bir süre sonra yeniden: neyin eklendiğini kod karşılaştırıyor.
+    await panel.getByLabel("Your explanation", { exact: true }).fill(secondExplanation);
+    await panel.getByRole("button", { name: "Check my explanation" }).click();
+    const change = result.getByRole("region", { name: "Since your last explanation" });
+    await expect(change.locator(".explain-change-coverage")).toHaveText("1 of 2 → 2 of 2 claims conveyed.");
+    await expect(change.locator(".explain-group.is-covered")).toContainText(project.evidence.claims.find((claim) => claim.id === "claim-interpretation-01")!.statement);
+    await expect.poll(savedExplanations).toEqual([explanation, secondExplanation]);
+
+    // Sayfa yeniden açılınca geçmiş orada, en yenisi önce; istenirse unutuluyor.
+    // (Adres seçili iddiayı taşıyor; sayfa onun bölümünde açılıyor, çalışmaya menüden dönülüyor.)
+    await page.reload();
+    await page.locator(".lab-nav > button", { hasText: "Study" }).click();
+    const again = page.locator("section.study details.explain");
+    await again.locator("summary").first().click();
+    const history = again.locator(".explain-history");
+    await history.locator("summary").click();
+    await expect(history.locator(".explain-history-text")).toHaveText([secondExplanation, explanation]);
+    await expect(history.locator(".explain-history-meta").first()).toContainText("conveyed 2 of 2 claims");
+    await history.getByRole("button", { name: "Forget these" }).click();
+    await history.getByRole("group", { name: "Forget these explanations" }).getByRole("button", { name: "Forget" }).click();
+    await expect(again.locator(".explain-history")).toHaveCount(0);
+    await expect.poll(savedExplanations).toEqual([]);
   });
 
   test("works in a published page too, keeping progress in the reader's browser", async ({ page, request }) => {

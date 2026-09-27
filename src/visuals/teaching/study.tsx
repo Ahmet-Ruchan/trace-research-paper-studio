@@ -25,6 +25,12 @@ import {
 } from "@/lib/study-path";
 import type { Quiz, QuizQuestion, ResearchProject } from "@/lib/schema";
 
+/** Bölüm ekine verilen: ilerleme ve onu değiştirmenin tek yolu, çalışmanın kendi kaydıyla. */
+export type StudyHandle = {
+  progress?: StudyProgress;
+  update: (change: (previous: StudyProgress | undefined) => StudyProgress | undefined) => void;
+};
+
 /**
  * Rehberli çalışma: makaleyi adım adım, her bölümün ardından bir soruyla.
  * Yol `study-path.ts`'te kuruluyor; bu bileşen yalnızca bir adımı gösteriyor
@@ -48,8 +54,11 @@ export function StudyView({
   onSave: (progress: StudyProgress | undefined) => void;
   /** İlerlemenin nerede saklandığı; okuyucu bilmeli. */
   note?: string;
-  /** Stüdyo verir: bölüm adımının sonunda "kendi cümlelerinle anlat". Görüntüleyicide model yok. */
-  sectionExtra?: (sectionId: string) => ReactNode;
+  /**
+   * Stüdyo verir: bölüm adımının sonunda "kendi cümlelerinle anlat". Görüntüleyicide
+   * model yok. İlerlemeyi okuyup değiştirebiliyor: anlatışların geçmişi orada.
+   */
+  sectionExtra?: (sectionId: string, study: StudyHandle) => ReactNode;
   /** Stüdyo verir: kavramın kütüphanedeki başka makalelerde çalışılıp çalışılmadığı. */
   conceptExtra?: (conceptId: string) => ReactNode;
 }) {
@@ -108,8 +117,12 @@ export function StudyView({
     moved.current = true;
     setConfirmReset(false);
     setStepId(path.steps[0].id);
-    // Tekrar kartları kalıyor: yolu baştan yürümek, aylardır süren tekrarları silmemeli.
-    setProgress((previous) => (previous?.reviews?.length ? { ...emptyStudyProgress(now()), reviews: previous.reviews } : undefined));
+    // Tekrar kartları ve anlatışlar kalıyor: yolu baştan yürümek, aylardır süren
+    // tekrarları ya da okuyucunun neyi eklediğini gösteren geçmişi silmemeli.
+    setProgress((previous) => {
+      const kept = { ...(previous?.reviews?.length ? { reviews: previous.reviews } : {}), ...(previous?.explanations?.length ? { explanations: previous.explanations } : {}) };
+      return Object.keys(kept).length ? { ...emptyStudyProgress(now()), ...kept } : undefined;
+    });
   }
 
   function title(item: StudyStep) {
@@ -176,6 +189,7 @@ export function StudyView({
           stepTitle={title}
           onAnswer={answer}
           onGo={go}
+          onUpdate={setProgress}
           sectionExtra={sectionExtra}
           conceptExtra={conceptExtra}
         />
@@ -218,11 +232,12 @@ type StepContentProps = {
   stepTitle: (step: StudyStep) => string;
   onAnswer: (question: QuizQuestion, result: QuestionResult) => void;
   onGo: (stepId: string) => void;
-  sectionExtra?: (sectionId: string) => ReactNode;
+  onUpdate: StudyHandle["update"];
+  sectionExtra?: (sectionId: string, study: StudyHandle) => ReactNode;
   conceptExtra?: (conceptId: string) => ReactNode;
 };
 
-function StepContent({ step, project, terms, figures, questions, progress, summary, pathSteps, stepTitle, onAnswer, onGo, sectionExtra, conceptExtra }: StepContentProps) {
+function StepContent({ step, project, terms, figures, questions, progress, summary, pathSteps, stepTitle, onAnswer, onGo, onUpdate, sectionExtra, conceptExtra }: StepContentProps) {
   const t = useStrings();
   const { evidence, story } = project;
 
@@ -294,7 +309,7 @@ function StepContent({ step, project, terms, figures, questions, progress, summa
             onAnswer={onAnswer}
           />
         ) : null}
-        {sectionExtra?.(section.id)}
+        {sectionExtra?.(section.id, { progress, update: onUpdate })}
       </article>
     );
   }

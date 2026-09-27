@@ -12,6 +12,8 @@ import {
   buildExplanationBrief,
   buildSectionBrief,
   checkExplanationFeedback,
+  isStudyFile,
+  recordCheckedExplanation,
   conceptLinks,
   libraryPaperFor,
   paperKey,
@@ -187,9 +189,14 @@ function isAccentState(value) {
   );
 }
 
-function acquireAccentLock(dataDirectory) {
-  const lockPath = join(dataDirectory, "accent-cycle.lock");
-  mkdirSync(dataDirectory, { recursive: true, mode: 0o700 });
+/**
+ * Stüdyonun kilidiyle aynı sözleşme (`trace-storage.ts`): kilit bir dizin,
+ * 30 saniyeden eski kilit bayat sayılıyor. Stüdyo ve köprü aynı dosyaya
+ * aynı anda yazmıyor.
+ */
+function acquireDirectoryLock(directory, name, busyMessage) {
+  const lockPath = join(directory, name);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
   for (let attempt = 0; attempt < 200; attempt += 1) {
     try {
       mkdirSync(lockPath);
@@ -209,7 +216,11 @@ function acquireAccentLock(dataDirectory) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 + Math.min(attempt, 40));
     }
   }
-  throw new Error("The Trace accent cycle is busy. Please retry in a moment.");
+  throw new Error(busyMessage);
+}
+
+function acquireAccentLock(dataDirectory) {
+  return acquireDirectoryLock(dataDirectory, "accent-cycle.lock", "The Trace accent cycle is busy. Please retry in a moment.");
 }
 
 function assignPaperAccent(paperPath) {
@@ -322,7 +333,7 @@ Usage:
                               [--claims locked|open] [--goal revise|strengthen] [--instruction "<what should change>"]
   node trace-agent.mjs splice --brief <revisions/…brief.json> [--section <section.json>]
   node trace-agent.mjs explain --project <project.trace.json> --target story:<id> (--text "<explanation>" | --text-file <file>)
-  node trace-agent.mjs explain-check --brief <explanations/…brief.json> [--feedback <feedback.json>]
+  node trace-agent.mjs explain-check --brief <explanations/…brief.json> [--feedback <feedback.json>] [--model <name>] [--no-save]
   node trace-agent.mjs templates
   node trace-agent.mjs publish --project <project.trace.json> [--expires-days 7|30|90]
                               [--no-report] [--no-appendix] [--no-learning] [--no-figures] [--app-url <http://...>]
@@ -422,7 +433,12 @@ Usage:
             and every quoted phrase is really in the reader's text. Prints
             what they conveyed, what they left out and where the evidence
             says otherwise, each with its claim and page. Nothing is saved
-            in the project.
+            in the project. When the project is in the Trace library, the
+            explanation is kept with the reader's study progress (the
+            studio shows it under "Your earlier explanations"), and
+            history.sinceLast says what changed since their last
+            explanation of the same section. --no-save skips that; --model
+            names the model that wrote the feedback.
 
   publish   Freezes a copy of the project as a shareable link served by the
             Trace studio at /p/<id>. Blocks can be left out; evidence quotes
@@ -450,7 +466,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest"].includes(key)) {
+    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest", "no-save"].includes(key)) {
       args[key] = true;
       continue;
     }
@@ -1120,11 +1136,57 @@ function checkExplanation(args) {
     return;
   }
   const { ok, ...report } = outcome;
+  const history = args["no-save"]
+    ? { saved: false, reason: "--no-save" }
+    : saveExplanationHistory(readJsonFile(projectPath, "project"), brief, readJsonFile(feedbackPath, "feedback"), args.model);
   console.log(JSON.stringify({
     ok,
     ...report,
-    note: "This is a model's reading of the explanation against the collected evidence, not a grade; it did not read the paper. Tell the reader what they conveyed, what they left out and where the evidence says otherwise, with each claim's page.",
+    history,
+    note: "This is a model's reading of the explanation against the collected evidence, not a grade; it did not read the paper. Tell the reader what they conveyed, what they left out and where the evidence says otherwise, with each claim's page. When history.sinceLast is set, also tell them what they conveyed this time that they had not last time, and what they left out both times.",
   }, null, 2));
+}
+
+/**
+ * Anlatış kütüphanenin çalışma kaydına ekleniyor (stüdyonun `study.json`'ı,
+ * aynı kilit ve bozuk dosyayı kenara alma kuralıyla): stüdyo onu "Your earlier
+ * explanations" altında gösteriyor ve bir sonraki anlatış onunla
+ * karşılaştırılıyor. Proje kütüphanede değilse yazılmıyor; ilerleme projeye
+ * değil kütüphanedeki makaleye ait.
+ */
+function saveExplanationHistory(project, brief, feedback, model) {
+  const library = traceLibraryDirectory();
+  if (!existsSync(join(library, projectLibraryFileName(brief.projectId)))) {
+    return { saved: false, reason: "The project is not in the Trace library, so there is no study progress to keep the explanation in. Run deliver first." };
+  }
+  const release = acquireDirectoryLock(library, "study.lock", "The study progress is busy. Please retry in a moment.");
+  try {
+    const path = join(library, "study.json");
+    let raw;
+    let exists = true;
+    try {
+      raw = JSON.parse(readFileSync(path, "utf8"));
+    } catch (error) {
+      if (error?.code === "ENOENT") exists = false;
+      else if (!(error instanceof SyntaxError)) throw error;
+    }
+    const outcome = recordCheckedExplanation(project, brief, feedback, raw, typeof model === "string" && model.trim() ? model.trim() : "your agent", new Date().toISOString());
+    if (!outcome.ok) return { saved: false, reason: outcome.issues.join("; ") };
+    if (!outcome.duplicate) {
+      if (exists && !isStudyFile(raw)) {
+        renameSync(path, join(library, `study.damaged-${new Date().toISOString().replace(/[-:.]/g, "")}.json`));
+      }
+      atomicWrite(path, `${JSON.stringify(outcome.file, null, 2)}\n`);
+    }
+    return {
+      saved: !outcome.duplicate,
+      ...(outcome.duplicate ? { reason: "This explanation was already recorded." } : {}),
+      explanations: outcome.explanations,
+      sinceLast: outcome.sinceLast,
+    };
+  } finally {
+    release();
+  }
 }
 
 /**

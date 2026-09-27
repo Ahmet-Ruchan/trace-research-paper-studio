@@ -141,6 +141,30 @@ export const studyAnswerSchema = z.object({
 });
 export type StudyAnswer = z.infer<typeof studyAnswerSchema>;
 
+/**
+ * Okuyucunun bir bölümü kendi cümleleriyle anlatışı ve modelin denetiminin
+ * özeti (`explanation-history.ts`): hangi iddiaları aktardığı, hangilerini
+ * atladığı. Bir sonraki anlatışta neyin eklendiği bundan hesaplanıyor.
+ */
+export const studyExplanationSchema = z.object({
+  /** "story:<id>" ya da "report:<id>". */
+  target: z.string().min(1).max(MAX_ID),
+  at: z.string().max(40),
+  /** Anlatış 3000 karakterle sınırlı (`explain-back.ts`); bu yalnızca bir akıl sınırı. */
+  text: z.string().min(1).max(4000),
+  model: z.string().max(200),
+  covered: z.array(z.string().max(MAX_ID)).max(200),
+  missed: z.array(z.string().max(MAX_ID)).max(200),
+  misstated: z.number().int().min(0).max(200),
+  unsupported: z.number().int().min(0).max(200),
+  total: z.number().int().min(0).max(200),
+  /** Bölümün mührü: bölüm yeniden yazılırsa eski anlatış başka bir metne ait. */
+  sig: z.string().max(40),
+});
+export type StudyExplanation = z.infer<typeof studyExplanationSchema>;
+
+export const MAX_EXPLANATIONS = 60;
+
 export const studyProgressSchema = z.object({
   version: z.literal(1),
   current: z.string().max(MAX_ID).optional(),
@@ -151,6 +175,8 @@ export const studyProgressSchema = z.object({
   finishedAt: z.string().max(40).optional(),
   /** Tekrar kartları (`review-schedule.ts`); çalışmada yanıtlanan sorular ve okunan kavramlar. */
   reviews: z.array(studyReviewSchema).max(MAX_ENTRIES).optional(),
+  /** Kendi cümleleriyle anlatışlar; bölüm başına en yenileri. */
+  explanations: z.array(studyExplanationSchema).max(MAX_EXPLANATIONS).optional(),
 });
 export type StudyProgress = z.infer<typeof studyProgressSchema>;
 

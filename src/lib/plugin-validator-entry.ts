@@ -18,7 +18,7 @@ export { ankiCards, buildAnkiDeck } from "./anki-export";
 export { exportDefinitions, findExport } from "./exports";
 export { libraryModelRecord } from "./model-record";
 export { conceptLinks, libraryPaperFor, paperKey, sharedConcepts, suggestReferences } from "./concept-links";
-export { parseStudyFile } from "./study-path";
+export { isStudyFile, parseStudyFile } from "./study-path";
 export {
   defaultPublicationInclude,
   expiryFromDays,
@@ -60,6 +60,8 @@ import {
   parseExplainTarget,
   validateExplanationFeedback,
 } from "./explain-back";
+import { compareExplanations, explanationHistory, explanationRecord, recordExplanation } from "./explanation-history";
+import { parseStudyFile, studyFileToJson } from "./study-path";
 import {
   describeValidationError,
   validateDeepReportIntegrity,
@@ -289,6 +291,52 @@ export function buildExplanationBrief(input: unknown, rawTarget: string, rawText
   } catch (error) {
     return { ok: false, issues: describeValidationError(error) };
   }
+}
+
+/**
+ * Denetlenmiş bir anlatışı çalışma kaydına ekler (`explanation-history.ts`):
+ * stüdyo "Your earlier explanations" altında gösteriyor, bir sonraki anlatış
+ * onunla karşılaştırılıyor. Çağıran önce `checkExplanationFeedback` ile
+ * denetlemiş olmalı. Aynı metin iki kez kaydedilmiyor. `file` çalışma
+ * dosyasının yeni hâli; çağıran kilidin altında yazıyor.
+ */
+export function recordCheckedExplanation(input: unknown, rawBrief: unknown, rawFeedback: unknown, rawStudyFile: unknown, model: string, now: string) {
+  const parsed = parseProject(input);
+  if (!parsed.ok) return parsed;
+  const { project } = parsed;
+  const brief = explanationBriefSchema.safeParse(rawBrief);
+  const feedback = explanationFeedbackSchema.safeParse(rawFeedback);
+  if (!brief.success || !feedback.success) return { ok: false as const, issues: ["Run explain-check first; the brief or the feedback is not valid"] };
+  const target = parseExplainTarget(brief.data.target);
+  const record = explanationRecord(project, target, brief.data.text, feedback.data, explanationCoverage(project, target, feedback.data), model, now);
+  const study = parseStudyFile(rawStudyFile);
+  const history = explanationHistory(study.get(project.id), target);
+  const duplicate = Boolean(history[0] && history[0].text === record.text && history[0].sig === record.sig);
+  if (!duplicate) study.set(project.id, recordExplanation(study.get(project.id), record, now));
+  const latest = duplicate ? history[0] : record;
+  const previous = duplicate ? history[1] : history[0];
+  const change = previous ? compareExplanations(previous, latest) : undefined;
+  const claim = (id: string) => {
+    const found = project.evidence.claims.find((item) => item.id === id);
+    return { claimId: id, statement: found?.statement ?? "", page: found?.sourceRefs[0]?.page ?? null };
+  };
+  return {
+    ok: true as const,
+    duplicate,
+    file: studyFileToJson(study),
+    explanations: explanationHistory(study.get(project.id), target).length,
+    sinceLast: change
+      ? {
+          at: change.previous.at,
+          sameSection: change.sameSection,
+          before: change.before,
+          after: change.after,
+          conveyedThisTimeNotLast: change.gained.map(claim),
+          conveyedLastTimeNotThis: change.lost.map(claim),
+          leftOutBothTimes: change.stillMissed.map(claim),
+        }
+      : null,
+  };
 }
 
 export function checkExplanationFeedback(input: unknown, rawBrief: unknown, rawFeedback: unknown) {

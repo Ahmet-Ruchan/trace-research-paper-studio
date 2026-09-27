@@ -976,6 +976,19 @@ html[data-text-size="larger"] { font-size: 125%; }
 .explain-group.is-misstated h5, .explain-group.is-unsupported h5 { color: var(--danger); }
 .explain-note { margin: 6px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; }
 .explain-quote { margin: 0; padding-left: 10px; border-left: 2px solid var(--danger-edge); color: var(--ink); font: italic var(--text-md)/1.55 Georgia, serif; }
+.explain-change { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); }
+.explain-change-coverage { margin: 0; font-size: var(--text-md); }
+.explain-change > h5 { margin: 0 0 6px; color: var(--muted); font-size: var(--text-xs); letter-spacing: .1em; text-transform: uppercase; }
+.explain-change .explain-group:first-of-type { margin-top: 12px; }
+.explain-history { margin-bottom: 16px; }
+.explain-history > summary { cursor: pointer; color: var(--ink-soft); font-size: var(--text-sm); font-weight: 600; }
+.explain-history ol { display: grid; gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.explain-history-meta { margin: 0 0 6px; color: var(--muted); font-size: var(--text-sm); }
+.explain-history-meta strong { color: var(--ink); font-weight: 600; }
+.explain-history-text { margin: 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--ink-soft); font: var(--text-md)/1.55 Georgia, serif; white-space: pre-wrap; }
+.explain-forget, .explain-forget-open { margin-top: 12px; font-size: var(--text-sm); }
+.explain-forget button, .explain-forget-open { margin-left: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 16px; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.explain-forget-open { margin-left: 0; }
 
 /* Kavram bağları: ön bilgi ve çalışma notu, Lab'deki "Concepts" ve kütüphanenin kavram haritası. */
 .concept-note { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0; padding: 8px 11px; border-radius: 9px; background: var(--surface-2); color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }

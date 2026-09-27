@@ -20431,6 +20431,27 @@ const studyAnswerSchema = object({
 	/** Sorunun içeriğinin mührü: soru yeniden yazılırsa eski yanıt geçersiz. */
 	sig: string().max(40)
 });
+/**
+* Okuyucunun bir bölümü kendi cümleleriyle anlatışı ve modelin denetiminin
+* özeti (`explanation-history.ts`): hangi iddiaları aktardığı, hangilerini
+* atladığı. Bir sonraki anlatışta neyin eklendiği bundan hesaplanıyor.
+*/
+const studyExplanationSchema = object({
+	/** "story:<id>" ya da "report:<id>". */
+	target: string().min(1).max(MAX_ID),
+	at: string().max(40),
+	/** Anlatış 3000 karakterle sınırlı (`explain-back.ts`); bu yalnızca bir akıl sınırı. */
+	text: string().min(1).max(4e3),
+	model: string().max(200),
+	covered: array(string().max(MAX_ID)).max(200),
+	missed: array(string().max(MAX_ID)).max(200),
+	misstated: number().int().min(0).max(200),
+	unsupported: number().int().min(0).max(200),
+	total: number().int().min(0).max(200),
+	/** Bölümün mührü: bölüm yeniden yazılırsa eski anlatış başka bir metne ait. */
+	sig: string().max(40)
+});
+const MAX_EXPLANATIONS = 60;
 const studyProgressSchema = object({
 	version: literal(1),
 	current: string().max(MAX_ID).optional(),
@@ -20440,8 +20461,19 @@ const studyProgressSchema = object({
 	updatedAt: string().max(40),
 	finishedAt: string().max(40).optional(),
 	/** Tekrar kartları (`review-schedule.ts`); çalışmada yanıtlanan sorular ve okunan kavramlar. */
-	reviews: array(studyReviewSchema).max(MAX_ENTRIES).optional()
+	reviews: array(studyReviewSchema).max(MAX_ENTRIES).optional(),
+	/** Kendi cümleleriyle anlatışlar; bölüm başına en yenileri. */
+	explanations: array(studyExplanationSchema).max(60).optional()
 });
+function emptyStudyProgress(now) {
+	return {
+		version: 1,
+		done: [],
+		answers: [],
+		startedAt: now,
+		updatedAt: now
+	};
+}
 const studyFileSchema = object({
 	version: literal(1),
 	projects: array(unknown())
@@ -20450,6 +20482,9 @@ const studyEntrySchema = object({
 	id: string().min(1).max(MAX_ID),
 	progress: studyProgressSchema
 });
+function isStudyFile(raw) {
+	return studyFileSchema.safeParse(raw).success;
+}
 /** Proje kimliği → ilerleme. Nesne değil `Map`: kimlik serbest metin ve "__proto__" da olabilir. */
 function parseStudyFile(raw) {
 	const entries = /* @__PURE__ */ new Map();
@@ -20460,6 +20495,15 @@ function parseStudyFile(raw) {
 		if (entry.success) entries.set(entry.data.id, entry.data.progress);
 	}
 	return entries;
+}
+function studyFileToJson(entries) {
+	return {
+		version: 1,
+		projects: [...entries].map(([id, progress]) => ({
+			id,
+			progress
+		}))
+	};
 }
 
 //#endregion
@@ -21380,6 +21424,82 @@ function explanationCoverage(project, target, feedback) {
 }
 
 //#endregion
+//#region src/lib/explanation-history.ts
+/**
+* Kendi cümlelerinle anlatışların geçmişi.
+*
+* Bir bölümü bir kez anlatmak, bir hafta sonra yeniden anlatmaktan az şey
+* söylüyor: okuyucu neyi eklediğini, neyi hâlâ atladığını ve neyi artık
+* söylemediğini ancak iki anlatışı yan yana görünce anlıyor. Karşılaştırma
+* modelin değil kodun işi: iki denetimin iddia kimlikleri karşılaştırılıyor.
+*
+* Geçmiş çalışma ilerlemesinde (`study.json`) duruyor, projede değil:
+* okuyucunun cümleleri paylaşılan bir JSON'la dışarı gitmiyor. Bölüm başına
+* en yeni beş anlatış, bütün makale için en çok altmış tutuluyor.
+*/
+const MAX_EXPLANATIONS_PER_SECTION = 5;
+/** Bölümün mührü: bölüm yeniden yazıldıysa eski anlatış başka bir metne ait. */
+function explainedSectionSignature(project, target) {
+	const section = explainedSection(project, target);
+	return section ? stableHash(canonicalJson(section)) : "";
+}
+function explanationRecord(project, target, text, feedback, coverage, model, at) {
+	const inSection = new Set(explainedSection(project, target)?.claimIds ?? []);
+	const ids = (items) => [...new Set(items.map((item) => item.claimId))].filter((id) => inSection.has(id));
+	return {
+		target: formatExplainTarget(target),
+		at,
+		text: text.trim(),
+		model: model.slice(0, 200),
+		covered: ids(feedback.covered),
+		missed: ids(feedback.missed),
+		misstated: feedback.misstated.length,
+		unsupported: feedback.unsupported.length,
+		total: coverage.total,
+		sig: explainedSectionSignature(project, target)
+	};
+}
+/** Anlatışı ekler; bölümün en eski anlatışları ve toplam sınırı aşanlar düşüyor. */
+function recordExplanation(progress, record, now) {
+	const base = progress ?? emptyStudyProgress(now);
+	const all = [...base.explanations ?? [], record];
+	const forTarget = all.filter((item) => item.target === record.target);
+	const dropped = new Set(forTarget.slice(0, Math.max(0, forTarget.length - 5)));
+	const kept = all.filter((item) => !dropped.has(item)).slice(-60);
+	return {
+		...base,
+		explanations: kept,
+		updatedAt: now
+	};
+}
+/** Bir bölümün anlatışları, en yenisi önce. */
+function explanationHistory(progress, target) {
+	const id = formatExplainTarget(target);
+	return (progress?.explanations ?? []).filter((item) => item.target === id).sort((left, right) => right.at.localeCompare(left.at));
+}
+/** İki anlatışın farkı; iddia kimlikleri üzerinden, model yok. */
+function compareExplanations(previous, current) {
+	const before = new Set(previous.covered);
+	const after = new Set(current.covered);
+	const missedBefore = new Set(previous.missed);
+	return {
+		previous,
+		sameSection: previous.sig === current.sig,
+		gained: current.covered.filter((id) => !before.has(id)),
+		lost: previous.covered.filter((id) => !after.has(id)),
+		stillMissed: current.missed.filter((id) => missedBefore.has(id)),
+		before: {
+			covered: previous.covered.length,
+			total: previous.total
+		},
+		after: {
+			covered: current.covered.length,
+			total: current.total
+		}
+	};
+}
+
+//#endregion
 //#region src/lib/plugin-validator-entry.ts
 function validateProjectObject(input, options = {}) {
 	const parsed = researchProjectSchema.safeParse(input);
@@ -21563,6 +21683,56 @@ function buildExplanationBrief(input, rawTarget, rawText) {
 		};
 	}
 }
+/**
+* Denetlenmiş bir anlatışı çalışma kaydına ekler (`explanation-history.ts`):
+* stüdyo "Your earlier explanations" altında gösteriyor, bir sonraki anlatış
+* onunla karşılaştırılıyor. Çağıran önce `checkExplanationFeedback` ile
+* denetlemiş olmalı. Aynı metin iki kez kaydedilmiyor. `file` çalışma
+* dosyasının yeni hâli; çağıran kilidin altında yazıyor.
+*/
+function recordCheckedExplanation(input, rawBrief, rawFeedback, rawStudyFile, model, now) {
+	const parsed = parseProject(input);
+	if (!parsed.ok) return parsed;
+	const { project } = parsed;
+	const brief = explanationBriefSchema.safeParse(rawBrief);
+	const feedback = explanationFeedbackSchema.safeParse(rawFeedback);
+	if (!brief.success || !feedback.success) return {
+		ok: false,
+		issues: ["Run explain-check first; the brief or the feedback is not valid"]
+	};
+	const target = parseExplainTarget(brief.data.target);
+	const record = explanationRecord(project, target, brief.data.text, feedback.data, explanationCoverage(project, target, feedback.data), model, now);
+	const study = parseStudyFile(rawStudyFile);
+	const history = explanationHistory(study.get(project.id), target);
+	const duplicate = Boolean(history[0] && history[0].text === record.text && history[0].sig === record.sig);
+	if (!duplicate) study.set(project.id, recordExplanation(study.get(project.id), record, now));
+	const latest = duplicate ? history[0] : record;
+	const previous = duplicate ? history[1] : history[0];
+	const change = previous ? compareExplanations(previous, latest) : void 0;
+	const claim = (id) => {
+		const found = project.evidence.claims.find((item) => item.id === id);
+		return {
+			claimId: id,
+			statement: found?.statement ?? "",
+			page: found?.sourceRefs[0]?.page ?? null
+		};
+	};
+	return {
+		ok: true,
+		duplicate,
+		file: studyFileToJson(study),
+		explanations: explanationHistory(study.get(project.id), target).length,
+		sinceLast: change ? {
+			at: change.previous.at,
+			sameSection: change.sameSection,
+			before: change.before,
+			after: change.after,
+			conveyedThisTimeNotLast: change.gained.map(claim),
+			conveyedLastTimeNotThis: change.lost.map(claim),
+			leftOutBothTimes: change.stillMissed.map(claim)
+		} : null
+	};
+}
 function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 	const parsed = parseProject(input);
 	if (!parsed.ok) return parsed;
@@ -21627,4 +21797,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptLinks, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, isRevisionFileName, isStudyFile, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };

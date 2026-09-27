@@ -192,6 +192,8 @@ node scripts/trace-agent.mjs explain-check --brief "<briefPath>"
 
 `explain-check` applies the studio's own rules: every claim id must exist, "left out" may only name the claims the section rests on, and every quoted phrase must be the user's exact words. If it returns `ok: false`, fix the feedback file and run it again. When it succeeds, tell the user what they conveyed, what they left out and where the evidence says otherwise, each with the claim and its page, and say plainly that this is a model's reading of their text against the collected evidence, not a grade. Nothing is written to the project.
 
+When the project is in the Trace library, `explain-check` also keeps the explanation with the user's study progress (`history.saved`), where the studio shows it under "Your earlier explanations". Pass `--model <name>` with the model you are running. If `history.sinceLast` is set, the user explained the same section before: tell them what they conveyed this time and not last time, what they conveyed before and left out now, and what they left out both times, with the count (`before` → `after`). Checking the same text twice records it once. Pass `--no-save` when the user does not want the explanation kept.
+
 ## Concepts across the library
 
 When the user asks what they already know from other papers, which concepts of a project are new to them, or what to read next, run:

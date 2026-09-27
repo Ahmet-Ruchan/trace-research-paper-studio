@@ -386,7 +386,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 initialProgress={study.state.progress}
                 onSave={study.save}
                 note="Your progress is saved in your library, next to this paper. It is not part of the project file, so exports and published pages never carry your answers."
-                sectionExtra={(sectionId) => <ExplainPanel project={project} target={{ kind: "story", sectionId }} onClaimSelect={onClaimSelect} />}
+                sectionExtra={(sectionId, handle) => <ExplainPanel project={project} target={{ kind: "story", sectionId }} study={handle} onClaimSelect={onClaimSelect} />}
                 conceptExtra={library ? (conceptId) => <ConceptNote link={linkFor(conceptId)} /> : undefined}
               />
             ) : null}

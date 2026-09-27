@@ -42,7 +42,7 @@ running on the coding agent you already use, with no second API key.
 | | |
 | --- | --- |
 | **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references, titles and abstracts, for works that teach what you have not studied yet. |
-| **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim and page. |
+| **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim and page. Explain it again later and Trace shows what you added since. |
 | **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next. The answers come from the formulas themselves, not from a model. |
 | **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
 | **[Learning health](#see-what-a-reader-cannot-learn-from)** | The learning counterpart of evidence health: unchecked sections, a quiz that never asks about limitations, playgrounds that show nothing, derivations that restate themselves, concepts nothing uses. Each finding opens its fix. |
@@ -234,14 +234,25 @@ to its claim and page.
 
 It is a model's reading, and the page says so, but the parts that can be checked are checked by code:
 every claim must exist, "left out" can only name the claims the section rests on, and every phrase it
-quotes back to you must be your own words, verbatim. Nothing is saved. Your agent can do the same
-with the active model:
+quotes back to you must be your own words, verbatim.
+
+Explaining a section once says less than explaining it again a week later. Every explanation you check
+is kept with your study progress, in your library and never in the project, so the next time you
+explain the same section Trace shows what changed: the claims you conveyed this time and not last
+time, the ones you conveyed before and dropped, and the ones you left out both times, with the count
+going from, say, 1 of 2 to 2 of 2. The comparison is done by code on the claims each check found, not
+by a model. **Your earlier explanations** lists the last five for each section, newest first, and
+**Forget these** removes them. An explanation written for an earlier version of a section says so.
+Your agent can do the same with the active model, and when the paper is in your library its checks
+land in the same history:
 
 ```text
 I'll explain the scaling section of my Trace project in my own words; check it against the evidence using the Trace plugin.
 ```
 
 ![Explain it back](docs/images/explain.jpg)
+
+![What you added since your last explanation](docs/images/explain-history.jpg)
 
 ### Remember it weeks later
 
