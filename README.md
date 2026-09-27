@@ -37,21 +37,16 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**0.23 — study across your whole library**
+**0.24 — a work timer and your profile**
 
 | | |
 | --- | --- |
-| **[A reading order for your library](#connect-what-you-learn-across-papers)** | Each paper after the papers that define what it assumes, with the reason and the next paper to read. The Lab says which papers to read first. |
-| **[One idea, two names](#connect-what-you-learn-across-papers)** | Link two names for the same concept yourself, or let a model propose pairs from the papers' own definitions; nothing is linked until you confirm. |
-| **[See what you have learned](#see-what-you-have-learned)** | Papers finished, reviews remembered, questions right on the first try, cards kept long-term, the week ahead and the cards you forget most, counted from your study progress. |
-| **[Take your progress to another device](#study-it-step-by-step)** | Save your study progress to a file and load it on a published page, an exported page or in the studio; it merges with what is there. |
-| **[Explain it again, see what you added](#explain-it-back-in-your-own-words)** | Your checked explanations are kept; explain a section again and Trace shows which claims you conveyed this time and not last time. |
-| **[Reading suggestions from abstracts](#connect-what-you-learn-across-papers)** | Looking through a paper's references now reads their abstracts too, and shows the sentence each suggestion rests on. |
-| **[The plugin, tested on every push](#development)** | A workflow installs the plugin into Codex, Claude Code and Antigravity CLI and runs it from the installed copy, so an agent that cuts a description or drops a field is caught before users see it. |
-
-Your agent has all of it too: `concepts` gives the reading order, the papers to read first and the
-concept names to link, `alias` records a link you confirmed, `progress` prints your study counts, and
-`explain-check` keeps your explanation and says what changed since the last one.
+| **[Work in focused rounds, with breaks](#work-in-focused-rounds-with-breaks)** | Focus rounds and short and long breaks that follow each other on their own, a countdown, a stopwatch with laps and alarms on chosen days, one click away in the header of every screen, in eleven colours. |
+| **[A calendar of the days you worked](#your-profile-and-a-calendar-of-the-days-you-worked)** | Every minute you work is kept on your computer and drawn like a contribution graph, in the colour you choose: streaks, today against your goal, any past year, and the sessions behind each day. |
+| **[Your profile](#your-profile-and-a-calendar-of-the-days-you-worked)** | Your name, role, institution, field and a photo, your goal and sounds; kept in `~/.trace` with a daily backup, and downloadable in one file to take to another computer. |
+| **[Days on your own clock](#see-what-you-have-learned)** | Progress counts "today" and the week ahead in your time zone, not in UTC. |
+| **[Every concept name, in a large library](#connect-what-you-learn-across-papers)** | A model is asked about every name, in parts that fit one request; names with similar definitions are compared together. |
+| **[The plugin, tried with a real model](#development)** | The weekly check can open a real Codex and Claude Code session and make it use the skill; Antigravity CLI is pinned to a checked release. |
 
 ---
 
@@ -286,6 +281,40 @@ How is my studying going across my Trace papers, and what should I review? Use t
 ```
 
 ![Your learning](docs/images/progress.jpg)
+
+### Work in focused rounds, with breaks
+
+**Focus** in the header of every screen opens a work timer. Work in rounds with a short break after
+each one and a long break every few rounds (25, 5 and 15 minutes to begin with, every length yours
+to change), for as many rounds as you choose or until you stop: breaks and rounds start on their own,
+or wait for you. Beside it are a **Timer** that counts down, a **Stopwatch** with laps, and **Alarms**
+for a time of day, once or on the days you pick. Each has its own colour among the studio's eleven:
+yellow, blue, red, green, orange, purple, lilac, light blue, navy, burgundy and pink.
+
+The timer keeps running while you read a paper: the header shows the time left, the browser tab
+shows it too, and when a round ends a note says what comes next, with a chime (and a desktop
+notification if you allow it). Only focus time counts as work, never a break; a countdown or the
+stopwatch count if you want them to. Time counts only while Trace is open: if the tab is closed or
+the computer sleeps, the timer pauses at that moment and says so, instead of adding the night to
+your day.
+
+![The work timer](docs/images/focus.jpg)
+
+### Your profile, and a calendar of the days you worked
+
+The round button next to it is your **profile**: your name, role, institution, field of study, an
+email and a photo, all editable. Below them is a calendar like a contribution graph, one square per
+day, darker the closer you came to your daily goal, in the colour you choose; show the last twelve
+months or any past year, and choose a day to see its sessions. Around it are today against your
+goal, this week and month, your streak and longest streak, your daily average and your best day.
+Add time you worked without the timer, or delete a session started by mistake.
+
+Every minute is kept on your computer, in `~/.trace/profile.json` and `~/.trace/focus-log.json`, never
+in a paper and never sent anywhere. Writes are atomic, a damaged file is set aside rather than
+overwritten, and a copy of the last seven days is kept in `~/.trace/backups`. **Download my data**
+puts everything in one file; importing it on another computer adds its sessions and removes none.
+
+![Your profile and work calendar](docs/images/profile.jpg)
 
 ### Connect what you learn across papers
 
@@ -990,7 +1019,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.23.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.24.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 
@@ -1125,6 +1154,10 @@ the server.
 - PDF and web content are treated as source material, never as instructions.
 - Provider keys are used only for the active request. They never appear in exports or in the
   browser's storage: the remembered analysis setup has no field for a key.
+- The profile and the work log live in `~/.trace`, behind the same password as the rest of the API.
+  A photo is accepted only as a small JPEG, PNG or WebP image (the browser crops it to 192 pixels),
+  a session cannot end in the future, and an import adds sessions without removing any; a profile
+  in an imported file is taken only into an empty one.
 - Verified paper claims require an excerpt and a visible page number.
 - Comparison visuals may only use numeric values already recorded in evidence.
 - A publication is a filtered copy: blocks the author leaves out are removed from the served file,
