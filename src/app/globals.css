@@ -3,6 +3,7 @@
 @import "../visuals/tokens.css";
 @import "../visuals/styles.css";
 @import "../visuals/learning.css";
+@import "./focus.css";
 @theme inline {
   --color-background: var(--paper);
   --color-foreground: var(--ink);

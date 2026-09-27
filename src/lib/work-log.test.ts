@@ -1,0 +1,161 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  addSessions,
+  calendarYears,
+  dailyTotals,
+  dayKey,
+  emptyWorkLog,
+  formatClock,
+  formatDuration,
+  heatLevel,
+  heatmap,
+  MAX_SESSIONS,
+  mergeWorkLogs,
+  parseWorkLog,
+  removeSession,
+  sessionPieces,
+  workLogSchema,
+  workLogToJson,
+  workSummary,
+  type WorkSession,
+} from "./work-log";
+
+/** Günler yerel saate göre: testler sabit bir saat diliminde koşuyor. */
+let zone: string | undefined;
+beforeEach(() => {
+  zone = process.env.TZ;
+  process.env.TZ = "Europe/Istanbul";
+});
+afterEach(() => {
+  if (zone === undefined) delete process.env.TZ;
+  else process.env.TZ = zone;
+});
+
+/** İstanbul saatiyle (UTC+3) bir an. */
+const at = (day: string, time: string) => Date.parse(`${day}T${time}:00+03:00`);
+const session = (id: string, day: string, from: string, to: string, kind: WorkSession["kind"] = "focus"): WorkSession => ({
+  id,
+  start: new Date(at(day, from)).toISOString(),
+  end: new Date(at(day, to)).toISOString(),
+  kind,
+});
+
+describe("the work log", () => {
+  it("counts overlapping sessions once: a focus round and a stopwatch at the same time, or two tabs", () => {
+    const log = addSessions(emptyWorkLog(), [
+      session("a", "2026-09-20", "09:00", "09:25"),
+      session("b", "2026-09-20", "09:10", "09:40", "stopwatch"),
+      session("c", "2026-09-20", "10:00", "10:30"),
+    ]);
+    expect(dailyTotals(log).get("2026-09-20")).toBe(70 * 60);
+  });
+
+  it("splits a session across midnight on the reader's clock", () => {
+    const log = addSessions(emptyWorkLog(), [{ id: "late", start: new Date(at("2026-09-20", "23:30")).toISOString(), end: new Date(at("2026-09-21", "00:45")).toISOString(), kind: "stopwatch" }]);
+    const totals = dailyTotals(log);
+    expect(totals.get("2026-09-20")).toBe(30 * 60);
+    expect(totals.get("2026-09-21")).toBe(45 * 60);
+  });
+
+  it("adds a session once, keeps the longer copy of the same one, and removes one", () => {
+    const first = addSessions(emptyWorkLog(), [session("a", "2026-09-20", "09:00", "09:10")]);
+    const again = addSessions(first, [session("a", "2026-09-20", "09:00", "09:25"), session("a", "2026-09-20", "09:00", "09:05")]);
+    expect(again.sessions).toHaveLength(1);
+    expect(again.sessions[0].end).toBe(new Date(at("2026-09-20", "09:25")).toISOString());
+    expect(removeSession(again, "a").sessions).toEqual([]);
+  });
+
+  it("folds the oldest sessions into day totals instead of dropping them", () => {
+    const many = Array.from({ length: MAX_SESSIONS + 2 }, (_, index) => {
+      const start = at("2026-01-01", "08:00") + index * 3_600_000;
+      return { id: `s${index}`, start: new Date(start).toISOString(), end: new Date(start + 600_000).toISOString(), kind: "focus" as const };
+    });
+    const log = addSessions(emptyWorkLog(), many);
+    expect(log.sessions).toHaveLength(MAX_SESSIONS);
+    expect(Object.values(log.archive).reduce((sum, seconds) => sum + seconds, 0)).toBe(2 * 600);
+    const total = [...dailyTotals(log).values()].reduce((sum, seconds) => sum + seconds, 0);
+    expect(total).toBe((MAX_SESSIONS + 2) * 600);
+  });
+
+  it("merges an imported log without counting the same file twice", () => {
+    const mine = addSessions(emptyWorkLog(), [session("a", "2026-09-20", "09:00", "09:25")]);
+    const theirs = { ...addSessions(emptyWorkLog(), [session("a", "2026-09-20", "09:00", "09:25"), session("b", "2026-09-21", "09:00", "10:00")]), archive: { "2025-01-02": 3600 } };
+    const once = mergeWorkLogs(mine, theirs);
+    const twice = mergeWorkLogs(once, theirs);
+    expect(twice).toEqual(once);
+    expect(once.sessions.map((item) => item.id)).toEqual(["a", "b"]);
+    expect(once.archive).toEqual({ "2025-01-02": 3600 });
+  });
+
+  it("splits an interval longer than twelve hours, and writes one session per line", () => {
+    const start = at("2026-09-20", "00:00");
+    const pieces = sessionPieces({ kind: "stopwatch", label: "  Reading  " }, start, start + 13 * 3_600_000);
+    expect(pieces.map((piece) => piece.id)).toEqual([`stopwatch-${start}`, `stopwatch-${start}-1`]);
+    expect(pieces[0].label).toBe("Reading");
+    const log = addSessions(emptyWorkLog(), pieces);
+    const text = workLogToJson(log);
+    expect(text.split("\n")).toHaveLength(5);
+    expect(workLogSchema.parse(JSON.parse(text))).toEqual(log);
+    expect(JSON.parse(workLogToJson(emptyWorkLog()))).toEqual(emptyWorkLog());
+  });
+
+  it("rejects a session that ends before it starts, and reads a damaged file as empty", () => {
+    expect(workLogSchema.safeParse({ version: 1, sessions: [session("x", "2026-09-20", "10:00", "09:00")], archive: {} }).success).toBe(false);
+    expect(parseWorkLog({ version: 2 })).toEqual(emptyWorkLog());
+  });
+});
+
+describe("the reader's week and streaks", () => {
+  const totals = new Map([
+    ["2026-09-21", 3600], // pazartesi
+    ["2026-09-22", 2 * 3600],
+    ["2026-09-23", 30], // bir dakikadan az: çalışılan gün sayılmıyor
+    ["2026-09-25", 5 * 3600],
+    ["2026-09-26", 4 * 3600],
+    ["2026-09-10", 1800],
+  ]);
+
+  it("adds up today, the week from its first day, the month, and the streaks", () => {
+    const now = new Date(at("2026-09-27", "10:00")); // pazar, henüz çalışılmadı
+    const summary = workSummary(totals, now, { weekStart: 1, goalMinutes: 240 });
+    expect(summary.today).toBe(0);
+    expect(summary.week).toBe(3600 + 7200 + 30 + 5 * 3600 + 4 * 3600);
+    expect(summary.goalDaysThisWeek).toBe(2);
+    expect(summary.currentStreak).toBe(2); // cuma ve cumartesi; bugün henüz bitmedi
+    expect(summary.longestStreak).toBe(2);
+    expect(summary.activeDays).toBe(5);
+    expect(summary.best).toEqual({ day: "2026-09-25", seconds: 5 * 3600 });
+    // Hafta pazardan başlıyorsa bu pazar yeni bir hafta.
+    expect(workSummary(totals, now, { weekStart: 0, goalMinutes: 240 }).week).toBe(0);
+  });
+
+  it("colours a day by the share of the daily goal, the darkest when the goal is met", () => {
+    expect([0, 59, 60, 60 * 60, 150 * 60, 240 * 60].map((seconds) => heatLevel(seconds, 240))).toEqual([0, 0, 1, 2, 3, 4]);
+  });
+
+  it("lays the calendar out in weeks, like a contribution graph", () => {
+    const today = new Date(at("2026-09-27", "10:00"));
+    const map = heatmap(totals, { from: new Date(2025, 8, 28), to: today, today, weekStart: 1, goalMinutes: 240 });
+    expect(map.weeks.every((week) => week.length === 7)).toBe(true);
+    expect(map.weeks.length).toBe(53);
+    const cells = map.weeks.flat().filter((cell) => cell !== null);
+    expect(cells[0]!.day).toBe("2025-09-28");
+    expect(cells.at(-1)!.day).toBe("2026-09-27");
+    expect(cells.find((cell) => cell!.day === "2026-09-25")!.level).toBe(4);
+    expect(map.total).toBe([...totals.values()].reduce((sum, seconds) => sum + seconds, 0));
+    expect(map.activeDays).toBe(5);
+    expect(map.months.map((month) => month.label).slice(0, 3)).toEqual(["Sep", "Oct", "Nov"]);
+    // Bir yıl: ocaktan aralığa; bugünden sonraki günler gelecek.
+    const year = heatmap(totals, { from: new Date(2026, 0, 1), to: new Date(2026, 11, 31), today, weekStart: 1, goalMinutes: 240 });
+    expect(year.weeks.flat().filter((cell) => cell?.future).length).toBe(95);
+    expect(calendarYears(new Map([["2024-03-01", 60], ...totals]), today)).toEqual([2026, 2024]);
+  });
+
+  it("writes durations and the clock the way people read them", () => {
+    expect([0, 30, 60, 45 * 60, 3600, 2 * 3600 + 15 * 60].map(formatDuration)).toEqual(["0m", "under a minute", "1m", "45m", "1h", "2h 15m"]);
+    expect(formatClock(25 * 60_000)).toBe("25:00");
+    expect(formatClock(400, "up")).toBe("00:01");
+    expect(formatClock(3_723_000)).toBe("1:02:03");
+    expect(dayKey(new Date(at("2026-09-20", "00:30")))).toBe("2026-09-20");
+  });
+});

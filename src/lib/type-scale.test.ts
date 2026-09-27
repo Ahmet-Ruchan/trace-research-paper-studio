@@ -17,7 +17,7 @@ import { THEME_ATTRIBUTE, THEME_KEY, parseTheme, themeBootScript } from "./theme
  * `node:*` içe aktarımı eslint tarafından yasak.
  */
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const STYLESHEETS = ["src/visuals/tokens.css", "src/app/globals.css", "src/visuals/styles.css", "src/visuals/learning.css", "viewer/shell.css"];
+const STYLESHEETS = ["src/visuals/tokens.css", "src/app/globals.css", "src/visuals/styles.css", "src/visuals/learning.css", "src/app/focus.css", "viewer/shell.css"];
 const FLOOR_PX = 12;
 const ROOT_PX = 16;
 

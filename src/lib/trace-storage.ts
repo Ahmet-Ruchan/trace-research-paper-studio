@@ -2,6 +2,7 @@ import { createHash, randomInt, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
+  copyFile,
   mkdir,
   readFile,
   readdir,
@@ -29,6 +30,8 @@ import { isLibraryTagsFile, libraryTagsToJson, parseLibraryTags, tagListSchema }
 import { aliasFileSchema, isAliasFile, parseAliasFile, type AliasFile } from "./concept-aliases";
 import { findBuiltInTemplate, templateIssues } from "./narrative-templates";
 import { isStudyFile, parseStudyFile, studyFileToJson, studyProgressSchema, type StudyProgress } from "./study-path";
+import { emptyProfile, isProfile, parseProfile, profileSchema, type Profile } from "./profile";
+import { dayKey, isWorkLog, parseWorkLog, workLogSchema, workLogToJson, type WorkLog } from "./work-log";
 import {
   projectContentFingerprint,
   projectForPublication,
@@ -524,6 +527,99 @@ export async function updateConceptAliases(change: (file: AliasFile) => AliasFil
       await rename(join(directory, ALIASES_FILE), join(directory, `aliases.damaged-${stamp}.json`));
     }
     await atomicWrite(join(directory, ALIASES_FILE), `${JSON.stringify(next, null, 2)}\n`);
+    return next;
+  } finally {
+    await release();
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Profil ve çalışma kaydı — ~/.trace/profile.json, ~/.trace/focus-log.json
+ *
+ * Kütüphaneye değil okuyucuya ait; bu yüzden kütüphane dizininde değil veri
+ * dizininin kökünde. Kayıt geriye dönük kaybolmamalı: yazımlar atomik ve
+ * kilitli, tanınmayan dosya kenara alınıyor (üzerine yazılmıyor) ve her
+ * dosyanın günde bir yedeği `backups/` altında son yedi günlük tutuluyor.
+ * ------------------------------------------------------------------ */
+
+const PROFILE_FILE = "profile.json";
+const PROFILE_LOCK = "profile.lock";
+const WORK_LOG_FILE = "focus-log.json";
+const WORK_LOG_LOCK = "focus-log.lock";
+const BACKUPS_KEPT = 7;
+
+async function readJsonFile(path: string): Promise<{ exists: boolean; raw: unknown }> {
+  try {
+    return { exists: true, raw: JSON.parse(await readFile(path, "utf8")) as unknown };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { exists: false, raw: undefined };
+    if (error instanceof SyntaxError) return { exists: true, raw: undefined };
+    throw error;
+  }
+}
+
+/** Günün ilk yazımından önce dosyanın bir kopyası; en yeni yedi gün kalıyor. */
+async function dailyBackup(path: string, stem: string) {
+  const directory = join(traceDataDirectory(), "backups");
+  const target = join(directory, `${stem}-${dayKey(new Date())}.json`);
+  try {
+    await stat(target);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  try {
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    await copyFile(path, target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  const kept = (await readdir(directory)).filter((name) => new RegExp(`^${stem}-\\d{4}-\\d{2}-\\d{2}\\.json$`).test(name)).sort();
+  for (const old of kept.slice(0, -BACKUPS_KEPT)) await rm(join(directory, old), { force: true });
+}
+
+async function setAsideDamaged(path: string, stem: string) {
+  const stamp = new Date().toISOString().replace(/[-:.]/g, "");
+  await rename(path, join(dirname(path), `${stem}.damaged-${stamp}.json`));
+}
+
+export async function readProfile(): Promise<Profile> {
+  const file = await readJsonFile(join(traceDataDirectory(), PROFILE_FILE));
+  return file.exists ? parseProfile(file.raw, new Date().toISOString()) : emptyProfile(new Date().toISOString());
+}
+
+export async function updateProfile(change: (profile: Profile) => Profile): Promise<Profile> {
+  const directory = traceDataDirectory();
+  const path = join(directory, PROFILE_FILE);
+  const release = await acquireDirectoryLock(directory, PROFILE_LOCK, "The profile is busy. Please retry in a moment.");
+  try {
+    const file = await readJsonFile(path);
+    const now = new Date().toISOString();
+    const next = profileSchema.parse(change(parseProfile(file.raw, now)));
+    if (file.exists && !isProfile(file.raw)) await setAsideDamaged(path, "profile");
+    else if (file.exists) await dailyBackup(path, "profile");
+    await atomicWrite(path, `${JSON.stringify(next, null, 2)}\n`);
+    return next;
+  } finally {
+    await release();
+  }
+}
+
+export async function readWorkLog(): Promise<WorkLog> {
+  return parseWorkLog((await readJsonFile(join(traceDataDirectory(), WORK_LOG_FILE))).raw);
+}
+
+export async function updateWorkLog(change: (log: WorkLog) => WorkLog): Promise<WorkLog> {
+  const directory = traceDataDirectory();
+  const path = join(directory, WORK_LOG_FILE);
+  const release = await acquireDirectoryLock(directory, WORK_LOG_LOCK, "The work log is busy. Please retry in a moment.");
+  try {
+    const file = await readJsonFile(path);
+    const next = workLogSchema.parse(change(parseWorkLog(file.raw)));
+    if (file.exists && !isWorkLog(file.raw)) await setAsideDamaged(path, "focus-log");
+    else if (file.exists) await dailyBackup(path, "focus-log");
+    await atomicWrite(path, workLogToJson(next));
     return next;
   } finally {
     await release();

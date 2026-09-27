@@ -1,0 +1,23 @@
+/*
+ * Çalışma saati ve profil.
+ *
+ * Renk bir kapsayıcıya `--focus` (rengin kendisi), `--focus-fill` (üstünde
+ * yazı taşıyan dolgu) ve `--on-focus` olarak veriliyor (`focus-colors.ts`).
+ * Rengin yazı tonu makale rengi gibi her öğede ve temaya göre türetiliyor:
+ * açık temada koyulaşıyor, koyu temada açılıyor. Çizgiler (halka, takvim) koyu
+ * temada lacivert ve bordo gibi koyu tonlarda zeminde kaybolmasın diye açılıyor.
+ */
+*, ::before, ::after {
+  --focus-ink: oklch(from var(--focus, #2563eb) min(l, .5) c h);
+  --focus-line: var(--focus, #2563eb);
+}
+html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="dark"] ::after {
+  --focus-ink: oklch(from var(--focus, #2563eb) max(l, .72) c h);
+  --focus-line: oklch(from var(--focus, #2563eb) max(l, .62) c h);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] *, html[data-theme="system"] ::before, html[data-theme="system"] ::after {
+    --focus-ink: oklch(from var(--focus, #2563eb) max(l, .72) c h);
+    --focus-line: oklch(from var(--focus, #2563eb) max(l, .62) c h);
+  }
+}
