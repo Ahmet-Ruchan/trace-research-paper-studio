@@ -37,30 +37,21 @@ running on the coding agent you already use, with no second API key.
 
 ## What's new
 
-**0.22 — learn the paper, not just read it**
+**0.23 — study across your whole library**
 
 | | |
 | --- | --- |
-| **[Take your progress to another device](#study-it-step-by-step)** | Save your study progress to a file and load it on a published page, an exported page or in the studio; it merges with what is there. |
+| **[A reading order for your library](#connect-what-you-learn-across-papers)** | Each paper after the papers that define what it assumes, with the reason and the next paper to read. The Lab says which papers to read first. |
 | **[One idea, two names](#connect-what-you-learn-across-papers)** | Link two names for the same concept yourself, or let a model propose pairs from the papers' own definitions; nothing is linked until you confirm. |
 | **[See what you have learned](#see-what-you-have-learned)** | Papers finished, reviews remembered, questions right on the first try, cards kept long-term, the week ahead and the cards you forget most, counted from your study progress. |
-| **[A reading order for your library](#connect-what-you-learn-across-papers)** | Each paper after the papers that define what it assumes, with the reason and the next paper to read. The Lab says which papers to read first. |
-| **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references, titles and abstracts, for works that teach what you have not studied yet. |
-| **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim and page. Explain it again later and Trace shows what you added since. |
-| **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next. The answers come from the formulas themselves, not from a model. |
-| **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
-| **[Learning health](#see-what-a-reader-cannot-learn-from)** | The learning counterpart of evidence health: unchecked sections, a quiz that never asks about limitations, playgrounds that show nothing, derivations that restate themselves, concepts nothing uses. Each finding opens its fix. |
-| **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review a day later, then at growing intervals while you keep remembering it, with every paper of your library in one queue. |
-| **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
-| **[Explain it differently](#rewrite-one-section-without-touching-the-evidence)** | One click asks for a section simpler, with an analogy, with a worked example or more technical, with the evidence still locked. |
-| **[Terms open where they are used](#read-it-as-a-narrative-with-the-source-one-click-away)** | Click a term in the story or the report for its definition; each section lists the concepts to know first. |
-| **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
-| **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio includes the learning layer, written by a fifth **Teaching** model from the evidence alone. Every number in it comes from the paper or says it is illustrative. Older projects offer **Add the learning layer**. |
-| **[The plugin, checked on all three agents](#install-in-under-a-minute)** | Installed and run on Claude Code, Codex and Antigravity CLI. Codex had been cutting the skill's description off mid-sentence and ignoring half of its starter prompts; both now fit its limits. A [workflow](#development) now installs the plugin into all three on every push and runs it from the installed copy. |
+| **[Take your progress to another device](#study-it-step-by-step)** | Save your study progress to a file and load it on a published page, an exported page or in the studio; it merges with what is there. |
+| **[Explain it again, see what you added](#explain-it-back-in-your-own-words)** | Your checked explanations are kept; explain a section again and Trace shows which claims you conveyed this time and not last time. |
+| **[Reading suggestions from abstracts](#connect-what-you-learn-across-papers)** | Looking through a paper's references now reads their abstracts too, and shows the sentence each suggestion rests on. |
+| **[The plugin, tested on every push](#development)** | A workflow installs the plugin into Codex, Claude Code and Antigravity CLI and runs it from the installed copy, so an agent that cuts a description or drops a field is caught before users see it. |
 
-Your agent has the new parts too: `explain` checks your own explanation, `concepts` links a paper to
-what you studied in the others, and `validate --strict` expects common misreadings at standard and
-deep depth.
+Your agent has all of it too: `concepts` gives the reading order, the papers to read first and the
+concept names to link, `alias` records a link you confirmed, `progress` prints your study counts, and
+`explain-check` keeps your explanation and says what changed since the last one.
 
 ---
 
@@ -997,7 +988,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.22.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.23.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)"
 ```
 
