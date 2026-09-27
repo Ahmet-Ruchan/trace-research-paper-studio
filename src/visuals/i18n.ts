@@ -135,6 +135,13 @@ export type Strings = {
   studyClear: string;
   studyKeep: string;
   studyBrowserNote: string;
+  studySaveFile: string;
+  studyLoadFile: string;
+  studyCarryHint: string;
+  studyLoaded: (steps: number, answers: number, cards: number) => string;
+  studyLoadOtherPaper: (title: string) => string;
+  studyLoadInvalid: string;
+  studyNothingToSave: string;
   // Kabuk
   navPrimer: string;
   navPractice: string;
@@ -356,6 +363,15 @@ const en: Strings = {
   studyClear: "Clear",
   studyKeep: "Keep",
   studyBrowserNote: "Your progress stays in this browser. It is not sent anywhere, and it is not part of the paper.",
+  studySaveFile: "Save progress to a file",
+  studyLoadFile: "Load progress from a file",
+  studyCarryHint:
+    "To continue on another device, save your progress to a file and load it there: on the published page, the exported page or in the studio. It merges with what is there instead of replacing it.",
+  studyLoaded: (steps, answers, cards) =>
+    `Progress loaded and merged with what was here: ${steps} ${steps === 1 ? "step" : "steps"} done, ${answers} ${answers === 1 ? "answer" : "answers"}, ${cards} review ${cards === 1 ? "card" : "cards"}.`,
+  studyLoadOtherPaper: (title) => `That file holds progress for another paper: ${title}. Nothing was changed.`,
+  studyLoadInvalid: "That file is not Trace study progress. Nothing was changed.",
+  studyNothingToSave: "There is no progress to save yet.",
   navPractice: "Learn & Try",
   tabLab: "Lab",
   tabStory: "Story",

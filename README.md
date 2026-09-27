@@ -41,6 +41,7 @@ running on the coding agent you already use, with no second API key.
 
 | | |
 | --- | --- |
+| **[Take your progress to another device](#study-it-step-by-step)** | Save your study progress to a file and load it on a published page, an exported page or in the studio; it merges with what is there. |
 | **[One idea, two names](#connect-what-you-learn-across-papers)** | Link two names for the same concept yourself, or let a model propose pairs from the papers' own definitions; nothing is linked until you confirm. |
 | **[See what you have learned](#see-what-you-have-learned)** | Papers finished, reviews remembered, questions right on the first try, cards kept long-term, the week ahead and the cards you forget most, counted from your study progress. |
 | **[A reading order for your library](#connect-what-you-learn-across-papers)** | Each paper after the papers that define what it assumes, with the reason and the next paper to read. The Lab says which papers to read first. |
@@ -221,7 +222,10 @@ try, the section it belongs to and the primer concepts resting on the same claim
 Trace remembers where you stopped. In the studio the progress is kept in your library, next to the
 paper, and never in the project file, so exports and published pages do not carry your answers. The
 published site and the exported page have **Study** too, and keep progress in the reader's own
-browser.
+browser. To continue on another device, **Save progress to a file** and **Load progress from a file**
+there: on the published page, the exported page or in the studio. Loading merges instead of
+replacing: every step done on either device, the latest answer to each question and the most
+advanced state of each review card are kept, and a file for another paper changes nothing.
 
 ![Study mode](docs/images/study.jpg)
 

@@ -1,7 +1,7 @@
 import { canonicalJson, stableHash } from "./canonical-json";
 import { explainedSection, formatExplainTarget, type ExplainTarget, type ExplanationFeedback } from "./explain-back";
 import type { ResearchProject } from "./schema";
-import { emptyStudyProgress, MAX_EXPLANATIONS, type StudyExplanation, type StudyProgress } from "./study-path";
+import { emptyStudyProgress, MAX_EXPLANATIONS_PER_SECTION, trimExplanations, type StudyExplanation, type StudyProgress } from "./study-path";
 
 /**
  * Kendi cümlelerinle anlatışların geçmişi.
@@ -16,7 +16,7 @@ import { emptyStudyProgress, MAX_EXPLANATIONS, type StudyExplanation, type Study
  * en yeni beş anlatış, bütün makale için en çok altmış tutuluyor.
  */
 
-export const MAX_EXPLANATIONS_PER_SECTION = 5;
+export { MAX_EXPLANATIONS_PER_SECTION };
 
 /** Bölümün mührü: bölüm yeniden yazıldıysa eski anlatış başka bir metne ait. */
 export function explainedSectionSignature(project: ResearchProject, target: ExplainTarget) {
@@ -53,11 +53,7 @@ export function explanationRecord(
 /** Anlatışı ekler; bölümün en eski anlatışları ve toplam sınırı aşanlar düşüyor. */
 export function recordExplanation(progress: StudyProgress | undefined, record: StudyExplanation, now: string): StudyProgress {
   const base = progress ?? emptyStudyProgress(now);
-  const all = [...(base.explanations ?? []), record];
-  const forTarget = all.filter((item) => item.target === record.target);
-  const dropped = new Set(forTarget.slice(0, Math.max(0, forTarget.length - MAX_EXPLANATIONS_PER_SECTION)));
-  const kept = all.filter((item) => !dropped.has(item)).slice(-MAX_EXPLANATIONS);
-  return { ...base, explanations: kept, updatedAt: now };
+  return { ...base, explanations: trimExplanations([...(base.explanations ?? []), record]), updatedAt: now };
 }
 
 /** Bir bölümün anlatışları, en yenisi önce. */

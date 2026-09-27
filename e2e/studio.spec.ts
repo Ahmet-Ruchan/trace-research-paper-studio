@@ -1674,6 +1674,59 @@ test.describe("study mode", () => {
     await expect(page.locator("section.study .study-meta")).toContainText(`Step 3 of ${path.steps.length}`);
     await expect(page.locator("section.study .study-bar")).toHaveAttribute("aria-valuenow", "2");
   });
+
+  test("carries progress to another device in a file, merging it with what is there", async ({ page, browser, request }) => {
+    const project = await seed(request, projectNamed("e2e-study-carry"));
+    const created = await request.post("/api/publications", {
+      data: { projectId: project.id, settings: { include: { deepReport: true, technicalAppendix: true, learning: true, figures: false }, expiresAt: null } },
+    });
+    const { publication } = (await created.json()) as { publication: { path: string } };
+
+    // Telefon: yayınlanan sayfada iki adım.
+    await page.goto(publication.path);
+    await page.locator(".viewer-tabs button", { hasText: "Study" }).click();
+    const study = page.locator("section.study");
+    await study.getByRole("button", { name: "Begin →" }).click();
+    await study.getByRole("button", { name: "Next →" }).click();
+    const [download] = await Promise.all([page.waitForEvent("download"), study.getByRole("button", { name: "Save progress to a file" }).click()]);
+    expect(download.suggestedFilename()).toBe("attention-is-all-you-need.trace-progress.json");
+    const file = await download.path();
+    const saved = JSON.parse(readFileSync(file, "utf8")) as { kind: string; projectId: string; progress: StudyProgress };
+    expect(saved).toMatchObject({ kind: "trace-study-progress", projectId: project.id });
+    expect(saved.progress.done).toHaveLength(2);
+
+    // Başka bir cihaz: boş bir tarayıcı, aynı sayfa.
+    const other = await browser.newContext();
+    const laptop = await other.newPage();
+    await laptop.goto(publication.path);
+    await laptop.locator(".viewer-tabs button", { hasText: "Study" }).click();
+    const there = laptop.locator("section.study");
+    await there.getByLabel("Load progress from a file").setInputFiles(file);
+    // İkinci adım bir kavramdı: okunan kavram bir tekrar kartı da açtı, o da taşınıyor.
+    await expect(there.locator(".study-carry-message")).toHaveText(
+      `Progress loaded and merged with what was here: 2 steps done, 0 answers, ${saved.progress.reviews?.length ?? 0} review ${saved.progress.reviews?.length === 1 ? "card" : "cards"}.`,
+    );
+    await expect(there.locator(".study-bar")).toHaveAttribute("aria-valuenow", "2");
+
+    // Başka bir makalenin dosyası hiçbir şeyi değiştirmiyor.
+    await there.getByLabel("Load progress from a file").setInputFiles({
+      name: "other.trace-progress.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify({ ...saved, projectId: "someone-else", paperTitle: "Another paper" })),
+    });
+    await expect(there.locator(".study-carry-message")).toHaveText("That file holds progress for another paper: Another paper. Nothing was changed.");
+    await other.close();
+
+    // Stüdyo: aynı dosya kütüphanedeki ilerlemeye ekleniyor.
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Study" }).click();
+    await page.locator("section.study").getByLabel("Load progress from a file").setInputFiles(file);
+    await expect(page.locator("section.study .study-carry-message")).toContainText("2 steps done");
+    await expect.poll(async () => {
+      const { progress } = (await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress?: StudyProgress };
+      return progress?.done.length ?? 0;
+    }).toBe(2);
+  });
 });
 
 test.describe("review", () => {

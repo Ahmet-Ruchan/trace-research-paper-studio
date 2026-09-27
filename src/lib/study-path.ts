@@ -128,7 +128,7 @@ export function studyPath(project: ResearchProject, drill?: Quiz): StudyPath {
  * ------------------------------------------------------------------ */
 
 const MAX_ID = 300;
-const MAX_ENTRIES = 400;
+export const MAX_ENTRIES = 400;
 
 export const studyAnswerSchema = z.object({
   id: z.string().min(1).max(MAX_ID),
@@ -164,6 +164,22 @@ export const studyExplanationSchema = z.object({
 export type StudyExplanation = z.infer<typeof studyExplanationSchema>;
 
 export const MAX_EXPLANATIONS = 60;
+/** Bölüm başına en yeni bu kadar anlatış tutuluyor. */
+export const MAX_EXPLANATIONS_PER_SECTION = 5;
+
+/** Sınırlar içinde bırakıyor: bölüm başına en yeni beş, toplam en çok altmış, en eski düşüyor. */
+export function trimExplanations(items: readonly StudyExplanation[]) {
+  const ordered = [...items].sort((left, right) => left.at.localeCompare(right.at));
+  const perSection = new Map<string, number>();
+  const kept: StudyExplanation[] = [];
+  for (const item of [...ordered].reverse()) {
+    const count = perSection.get(item.target) ?? 0;
+    if (count >= MAX_EXPLANATIONS_PER_SECTION) continue;
+    perSection.set(item.target, count + 1);
+    kept.push(item);
+  }
+  return kept.reverse().slice(-MAX_EXPLANATIONS);
+}
 
 export const studyProgressSchema = z.object({
   version: z.literal(1),

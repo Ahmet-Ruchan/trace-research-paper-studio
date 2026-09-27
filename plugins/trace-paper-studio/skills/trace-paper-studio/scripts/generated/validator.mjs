@@ -20729,16 +20729,31 @@ const studyExplanationSchema = object({
 	sig: string().max(40)
 });
 const MAX_EXPLANATIONS = 60;
+/** Bölüm başına en yeni bu kadar anlatış tutuluyor. */
+const MAX_EXPLANATIONS_PER_SECTION = 5;
+/** Sınırlar içinde bırakıyor: bölüm başına en yeni beş, toplam en çok altmış, en eski düşüyor. */
+function trimExplanations(items) {
+	const ordered = [...items].sort((left, right) => left.at.localeCompare(right.at));
+	const perSection = /* @__PURE__ */ new Map();
+	const kept = [];
+	for (const item of [...ordered].reverse()) {
+		const count = perSection.get(item.target) ?? 0;
+		if (count >= 5) continue;
+		perSection.set(item.target, count + 1);
+		kept.push(item);
+	}
+	return kept.reverse().slice(-60);
+}
 const studyProgressSchema = object({
 	version: literal(1),
 	current: string().max(MAX_ID).optional(),
-	done: array(string().max(MAX_ID)).max(MAX_ENTRIES),
-	answers: array(studyAnswerSchema).max(MAX_ENTRIES),
+	done: array(string().max(MAX_ID)).max(400),
+	answers: array(studyAnswerSchema).max(400),
 	startedAt: string().max(40),
 	updatedAt: string().max(40),
 	finishedAt: string().max(40).optional(),
 	/** Tekrar kartları (`review-schedule.ts`); çalışmada yanıtlanan sorular ve okunan kavramlar. */
-	reviews: array(studyReviewSchema).max(MAX_ENTRIES).optional(),
+	reviews: array(studyReviewSchema).max(400).optional(),
 	/** Kendi cümleleriyle anlatışlar; bölüm başına en yenileri. */
 	explanations: array(studyExplanationSchema).max(60).optional()
 });
@@ -22366,19 +22381,6 @@ function explanationCoverage(project, target, feedback) {
 
 //#endregion
 //#region src/lib/explanation-history.ts
-/**
-* Kendi cümlelerinle anlatışların geçmişi.
-*
-* Bir bölümü bir kez anlatmak, bir hafta sonra yeniden anlatmaktan az şey
-* söylüyor: okuyucu neyi eklediğini, neyi hâlâ atladığını ve neyi artık
-* söylemediğini ancak iki anlatışı yan yana görünce anlıyor. Karşılaştırma
-* modelin değil kodun işi: iki denetimin iddia kimlikleri karşılaştırılıyor.
-*
-* Geçmiş çalışma ilerlemesinde (`study.json`) duruyor, projede değil:
-* okuyucunun cümleleri paylaşılan bir JSON'la dışarı gitmiyor. Bölüm başına
-* en yeni beş anlatış, bütün makale için en çok altmış tutuluyor.
-*/
-const MAX_EXPLANATIONS_PER_SECTION = 5;
 /** Bölümün mührü: bölüm yeniden yazıldıysa eski anlatış başka bir metne ait. */
 function explainedSectionSignature(project, target) {
 	const section = explainedSection(project, target);
@@ -22403,13 +22405,9 @@ function explanationRecord(project, target, text, feedback, coverage, model, at)
 /** Anlatışı ekler; bölümün en eski anlatışları ve toplam sınırı aşanlar düşüyor. */
 function recordExplanation(progress, record, now) {
 	const base = progress ?? emptyStudyProgress(now);
-	const all = [...base.explanations ?? [], record];
-	const forTarget = all.filter((item) => item.target === record.target);
-	const dropped = new Set(forTarget.slice(0, Math.max(0, forTarget.length - 5)));
-	const kept = all.filter((item) => !dropped.has(item)).slice(-60);
 	return {
 		...base,
-		explanations: kept,
+		explanations: trimExplanations([...base.explanations ?? [], record]),
 		updatedAt: now
 	};
 }

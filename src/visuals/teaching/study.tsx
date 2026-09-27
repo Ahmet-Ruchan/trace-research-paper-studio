@@ -24,6 +24,7 @@ import {
   type StudyStep,
 } from "@/lib/study-path";
 import type { Quiz, QuizQuestion, ResearchProject } from "@/lib/schema";
+import { mergeStudyProgress, readStudyTransfer, studyTransferFile, studyTransferFileName } from "@/lib/study-transfer";
 
 /** Bölüm ekine verilen: ilerleme ve onu değiştirmenin tek yolu, çalışmanın kendi kaydıyla. */
 export type StudyHandle = {
@@ -69,6 +70,7 @@ export function StudyView({
   const [progress, setProgress] = useState(initialProgress);
   const [stepId, setStepId] = useState(() => resumeStepId(path, initialProgress));
   const [confirmReset, setConfirmReset] = useState(false);
+  const [carryMessage, setCarryMessage] = useState<{ ok: boolean; text: string }>();
   const root = useRef<HTMLElement>(null);
   const outline = useRef<HTMLDetailsElement>(null);
   const moved = useRef(false);
@@ -123,6 +125,40 @@ export function StudyView({
       const kept = { ...(previous?.reviews?.length ? { reviews: previous.reviews } : {}), ...(previous?.explanations?.length ? { explanations: previous.explanations } : {}) };
       return Object.keys(kept).length ? { ...emptyStudyProgress(now()), ...kept } : undefined;
     });
+  }
+
+  /** İlerlemeyi bir dosyaya indiriyor (`study-transfer.ts`); başka bir cihazda yükleniyor. */
+  function saveToFile() {
+    if (!progress) return setCarryMessage({ ok: false, text: t.studyNothingToSave });
+    const blob = new Blob([`${JSON.stringify(studyTransferFile(project, progress, now()), null, 2)}\n`], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = studyTransferFileName(project);
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    setCarryMessage(undefined);
+  }
+
+  /** Dosyadaki ilerleme buradakiyle birleşiyor; başka makalenin dosyası hiçbir şeyi değiştirmiyor. */
+  async function loadFromFile(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await file.text());
+    } catch {
+      return setCarryMessage({ ok: false, text: t.studyLoadInvalid });
+    }
+    const outcome = readStudyTransfer(raw, project);
+    if (!outcome.ok) {
+      return setCarryMessage({ ok: false, text: outcome.reason === "other-paper" ? t.studyLoadOtherPaper(outcome.paperTitle) : t.studyLoadInvalid });
+    }
+    const merged = mergeStudyProgress(progress, outcome.progress, now());
+    setProgress(merged);
+    setCarryMessage({ ok: true, text: t.studyLoaded(merged.done.length, merged.answers.length, merged.reviews?.length ?? 0) });
   }
 
   function title(item: StudyStep) {
@@ -214,6 +250,15 @@ export function StudyView({
         )}
       </footer>
       {note ? <p className="study-note">{note}</p> : null}
+      <div className="study-carry">
+        <button type="button" onClick={saveToFile}>{t.studySaveFile}</button>
+        <label className="study-carry-load">
+          {t.studyLoadFile}
+          <input type="file" accept=".json,application/json" onChange={(event) => { void loadFromFile(event.currentTarget); }} />
+        </label>
+        <p className="study-note">{t.studyCarryHint}</p>
+        {carryMessage ? <p className={carryMessage.ok ? "study-carry-message" : "study-carry-message is-error"} role="status">{carryMessage.text}</p> : null}
+      </div>
     </section>
   );
 }
