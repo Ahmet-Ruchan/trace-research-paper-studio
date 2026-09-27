@@ -372,11 +372,12 @@ Usage:
             studio's study progress). Without: the concepts more than one
             paper explains. Reads the library only. No model.
             --suggest also looks through the paper's references (the 50
-            most-cited, from OpenAlex) for works whose titles name a concept
-            the reader has not studied in any paper; --references <file>
-            does the same offline with a list you give it (a JSON array of
-            titles or { title, year } objects, or one title per line). A
-            work already in the library is marked inLibrary.
+            most-cited, from OpenAlex) for works whose title, then abstract,
+            names a concept the reader has not studied in any paper;
+            --references <file> does the same offline with a list you give
+            it (a JSON array of titles or { title, year, abstract } objects,
+            or one title per line). A work already in the library is marked
+            inLibrary.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -1698,8 +1699,8 @@ function readLibrary() {
 
 /**
  * Kaynakça listesi dosyadan: JSON dizi (başlık dizgeleri ya da { title, year,
- * identifier } nesneleri, ya da { references: [...] }) veya her satırda bir
- * başlık. Ajan kaynakçayı makalenin metninden okuyabiliyor; ağ gerekmiyor.
+ * identifier, abstract } nesneleri, ya da { references: [...] }) veya her
+ * satırda bir başlık. Ajan kaynakçayı makalenin metninden okuyabiliyor; ağ gerekmiyor.
  */
 function readReferenceList(path) {
   if (!existsSync(path)) throw new Error(`reference list not found: ${path}`);
@@ -1725,6 +1726,7 @@ function readReferenceList(path) {
         ...(typeof item.identifier === "string" && item.identifier.trim() ? { identifier: item.identifier.trim() } : {}),
         ...(typeof item.url === "string" && item.url.trim() ? { url: item.url.trim() } : {}),
         ...(Number.isFinite(item.citationCount) ? { citationCount: item.citationCount } : {}),
+        ...(typeof item.abstract === "string" && item.abstract.trim() ? { abstract: item.abstract.trim() } : {}),
       };
     });
 }
@@ -1744,7 +1746,7 @@ async function conceptSuggestions(args, project, links, projects, files) {
   } else {
     const { fetchCitationGraph } = await import("./lib/citation-graph.mjs");
     const { paper } = project.evidence;
-    const graph = await fetchCitationGraph({ doi: paper.doi, title: paper.title, authors: paper.authors }, { limit: 50 });
+    const graph = await fetchCitationGraph({ doi: paper.doi, title: paper.title, authors: paper.authors }, { limit: 50, abstracts: true });
     if (!graph.ok) {
       return { ok: false, reason: graph.skipped ? `OpenAlex has no certain record of this paper (${graph.skipped}).` : graph.error ?? "The references could not be loaded." };
     }
@@ -1762,6 +1764,8 @@ async function conceptSuggestions(args, project, links, projects, files) {
         conceptId: item.conceptId,
         term: item.term,
         phrase: item.phrase,
+        where: item.where,
+        ...(item.excerpt ? { excerpt: item.excerpt } : {}),
         title: item.reference.title,
         year: item.reference.year ?? null,
         citationCount: item.reference.citationCount ?? null,
@@ -1769,7 +1773,7 @@ async function conceptSuggestions(args, project, links, projects, files) {
         inLibrary: owned ? { paper: owned.evidence.paper.title, projectId: owned.id, file: files.get(owned.id) } : null,
       };
     }),
-    note: "Cited works whose titles name a concept the reader has not studied in any paper: a match on the title, not a judgement of the work. A work that is inLibrary is already analysed: point the reader to it instead of analysing it again. Otherwise prepare --source <identifier> analyses it.",
+    note: "Cited works whose title (where: title) or abstract (where: abstract, with the sentence as excerpt) names a concept the reader has not studied in any paper: a match on the words, not a judgement of the work. Abstracts come from OpenAlex and are occasionally attached to the wrong work, so quote the excerpt when you mention an abstract match. A work that is inLibrary is already analysed: point the reader to it instead of analysing it again. Otherwise prepare --source <identifier> analyses it.",
   };
 }
 

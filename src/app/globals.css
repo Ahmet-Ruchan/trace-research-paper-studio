@@ -1001,6 +1001,7 @@ html[data-text-size="larger"] { font-size: 125%; }
 .concept-for { color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; }
 .concept-work strong { display: block; font-size: var(--text-md); }
 .concept-work small { color: var(--muted); font-size: var(--text-xs); }
+.concept-excerpt { display: block; margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--line); color: var(--ink-soft); font: italic var(--text-sm)/1.5 Georgia, serif; quotes: "“" "”"; }
 .concept-actions { display: flex; align-items: center; gap: 8px; }
 .concept-actions button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
 .concept-actions button:hover { border-color: var(--accent); }

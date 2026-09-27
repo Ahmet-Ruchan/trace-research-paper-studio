@@ -20288,27 +20288,62 @@ function conceptPhrases(term) {
 		return parts.filter((part) => part.includes(" "));
 	}))];
 }
+/** Özetin cümleleri; bir eşleşmenin kanıtı olarak gösterilen cümle en çok bu kadar uzun. */
+const MAX_EXCERPT = 280;
+/** Özetten ifadeyi bütün kelimelerle anan ilk cümle, olduğu gibi. */
+function sentenceNaming(abstract, phrase) {
+	const sentence = (abstract.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? [abstract]).map((item) => item.trim()).find((item) => ` ${normalizePhrase(item)} `.includes(` ${phrase} `));
+	if (!sentence) return void 0;
+	return sentence.length > MAX_EXCERPT ? `${sentence.slice(0, 279).trimEnd()}…` : sentence;
+}
+/** Kavram başına en çok bu kadar öneri; başlıkta ananlar önce. */
+const SUGGESTIONS_PER_CONCEPT = 3;
 /**
 * Henüz çalışılmamış kavramlar için makalenin kaynaklarından öneri: başlığı
-* kavramın bir parçasını bütün kelimelerle anan çalışma. Kavram başına en çok
-* atıf alan iki çalışma.
+* kavramın bir parçasını bütün kelimelerle anan çalışmalar önce, sonra
+* özeti anan çalışmalar, her grupta en çok atıf alan önce. Özet eşleşmesi,
+* özetteki cümleyle birlikte veriliyor; OpenAlex'in özetleri kimi zaman başka
+* bir çalışmaya ait olabiliyor ve okuyucu bunu cümleden görebiliyor.
 */
 function suggestReferences(links, references) {
-	const titles = references.map((reference) => ({
+	const works = references.map((reference) => ({
 		reference,
-		title: ` ${normalizePhrase(reference.title)} `
+		title: ` ${normalizePhrase(reference.title)} `,
+		abstract: reference.abstract ? ` ${normalizePhrase(reference.abstract)} ` : void 0
 	}));
+	const byCitations = (left, right) => (right.reference.citationCount ?? 0) - (left.reference.citationCount ?? 0);
 	const suggestions = [];
 	for (const link of links) {
 		if (link.here?.studied || link.studiedIn) continue;
-		const matches = [];
-		for (const phrase of conceptPhrases(link.term)) for (const { reference, title } of titles) if (title.includes(` ${phrase} `) && !matches.some((item) => item.reference.title === reference.title)) matches.push({
-			conceptId: link.conceptId,
-			term: link.term,
-			phrase,
-			reference
-		});
-		suggestions.push(...matches.sort((left, right) => (right.reference.citationCount ?? 0) - (left.reference.citationCount ?? 0)).slice(0, 2));
+		const inTitle = [];
+		const inAbstract = [];
+		const taken = /* @__PURE__ */ new Set();
+		for (const phrase of conceptPhrases(link.term)) for (const { reference, title } of works) {
+			if (taken.has(reference) || !title.includes(` ${phrase} `)) continue;
+			taken.add(reference);
+			inTitle.push({
+				conceptId: link.conceptId,
+				term: link.term,
+				phrase,
+				where: "title",
+				reference
+			});
+		}
+		for (const phrase of conceptPhrases(link.term)) for (const { reference, abstract } of works) {
+			if (taken.has(reference) || !abstract?.includes(` ${phrase} `)) continue;
+			const excerpt = sentenceNaming(reference.abstract, phrase);
+			if (!excerpt) continue;
+			taken.add(reference);
+			inAbstract.push({
+				conceptId: link.conceptId,
+				term: link.term,
+				phrase,
+				where: "abstract",
+				excerpt,
+				reference
+			});
+		}
+		suggestions.push(...[...inTitle.sort(byCitations), ...inAbstract.sort(byCitations)].slice(0, SUGGESTIONS_PER_CONCEPT));
 	}
 	return suggestions;
 }

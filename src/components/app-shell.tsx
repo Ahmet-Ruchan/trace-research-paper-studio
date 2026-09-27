@@ -216,18 +216,31 @@ export function AppShell() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  /**
+   * Kaydın sebebi (sürüm geçmişindeki etiket) kayıt zamanlandığında bu
+   * projeye bağlanıyor, zamanlayıcı çalıştığında değil. Önceden zamanlayıcı
+   * okuyordu: bir değişikliğin sebebi yazıldıktan sonra, React yeni projeyi
+   * işlemeden önce önceki projenin bekleyen kaydı çalışırsa sebebi o alıyor,
+   * asıl değişiklik "Before edits" diye kaydediliyordu. Kaydedilmeden yerini
+   * yeni bir değişikliğe bırakan kaydın sebebi de ona taşınıyor.
+   */
   useEffect(() => {
     if (!project || !hydrated || screen !== "workspace") return;
+    const reason = saveReason.current;
+    saveReason.current = "edit";
+    let saved = false;
     const timer = window.setTimeout(() => {
+      saved = true;
       const updated = { ...project, updatedAt: new Date().toISOString() };
-      const reason = saveReason.current;
-      saveReason.current = "edit";
       void saveLibraryProject(updated, { reason }).then(() => {
         setProjects((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
       });
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     }, 500);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      if (!saved && saveReason.current === "edit") saveReason.current = reason;
+    };
   }, [project, hydrated, screen]);
 
   /**

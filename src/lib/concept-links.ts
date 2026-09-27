@@ -185,8 +185,17 @@ export function sharedConcepts(library: readonly ResearchProject[], study: Reado
   return shared.sort((left, right) => right.papers - left.papers || left.term.localeCompare(right.term));
 }
 
-export type ReferenceWork = { title: string; year?: number; identifier?: string; pdfAvailable?: boolean; url?: string; citationCount?: number };
-export type ReferenceSuggestion = { conceptId: string; term: string; phrase: string; reference: ReferenceWork };
+export type ReferenceWork = { title: string; year?: number; identifier?: string; pdfAvailable?: boolean; url?: string; citationCount?: number; abstract?: string };
+export type ReferenceSuggestion = {
+  conceptId: string;
+  term: string;
+  phrase: string;
+  /** Kavramı anan yer: başlık, yoksa (OpenAlex'in verdiği) özet. */
+  where: "title" | "abstract";
+  /** Özetten anan cümle, olduğu gibi: okuyucu eşleşmenin neye dayandığını görüyor. */
+  excerpt?: string;
+  reference: ReferenceWork;
+};
 
 /**
  * Önerilen çalışma kütüphanede zaten var mı: DOI ya da katlanmış başlık aynı.
@@ -221,25 +230,57 @@ export function conceptPhrases(term: string) {
   ];
 }
 
+/** Özetin cümleleri; bir eşleşmenin kanıtı olarak gösterilen cümle en çok bu kadar uzun. */
+const MAX_EXCERPT = 280;
+
+/** Özetten ifadeyi bütün kelimelerle anan ilk cümle, olduğu gibi. */
+function sentenceNaming(abstract: string, phrase: string) {
+  const sentences = abstract.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? [abstract];
+  const sentence = sentences.map((item) => item.trim()).find((item) => ` ${normalizePhrase(item)} `.includes(` ${phrase} `));
+  if (!sentence) return undefined;
+  return sentence.length > MAX_EXCERPT ? `${sentence.slice(0, MAX_EXCERPT - 1).trimEnd()}…` : sentence;
+}
+
+/** Kavram başına en çok bu kadar öneri; başlıkta ananlar önce. */
+const SUGGESTIONS_PER_CONCEPT = 3;
+
 /**
  * Henüz çalışılmamış kavramlar için makalenin kaynaklarından öneri: başlığı
- * kavramın bir parçasını bütün kelimelerle anan çalışma. Kavram başına en çok
- * atıf alan iki çalışma.
+ * kavramın bir parçasını bütün kelimelerle anan çalışmalar önce, sonra
+ * özeti anan çalışmalar, her grupta en çok atıf alan önce. Özet eşleşmesi,
+ * özetteki cümleyle birlikte veriliyor; OpenAlex'in özetleri kimi zaman başka
+ * bir çalışmaya ait olabiliyor ve okuyucu bunu cümleden görebiliyor.
  */
 export function suggestReferences(links: readonly ConceptLink[], references: readonly ReferenceWork[]): ReferenceSuggestion[] {
-  const titles = references.map((reference) => ({ reference, title: ` ${normalizePhrase(reference.title)} ` }));
+  const works = references.map((reference) => ({
+    reference,
+    title: ` ${normalizePhrase(reference.title)} `,
+    abstract: reference.abstract ? ` ${normalizePhrase(reference.abstract)} ` : undefined,
+  }));
+  const byCitations = (left: ReferenceSuggestion, right: ReferenceSuggestion) => (right.reference.citationCount ?? 0) - (left.reference.citationCount ?? 0);
   const suggestions: ReferenceSuggestion[] = [];
   for (const link of links) {
     if (link.here?.studied || link.studiedIn) continue;
-    const matches: ReferenceSuggestion[] = [];
+    const inTitle: ReferenceSuggestion[] = [];
+    const inAbstract: ReferenceSuggestion[] = [];
+    const taken = new Set<ReferenceWork>();
     for (const phrase of conceptPhrases(link.term)) {
-      for (const { reference, title } of titles) {
-        if (title.includes(` ${phrase} `) && !matches.some((item) => item.reference.title === reference.title)) {
-          matches.push({ conceptId: link.conceptId, term: link.term, phrase, reference });
-        }
+      for (const { reference, title } of works) {
+        if (taken.has(reference) || !title.includes(` ${phrase} `)) continue;
+        taken.add(reference);
+        inTitle.push({ conceptId: link.conceptId, term: link.term, phrase, where: "title", reference });
       }
     }
-    suggestions.push(...matches.sort((left, right) => (right.reference.citationCount ?? 0) - (left.reference.citationCount ?? 0)).slice(0, 2));
+    for (const phrase of conceptPhrases(link.term)) {
+      for (const { reference, abstract } of works) {
+        if (taken.has(reference) || !abstract?.includes(` ${phrase} `)) continue;
+        const excerpt = sentenceNaming(reference.abstract!, phrase);
+        if (!excerpt) continue;
+        taken.add(reference);
+        inAbstract.push({ conceptId: link.conceptId, term: link.term, phrase, where: "abstract", excerpt, reference });
+      }
+    }
+    suggestions.push(...[...inTitle.sort(byCitations), ...inAbstract.sort(byCitations)].slice(0, SUGGESTIONS_PER_CONCEPT));
   }
   return suggestions;
 }

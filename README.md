@@ -41,7 +41,7 @@ running on the coding agent you already use, with no second API key.
 
 | | |
 | --- | --- |
-| **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references for works that teach what you have not studied yet. |
+| **[Connect what you learn across papers](#connect-what-you-learn-across-papers)** | A concept you studied in one paper is marked in the next one that assumes it, with a link back. **Concepts** in the library maps what your papers share, and the Lab looks through a paper's references, titles and abstracts, for works that teach what you have not studied yet. |
 | **[Explain it back](#explain-it-back-in-your-own-words)** | Write a section in your own words; a model that sees only the evidence shows what you conveyed, left out or said differently, each with its claim and page. |
 | **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next. The answers come from the formulas themselves, not from a model. |
 | **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
@@ -270,15 +270,20 @@ studied yet. The primer and the study path say the same thing where the concept 
 studied this in …, skim it here or move on*.
 
 For the concepts you have not studied anywhere, **Look in the references** goes through the works the
-paper cites (the 50 most-cited, from OpenAlex) for titles that name them, and offers each with
-**Analyze it**; a work already in your library opens instead of being analysed twice. **Concepts** in
+paper cites (the 50 most-cited, from OpenAlex) for a title that names them, then for an abstract that
+does, and offers each with **Analyze it**; a work already in your library opens instead of being
+analysed twice. A title is rarely enough: none of the references OpenAlex lists for the attention paper
+names one of its concepts in the title, while their abstracts name three (residual connections, and
+encoder-decoder models twice). An abstract match is shown with the sentence it rests on, quoted as
+OpenAlex has it, because OpenAlex occasionally attaches an abstract to the wrong work and the sentence
+lets you see that. **Concepts** in
 the library header is the map across all of it: every concept more than one paper explains, with the
 papers that explain it and a check mark where you studied it.
 
 Nothing here is generated. Concepts are matched by name, from each paper's primer and glossary, with
 case, hyphens, British and American spellings and plurals folded, never by meaning: two names for one
 idea stay apart rather than risk joining two different ideas under one name. A suggested reference is
-a match on its title, not a judgement of the work. Your study progress stays in your library, never
+a match on its words, not a judgement of the work. Your study progress stays in your library, never
 in a project file. Your agent reads the same links from your library:
 
 ```text

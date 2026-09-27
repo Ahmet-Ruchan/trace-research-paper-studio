@@ -118,6 +118,8 @@ describe("OpenAlex helpers", () => {
       "Large models work hard work",
     );
     expect(openAlexAbstract({})).toBeUndefined();
+    // Dışarıdan gelen konumlar: aşırı büyük ya da bozuk olanlar yok sayılıyor.
+    expect(openAlexAbstract({ abstract_inverted_index: { Short: [0], abstract: [1], far: [1e9], bad: [-1, 1.5], odd: "x" } })).toBe("Short abstract");
   });
 
   it("arXiv kopyasının kimliğini bulur", () => {
@@ -304,6 +306,25 @@ describe("citation graph", () => {
     expect(graph.references?.map((node: { title: string }) => node.title)).toEqual(["Major", "Minor"]);
     expect(graph.citedBy).toHaveLength(1);
     expect(graph.referenceCount).toBe(2);
+  });
+
+  it("istenirse kaynakların özetlerini de getirir, yalnızca kaynaklar için", async () => {
+    const calls = mockFetch([
+      { match: "https://api.openalex.org/works/doi:", body: { id: "https://openalex.org/W1", title: "Paper", cited_by_count: 40, referenced_works: ["https://openalex.org/W2"] } },
+      { match: "https://api.openalex.org/works?filter=openalex", body: { results: [{ id: "https://openalex.org/W2", title: "Cited", cited_by_count: 3, abstract_inverted_index: { We: [0], normalize: [1], layers: [2] } }] } },
+      { match: "https://api.openalex.org/works?filter=cites", body: { results: [{ id: "https://openalex.org/W4", title: "Follow-up", cited_by_count: 12, abstract_inverted_index: { Not: [0], asked: [1] } }] } },
+    ]);
+    const graph = await fetchCitationGraph({ doi: "10.1000/example" }, { limit: 50, abstracts: true });
+    expect(graph.references?.[0]).toMatchObject({ title: "Cited", abstract: "We normalize layers" });
+    expect(graph.citedBy?.[0].abstract).toBeUndefined();
+    expect(calls.find((url) => url.includes("filter=openalex"))).toContain("abstract_inverted_index");
+
+    mockFetch([
+      { match: "https://api.openalex.org/works/doi:", body: { id: "https://openalex.org/W1", title: "Paper", cited_by_count: 40, referenced_works: ["https://openalex.org/W2"] } },
+      { match: "https://api.openalex.org/works?filter=openalex", body: { results: [{ id: "https://openalex.org/W2", title: "Cited", cited_by_count: 3, abstract_inverted_index: { We: [0] } }] } },
+      { match: "https://api.openalex.org/works?filter=cites", body: { results: [] } },
+    ]);
+    expect((await fetchCitationGraph({ doi: "10.1000/example" })).references?.[0]).not.toHaveProperty("abstract");
   });
 
   it("ağ hatasında akışı düşürmez", async () => {

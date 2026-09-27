@@ -44,7 +44,7 @@ export function ConceptsView({
     setLookup({ status: "loading" });
     try {
       const { paper } = project.evidence;
-      const graph = await loadCitationGraph({ doi: paper.doi, title: paper.title, authors: paper.authors, limit: 50 });
+      const graph = await loadCitationGraph({ doi: paper.doi, title: paper.title, authors: paper.authors, limit: 50, abstracts: true });
       if (!graph.ok) throw new Error(graph.skipped ? `OpenAlex has no certain record of this paper (${graph.skipped}).` : graph.error ?? "The references could not be loaded.");
       setLookup({ status: "done", suggestions: suggestReferences(links, graph.references), references: graph.references.length });
     } catch (error) {
@@ -90,8 +90,9 @@ export function ConceptsView({
       <section className="concept-suggest" aria-label="Papers that teach what you have not studied yet">
         <h4>Papers that teach what you have not studied yet</h4>
         <p>
-          Looks through the works this paper cites (from OpenAlex) for titles that name one of the {plural(unknown.length, "concept")}{" "}
-          you have not studied in any paper. It is a match on the title, not a judgement of the work: open it and decide.
+          Looks through the works this paper cites (the 50 most-cited, from OpenAlex) for a title, then an abstract, that names one
+          of the {plural(unknown.length, "concept")} you have not studied in any paper. It is a match on the words, not a judgement
+          of the work, and an abstract match shows the sentence it rests on: open the work and decide.
         </p>
         {lookup.status === "idle" || lookup.status === "failed" ? (
           <button type="button" className="concept-look" onClick={() => { void look(); }} disabled={!unknown.length}>
@@ -113,9 +114,10 @@ export function ConceptsView({
                       <small>
                         {item.reference.year ?? "—"}
                         {item.reference.citationCount !== undefined ? ` · cited ${item.reference.citationCount.toLocaleString("en")} times` : ""}
-                        {` · the title names “${item.phrase}”`}
+                        {item.where === "title" ? ` · the title names “${item.phrase}”` : ` · its abstract names “${item.phrase}”`}
                         {owned ? " · already in your library" : ""}
                       </small>
+                      {item.excerpt ? <q className="concept-excerpt" cite={item.reference.url}>{item.excerpt}</q> : null}
                     </span>
                     <span className="concept-actions">
                       {owned ? (
@@ -132,7 +134,7 @@ export function ConceptsView({
               })}
             </ul>
           ) : (
-            <p>None of the {plural(lookup.references, "reference")} OpenAlex lists names these concepts in its title.</p>
+            <p>None of the {plural(lookup.references, "reference")} OpenAlex lists names these concepts in its title or abstract.</p>
           )
         ) : null}
       </section>

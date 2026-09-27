@@ -473,12 +473,17 @@ export function openAlexArxivId(work) {
 }
 
 /** OpenAlex özeti ters dizin olarak saklıyor ({kelime: [konumlar]}); düz metne çevrilir. */
+/** Bir özet bundan uzun olmuyor; ters dizindeki daha büyük konumlar yok sayılıyor. */
+const MAX_ABSTRACT_WORDS = 2000;
+
 export function openAlexAbstract(work) {
-  const index = work.abstract_inverted_index;
+  const index = work?.abstract_inverted_index;
   if (!index || typeof index !== "object") return undefined;
   const words = [];
   for (const [word, positions] of Object.entries(index)) {
-    for (const position of positions) words[position] = word;
+    if (!Array.isArray(positions)) continue;
+    // Konum dışarıdan geliyor: çok büyük bir sayı devasa bir seyrek dizi açardı.
+    for (const position of positions) if (Number.isInteger(position) && position >= 0 && position < MAX_ABSTRACT_WORDS) words[position] = word;
   }
   return words.filter(Boolean).join(" ") || undefined;
 }

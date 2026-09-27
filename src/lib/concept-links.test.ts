@@ -114,6 +114,37 @@ describe("concepts across the library", () => {
     expect(suggestReferences(conceptLinks(english, [english], new Map()), withSoftmax).some((item) => item.conceptId === "softmax")).toBe(true);
   });
 
+  it("falls back to abstracts, after titles, and shows the sentence each match rests on", () => {
+    const references = [
+      { title: "Layer Normalization", year: 2016, citationCount: 10_000 },
+      {
+        title: "Google's Neural Machine Translation System",
+        year: 2016,
+        citationCount: 5_000,
+        abstract: "Neural Machine Translation is an end-to-end approach. Our model consists of a deep LSTM network with 8 encoder and 8 decoder layers using attention and residual connections. It is fast.",
+      },
+      { title: "A Deep Reinforced Model for Abstractive Summarization", year: 2017, citationCount: 900, abstract: "Attentional, RNN-based encoder-decoder models for abstractive summarization have achieved good performance on short input and output sequences." },
+      // "layer" ve "normal" tek başına kavram değil: bütün ifade geçmeli.
+      { title: "Exploring the Limits", year: 2016, citationCount: 800, abstract: "Every layer is normal here. We explore limits." },
+      { title: "Cited but without an abstract", year: 2015, citationCount: 700 },
+    ];
+    const suggestions = suggestReferences(conceptLinks(english, [english], new Map()), references);
+    expect(suggestions.map((item) => [item.conceptId, item.where, item.reference.title])).toEqual([
+      ["residual-layernorm", "title", "Layer Normalization"],
+      ["residual-layernorm", "abstract", "Google's Neural Machine Translation System"],
+      ["encoder-decoder", "abstract", "A Deep Reinforced Model for Abstractive Summarization"],
+    ]);
+    // Cümle özetten olduğu gibi alınıyor; başlık eşleşmesinin cümlesi yok.
+    expect(suggestions[1]).toMatchObject({ phrase: "residual connection", excerpt: "Our model consists of a deep LSTM network with 8 encoder and 8 decoder layers using attention and residual connections." });
+    expect(suggestions[0].excerpt).toBeUndefined();
+    expect(suggestions[2].excerpt).toBe(references[2].abstract);
+
+    // Bir kavram için en çok üç çalışma, başlıkta ananlar önce.
+    const many = Array.from({ length: 5 }, (_, index) => ({ title: `Work ${index}`, citationCount: index, abstract: `We use softmax in part ${index}.` }));
+    const softmax = suggestReferences(conceptLinks(english, [english], new Map()), [{ title: "On the Softmax Bottleneck", citationCount: 1 }, ...many]).filter((item) => item.conceptId === "softmax");
+    expect(softmax.map((item) => item.reference.title)).toEqual(["On the Softmax Bottleneck", "Work 4", "Work 3"]);
+  });
+
   it("recognises a suggested work that is already in the library, by DOI or by title", () => {
     const base = secondPaper();
     const second = { ...base, evidence: { ...base.evidence, paper: { ...base.evidence.paper, title: "Layer Normalisation", doi: "https://doi.org/10.48550/arXiv.1607.06450" } } };
@@ -162,15 +193,22 @@ describe("the concepts bridge for agents", () => {
     const third = { ...english, id: "third-paper", evidence: { ...english.evidence, paper: { ...english.evidence.paper, title: "Embedding Vectors, Explained" } } };
     writeFileSync(join(workspace, "data", "library", "third-paper.trace.json"), JSON.stringify(third));
     const list = join(workspace, "references.json");
-    writeFileSync(list, JSON.stringify(["Layer Normalization", { title: "Embedding vectors, explained", year: "2019" }, { title: "Deep Residual Learning for Image Recognition", year: 2016 }]));
+    writeFileSync(list, JSON.stringify([
+      "Layer Normalization",
+      { title: "Embedding vectors, explained", year: "2019" },
+      { title: "Deep Residual Learning for Image Recognition", year: 2016 },
+      { title: "A Deep Reinforced Model for Abstractive Summarization", year: 2017, abstract: "Attentional, RNN-based encoder-decoder models for abstractive summarization have achieved good performance. We go further." },
+    ]));
     const run = bridge("concepts", "--project", join(workspace, "paper.trace.json"), "--references", list);
     expect(run.status).toBe(0);
-    const suggestions = run.json.suggestions as { ok: boolean; source: string; references: number; items: Array<{ conceptId: string; title: string; year: number | null; inLibrary: { projectId: string } | null }> };
-    expect(suggestions).toMatchObject({ ok: true, source: "file", references: 3 });
-    expect(suggestions.items.map((item) => [item.conceptId, item.title, item.inLibrary?.projectId ?? null])).toEqual([
-      ["embedding", "Embedding vectors, explained", "third-paper"],
-      ["residual-layernorm", "Layer Normalization", null],
+    const suggestions = run.json.suggestions as { ok: boolean; source: string; references: number; items: Array<{ conceptId: string; title: string; year: number | null; where: string; excerpt?: string; inLibrary: { projectId: string } | null }> };
+    expect(suggestions).toMatchObject({ ok: true, source: "file", references: 4 });
+    expect(suggestions.items.map((item) => [item.conceptId, item.where, item.title, item.inLibrary?.projectId ?? null])).toEqual([
+      ["embedding", "title", "Embedding vectors, explained", "third-paper"],
+      ["residual-layernorm", "title", "Layer Normalization", null],
+      ["encoder-decoder", "abstract", "A Deep Reinforced Model for Abstractive Summarization", null],
     ]);
+    expect(suggestions.items[2].excerpt).toBe("Attentional, RNN-based encoder-decoder models for abstractive summarization have achieved good performance.");
     expect(suggestions.items[0].year).toBe(2019);
 
     // Satır başına bir başlık da olur; softmax başka bir makalede çalışıldığı için önerilmiyor.

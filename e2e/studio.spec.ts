@@ -1201,6 +1201,8 @@ test.describe("colour themes", () => {
         await page.goto(url);
         await expect(page.locator(".boot-screen")).toHaveCount(0);
         if (section) await page.locator(".lab-nav button", { hasText: section }).first().click();
+        // Kütüphane listesi sunucudan geliyor; yüklü bir makinede 400 ms yetmiyordu ve sayfanın yalnızca başlığı ölçülüyordu.
+        if (url.includes("library=1")) await expect(page.locator(".library-card").first()).toBeVisible();
         // Geçişler bitsin: renkler yarı yoldayken ölçülmesin.
         await page.waitForTimeout(400);
         const { checked, failures } = await unreadableTexts(page);
@@ -1773,7 +1775,7 @@ test.describe("concepts across the library", () => {
     const progress = completeStep(undefined, "concept:softmax", "concept:variance", new Date().toISOString());
     expect((await request.put(`/api/library/study?id=${second.id}`, { data: { progress } })).ok()).toBe(true);
     await page.route("**/api/citations", async (route) => {
-      const node = (title: string, year: number, citationCount: number) => ({ openAlexId: title, title, year, citationCount, authors: [], authorCount: 0, pdfAvailable: true, identifier: title });
+      const node = (title: string, year: number, citationCount: number, abstract?: string) => ({ openAlexId: title, title, year, citationCount, authors: [], authorCount: 0, pdfAvailable: true, identifier: title, ...(abstract ? { abstract } : {}) });
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -1783,6 +1785,7 @@ test.describe("concepts across the library", () => {
           references: [
             node("Layer Normalization", 2016, 10_000), node("Deep Residual Learning for Image Recognition", 2016, 200_000),
             node("Adam: A Method for Stochastic Optimization", 2015, 100_000), node("Zeta Dot Products: A Second Paper", 2018, 12),
+            node("A Deep Reinforced Model for Abstractive Summarization", 2017, 900, "Attentional, RNN-based encoder-decoder models for abstractive summarization have achieved good performance. We go further."),
           ],
         }),
       });
@@ -1803,6 +1806,11 @@ test.describe("concepts across the library", () => {
     await expect(suggestion).toContainText("the title names “layer normalization”");
     await expect(suggestion.getByRole("button", { name: "Analyze it" })).toBeVisible();
     await expect(page.locator(".concept-suggestions li", { hasText: "Deep Residual Learning" })).toHaveCount(0);
+    // Başlıkta değil özette anılan kavram: eşleşme ayrı etiketle ve özetteki cümlesiyle.
+    const fromAbstract = page.locator(".concept-suggestions li", { hasText: "A Deep Reinforced Model" });
+    await expect(fromAbstract.locator(".concept-for")).toHaveText("Encoder-decoder and auto-regression");
+    await expect(fromAbstract).toContainText("its abstract names “encoder decoder”");
+    await expect(fromAbstract.locator(".concept-excerpt")).toHaveText("Attentional, RNN-based encoder-decoder models for abstractive summarization have achieved good performance.");
     // Kütüphanede zaten olan bir çalışma analiz edilmiyor, açılıyor.
     const owned = page.locator(".concept-suggestions li", { hasText: "Zeta Dot Products: A Second Paper" });
     await expect(owned.locator(".concept-for")).toHaveText("Zeta dot product");

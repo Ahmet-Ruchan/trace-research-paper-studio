@@ -10,7 +10,7 @@
  * yoksa başlık); böylece grafikteki bir makale tek adımda analiz edilebilir.
  */
 
-import { doiHasRepository, openAlexArxivId, openAlexPdfUrls, isAllowedUrl, request } from "./paper-source.mjs";
+import { doiHasRepository, openAlexAbstract, openAlexArxivId, openAlexPdfUrls, isAllowedUrl, request } from "./paper-source.mjs";
 
 const NODE_FIELDS =
   "id,doi,title,publication_year,cited_by_count,authorships,primary_location,best_oa_location,locations,open_access";
@@ -73,7 +73,7 @@ export async function findOpenAlexWork({ title, authors = [] }) {
   return matches.sort((a, b) => (b.cited_by_count ?? 0) - (a.cited_by_count ?? 0))[0];
 }
 
-async function fetchWorksByIds(ids, limit) {
+async function fetchWorksByIds(ids, limit, select = NODE_FIELDS) {
   const works = [];
   for (let start = 0; start < ids.length; start += OPENALEX_OR_LIMIT) {
     const batch = ids.slice(start, start + OPENALEX_OR_LIMIT).map(shortId);
@@ -83,7 +83,7 @@ async function fetchWorksByIds(ids, limit) {
         filter: `openalex:${batch.join("|")}`,
         sort: "cited_by_count:desc",
         "per-page": String(Math.min(limit, 50)),
-        select: NODE_FIELDS,
+        select,
       });
     const data = await (await request(url)).json();
     works.push(...(data?.results ?? []));
@@ -97,8 +97,11 @@ async function fetchWorksByIds(ids, limit) {
  * harita amaçlanıyor — tam liste için OpenAlex bağlantısı veriliyor.
  *
  * Başarısızlık sessiz: grafik bir bonustur ve bir ağ hatası akışı düşürmemeli.
+ *
+ * `abstracts`: kaynakların özetleri de gelsin (kavram önerileri için); grafik
+ * paneli onlara ihtiyaç duymuyor.
  */
-export async function fetchCitationGraph({ openAlexId, doi, title, authors } = {}, { limit = 12 } = {}) {
+export async function fetchCitationGraph({ openAlexId, doi, title, authors } = {}, { limit = 12, abstracts = false } = {}) {
   try {
     let work;
     const select = `${NODE_FIELDS},referenced_works`;
@@ -117,7 +120,9 @@ export async function fetchCitationGraph({ openAlexId, doi, title, authors } = {
     }
 
     const referenceIds = (work.referenced_works ?? []).slice(0, MAX_REFERENCE_IDS);
-    const references = referenceIds.length ? await fetchWorksByIds(referenceIds, limit) : [];
+    const references = referenceIds.length
+      ? await fetchWorksByIds(referenceIds, limit, abstracts ? `${NODE_FIELDS},abstract_inverted_index` : NODE_FIELDS)
+      : [];
     const citingUrl =
       "https://api.openalex.org/works?" +
       new URLSearchParams({
@@ -135,7 +140,12 @@ export async function fetchCitationGraph({ openAlexId, doi, title, authors } = {
       paper: toGraphNode(work),
       referenceCount: (work.referenced_works ?? []).length,
       citedByCount: work.cited_by_count ?? 0,
-      references: references.map(toGraphNode),
+      references: references.map((reference) => {
+        const node = toGraphNode(reference);
+        // Özet de kanıt değil, bağlam: kavram önerisi onu "özeti anıyor" diye, cümlesiyle gösteriyor.
+        const abstract = abstracts ? openAlexAbstract(reference) : undefined;
+        return abstract ? { ...node, abstract } : node;
+      }),
       citedBy: citing.map(toGraphNode),
       note: `Each direction lists the ${limit} most-cited works. Counts come from OpenAlex and change over time.`,
       openAlexUrl: `https://openalex.org/${shortId(work.id)}`,
