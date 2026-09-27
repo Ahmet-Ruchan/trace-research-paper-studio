@@ -2,7 +2,7 @@
   "version": 1,
   "id": "attention-is-all-you-need-en",
   "createdAt": "2026-08-20T00:00:00.000Z",
-  "updatedAt": "2026-09-27T00:28:08.627Z",
+  "updatedAt": "2026-09-27T00:45:50.540Z",
   "language": "en",
   "audience": "student",
   "depth": "deep",
@@ -2188,7 +2188,7 @@
         {
           "id": "l4",
           "latex": "\\text{step} \\gg \\text{warmup} \\;\\Rightarrow\\; \\text{lrate} \\propto \\text{step}^{-0.5}",
-          "plain": "step >> warmup iken lrate ∝ step^-0.5",
+          "plain": "once step >> warmup, lrate ∝ step^-0.5",
           "rationale": "After that the first branch takes over and the learning rate decays with the inverse square root of the step number — classic convergence behaviour."
         }
       ],

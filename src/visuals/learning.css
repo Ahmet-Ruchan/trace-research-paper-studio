@@ -407,3 +407,33 @@
 .misreading-correction { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .misreading-correction strong { color: var(--green); font-size: var(--text-sm); }
 .misreading .misreading-correction > p { margin: 6px 0 10px; font-size: var(--text-md); line-height: 1.65; }
+
+/* --- Önce tahmin: grafik ve türetim ---------------------------------- */
+.predict, .derivation-predict { margin-top: 18px; padding: 16px 18px; border: 1px dashed var(--line-dark); border-radius: 12px; background: var(--surface-2); color: var(--ink); }
+.predict-head { display: block; color: var(--accent-ink); font-size: var(--text-xs); letter-spacing: .12em; text-transform: uppercase; }
+.predict .predict-intro { margin: 6px 0 12px; color: var(--ink-soft); font-size: var(--text-md); line-height: 1.6; }
+.predict-question { display: grid; gap: 7px; margin-top: 12px; }
+.predict-label { font-size: var(--text-sm); font-weight: 600; }
+.predict-options, .derivation-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.predict-option, .derivation-option { padding: 6px 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--field); color: var(--ink); cursor: pointer; font-size: var(--text-sm); line-height: 1.45; text-align: left; }
+.predict-option:hover, .derivation-option:hover { border-color: var(--accent); }
+.predict-option[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.predict-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 16px; }
+.predict-show { padding: 8px 15px; border: 0; border-radius: 20px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); }
+.predict-show:disabled { opacity: .35; cursor: default; }
+.predict-skip { padding: 0; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--muted); cursor: pointer; font-size: var(--text-sm); }
+.predict-results { margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); color: var(--ink); font-size: var(--text-sm); }
+.predict-results ul { display: grid; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; }
+.predict-results li { position: relative; padding-left: 18px; color: var(--ink-soft); line-height: 1.55; }
+.predict-results li > span { color: var(--ink); font-weight: 600; }
+.predict-results li.is-right::before { content: "✓"; position: absolute; left: 0; color: var(--green); }
+.predict-results li.is-wrong::before { content: "✗"; position: absolute; left: 0; color: var(--danger); }
+.derivation-predict > strong { display: block; margin-bottom: 10px; font-size: var(--text-sm); }
+.derivation-predict .derivation-more { margin-top: 12px; }
+.derivation .derivation-verdict { margin: 6px 0 0; font-size: var(--text-sm); line-height: 1.5; }
+.derivation .derivation-verdict.is-right { color: var(--green); }
+.derivation .derivation-verdict.is-wrong { color: var(--danger); }
+.derivation .derivation-score { margin: 16px 0 0; color: var(--ink-soft); font-size: var(--text-sm); }
+/* Oyun alanı kartının içinde diğer bloklar gibi 22px içeride; kartın kenarına yapışmıyor. */
+.playground .predict { margin: 18px 22px; }
+.playground .predict-results { margin: 18px 22px 0; }

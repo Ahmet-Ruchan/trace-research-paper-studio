@@ -43,6 +43,7 @@ running on the coding agent you already use, with no second API key.
 | **[The studio teaches too](#learn-from-it-not-just-read-it)** | An analysis made in the studio now includes the learning layer: primer, step-by-step derivations, playgrounds, quiz and application guide, written by a fifth **Teaching** model from the evidence alone. Older projects offer **Add the learning layer** in the Lab. |
 | **[Study it step by step](#study-it-step-by-step)** | A guided path through the paper: the concepts it assumes, every section followed by one question, the derivations and playgrounds, a final check, then what to read again. It remembers where you stopped. |
 | **[Remember it weeks later](#remember-it-weeks-later)** | What you answer and read in Study comes back for review across your whole library: a day later, then at growing intervals while you keep remembering it. Papers are mixed in one queue. |
+| **[Predict first, then look](#predict-first-then-look)** | A playground asks what each curve will do before it shows the chart, and a derivation asks which step comes next before it shows it. The answers come from the formulas themselves, not from a model. |
 | **[Common misreadings](#see-through-the-common-misreadings)** | The conclusions a hurried reader draws that the paper does not support, each labelled with its kind of mistake and corrected from its claims. The correction opens only when you ask why. |
 | **[Learning health](#see-what-a-reader-cannot-learn-from)** | The learning counterpart of evidence health: unchecked sections, a quiz that never asks about limitations, playgrounds that show nothing, derivations that restate themselves, concepts nothing uses. Each finding opens its fix. |
 | **[A quiz that teaches](#check-whether-you-actually-understood-it)** | A wrong answer gets a second try and a link to where the paper settles it. **Read it like a reviewer** adds questions made from the evidence itself, so every project has some. |
@@ -159,6 +160,19 @@ steady. The slider **starts at the paper's value, marks it on the track and the 
 warns you the moment you leave the region the paper actually verified**.
 
 ![Interactive playground](docs/images/playground.jpg)
+
+### Predict first, then look
+
+Seeing a curve teaches less than guessing it first. Before a playground shows its chart, Trace asks
+what each curve will do as the slider moves (rise, fall, stay flat, rise then fall, fall then rise)
+and, when there are two, whether they cross. The answers are not written by a model: Trace sweeps the
+playground's own formula over the slider's range, so the key point of the attention paper comes back
+as a question (the unscaled weight rises towards 1, the scaled one stays flat; the two costs of Table 1
+cross at n = d = 512). A derivation works the same way: before the next step appears, you pick it from
+the true next step and later steps of the same derivation, all true statements, only one of which
+follows from here. You can always just look instead.
+
+![Predict before the chart](docs/images/predict.jpg)
 
 ### Learn what the paper assumes and never explains
 

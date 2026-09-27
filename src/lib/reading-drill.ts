@@ -1,4 +1,5 @@
 import type { Claim, Metric, PaperEvidence, Quiz, QuizQuestion, ResearchProject } from "./schema";
+import { seededRandom, seededShuffle } from "./seeded";
 
 /**
  * "Hakem gibi oku": kanıtın kendisinden üretilen sorular.
@@ -38,26 +39,8 @@ const KIND_TEXT: Record<Claim["kind"], { option: string; meaning: string }> = {
 
 const KINDS = Object.keys(KIND_TEXT) as Array<Claim["kind"]>;
 
-/** Küçük, tohumlanabilir bir sözde rastgele üreteç (mulberry32). */
-function random(seed: string) {
-  let state = 0;
-  for (const character of seed) state = (Math.imul(state, 31) + character.charCodeAt(0)) | 0;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let value = Math.imul(state ^ (state >>> 15), 1 | state);
-    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function shuffle<T>(items: readonly T[], next: () => number): T[] {
-  const copy = [...items];
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const other = Math.floor(next() * (index + 1));
-    [copy[index], copy[other]] = [copy[other], copy[index]];
-  }
-  return copy;
-}
+const random = seededRandom;
+const shuffle = seededShuffle;
 
 const quoted = (text: string) => `“${text.trim()}”`;
 const pageOf = (claim: Claim) => claim.sourceRefs.find((reference) => reference.page)?.page;

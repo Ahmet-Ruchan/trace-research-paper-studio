@@ -41,6 +41,25 @@ export type Strings = {
   levels: Record<"temel" | "orta" | "ileri", string>;
   whyItMatters: string;
   readFirst: string;
+  // Önce tahmin
+  predictHeading: string;
+  predictIntro: (label: string, min: string, max: string) => string;
+  curveShapes: Record<"rises" | "falls" | "flat" | "peak" | "valley", string>;
+  predictCross: (left: string, right: string) => string;
+  predictCrossYes: string;
+  predictCrossNo: string;
+  predictShow: string;
+  predictSkip: string;
+  predictRight: string;
+  predictWrong: string;
+  curveActual: (shape: string, start: string, end: string, flat: boolean) => string;
+  crossActual: (xParam: string, at?: string) => string;
+  predictScore: (right: number, total: number) => string;
+  nextStepQuestion: string;
+  justShowIt: string;
+  stepCalled: string;
+  stepComesAt: (text: string, position: number) => string;
+  stepsCalled: (right: number, total: number) => string;
   // Türetim
   goal: string;
   nextStep: (shown: number, total: number) => string;
@@ -239,6 +258,30 @@ const en: Strings = {
   levels: { temel: "Basic", orta: "Intermediate", ileri: "Advanced" },
   whyItMatters: "Why this paper needs it:",
   readFirst: "Read these first:",
+  predictHeading: "Predict first",
+  predictIntro: (label, min, max) => `Before you see the chart: as ${label} goes from ${min} to ${max}, with everything else at the paper's values, what happens?`,
+  curveShapes: {
+    rises: "It rises",
+    falls: "It falls",
+    flat: "It stays about the same",
+    peak: "It rises, then falls",
+    valley: "It falls, then rises",
+  },
+  predictCross: (left, right) => `Do “${left}” and “${right}” cross?`,
+  predictCrossYes: "Yes, they cross",
+  predictCrossNo: "No, they never meet",
+  predictShow: "Check and show the chart",
+  predictSkip: "Just show the chart",
+  predictRight: "You called it.",
+  predictWrong: "Not quite.",
+  curveActual: (shape, start, end, flat) => (flat ? `${shape}: ${start} throughout.` : `${shape}: from ${start} to ${end}.`),
+  crossActual: (xParam, at) => (at === undefined ? "They never cross in this range." : `They cross near ${xParam} = ${at}.`),
+  predictScore: (right, total) => `${right} of ${total} ${total === 1 ? "prediction" : "predictions"} right.`,
+  nextStepQuestion: "Which step comes next?",
+  justShowIt: "Just show it",
+  stepCalled: "You called it.",
+  stepComesAt: (text, position) => `You picked “${text}”: true, but that is step ${position}.`,
+  stepsCalled: (right, total) => `You called ${right} of ${total} ${total === 1 ? "step" : "steps"} before seeing ${total === 1 ? "it" : "them"}.`,
   goal: "Goal:",
   nextStep: (shown, total) => `Show the next step (${shown}/${total})`,
   numericExample: "Worked example",

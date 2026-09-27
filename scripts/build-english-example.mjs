@@ -261,6 +261,7 @@ const PHRASES = new Map(Object.entries({
   "|x| büyüdükçe softmax tek bir pozisyona yığılır": "as |x| grows, softmax collapses onto a single position",
   "step << warmup iken ikinci kol küçüktür": "while step << warmup the second branch is smaller",
   "step = warmup noktasında iki kol eşitlenir": "at step = warmup the two branches are equal",
+  "step >> warmup iken lrate ∝ step^-0.5": "once step >> warmup, lrate ∝ step^-0.5",
   "\\operatorname{softmax}(x)_i = \\frac{e^{x_i}}{\\sum_j e^{x_j}} \\;\\xrightarrow[\\;|x| \\to \\infty\\;]{}\\; \\text{tek noktaya yığılma}":
     "\\operatorname{softmax}(x)_i = \\frac{e^{x_i}}{\\sum_j e^{x_j}} \\;\\xrightarrow[\\;|x| \\to \\infty\\;]{}\\; \\text{collapse onto one position}",
   "\\text{step} \\ll \\text{warmup} \\;\\Rightarrow\\; \\text{step} \\cdot \\text{warmup}^{-1.5} \\text{ küçüktür}":
@@ -297,11 +298,18 @@ if (missing.length) {
   process.exit(1);
 }
 
-/* Kalan Türkçe düzyazı var mı? Alıntılar hariç tutulur. */
+/*
+ * Kalan Türkçe düzyazı var mı? Alıntılar ve gömülü görseller hariç tutulur.
+ * Yalnızca Türkçe harflere bakmak yetmiyordu: "step >> warmup iken …" gibi
+ * özel harf taşımayan bir adım İngilizce örnekte kalmıştı. Bu yüzden
+ * İngilizcede geçmeyen yaygın Türkçe bağlaçlar da aranıyor.
+ */
+const TURKISH_WORD = /(^|[^\p{L}'’])(iken|olarak|veya|gibi|kadar|sonra|yani|bir|ile|olan|nedir)(?=$|[^\p{L}'’])/iu;
 const turkish = [];
 const scan = (node, path) => {
   if (typeof node === "string") {
-    if (/[çğışöüÇĞİŞÖÜ]/.test(node) && !/(excerpt|figures\[\d+\]\.caption)$/.test(path)) turkish.push({ path, sample: node.slice(0, 70) });
+    if (/(excerpt|figures\[\d+\]\.caption|\.image)$/.test(path)) return;
+    if (/[çğışöüÇĞİŞÖÜ]/.test(node) || TURKISH_WORD.test(node)) turkish.push({ path, sample: node.slice(0, 70) });
     return;
   }
   if (Array.isArray(node)) return node.forEach((item, i) => scan(item, `${path}[${i}]`));

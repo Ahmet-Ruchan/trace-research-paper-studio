@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useStrings } from "../language-context";
 import type { Interactive } from "@/lib/schema";
 import { evaluateNode, parseFormula, type FormulaNode } from "@/lib/formula";
+import { curveShapes, playgroundPredictions, type CurveShape, type PlaygroundPredictions } from "@/lib/predictions";
 import { extent, formatNumber, makeScale, toPath, ticks, type Point } from "../chart";
 
 type Playground = Extract<Interactive, { kind: "formula-playground" }>;
@@ -42,6 +43,10 @@ export function PlaygroundView({ playground }: { playground: Playground }) {
   }, [playground]);
 
   const [params, setParams] = useState<Record<string, number>>(paperPoint);
+  // Grafik açılmadan önce tahmin: cevap formülden hesaplanıyor, model yok.
+  const predictions = useMemo(() => playgroundPredictions(playground), [playground]);
+  const [answers, setAnswers] = useState<Record<string, CurveShape | boolean>>({});
+  const [chartShown, setChartShown] = useState(false);
 
   const atPaperValues = playground.parameters.every(
     (parameter) => params[parameter.name] === parameter.paperValue,
@@ -129,7 +134,19 @@ export function PlaygroundView({ playground }: { playground: Playground }) {
       </div>
 
       {playground.chart ? (
-        <PlaygroundChart playground={playground} compiled={compiled} params={params} />
+        predictions && !chartShown ? (
+          <PredictPanel
+            predictions={predictions}
+            answers={answers}
+            onAnswer={(id, answer) => setAnswers((previous) => ({ ...previous, [id]: answer }))}
+            onShow={() => setChartShown(true)}
+          />
+        ) : (
+          <>
+            {predictions && Object.keys(answers).length ? <PredictResults predictions={predictions} answers={answers} /> : null}
+            <PlaygroundChart playground={playground} compiled={compiled} params={params} />
+          </>
+        )
       ) : null}
 
       <footer className="interactive-foot">
@@ -215,5 +232,81 @@ function PlaygroundChart({
         <span className="chart-key is-paper">{t.chartPaperKey}</span>
       </figcaption>
     </figure>
+  );
+}
+
+function PredictPanel({
+  predictions,
+  answers,
+  onAnswer,
+  onShow,
+}: {
+  predictions: PlaygroundPredictions;
+  answers: Record<string, CurveShape | boolean>;
+  onAnswer: (id: string, answer: CurveShape | boolean) => void;
+  onShow: () => void;
+}) {
+  const t = useStrings();
+  const answered = predictions.questions.some((question) => answers[question.id] !== undefined);
+  return (
+    <div className="predict" role="group" aria-label={t.predictHeading}>
+      <strong className="predict-head">{t.predictHeading}</strong>
+      <p className="predict-intro">{t.predictIntro(predictions.xLabel, formatNumber(predictions.min), formatNumber(predictions.max))}</p>
+      {predictions.questions.map((question) => {
+        const options: Array<{ value: CurveShape | boolean; label: string }> = question.kind === "shape"
+          ? curveShapes.map((shape) => ({ value: shape, label: t.curveShapes[shape] }))
+          : [{ value: true, label: t.predictCrossYes }, { value: false, label: t.predictCrossNo }];
+        const title = question.kind === "shape" ? question.label : t.predictCross(question.labels[0], question.labels[1]);
+        return (
+          <div className="predict-question" key={question.id} role="group" aria-label={title}>
+            <span className="predict-label">{title}</span>
+            <div className="predict-options">
+              {options.map((option) => (
+                <button
+                  key={String(option.value)}
+                  type="button"
+                  className="predict-option"
+                  aria-pressed={answers[question.id] === option.value}
+                  onClick={() => onAnswer(question.id, option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <div className="predict-actions">
+        <button type="button" className="predict-show" disabled={!answered} onClick={onShow}>{t.predictShow}</button>
+        <button type="button" className="predict-skip" onClick={onShow}>{t.predictSkip}</button>
+      </div>
+    </div>
+  );
+}
+
+/** Grafiğin üstünde: her tahmin, doğru muydu ve eğri gerçekte ne yaptı. */
+function PredictResults({ predictions, answers }: { predictions: PlaygroundPredictions; answers: Record<string, CurveShape | boolean> }) {
+  const t = useStrings();
+  const asked = predictions.questions.filter((question) => answers[question.id] !== undefined);
+  const right = asked.filter((question) => answers[question.id] === question.answer).length;
+  return (
+    <div className="predict-results" role="status">
+      <strong>{t.predictScore(right, asked.length)}</strong>
+      <ul>
+        {predictions.questions.map((question) => {
+          const answer = answers[question.id];
+          const verdict = answer === undefined ? "" : answer === question.answer ? `${t.predictRight} ` : `${t.predictWrong} `;
+          const actual = question.kind === "shape"
+            ? t.curveActual(t.curveShapes[question.answer], formatNumber(question.start), formatNumber(question.end), question.answer === "flat")
+            : t.crossActual(predictions.xParam, question.at === undefined ? undefined : formatNumber(question.at));
+          const label = question.kind === "shape" ? question.label : t.predictCross(question.labels[0], question.labels[1]);
+          return (
+            <li key={question.id} className={answer === undefined ? "" : answer === question.answer ? "is-right" : "is-wrong"}>
+              <span>{label}</span> {verdict}{actual}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

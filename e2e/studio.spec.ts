@@ -1347,6 +1347,48 @@ test.describe("learning layer", () => {
     await expect(first.locator(".evidence-note")).toContainText(project.evidence.claims.find((claim) => claim.id === item.claimIds[0])!.statement);
   });
 
+  test("asks for a prediction before it shows a chart or the next step of a derivation", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-predict"));
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Learn & Try" }).click();
+
+    // Grafik, tahminden sonra açılıyor; cevap formülden hesaplanmış.
+    const scaling = page.locator("section.playground", { hasText: "Why the scaling is necessary" });
+    await expect(scaling.locator(".playground-chart")).toHaveCount(0);
+    const predict = scaling.getByRole("group", { name: "Predict first" });
+    await expect(predict).toContainText("as Key dimension d_k goes from 1 to 512");
+    await expect(predict.getByRole("button", { name: "Check and show the chart" })).toBeDisabled();
+    await predict.getByRole("group", { name: "unscaled", exact: true }).getByRole("button", { name: "It rises", exact: true }).click();
+    await predict.getByRole("group", { name: "scaled", exact: true }).getByRole("button", { name: "It falls", exact: true }).click();
+    await predict.getByRole("button", { name: "Check and show the chart" }).click();
+    await expect(scaling.locator(".playground-chart")).toBeVisible();
+    const results = scaling.locator(".predict-results");
+    await expect(results).toContainText("1 of 2 predictions right.");
+    await expect(results.locator("li.is-right")).toContainText("You called it. It rises: from 0.7311 to 1.0000.");
+    await expect(results.locator("li.is-wrong")).toContainText("Not quite. It stays about the same: 0.7311 throughout.");
+
+    const complexity = page.locator("section.playground", { hasText: "When self-attention becomes expensive" });
+    await expect(complexity.getByRole("group", { name: /cross\?$/ })).toBeVisible();
+    await complexity.getByRole("button", { name: "Just show the chart" }).click();
+    await expect(complexity.locator(".playground-chart")).toBeVisible();
+    await expect(complexity.locator(".predict-results")).toHaveCount(0);
+
+    // Türetim: sıradaki adım adaylar arasından seçiliyor.
+    const steps = project.derivations!.find((item) => item.id === "deriv-scaling")!.steps;
+    const derivation = page.locator("article.derivation", { hasText: "Where dividing by √d_k comes from" }).first();
+    const choose = (text: string) => derivation.getByRole("group", { name: "Which step comes next?" }).getByRole("button", { name: text, exact: true }).click();
+    await choose(steps[1].plain);
+    await expect(derivation.locator(".derivation-step").nth(1).locator(".derivation-verdict")).toHaveText("You called it.");
+    await choose(steps[5].plain);
+    await expect(derivation.locator(".derivation-step").nth(2).locator(".derivation-verdict")).toHaveText(`You picked “${steps[5].plain}”: true, but that is step 6.`);
+    await derivation.getByRole("button", { name: "Just show it" }).click();
+    await choose(steps[4].plain);
+    // Son adımda seçilecek aday kalmıyor.
+    await expect(derivation.getByRole("group", { name: "Which step comes next?" })).toHaveCount(0);
+    await derivation.locator(".derivation-more").click();
+    await expect(derivation.locator(".derivation-score")).toHaveText("You called 2 of 3 steps before seeing them.");
+  });
+
   test("tells the reader which numbers are illustrative and which are the paper's", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-illustrative"));
     await page.goto(`/?project=${project.id}`);
