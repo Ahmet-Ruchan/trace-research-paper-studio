@@ -63,6 +63,7 @@ import { termIndex } from "@/lib/term-index";
 import { studyPath, studySummary } from "@/lib/study-path";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import { useConceptAliases, useLibraryStudy, useStudyProgress } from "./study-progress";
+import { PaperFocusOffer } from "./focus/paper-time";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -335,6 +336,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 </button>
               </div>
             </section>
+            {onProjectChange ? <PaperFocusOffer project={project} /> : null}
             <section className="thesis-card">
               <span>Core thesis</span>
               <blockquote>{project.evidence.thesis}</blockquote>

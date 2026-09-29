@@ -1,4 +1,10 @@
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { loadExampleProject } from "./example-fixture";
 import {
   addSessions,
   calendarYears,
@@ -14,6 +20,7 @@ import {
   parseWorkLog,
   removeSession,
   sessionPieces,
+  timeByProject,
   workLogSchema,
   workLogToJson,
   workSummary,
@@ -157,5 +164,49 @@ describe("the reader's week and streaks", () => {
     expect(formatClock(400, "up")).toBe("00:01");
     expect(formatClock(3_723_000)).toBe("1:02:03");
     expect(dayKey(new Date(at("2026-09-20", "00:30")))).toBe("2026-09-20");
+  });
+});
+
+describe("time by paper", () => {
+  const paper = (id: string, day: string, from: string, to: string, projectId?: string): WorkSession => ({ ...session(id, day, from, to), ...(projectId ? { projectId } : {}) });
+
+  it("adds up each paper's sessions once, keeps unnamed work apart, and can be limited to a week", () => {
+    const sessions = [
+      paper("a", "2026-09-21", "09:00", "10:00", "attention"),
+      paper("b", "2026-09-21", "09:30", "10:30", "attention"), // bir kronometre aynı makaleye aynı anda
+      paper("c", "2026-09-22", "09:00", "09:25", "bert"),
+      paper("d", "2026-09-28", "09:00", "09:45", "bert"),
+      paper("e", "2026-09-22", "11:00", "11:10"),
+    ];
+    expect([...timeByProject(sessions)]).toEqual([["attention", 90 * 60], ["bert", 70 * 60], ["", 10 * 60]]);
+    const week = timeByProject(sessions, { from: at("2026-09-28", "00:00") });
+    expect([...week]).toEqual([["bert", 45 * 60]]);
+    expect(sessionPieces({ kind: "focus", projectId: " attention " }, at("2026-09-21", "09:00"), at("2026-09-21", "09:25"))[0].projectId).toBe("attention");
+  });
+
+  it("tells an agent the reader's work time, by paper", () => {
+    const root = fileURLToPath(new URL("../..", import.meta.url));
+    const english = loadExampleProject("attention-is-all-you-need.en.trace.json");
+    const workspace = mkdtempSync(join(tmpdir(), "trace-work-"));
+    try {
+      mkdirSync(join(workspace, "library"), { recursive: true });
+      writeFileSync(join(workspace, "library", "english.trace.json"), JSON.stringify(english));
+      const now = Date.now();
+      const minutes = (from: number, to: number, projectId?: string, id = `s${from}`): WorkSession => ({ id, start: new Date(now - from * 60_000).toISOString(), end: new Date(now - to * 60_000).toISOString(), kind: "focus", ...(projectId ? { projectId } : {}) });
+      const log = addSessions(emptyWorkLog(), [minutes(50, 25, english.id), minutes(20, 10), minutes(40, 30, "gone")]);
+      writeFileSync(join(workspace, "focus-log.json"), JSON.stringify(log));
+      writeFileSync(join(workspace, "profile.json"), JSON.stringify({ version: 1, firstName: "Ada", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z" }));
+      const run = spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "work", "--days", "3"], { encoding: "utf8", env: { ...process.env, TRACE_DATA_DIR: workspace } });
+      expect(run.status).toBe(0);
+      const report = JSON.parse(run.stdout) as { reader: string; timeZone: string; days: unknown[]; allTime: { seconds: number }; papers: { allTime: Array<{ paper: string; projectId: string | null; seconds: number }> } };
+      expect(report).toMatchObject({ reader: "Ada", timeZone: "Europe/Istanbul" });
+      expect(report.days).toHaveLength(3);
+      expect(report.papers.allTime.map((item) => [item.projectId, item.seconds])).toEqual([[english.id, 25 * 60], [null, 10 * 60], ["gone", 10 * 60]]);
+      expect(report.papers.allTime[0].paper).toBe(english.evidence.paper.title);
+      expect(report.papers.allTime[2].paper).toBe("A paper no longer in the library");
+      expect(spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "work", "--days", "0"], { encoding: "utf8", env: { ...process.env, TRACE_DATA_DIR: workspace } }).status).toBe(1);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
   });
 });

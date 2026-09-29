@@ -577,7 +577,7 @@ const uuid = (version) => {
 	return new RegExp(`^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-${version}[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$`);
 };
 /** Practical email validation */
-const email = /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$/;
+const email$1 = /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$/;
 const _emoji$1 = `^(\\p{Extended_Pictographic}|\\p{Emoji_Component})+$`;
 function emoji() {
 	return new RegExp(_emoji$1, "u");
@@ -1154,7 +1154,7 @@ const $ZodUUID = /*@__PURE__*/ $constructor("$ZodUUID", (inst, def) => {
 	$ZodStringFormat.init(inst, def);
 });
 const $ZodEmail = /*@__PURE__*/ $constructor("$ZodEmail", (inst, def) => {
-	def.pattern ?? (def.pattern = email);
+	def.pattern ?? (def.pattern = email$1);
 	$ZodStringFormat.init(inst, def);
 });
 const $ZodURL = /*@__PURE__*/ $constructor("$ZodURL", (inst, def) => {
@@ -3887,6 +3887,9 @@ const ZodEmail = /*@__PURE__*/ $constructor("ZodEmail", (inst, def) => {
 	$ZodEmail.init(inst, def);
 	ZodStringFormat.init(inst, def);
 });
+function email(params) {
+	return _email(ZodEmail, params);
+}
 const ZodGUID = /*@__PURE__*/ $constructor("ZodGUID", (inst, def) => {
 	$ZodGUID.init(inst, def);
 	ZodStringFormat.init(inst, def);
@@ -7708,7 +7711,7 @@ function defineSymbol(mode, group, replace, name, acceptUnicodeChar) {
 	if (acceptUnicodeChar && replace) symbols[mode][replace] = symbols[mode][name];
 }
 const math = "math";
-const text = "text";
+const text$1 = "text";
 const accent = "accent-token";
 const bin = "bin";
 const close = "close";
@@ -7764,9 +7767,9 @@ defineSymbol(math, rel, "⩴", "\\Coloneqq", true);
 defineSymbol(math, punct, ".", "\\ldotp");
 defineSymbol(math, punct, "·", "\\cdotp");
 defineSymbol(math, textord, "#", "\\#");
-defineSymbol(text, textord, "#", "\\#");
+defineSymbol(text$1, textord, "#", "\\#");
 defineSymbol(math, textord, "&", "\\&");
-defineSymbol(text, textord, "&", "\\&");
+defineSymbol(text$1, textord, "&", "\\&");
 defineSymbol(math, textord, "ℵ", "\\aleph", true);
 defineSymbol(math, textord, "∀", "\\forall", true);
 defineSymbol(math, textord, "ℏ", "\\hbar", true);
@@ -7776,7 +7779,7 @@ defineSymbol(math, textord, "♭", "\\flat", true);
 defineSymbol(math, textord, "ℓ", "\\ell", true);
 defineSymbol(math, textord, "♮", "\\natural", true);
 defineSymbol(math, textord, "Å", "\\Angstrom", true);
-defineSymbol(text, textord, "Å", "\\Angstrom", true);
+defineSymbol(text$1, textord, "Å", "\\Angstrom", true);
 defineSymbol(math, textord, "♣", "\\clubsuit", true);
 defineSymbol(math, textord, "♧", "\\varclubsuit", true);
 defineSymbol(math, textord, "℘", "\\wp", true);
@@ -7792,17 +7795,17 @@ defineSymbol(math, textord, "♤", "\\varspadesuit", true);
 defineSymbol(math, textord, "♀", "\\female", true);
 defineSymbol(math, textord, "♂", "\\male", true);
 defineSymbol(math, textord, "§", "\\S", true);
-defineSymbol(text, textord, "§", "\\S");
+defineSymbol(text$1, textord, "§", "\\S");
 defineSymbol(math, textord, "¶", "\\P", true);
-defineSymbol(text, textord, "¶", "\\P");
-defineSymbol(text, textord, "☺", "\\smiley", true);
+defineSymbol(text$1, textord, "¶", "\\P");
+defineSymbol(text$1, textord, "☺", "\\smiley", true);
 defineSymbol(math, textord, "☺", "\\smiley", true);
 defineSymbol(math, textord, "†", "\\dag");
-defineSymbol(text, textord, "†", "\\dag");
-defineSymbol(text, textord, "†", "\\textdagger");
+defineSymbol(text$1, textord, "†", "\\dag");
+defineSymbol(text$1, textord, "†", "\\textdagger");
 defineSymbol(math, textord, "‡", "\\ddag");
-defineSymbol(text, textord, "‡", "\\ddag");
-defineSymbol(text, textord, "‡", "\\textdaggerdbl");
+defineSymbol(text$1, textord, "‡", "\\ddag");
+defineSymbol(text$1, textord, "‡", "\\textdaggerdbl");
 defineSymbol(math, close, "⎱", "\\rmoustache", true);
 defineSymbol(math, open, "⎰", "\\lmoustache", true);
 defineSymbol(math, close, "⟯", "\\rgroup", true);
@@ -7847,7 +7850,7 @@ defineSymbol(math, rel, "⇌", "\\rightleftharpoons", true);
 defineSymbol(math, mathord, "↯", "\\lightning", true);
 defineSymbol(math, mathord, "∎", "\\QED", true);
 defineSymbol(math, mathord, "‰", "\\permil", true);
-defineSymbol(text, textord, "‰", "\\permil");
+defineSymbol(text$1, textord, "‰", "\\permil");
 defineSymbol(math, mathord, "☉", "\\astrosun", true);
 defineSymbol(math, mathord, "☼", "\\sun", true);
 defineSymbol(math, mathord, "☾", "\\leftmoon", true);
@@ -7913,8 +7916,8 @@ defineSymbol(math, textord, "▽", "\\triangledown");
 defineSymbol(math, textord, "◊", "\\lozenge");
 defineSymbol(math, textord, "Ⓢ", "\\circledS");
 defineSymbol(math, textord, "®", "\\circledR", true);
-defineSymbol(text, textord, "®", "\\circledR");
-defineSymbol(text, textord, "®", "\\textregistered");
+defineSymbol(text$1, textord, "®", "\\circledR");
+defineSymbol(text$1, textord, "®", "\\textregistered");
 defineSymbol(math, textord, "∡", "\\measuredangle", true);
 defineSymbol(math, textord, "∄", "\\nexists");
 defineSymbol(math, textord, "℧", "\\mho");
@@ -7936,12 +7939,12 @@ defineSymbol(math, textord, "□", "\\square");
 defineSymbol(math, textord, "□", "\\Box");
 defineSymbol(math, textord, "◊", "\\Diamond");
 defineSymbol(math, textord, "¥", "\\yen", true);
-defineSymbol(text, textord, "¥", "\\yen", true);
+defineSymbol(text$1, textord, "¥", "\\yen", true);
 defineSymbol(math, textord, "✓", "\\checkmark", true);
-defineSymbol(text, textord, "✓", "\\checkmark");
+defineSymbol(text$1, textord, "✓", "\\checkmark");
 defineSymbol(math, textord, "✗", "\\ballotx", true);
-defineSymbol(text, textord, "✗", "\\ballotx");
-defineSymbol(text, textord, "•", "\\textbullet");
+defineSymbol(text$1, textord, "✗", "\\ballotx");
+defineSymbol(text$1, textord, "•", "\\textbullet");
 defineSymbol(math, textord, "ℶ", "\\beth", true);
 defineSymbol(math, textord, "ℸ", "\\daleth", true);
 defineSymbol(math, textord, "ℷ", "\\gimel", true);
@@ -8153,16 +8156,16 @@ defineSymbol(math, rel, "⇛", "\\Rrightarrow", true);
 defineSymbol(math, rel, "↾", "\\restriction");
 defineSymbol(math, textord, "‘", "`");
 defineSymbol(math, textord, "$", "\\$");
-defineSymbol(text, textord, "$", "\\$");
-defineSymbol(text, textord, "$", "\\textdollar");
+defineSymbol(text$1, textord, "$", "\\$");
+defineSymbol(text$1, textord, "$", "\\textdollar");
 defineSymbol(math, textord, "¢", "\\cent");
-defineSymbol(text, textord, "¢", "\\cent");
+defineSymbol(text$1, textord, "¢", "\\cent");
 defineSymbol(math, textord, "%", "\\%");
-defineSymbol(text, textord, "%", "\\%");
+defineSymbol(text$1, textord, "%", "\\%");
 defineSymbol(math, textord, "_", "\\_");
-defineSymbol(text, textord, "_", "\\_");
-defineSymbol(text, textord, "_", "\\textunderscore");
-defineSymbol(text, textord, "␣", "\\textvisiblespace", true);
+defineSymbol(text$1, textord, "_", "\\_");
+defineSymbol(text$1, textord, "_", "\\textunderscore");
+defineSymbol(text$1, textord, "␣", "\\textvisiblespace", true);
 defineSymbol(math, textord, "∠", "\\angle", true);
 defineSymbol(math, textord, "∞", "\\infty", true);
 defineSymbol(math, textord, "′", "\\prime");
@@ -8170,30 +8173,30 @@ defineSymbol(math, textord, "″", "\\dprime");
 defineSymbol(math, textord, "‴", "\\trprime");
 defineSymbol(math, textord, "⁗", "\\qprime");
 defineSymbol(math, textord, "△", "\\triangle");
-defineSymbol(text, textord, "Α", "\\Alpha", true);
-defineSymbol(text, textord, "Β", "\\Beta", true);
-defineSymbol(text, textord, "Γ", "\\Gamma", true);
-defineSymbol(text, textord, "Δ", "\\Delta", true);
-defineSymbol(text, textord, "Ε", "\\Epsilon", true);
-defineSymbol(text, textord, "Ζ", "\\Zeta", true);
-defineSymbol(text, textord, "Η", "\\Eta", true);
-defineSymbol(text, textord, "Θ", "\\Theta", true);
-defineSymbol(text, textord, "Ι", "\\Iota", true);
-defineSymbol(text, textord, "Κ", "\\Kappa", true);
-defineSymbol(text, textord, "Λ", "\\Lambda", true);
-defineSymbol(text, textord, "Μ", "\\Mu", true);
-defineSymbol(text, textord, "Ν", "\\Nu", true);
-defineSymbol(text, textord, "Ξ", "\\Xi", true);
-defineSymbol(text, textord, "Ο", "\\Omicron", true);
-defineSymbol(text, textord, "Π", "\\Pi", true);
-defineSymbol(text, textord, "Ρ", "\\Rho", true);
-defineSymbol(text, textord, "Σ", "\\Sigma", true);
-defineSymbol(text, textord, "Τ", "\\Tau", true);
-defineSymbol(text, textord, "Υ", "\\Upsilon", true);
-defineSymbol(text, textord, "Φ", "\\Phi", true);
-defineSymbol(text, textord, "Χ", "\\Chi", true);
-defineSymbol(text, textord, "Ψ", "\\Psi", true);
-defineSymbol(text, textord, "Ω", "\\Omega", true);
+defineSymbol(text$1, textord, "Α", "\\Alpha", true);
+defineSymbol(text$1, textord, "Β", "\\Beta", true);
+defineSymbol(text$1, textord, "Γ", "\\Gamma", true);
+defineSymbol(text$1, textord, "Δ", "\\Delta", true);
+defineSymbol(text$1, textord, "Ε", "\\Epsilon", true);
+defineSymbol(text$1, textord, "Ζ", "\\Zeta", true);
+defineSymbol(text$1, textord, "Η", "\\Eta", true);
+defineSymbol(text$1, textord, "Θ", "\\Theta", true);
+defineSymbol(text$1, textord, "Ι", "\\Iota", true);
+defineSymbol(text$1, textord, "Κ", "\\Kappa", true);
+defineSymbol(text$1, textord, "Λ", "\\Lambda", true);
+defineSymbol(text$1, textord, "Μ", "\\Mu", true);
+defineSymbol(text$1, textord, "Ν", "\\Nu", true);
+defineSymbol(text$1, textord, "Ξ", "\\Xi", true);
+defineSymbol(text$1, textord, "Ο", "\\Omicron", true);
+defineSymbol(text$1, textord, "Π", "\\Pi", true);
+defineSymbol(text$1, textord, "Ρ", "\\Rho", true);
+defineSymbol(text$1, textord, "Σ", "\\Sigma", true);
+defineSymbol(text$1, textord, "Τ", "\\Tau", true);
+defineSymbol(text$1, textord, "Υ", "\\Upsilon", true);
+defineSymbol(text$1, textord, "Φ", "\\Phi", true);
+defineSymbol(text$1, textord, "Χ", "\\Chi", true);
+defineSymbol(text$1, textord, "Ψ", "\\Psi", true);
+defineSymbol(text$1, textord, "Ω", "\\Omega", true);
 defineSymbol(math, mathord, "Α", "\\Alpha", true);
 defineSymbol(math, mathord, "Β", "\\Beta", true);
 defineSymbol(math, mathord, "Γ", "\\Gamma", true);
@@ -8265,41 +8268,41 @@ defineSymbol(math, mathord, "Ϛ", "\\Stigma", true);
 defineSymbol(math, mathord, "ϛ", "\\stigma", true);
 defineSymbol(math, mathord, "⫫", "\\Bot");
 defineSymbol(math, textord, "ð", "\\eth", true);
-defineSymbol(text, textord, "ð", "ð");
+defineSymbol(text$1, textord, "ð", "ð");
 defineSymbol(math, textord, "Å", "\\AA");
-defineSymbol(text, textord, "Å", "\\AA", true);
+defineSymbol(text$1, textord, "Å", "\\AA", true);
 defineSymbol(math, textord, "Æ", "\\AE", true);
-defineSymbol(text, textord, "Æ", "\\AE", true);
+defineSymbol(text$1, textord, "Æ", "\\AE", true);
 defineSymbol(math, textord, "Ð", "\\DH", true);
-defineSymbol(text, textord, "Ð", "\\DH", true);
+defineSymbol(text$1, textord, "Ð", "\\DH", true);
 defineSymbol(math, textord, "Þ", "\\TH", true);
-defineSymbol(text, textord, "Þ", "\\TH", true);
+defineSymbol(text$1, textord, "Þ", "\\TH", true);
 defineSymbol(math, textord, "ß", "\\ss", true);
-defineSymbol(text, textord, "ß", "\\ss", true);
+defineSymbol(text$1, textord, "ß", "\\ss", true);
 defineSymbol(math, textord, "å", "\\aa");
-defineSymbol(text, textord, "å", "\\aa", true);
+defineSymbol(text$1, textord, "å", "\\aa", true);
 defineSymbol(math, textord, "æ", "\\ae", true);
-defineSymbol(text, textord, "æ", "\\ae", true);
+defineSymbol(text$1, textord, "æ", "\\ae", true);
 defineSymbol(math, textord, "ð", "\\dh");
-defineSymbol(text, textord, "ð", "\\dh", true);
+defineSymbol(text$1, textord, "ð", "\\dh", true);
 defineSymbol(math, textord, "þ", "\\th", true);
-defineSymbol(text, textord, "þ", "\\th", true);
+defineSymbol(text$1, textord, "þ", "\\th", true);
 defineSymbol(math, textord, "Đ", "\\DJ", true);
-defineSymbol(text, textord, "Đ", "\\DJ", true);
+defineSymbol(text$1, textord, "Đ", "\\DJ", true);
 defineSymbol(math, textord, "đ", "\\dj", true);
-defineSymbol(text, textord, "đ", "\\dj", true);
+defineSymbol(text$1, textord, "đ", "\\dj", true);
 defineSymbol(math, textord, "Ł", "\\L", true);
-defineSymbol(text, textord, "Ł", "\\L", true);
+defineSymbol(text$1, textord, "Ł", "\\L", true);
 defineSymbol(math, textord, "Ł", "\\l", true);
-defineSymbol(text, textord, "Ł", "\\l", true);
+defineSymbol(text$1, textord, "Ł", "\\l", true);
 defineSymbol(math, textord, "Ŋ", "\\NG", true);
-defineSymbol(text, textord, "Ŋ", "\\NG", true);
+defineSymbol(text$1, textord, "Ŋ", "\\NG", true);
 defineSymbol(math, textord, "ŋ", "\\ng", true);
-defineSymbol(text, textord, "ŋ", "\\ng", true);
+defineSymbol(text$1, textord, "ŋ", "\\ng", true);
 defineSymbol(math, textord, "Œ", "\\OE", true);
-defineSymbol(text, textord, "Œ", "\\OE", true);
+defineSymbol(text$1, textord, "Œ", "\\OE", true);
 defineSymbol(math, textord, "œ", "\\oe", true);
-defineSymbol(text, textord, "œ", "\\oe", true);
+defineSymbol(text$1, textord, "œ", "\\oe", true);
 defineSymbol(math, bin, "∗", "∗", true);
 defineSymbol(math, bin, "+", "+");
 defineSymbol(math, bin, "∗", "*");
@@ -8376,14 +8379,14 @@ defineSymbol(math, rel, "⫫", "\\Perp", true);
 defineSymbol(math, spacing, "\xA0", "\\ ");
 defineSymbol(math, spacing, "\xA0", "\\space");
 defineSymbol(math, spacing, "\xA0", "\\nobreakspace");
-defineSymbol(text, spacing, "\xA0", "\\ ");
-defineSymbol(text, spacing, "\xA0", " ");
-defineSymbol(text, spacing, "\xA0", "\\space");
-defineSymbol(text, spacing, "\xA0", "\\nobreakspace");
+defineSymbol(text$1, spacing, "\xA0", "\\ ");
+defineSymbol(text$1, spacing, "\xA0", " ");
+defineSymbol(text$1, spacing, "\xA0", "\\space");
+defineSymbol(text$1, spacing, "\xA0", "\\nobreakspace");
 defineSymbol(math, spacing, null, "\\nobreak");
 defineSymbol(math, spacing, null, "\\allowbreak");
 defineSymbol(math, punct, ",", ",");
-defineSymbol(text, punct, ":", ":");
+defineSymbol(text$1, punct, ":", ":");
 defineSymbol(math, punct, ";", ";");
 defineSymbol(math, bin, "⊼", "\\barwedge");
 defineSymbol(math, bin, "⊻", "\\veebar");
@@ -8401,23 +8404,23 @@ defineSymbol(math, bin, "⋄", "\\diamond");
 defineSymbol(math, bin, "◃", "\\triangleleft");
 defineSymbol(math, bin, "▹", "\\triangleright");
 defineSymbol(math, open, "{", "\\{");
-defineSymbol(text, textord, "{", "\\{");
-defineSymbol(text, textord, "{", "\\textbraceleft");
+defineSymbol(text$1, textord, "{", "\\{");
+defineSymbol(text$1, textord, "{", "\\textbraceleft");
 defineSymbol(math, close, "}", "\\}");
-defineSymbol(text, textord, "}", "\\}");
-defineSymbol(text, textord, "}", "\\textbraceright");
+defineSymbol(text$1, textord, "}", "\\}");
+defineSymbol(text$1, textord, "}", "\\textbraceright");
 defineSymbol(math, open, "{", "\\lbrace");
 defineSymbol(math, close, "}", "\\rbrace");
 defineSymbol(math, open, "[", "\\lbrack", true);
-defineSymbol(text, textord, "[", "\\lbrack", true);
+defineSymbol(text$1, textord, "[", "\\lbrack", true);
 defineSymbol(math, close, "]", "\\rbrack", true);
-defineSymbol(text, textord, "]", "\\rbrack", true);
+defineSymbol(text$1, textord, "]", "\\rbrack", true);
 defineSymbol(math, open, "(", "\\lparen", true);
 defineSymbol(math, close, ")", "\\rparen", true);
 defineSymbol(math, open, "⦇", "\\llparenthesis", true);
 defineSymbol(math, close, "⦈", "\\rrparenthesis", true);
-defineSymbol(text, textord, "<", "\\textless", true);
-defineSymbol(text, textord, ">", "\\textgreater", true);
+defineSymbol(text$1, textord, "<", "\\textless", true);
+defineSymbol(text$1, textord, ">", "\\textgreater", true);
 defineSymbol(math, open, "⌊", "\\lfloor", true);
 defineSymbol(math, close, "⌋", "\\rfloor", true);
 defineSymbol(math, open, "⌈", "\\lceil", true);
@@ -8425,13 +8428,13 @@ defineSymbol(math, close, "⌉", "\\rceil", true);
 defineSymbol(math, textord, "\\", "\\backslash");
 defineSymbol(math, textord, "|", "|");
 defineSymbol(math, textord, "|", "\\vert");
-defineSymbol(text, textord, "|", "\\textbar", true);
+defineSymbol(text$1, textord, "|", "\\textbar", true);
 defineSymbol(math, textord, "‖", "\\|");
 defineSymbol(math, textord, "‖", "\\Vert");
-defineSymbol(text, textord, "‖", "\\textbardbl");
-defineSymbol(text, textord, "~", "\\textasciitilde");
-defineSymbol(text, textord, "\\", "\\textbackslash");
-defineSymbol(text, textord, "^", "\\textasciicircum");
+defineSymbol(text$1, textord, "‖", "\\textbardbl");
+defineSymbol(text$1, textord, "~", "\\textasciitilde");
+defineSymbol(text$1, textord, "\\", "\\textbackslash");
+defineSymbol(text$1, textord, "^", "\\textasciicircum");
 defineSymbol(math, rel, "↑", "\\uparrow", true);
 defineSymbol(math, rel, "⇑", "\\Uparrow", true);
 defineSymbol(math, rel, "↓", "\\downarrow", true);
@@ -8478,15 +8481,15 @@ defineSymbol(math, op, "⨚", "\\intcup");
 defineSymbol(math, op, "⨅", "\\bigsqcap");
 defineSymbol(math, op, "⨆", "\\bigsqcup");
 defineSymbol(math, op, "∫", "\\smallint");
-defineSymbol(text, inner, "…", "\\textellipsis");
+defineSymbol(text$1, inner, "…", "\\textellipsis");
 defineSymbol(math, inner, "…", "\\mathellipsis");
-defineSymbol(text, inner, "…", "\\ldots", true);
+defineSymbol(text$1, inner, "…", "\\ldots", true);
 defineSymbol(math, inner, "…", "\\ldots", true);
 defineSymbol(math, inner, "⋰", "\\iddots", true);
 defineSymbol(math, inner, "⋯", "\\@cdots", true);
 defineSymbol(math, inner, "⋱", "\\ddots", true);
 defineSymbol(math, textord, "⋮", "\\varvdots");
-defineSymbol(text, textord, "⋮", "\\varvdots");
+defineSymbol(text$1, textord, "⋮", "\\varvdots");
 defineSymbol(math, accent, "´", "\\acute");
 defineSymbol(math, accent, "`", "\\grave");
 defineSymbol(math, accent, "¨", "\\ddot");
@@ -8504,24 +8507,24 @@ defineSymbol(math, mathord, "ı", "\\imath", true);
 defineSymbol(math, mathord, "ȷ", "\\jmath", true);
 defineSymbol(math, textord, "ı", "ı");
 defineSymbol(math, textord, "ȷ", "ȷ");
-defineSymbol(text, textord, "ı", "\\i", true);
-defineSymbol(text, textord, "ȷ", "\\j", true);
-defineSymbol(text, textord, "ø", "\\o", true);
+defineSymbol(text$1, textord, "ı", "\\i", true);
+defineSymbol(text$1, textord, "ȷ", "\\j", true);
+defineSymbol(text$1, textord, "ø", "\\o", true);
 defineSymbol(math, mathord, "ø", "\\o", true);
-defineSymbol(text, textord, "Ø", "\\O", true);
+defineSymbol(text$1, textord, "Ø", "\\O", true);
 defineSymbol(math, mathord, "Ø", "\\O", true);
-defineSymbol(text, accent, "ˊ", "\\'");
-defineSymbol(text, accent, "ˋ", "\\`");
-defineSymbol(text, accent, "ˆ", "\\^");
-defineSymbol(text, accent, "~", "\\~");
-defineSymbol(text, accent, "ˉ", "\\=");
-defineSymbol(text, accent, "˘", "\\u");
-defineSymbol(text, accent, "˙", "\\.");
-defineSymbol(text, accent, "¸", "\\c");
-defineSymbol(text, accent, "˚", "\\r");
-defineSymbol(text, accent, "ˇ", "\\v");
-defineSymbol(text, accent, "¨", "\\\"");
-defineSymbol(text, accent, "˝", "\\H");
+defineSymbol(text$1, accent, "ˊ", "\\'");
+defineSymbol(text$1, accent, "ˋ", "\\`");
+defineSymbol(text$1, accent, "ˆ", "\\^");
+defineSymbol(text$1, accent, "~", "\\~");
+defineSymbol(text$1, accent, "ˉ", "\\=");
+defineSymbol(text$1, accent, "˘", "\\u");
+defineSymbol(text$1, accent, "˙", "\\.");
+defineSymbol(text$1, accent, "¸", "\\c");
+defineSymbol(text$1, accent, "˚", "\\r");
+defineSymbol(text$1, accent, "ˇ", "\\v");
+defineSymbol(text$1, accent, "¨", "\\\"");
+defineSymbol(text$1, accent, "˝", "\\H");
 defineSymbol(math, accent, "ˊ", "\\'");
 defineSymbol(math, accent, "ˋ", "\\`");
 defineSymbol(math, accent, "ˆ", "\\^");
@@ -8540,34 +8543,34 @@ const ligatures = {
 	"``": true,
 	"''": true
 };
-defineSymbol(text, textord, "–", "--", true);
-defineSymbol(text, textord, "–", "\\textendash");
-defineSymbol(text, textord, "—", "---", true);
-defineSymbol(text, textord, "—", "\\textemdash");
-defineSymbol(text, textord, "‘", "`", true);
-defineSymbol(text, textord, "‘", "\\textquoteleft");
-defineSymbol(text, textord, "’", "'", true);
-defineSymbol(text, textord, "’", "\\textquoteright");
-defineSymbol(text, textord, "“", "``", true);
-defineSymbol(text, textord, "“", "\\textquotedblleft");
-defineSymbol(text, textord, "”", "''", true);
-defineSymbol(text, textord, "”", "\\textquotedblright");
+defineSymbol(text$1, textord, "–", "--", true);
+defineSymbol(text$1, textord, "–", "\\textendash");
+defineSymbol(text$1, textord, "—", "---", true);
+defineSymbol(text$1, textord, "—", "\\textemdash");
+defineSymbol(text$1, textord, "‘", "`", true);
+defineSymbol(text$1, textord, "‘", "\\textquoteleft");
+defineSymbol(text$1, textord, "’", "'", true);
+defineSymbol(text$1, textord, "’", "\\textquoteright");
+defineSymbol(text$1, textord, "“", "``", true);
+defineSymbol(text$1, textord, "“", "\\textquotedblleft");
+defineSymbol(text$1, textord, "”", "''", true);
+defineSymbol(text$1, textord, "”", "\\textquotedblright");
 defineSymbol(math, textord, "°", "\\degree", true);
-defineSymbol(text, textord, "°", "\\degree");
-defineSymbol(text, textord, "°", "\\textdegree", true);
+defineSymbol(text$1, textord, "°", "\\degree");
+defineSymbol(text$1, textord, "°", "\\textdegree", true);
 defineSymbol(math, textord, "£", "\\pounds");
 defineSymbol(math, textord, "£", "\\mathsterling", true);
-defineSymbol(text, textord, "£", "\\pounds");
-defineSymbol(text, textord, "£", "\\textsterling", true);
+defineSymbol(text$1, textord, "£", "\\pounds");
+defineSymbol(text$1, textord, "£", "\\textsterling", true);
 defineSymbol(math, textord, "✠", "\\maltese");
-defineSymbol(text, textord, "✠", "\\maltese");
+defineSymbol(text$1, textord, "✠", "\\maltese");
 defineSymbol(math, textord, "€", "\\euro", true);
-defineSymbol(text, textord, "€", "\\euro", true);
-defineSymbol(text, textord, "€", "\\texteuro");
+defineSymbol(text$1, textord, "€", "\\euro", true);
+defineSymbol(text$1, textord, "€", "\\texteuro");
 defineSymbol(math, textord, "©", "\\copyright", true);
-defineSymbol(text, textord, "©", "\\textcopyright");
+defineSymbol(text$1, textord, "©", "\\textcopyright");
 defineSymbol(math, textord, "⌀", "\\diameter", true);
-defineSymbol(text, textord, "⌀", "\\diameter");
+defineSymbol(text$1, textord, "⌀", "\\diameter");
 defineSymbol(math, textord, "𝛤", "\\varGamma");
 defineSymbol(math, textord, "𝛥", "\\varDelta");
 defineSymbol(math, textord, "𝛩", "\\varTheta");
@@ -8579,17 +8582,17 @@ defineSymbol(math, textord, "𝛶", "\\varUpsilon");
 defineSymbol(math, textord, "𝛷", "\\varPhi");
 defineSymbol(math, textord, "𝛹", "\\varPsi");
 defineSymbol(math, textord, "𝛺", "\\varOmega");
-defineSymbol(text, textord, "𝛤", "\\varGamma");
-defineSymbol(text, textord, "𝛥", "\\varDelta");
-defineSymbol(text, textord, "𝛩", "\\varTheta");
-defineSymbol(text, textord, "𝛬", "\\varLambda");
-defineSymbol(text, textord, "𝛯", "\\varXi");
-defineSymbol(text, textord, "𝛱", "\\varPi");
-defineSymbol(text, textord, "𝛴", "\\varSigma");
-defineSymbol(text, textord, "𝛶", "\\varUpsilon");
-defineSymbol(text, textord, "𝛷", "\\varPhi");
-defineSymbol(text, textord, "𝛹", "\\varPsi");
-defineSymbol(text, textord, "𝛺", "\\varOmega");
+defineSymbol(text$1, textord, "𝛤", "\\varGamma");
+defineSymbol(text$1, textord, "𝛥", "\\varDelta");
+defineSymbol(text$1, textord, "𝛩", "\\varTheta");
+defineSymbol(text$1, textord, "𝛬", "\\varLambda");
+defineSymbol(text$1, textord, "𝛯", "\\varXi");
+defineSymbol(text$1, textord, "𝛱", "\\varPi");
+defineSymbol(text$1, textord, "𝛴", "\\varSigma");
+defineSymbol(text$1, textord, "𝛶", "\\varUpsilon");
+defineSymbol(text$1, textord, "𝛷", "\\varPhi");
+defineSymbol(text$1, textord, "𝛹", "\\varPsi");
+defineSymbol(text$1, textord, "𝛺", "\\varOmega");
 const mathTextSymbols = "0123456789/@.\"";
 for (let i = 0; i < 14; i++) {
 	const ch = mathTextSymbols.charAt(i);
@@ -8598,67 +8601,67 @@ for (let i = 0; i < 14; i++) {
 const textSymbols = "0123456789!@*()-=+\";:?/.,";
 for (let i = 0; i < 25; i++) {
 	const ch = textSymbols.charAt(i);
-	defineSymbol(text, textord, ch, ch);
+	defineSymbol(text$1, textord, ch, ch);
 }
 const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 for (let i = 0; i < 52; i++) {
 	const ch = letters.charAt(i);
 	defineSymbol(math, mathord, ch, ch);
-	defineSymbol(text, textord, ch, ch);
+	defineSymbol(text$1, textord, ch, ch);
 }
 const narrow = "ÇÐÞçþℂℍℕℙℚℝℤℎℏℊℋℌℐℑℒℓ℘ℛℜℬℰℱℳℭℨ";
 for (let i = 0; i < 30; i++) {
 	const ch = narrow.charAt(i);
 	defineSymbol(math, mathord, ch, ch);
-	defineSymbol(text, textord, ch, ch);
+	defineSymbol(text$1, textord, ch, ch);
 }
 let wideChar = "";
 for (let i = 0; i < 52; i++) {
 	wideChar = String.fromCharCode(55349, 56320 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56372 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56424 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56580 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56736 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56788 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56840 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56944 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 56632 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	const ch = letters.charAt(i);
 	wideChar = String.fromCharCode(55349, 56476 + i);
 	defineSymbol(math, mathord, ch, wideChar);
-	defineSymbol(text, textord, ch, wideChar);
+	defineSymbol(text$1, textord, ch, wideChar);
 }
 for (let i = 0; i < 10; i++) {
 	wideChar = String.fromCharCode(55349, 57294 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 57314 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 57324 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 	wideChar = String.fromCharCode(55349, 57334 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
-	defineSymbol(text, textord, wideChar, wideChar);
+	defineSymbol(text$1, textord, wideChar, wideChar);
 }
 function setLineBreaks(expression, wrapMode, isDisplayMode) {
 	const mtrs = [];
@@ -21464,7 +21467,7 @@ function reviewCards(projects, progress) {
 /** Bu kutudan itibaren kart "uzun süreli": bir sonraki tekrarı iki haftadan sonra. */
 const LONG_TERM_BOX = REVIEW_INTERVALS_DAYS.findIndex((days) => days >= 14);
 const HARDEST = 8;
-const pad = (value) => String(value).padStart(2, "0");
+const pad$1 = (value) => String(value).padStart(2, "0");
 /**
 * Okuyucunun günleri, kendi saatine göre: bugünün başından itibaren `count`
 * gün. UTC günü İstanbul'da gece üçte, Los Angeles'ta akşam beşte bitiyor;
@@ -21477,7 +21480,7 @@ function localDays(now, count = 7) {
 		const start = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset);
 		const end = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset + 1);
 		return {
-			day: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+			day: `${start.getFullYear()}-${pad$1(start.getMonth() + 1)}-${pad$1(start.getDate())}`,
 			start: start.toISOString(),
 			end: end.toISOString()
 		};
@@ -21563,6 +21566,407 @@ function learningStats(projects, study, now, days = localDays(now)) {
 		hardest,
 		explanationGain: gain
 	};
+}
+
+//#endregion
+//#region src/lib/focus-colors.ts
+/**
+* Çalışma saatinin renkleri.
+*
+* Stüdyonun makale renk paletinden (`TRACE_ACCENT_PALETTE`) on bir ton:
+* zamanlayıcılar, alarmlar ve profildeki çalışma takvimi bunlardan birini
+* seçiyor. Renk dolgu olarak kullanılıyor (halka, takvim kareleri, düğme);
+* üstündeki yazının rengi kodla seçiliyor: beyaz ya da koyu, hangisi dolguyla
+* daha çok ayrışıyorsa. Rengin yazı olarak kullanılan tonu CSS'te temaya göre
+* türetiliyor (`--focus-ink`, bkz. `focus.css`).
+*/
+const FOCUS_COLORS = [
+	{
+		id: "yellow",
+		label: "Yellow",
+		hex: "#FACC15"
+	},
+	{
+		id: "blue",
+		label: "Blue",
+		hex: "#2563EB"
+	},
+	{
+		id: "red",
+		label: "Red",
+		hex: "#EF4444"
+	},
+	{
+		id: "green",
+		label: "Green",
+		hex: "#22C55E"
+	},
+	{
+		id: "orange",
+		label: "Orange",
+		hex: "#F97316"
+	},
+	{
+		id: "purple",
+		label: "Purple",
+		hex: "#7C3AED"
+	},
+	{
+		id: "lilac",
+		label: "Lilac",
+		hex: "#A78BFA"
+	},
+	{
+		id: "sky",
+		label: "Light blue",
+		hex: "#38BDF8"
+	},
+	{
+		id: "navy",
+		label: "Navy",
+		hex: "#1E3A8A"
+	},
+	{
+		id: "burgundy",
+		label: "Burgundy",
+		hex: "#9F1239"
+	},
+	{
+		id: "pink",
+		label: "Pink",
+		hex: "#EC4899"
+	}
+];
+const FOCUS_COLOR_IDS = FOCUS_COLORS.map((color) => color.id);
+const focusColorSchema = _enum(FOCUS_COLOR_IDS);
+
+//#endregion
+//#region src/lib/profile.ts
+/**
+* Okuyucunun profili: kim olduğu ve çalışma saatinin ayarları.
+*
+* `~/.trace/profile.json` içinde, makinede duruyor; hiçbir projeye ya da
+* yayınlanan sayfaya girmiyor. Zamanlayıcı ayarları, alarmlar ve renkler de
+* burada: tarayıcının verisi silinince kaybolmasınlar, başka bir tarayıcıda
+* da aynı olsunlar. Çalışılan zamanın kaydı ayrı dosyada (`work-log.ts`).
+*/
+const PROFILE_VERSION = 1;
+/** Profil fotoğrafı istemcide 192 px'e küçültülüp JPEG olarak geliyor; bu sınır bol. */
+const MAX_PHOTO_CHARS = 2e5;
+const MAX_ALARMS = 20;
+const text = (max) => string().trim().max(max).default("");
+const SOUNDS = [
+	{
+		id: "chime",
+		label: "Chime"
+	},
+	{
+		id: "bell",
+		label: "Bell"
+	},
+	{
+		id: "beep",
+		label: "Soft beep"
+	},
+	{
+		id: "none",
+		label: "No sound"
+	}
+];
+/** Odak turu sürerken çalan arka plan sesi; ses dosyası yok, tarayıcıda üretiliyor. */
+const AMBIENT_SOUNDS = [
+	{
+		id: "none",
+		label: "None"
+	},
+	{
+		id: "white",
+		label: "White noise"
+	},
+	{
+		id: "brown",
+		label: "Brown noise"
+	},
+	{
+		id: "rain",
+		label: "Rain"
+	}
+];
+const ambientSchema = _enum(AMBIENT_SOUNDS.map((sound) => sound.id));
+const soundSchema = _enum(SOUNDS.map((sound) => sound.id));
+const alarmSchema = object({
+	id: string().min(1).max(60),
+	/** Yerel saat, "HH:MM". */
+	time: string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+	label: text(80),
+	/** Tekrarlanan günler (0 pazar … 6 cumartesi); boşsa bir kez çalıyor ve kapanıyor. */
+	days: array(number().int().min(0).max(6)).max(7).default([]),
+	enabled: boolean().default(true),
+	color: focusColorSchema.default("purple")
+});
+const focusSettingsSchema = object({
+	/** Dakika. */
+	work: number().int().min(1).max(240).default(25),
+	shortBreak: number().int().min(1).max(60).default(5),
+	longBreak: number().int().min(1).max(120).default(15),
+	/** Kaç odak turundan sonra uzun mola. */
+	longEvery: number().int().min(1).max(12).default(4),
+	/** Kaç tur; 0: durdurulana kadar sürüyor. */
+	rounds: number().int().min(0).max(24).default(0),
+	autoStartBreaks: boolean().default(true),
+	autoStartWork: boolean().default(true)
+});
+const preferencesSchema = object({
+	/** Profilin ve çalışma takviminin rengi. */
+	color: focusColorSchema.default("green"),
+	colors: object({
+		focus: focusColorSchema.default("red"),
+		timer: focusColorSchema.default("orange"),
+		stopwatch: focusColorSchema.default("blue"),
+		alarm: focusColorSchema.default("purple")
+	}).default({
+		focus: "red",
+		timer: "orange",
+		stopwatch: "blue",
+		alarm: "purple"
+	}),
+	focus: focusSettingsSchema.default(focusSettingsSchema.parse({})),
+	/** Geri sayımın son ayarı, saniye. */
+	timerSeconds: number().int().min(1).max(86399).default(600),
+	/** Geri sayım ve kronometre çalışma süresi sayılsın mı. */
+	timerCountsAsWork: boolean().default(true),
+	stopwatchCountsAsWork: boolean().default(true),
+	/** Günlük hedef, dakika; takvimin en koyu tonu hedefe ulaşılan gün. */
+	dailyGoalMinutes: number().int().min(15).max(1440).default(240),
+	/** Haftanın ilk günü: 1 pazartesi, 0 pazar. */
+	weekStart: union([literal(0), literal(1)]).default(1),
+	clock: _enum(["24h", "12h"]).default("24h"),
+	sound: soundSchema.default("chime"),
+	volume: number().min(0).max(1).default(.6),
+	/** Sekme arka plandayken masaüstü bildirimi. */
+	notifications: boolean().default(false),
+	/** Odak turlarında arka plan sesi ve düzeyi. */
+	ambient: ambientSchema.default("none"),
+	ambientVolume: number().min(0).max(1).default(.35)
+});
+const profileSchema = object({
+	version: literal(1),
+	firstName: text(60),
+	lastName: text(60),
+	/** "PhD student", "Research engineer". */
+	title: text(80),
+	institution: text(120),
+	field: text(120),
+	email: string().trim().max(200).refine((value) => value === "" || email().safeParse(value).success, "Enter an email address, or leave it empty.").default(""),
+	bio: text(400),
+	photo: string().max(MAX_PHOTO_CHARS).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/).optional(),
+	createdAt: string().max(40),
+	updatedAt: string().max(40),
+	preferences: preferencesSchema.default(preferencesSchema.parse({})),
+	alarms: array(alarmSchema).max(20).default([])
+});
+function emptyProfile(now) {
+	return profileSchema.parse({
+		version: 1,
+		createdAt: now,
+		updatedAt: now
+	});
+}
+/** Okunamayan ya da tanınmayan dosya boş profille karşılanıyor (depolama onu kenara alıyor, silmiyor). */
+function parseProfile(raw, now) {
+	const parsed = profileSchema.safeParse(raw);
+	return parsed.success ? parsed.data : emptyProfile(now);
+}
+function displayName(profile) {
+	return [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+}
+
+//#endregion
+//#region src/lib/work-log.ts
+/**
+* Çalışılan zamanın kaydı.
+*
+* `~/.trace/focus-log.json` içinde, makinede. Her kayıt kesintisiz bir
+* çalışma aralığı: bir odak turu, duraklatılana kadar çalışan bir geri sayım
+* ya da kronometre, ya da okuyucunun elle eklediği bir süre. Aralık kaydetmek
+* (toplam değil) iki şeyi çözüyor:
+*
+* - Üst üste binen aralıklar bir kez sayılıyor. Odak turu ve kronometre aynı
+*   anda çalışabiliyor, iki sekme aynı turu kaydedebiliyor; gün toplamı
+*   aralıkların BİRLEŞİMİ, toplamı değil.
+* - Gece yarısını geçen bir tur iki güne bölünüyor; günler okuyucunun kendi
+*   saatine göre (`dayKey`).
+*
+* Hiçbir şey sessizce düşmüyor: kayıt çok büyürse en eski oturumlar günlük
+* toplamlarına katlanıp `archive`'a geçiyor, takvimde kalıyorlar.
+*/
+const WORK_LOG_VERSION = 1;
+const MAX_SESSIONS = 2e4;
+/** Tek kayıt en çok 12 saat; daha uzun bir aralık parçalara bölünüyor (`sessionPieces`). */
+const MAX_SESSION_SECONDS = 43200;
+/** Bir gün en az bu kadar çalışılmışsa "çalışılan gün" (seri ve ortalama için). */
+const ACTIVE_DAY_SECONDS = 60;
+const SESSION_KINDS = [
+	"focus",
+	"timer",
+	"stopwatch",
+	"manual"
+];
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const instant = string().max(40).refine((value) => Number.isFinite(Date.parse(value)), "Not a date.");
+const workSessionSchema = object({
+	id: string().min(1).max(80),
+	start: instant,
+	end: instant,
+	kind: _enum(SESSION_KINDS),
+	label: string().trim().max(120).optional(),
+	/** Kütüphanedeki makale: süre ona yazılıyor. */
+	projectId: string().trim().min(1).max(300).optional(),
+	color: focusColorSchema.optional()
+}).refine((session) => Date.parse(session.end) > Date.parse(session.start), "A session ends after it starts.").refine((session) => Date.parse(session.end) - Date.parse(session.start) <= MAX_SESSION_SECONDS * 1e3, "A session is at most 12 hours.");
+const workLogSchema = object({
+	version: literal(1),
+	sessions: array(workSessionSchema).max(MAX_SESSIONS),
+	/** Katlanan eski oturumların gün toplamları, saniye. */
+	archive: record(string().regex(DAY_PATTERN), number().int().min(0).max(86400)).default({})
+});
+function emptyWorkLog() {
+	return {
+		version: 1,
+		sessions: [],
+		archive: {}
+	};
+}
+function parseWorkLog(raw) {
+	const parsed = workLogSchema.safeParse(raw);
+	return parsed.success ? parsed.data : emptyWorkLog();
+}
+const pad = (value) => String(value).padStart(2, "0");
+/** Yerel gün, "YYYY-MM-DD". */
+function dayKey(date) {
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+/** "YYYY-MM-DD" → o günün yerel gece yarısı. */
+function dayDate(day) {
+	const [year, month, date] = day.split("-").map(Number);
+	return new Date(year, month - 1, date);
+}
+function addDaysLocal(date, days) {
+	return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+/** Aralıkların birleşimi, başlangıca göre sıralı. */
+function mergedIntervals(intervals) {
+	const sorted = intervals.filter(([start, end]) => end > start).map(([start, end]) => [start, end]).sort((left, right) => left[0] - right[0]);
+	const merged = [];
+	for (const [start, end] of sorted) {
+		const last = merged.at(-1);
+		if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+		else merged.push([start, end]);
+	}
+	return merged;
+}
+const intervalOf = (session) => [Date.parse(session.start), Date.parse(session.end)];
+/**
+* Günlük toplamlar (saniye), okuyucunun saatine göre. `live` henüz
+* kaydedilmemiş, şu an süren aralıklar: ekrandaki "bugün" canlı artıyor.
+*/
+function dailyTotals(log, live = []) {
+	const totals = /* @__PURE__ */ new Map();
+	const add = (day, seconds) => totals.set(day, (totals.get(day) ?? 0) + seconds);
+	for (const [start, end] of mergedIntervals([...log.sessions.map(intervalOf), ...live])) {
+		let cursor = start;
+		while (cursor < end) {
+			const at = new Date(cursor);
+			const midnight = addDaysLocal(at, 1).getTime();
+			const stop = Math.min(end, midnight);
+			add(dayKey(at), (stop - cursor) / 1e3);
+			cursor = stop;
+		}
+	}
+	for (const [day, seconds] of Object.entries(log.archive ?? {})) add(day, seconds);
+	for (const [day, seconds] of totals) totals.set(day, Math.min(86400, Math.round(seconds)));
+	return totals;
+}
+/**
+* Makale başına süre (saniye): her makalenin aralıklarının birleşimi, isteğe
+* bağlı bir zaman aralığıyla sınırlı. Makaleye bağlanmamış çalışma `""`
+* altında. Aynı anda iki makaleye çalışılamayacağı için değil, iki sayacın
+* aynı makaleye aynı anda sayması iki kez yazılmasın diye birleşim.
+*/
+function timeByProject(sessions, range = {}) {
+	const byProject = /* @__PURE__ */ new Map();
+	for (const session of sessions) {
+		const start = Math.max(Date.parse(session.start), range.from ?? -Infinity);
+		const end = Math.min(Date.parse(session.end), range.to ?? Infinity);
+		if (end <= start) continue;
+		const key = session.projectId ?? "";
+		byProject.set(key, [...byProject.get(key) ?? [], [start, end]]);
+	}
+	return new Map([...byProject].map(([key, intervals]) => [key, Math.round(mergedIntervals(intervals).reduce((sum, [start, end]) => sum + (end - start), 0) / 1e3)]).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])));
+}
+function startOfWeek(date, weekStart) {
+	return addDaysLocal(date, -((date.getDay() - weekStart + 7) % 7));
+}
+/** Günler üst üste: dünden bugüne mi. */
+const nextDay = (day) => dayKey(addDaysLocal(dayDate(day), 1));
+function workSummary(totals, now, options) {
+	const today = dayKey(now);
+	const weekFrom = dayKey(startOfWeek(now, options.weekStart));
+	const monthPrefix = today.slice(0, 8);
+	let week = 0;
+	let month = 0;
+	let total = 0;
+	let best;
+	let goalDaysThisWeek = 0;
+	for (const [day, seconds] of totals) {
+		if (day > today) continue;
+		total += seconds;
+		if (day >= weekFrom) {
+			week += seconds;
+			if (seconds >= options.goalMinutes * 60) goalDaysThisWeek += 1;
+		}
+		if (day.startsWith(monthPrefix)) month += seconds;
+		if (!best || seconds > best.seconds) best = {
+			day,
+			seconds
+		};
+	}
+	const active = [...totals].filter(([day, seconds]) => day <= today && seconds >= 60).map(([day]) => day).sort();
+	const activeSet = new Set(active);
+	let longestStreak = 0;
+	let run = 0;
+	active.forEach((day, index) => {
+		run = index && nextDay(active[index - 1]) === day ? run + 1 : 1;
+		longestStreak = Math.max(longestStreak, run);
+	});
+	let cursor = activeSet.has(today) ? now : addDaysLocal(now, -1);
+	let currentStreak = 0;
+	while (activeSet.has(dayKey(cursor))) {
+		currentStreak += 1;
+		cursor = addDaysLocal(cursor, -1);
+	}
+	return {
+		today: totals.get(today) ?? 0,
+		week,
+		month,
+		total,
+		activeDays: active.length,
+		average: active.length ? Math.round(active.reduce((sum, day) => sum + (totals.get(day) ?? 0), 0) / active.length) : 0,
+		...best && best.seconds > 0 ? { best } : {},
+		currentStreak,
+		longestStreak,
+		goalDaysThisWeek
+	};
+}
+const monthFormat = new Intl.DateTimeFormat("en", { month: "short" });
+/** "2h 15m", "45m", "under a minute". */
+function formatDuration(seconds) {
+	const whole = Math.max(0, Math.round(seconds));
+	if (whole > 0 && whole < 60) return "under a minute";
+	const hours = Math.floor(whole / 3600);
+	const minutes = Math.floor(whole % 3600 / 60);
+	if (!hours) return `${minutes}m`;
+	return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
 //#endregion
@@ -22839,4 +23243,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { REVIEW_INTERVALS_DAYS, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, decideAlias, defaultPublicationInclude, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseAliasFile, parseStudyFile, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, validateProjectObject };
+export { REVIEW_INTERVALS_DAYS, addDaysLocal, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseAliasFile, parseProfile, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, workSummary };

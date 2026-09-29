@@ -81,6 +81,13 @@ describe("focus cycles", () => {
     expect(STALE_MS).toBeGreaterThan(MIN);
   });
 
+  it("carries the paper a round is for into what it records", () => {
+    const run = startFocus(settings(), T0, { label: " Attention ", projectId: "attention" });
+    expect(pauseFocus(run, T0 + 5 * MIN).segments).toEqual([{ kind: "focus", start: T0, end: T0 + 5 * MIN, label: "Attention", projectId: "attention" }]);
+    expect(pauseStopwatch(startStopwatch(T0, { projectId: "bert" }), T0 + MIN).segments[0]).toMatchObject({ kind: "stopwatch", projectId: "bert" });
+    expect(startCountdown(MIN, T0, "Tea")).toMatchObject({ label: "Tea" });
+  });
+
   it("records the worked part when paused, skipped or stopped, and never a break", () => {
     const run = startFocus(settings(), T0);
     const paused = pauseFocus(run, T0 + 12 * MIN);

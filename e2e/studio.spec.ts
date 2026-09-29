@@ -1355,6 +1355,16 @@ test.describe("colour themes", () => {
         },
         ...(["Timer", "Stopwatch", "Alarms"] as const).map((tab) => ({ name: `focus ${tab}`, url: "/?focus=1", ready: ".focus-settings", open: async () => { await page.getByRole("tab", { name: tab }).click(); } })),
         {
+          name: "focus full screen",
+          url: "/?focus=1",
+          ready: ".focus-stage",
+          open: async () => {
+            await page.getByRole("tab", { name: "Focus" }).click();
+            await page.locator(".focus-hero h1").click();
+            await page.keyboard.press("f");
+          },
+        },
+        {
           name: "profile",
           url: "/?profile=1",
           ready: ".work-calendar-grid",
@@ -2397,7 +2407,13 @@ test.describe("focus timer and profile", () => {
   });
 
   test("keeps a profile, a calendar of worked days in the chosen colour, and the sessions behind each day", async ({ page, request }) => {
-    const start = new Date();
+    // Tarayıcının saati dün öğlende: gece yarısından hemen sonra koşan test "bugün" için ileride biten
+    // bir oturum yazamıyordu (sunucu geri çeviriyor). Günler tarayıcının "bugün"üne göre.
+    const noon = new Date();
+    noon.setDate(noon.getDate() - 1);
+    noon.setHours(12, 0, 0, 0);
+    await page.clock.install({ time: noon });
+    const start = new Date(noon);
     start.setHours(0, 5, 0, 0);
     const day = (offset: number) => new Date(start.getTime() - offset * 86_400_000);
     const worked = [0, 1, 2, 9].map((offset) => ({ id: `e2e-${offset}`, start: day(offset).toISOString(), end: new Date(day(offset).getTime() + (offset + 1) * 30 * 60_000).toISOString(), kind: "focus", label: `Paper ${offset}` }));
@@ -2455,5 +2471,80 @@ test.describe("focus timer and profile", () => {
     expect(file.kind).toBe("trace-work-data");
     expect(file.profile.firstName).toBe("Grace");
     expect(file.log.sessions).toHaveLength(4);
+  });
+});
+
+test.describe("focus on a paper", () => {
+  async function setProfile(request: APIRequestContext, change: (profile: Profile) => Profile) {
+    const { profile } = (await (await request.get("/api/profile")).json()) as { profile: Profile };
+    expect((await request.put("/api/profile", { data: { profile: change(profile) } })).ok()).toBe(true);
+  }
+  const sessions = async (request: APIRequestContext) => ((await (await request.get("/api/profile/sessions")).json()) as { log: WorkLog }).log.sessions;
+
+  test("counts the time for a paper named on the timer or started from its Lab, and shows it there and on the profile", async ({ page, request }) => {
+    const project = await seed(request, { ...projectNamed("e2e-focus-paper"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Focus paper" } } });
+    await setProfile(request, (profile) => ({ ...profile, preferences: { ...profile.preferences, sound: "none" } }));
+    await page.clock.install();
+    await page.goto("/?focus=1");
+    const field = page.getByLabel("What are you working on?");
+    await field.fill("Focus");
+    await expect(page.locator(".focus-linked")).toHaveCount(0);
+    await field.fill("focus paper");
+    await expect(page.locator(".focus-linked")).toHaveText("The time is counted for this paper in your library.");
+    await page.getByRole("button", { name: "Start focus" }).click();
+    await page.clock.runFor(3 * 60_000);
+    await page.getByRole("button", { name: "Pause" }).click();
+    await expect.poll(async () => (await sessions(request)).map((session) => [session.projectId, session.label])).toEqual([[project.id, "focus paper"]]);
+    await page.getByRole("button", { name: "Stop" }).click();
+
+    // Lab: makaleye ayrılan zaman ve buradan başlatılan tur.
+    await page.goto(`/?project=${project.id}`);
+    const offer = page.getByRole("region", { name: "Time on this paper" });
+    await expect(offer.locator("strong")).toHaveText("3m on this paper");
+    await offer.getByRole("button", { name: "Start a focus round" }).click();
+    await page.clock.runFor(2 * 60_000);
+    await expect(offer.locator("strong")).toHaveText("5m on this paper");
+    await expect(offer.getByRole("button", { name: /Focus round on this paper/ })).toBeVisible();
+
+    // Profil: makale başına süre; makaleye tıklayınca açılıyor.
+    await page.getByRole("button", { name: "Profile" }).click();
+    const byPaper = page.getByRole("region", { name: "Time by paper" });
+    await expect(byPaper.locator("li", { hasText: "Focus paper" }).locator("strong")).toHaveText("5m");
+    await byPaper.getByRole("button", { name: "Focus paper" }).click();
+    await expect(page.locator(".lab-section-header h1")).toHaveText("Focus paper");
+  });
+
+  test("starts and pauses from the keyboard, opens a full-screen timer, and keeps the background sound chosen", async ({ page, request }) => {
+    await setProfile(request, (profile) => ({ ...profile, preferences: { ...profile.preferences, sound: "none" } }));
+    await page.clock.install();
+    await page.goto("/?focus=1");
+    await page.locator(".focus-hero h1").click();
+    await page.keyboard.press("Space");
+    await page.clock.runFor(2_000);
+    await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+    await page.keyboard.press("f");
+    const stage = page.getByRole("dialog", { name: "Full-screen timer" });
+    await expect(stage).toBeVisible();
+    await expect(stage.locator(".focus-stage-time")).toHaveText("24:58");
+    await expect(stage.locator(".focus-stage-phase")).toHaveText("Focus · Round 1");
+    await page.keyboard.press("Space");
+    await expect(stage.getByRole("button", { name: "Resume" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(stage).toHaveCount(0);
+    await page.keyboard.press("3");
+    await expect(page.getByRole("tab", { name: "Stopwatch" })).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Space");
+    await page.clock.runFor(1_500);
+    await page.keyboard.press("l");
+    await expect(page.locator(".focus-laps tbody tr")).toHaveCount(1);
+    // Yazarken kısayol çalışmıyor.
+    await page.getByLabel("Label", { exact: true }).focus();
+    await page.keyboard.press("Space");
+    await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+
+    await page.keyboard.press("1");
+    await page.getByLabel("Background sound").selectOption("rain");
+    await expect(page.getByRole("button", { name: "Listen" })).toBeEnabled();
+    await expect.poll(async () => ((await (await request.get("/api/profile")).json()) as { profile: Profile }).profile.preferences.ambient).toBe("rain");
   });
 });

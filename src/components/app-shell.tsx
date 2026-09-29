@@ -583,6 +583,7 @@ function Studio() {
         onBack={() => setScreen(backFromWork)}
         onFocus={() => setScreen("focus")}
         onProgress={() => setScreen("progress")}
+        onOpen={openProject}
       />,
     );
   }

@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Turns a research paper (a PDF, a title, a DOI or a repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite one section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; to tell a reader which concepts they already studied in other papers and which cited works teach the rest, to order a library for reading, and to report a reader's study progress.
+description: Turns a research paper (a PDF, a title, a DOI or a repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite a section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; to tell a reader which concepts they already studied in other papers and which cited works teach the rest, to order a library for reading, and to report a reader's study progress and work time.
 ---
 
 # Trace Paper Studio
@@ -219,6 +219,16 @@ node scripts/trace-agent.mjs progress
 ```
 
 It reads the studio's study progress and prints counts, nothing estimated: papers finished and in progress, reviews remembered (`totals.remembered` of `totals.reviews`), questions right on the first try, cards by the days until their next review, the week ahead (days on this machine's clock, `timeZone`), the cards forgotten most (`hardest`), and what explaining a section again added. Give every share with its counts ("26 of 34 reviews remembered"); a percentage from a handful of reviews says little. For the hardest cards, suggest rereading where they come from in that paper rather than only reviewing again.
+
+## Work time
+
+When the user asks how much they worked or studied, how the week went against their goal, or which papers their time went to, run:
+
+```bash
+node scripts/trace-agent.mjs work [--days 14]
+```
+
+It reads the studio's Focus timer record (`~/.trace/focus-log.json`) and prints today, this week and this month against the daily goal, the streak, the last `--days` days, time by paper this week and in all (`papers`, a session counts for a paper when the user named it on the timer or started the round from its Lab), and the latest sessions. Time where two timers ran at once is counted once, and days follow this machine's clock (`timeZone`). Give times as written ("2h 15m"). It is the user's own record: never write it into a project.
 
 ## Model record
 

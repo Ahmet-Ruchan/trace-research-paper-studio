@@ -25,6 +25,8 @@ export { aliasBatches, conceptNames } from "./alias-proposals";
 export { conceptKeys } from "./concept-links";
 export { learningStats } from "./learning-stats";
 export { REVIEW_INTERVALS_DAYS } from "./review-schedule";
+export { displayName, parseProfile } from "./profile";
+export { addDaysLocal, dailyTotals, dayKey, formatDuration, parseWorkLog, startOfWeek, timeByProject, workSummary } from "./work-log";
 export {
   defaultPublicationInclude,
   expiryFromDays,

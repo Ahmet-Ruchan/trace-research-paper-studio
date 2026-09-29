@@ -12,6 +12,7 @@ import { useLibraryStudyState } from "../study-progress";
 import { useFocus, useFocusClock } from "./focus-provider";
 import { Avatar, ColorPicker, NumberField, Toggle } from "./focus-parts";
 import { StudioNav } from "./studio-nav";
+import { PaperTimeCard } from "./paper-time";
 import { WorkCalendar, type CalendarRange } from "./work-calendar";
 
 const kindLabel = { focus: "Focus", timer: "Timer", stopwatch: "Stopwatch", manual: "Added by hand" } as const;
@@ -356,12 +357,14 @@ export function ProfileView({
   onBack,
   onFocus,
   onProgress,
+  onOpen,
 }: {
   projects: ResearchProject[];
   backLabel: string;
   onBack: () => void;
   onFocus: () => void;
   onProgress: () => void;
+  onOpen: (project: ResearchProject) => void;
 }) {
   const { profile, saveProfile, log, logReady, liveIntervals, profileReady } = useFocus();
   const now = useFocusClock();
@@ -372,6 +375,11 @@ export function ProfileView({
   const today = useMemo(() => new Date(now || 0), [now]);
   const summary = workSummary(totals, today, { weekStart: preferences.weekStart, goalMinutes: preferences.dailyGoalMinutes });
   const years = calendarYears(totals, today);
+  // Makale başına süre, takvimde gösterilen aralıkta.
+  const paperRange = useMemo(() => {
+    if (range === "recent") return { from: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate() + 1).getTime(), label: "The last 12 months" };
+    return { from: new Date(range, 0, 1).getTime(), to: new Date(range + 1, 0, 1).getTime(), label: `In ${range}` };
+  }, [range, today]);
 
   const tiles = [
     { label: "Today", value: formatDuration(summary.today), note: `goal ${formatDuration(preferences.dailyGoalMinutes * 60)}` },
@@ -443,6 +451,7 @@ export function ProfileView({
       <div className="stats-columns profile-columns">
         <SessionsCard key={selected ?? "recent"} selected={selected} />
         <div className="profile-stack">
+          <PaperTimeCard projects={projects} onOpen={onOpen} range={paperRange} />
           <PreferencesCard />
           <StudyingCard projects={projects} onProgress={onProgress} />
           <DataCard />

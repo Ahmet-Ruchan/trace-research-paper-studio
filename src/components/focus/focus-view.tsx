@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AlarmClock, ArrowLeft, Bell, Flag, Hourglass, Pause, Play, Plus, RotateCcw, SkipForward, Square, Timer, Trash2, Watch } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AlarmClock, ArrowLeft, Bell, BookOpen, Flag, Hourglass, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, SkipForward, Square, Timer, Trash2, Volume2, Watch } from "lucide-react";
 import { focusColorStyle, type FocusColorId } from "@/lib/focus-colors";
-import { countdownRemaining, elapsedOf, lapTimes, nextAlarm } from "@/lib/focus-timer";
-import { MAX_ALARMS, type Alarm, type Preferences, type TimerMode } from "@/lib/profile";
+import { countdownRemaining, elapsedOf, lapTimes, nextAlarm, type Subject } from "@/lib/focus-timer";
+import { AMBIENT_SOUNDS, MAX_ALARMS, type Alarm, type AmbientId, type Preferences, type TimerMode } from "@/lib/profile";
 import type { ResearchProject } from "@/lib/schema";
 import { addDaysLocal, dailyTotals, dayKey, formatClock, formatDuration, startOfWeek, workSummary } from "@/lib/work-log";
 import { DisplayControl } from "../display-control";
@@ -38,11 +38,40 @@ function Controls({ children }: { children: ReactNode }) {
   return <div className="focus-controls">{children}</div>;
 }
 
-function FocusPanel({ papers }: { papers: string[] }) {
-  const { profile, store, actions } = useFocus();
+type Paper = { id: string; title: string };
+type Subjects = Record<"focus" | "timer" | "stopwatch", string>;
+
+/** Yazılan ad kütüphanedeki bir makalenin başlığıysa süre o makaleye yazılıyor. */
+function resolveSubject(text: string, papers: readonly Paper[]): Subject {
+  const label = text.trim();
+  const match = papers.find((paper) => paper.title.trim().toLocaleLowerCase("en") === label.toLocaleLowerCase("en"));
+  return { ...(label ? { label } : {}), ...(match ? { projectId: match.id } : {}) };
+}
+
+/** Ne üzerinde çalışıldığı: serbest metin ya da kütüphaneden bir makale. */
+function SubjectField({ label, placeholder, value, onChange, active, papers }: { label: string; placeholder: string; value: string; onChange: (text: string) => void; active?: Subject; papers: readonly Paper[] }) {
+  const shown = active ? active.label ?? "" : value;
+  const linked = active ? active.projectId : resolveSubject(value, papers).projectId;
+  const paper = linked ? papers.find((item) => item.id === linked) : undefined;
+  return (
+    <label className="focus-task">
+      <span>{label}</span>
+      <input list="focus-papers" placeholder={placeholder} maxLength={120} value={shown} disabled={Boolean(active)} onChange={(event) => onChange(event.target.value)} />
+      {paper ? (
+        <small className="focus-linked"><BookOpen size={13} aria-hidden="true" /> The time is counted for this paper in your library.</small>
+      ) : papers.length && !active ? (
+        <small className="focus-linked-hint">Choose a paper from your library to count the time for it.</small>
+      ) : null}
+    </label>
+  );
+}
+
+type PanelProps = { papers: readonly Paper[]; subject: string; onSubject: (text: string) => void; onStage: () => void };
+
+function FocusPanel({ papers, subject, onSubject, onStage }: PanelProps) {
+  const { profile, store, actions, previewAmbient } = useFocus();
   const now = useFocusClock();
   const setPreferences = usePreferences();
-  const [task, setTask] = useState("");
   const settings = profile.preferences.focus;
   const focus = store.focus;
   const shown = focusDisplay(focus, profile, now);
@@ -56,6 +85,7 @@ function FocusPanel({ papers }: { papers: string[] }) {
   return (
     <div className="focus-mode" style={focusColorStyle(profile.preferences.colors.focus)}>
       <section className="focus-dial-card" aria-label="Focus rounds">
+        <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
         <p className="focus-phase">
           <span className={`focus-phase-chip is-${shown.phase}`}>{shown.finished ? "Done" : phaseTitle[shown.phase]}</span>
           {shown.finished ? `${focus?.completed ?? 0} rounds done` : rounds}
@@ -69,7 +99,7 @@ function FocusPanel({ papers }: { papers: string[] }) {
         </ol>
         <Controls>
           {!active ? (
-            <button type="button" className="focus-primary" onClick={() => actions.startFocus(task)}><Play size={16} /> {focus?.finished ? "Start again" : "Start focus"}</button>
+            <button type="button" className="focus-primary" onClick={() => actions.startFocus(resolveSubject(subject, papers))}><Play size={16} /> {focus?.finished ? "Start again" : "Start focus"}</button>
           ) : shown.running ? (
             <button type="button" className="focus-primary" onClick={actions.pauseFocus}><Pause size={16} /> Pause</button>
           ) : (
@@ -78,18 +108,7 @@ function FocusPanel({ papers }: { papers: string[] }) {
           {active ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> {shown.phase === "work" ? "Skip to a break" : "Skip the break"}</button> : null}
           {focus ? <button type="button" onClick={actions.stopFocus}><Square size={14} /> Stop</button> : null}
         </Controls>
-        <label className="focus-task">
-          <span>What are you working on?</span>
-          <input
-            list="focus-papers"
-            placeholder="A paper, a chapter, a problem set…"
-            maxLength={120}
-            value={active ? focus?.label ?? "" : task}
-            disabled={active}
-            onChange={(event) => setTask(event.target.value)}
-          />
-          <datalist id="focus-papers">{papers.map((title) => <option key={title} value={title} />)}</datalist>
-        </label>
+        <SubjectField label="What are you working on?" placeholder="A paper, a chapter, a problem set…" value={subject} onChange={onSubject} active={active ? focus : undefined} papers={papers} />
       </section>
 
       <section className="focus-settings" aria-label="Focus settings">
@@ -110,6 +129,20 @@ function FocusPanel({ papers }: { papers: string[] }) {
         <Toggle checked={settings.autoStartBreaks} onChange={(autoStartBreaks) => setFocus({ autoStartBreaks })} label="Start breaks on their own" hint="Otherwise the timer waits for you after each round." />
         <Toggle checked={settings.autoStartWork} onChange={(autoStartWork) => setFocus({ autoStartWork })} label="Start the next round after a break" hint="With both on, rounds and breaks follow each other until you stop." />
         <p className="focus-note">Changes apply from the next round. Only focus time is counted as work, never a break.</p>
+        <div className="focus-ambient">
+          <label className="focus-select">
+            <span>Background sound</span>
+            <select value={profile.preferences.ambient} onChange={(event) => void setPreferences({ ambient: event.target.value as AmbientId })}>
+              {AMBIENT_SOUNDS.map((sound) => <option key={sound.id} value={sound.id}>{sound.label}</option>)}
+            </select>
+          </label>
+          <label className="profile-volume">
+            <span>Volume</span>
+            <input type="range" min={0} max={1} step={0.05} value={profile.preferences.ambientVolume} onChange={(event) => void setPreferences({ ambientVolume: Number(event.target.value) })} aria-valuetext={`${Math.round(profile.preferences.ambientVolume * 100)}%`} disabled={profile.preferences.ambient === "none"} />
+          </label>
+          <button type="button" className="focus-secondary" onClick={previewAmbient} disabled={profile.preferences.ambient === "none"}><Volume2 size={14} /> Listen</button>
+        </div>
+        <p className="focus-note">It plays during focus rounds and stops for breaks.</p>
         <h3>Colour</h3>
         <ColorPicker label="Focus colour" value={profile.preferences.colors.focus} onChange={(color) => void setPreferences({ colors: { ...profile.preferences.colors, focus: color } })} />
       </section>
@@ -117,11 +150,10 @@ function FocusPanel({ papers }: { papers: string[] }) {
   );
 }
 
-function TimerPanel() {
+function TimerPanel({ papers, subject, onSubject, onStage }: PanelProps) {
   const { profile, store, actions } = useFocus();
   const now = useFocusClock();
   const setPreferences = usePreferences();
-  const [label, setLabel] = useState("");
   const total = profile.preferences.timerSeconds;
   const timer = store.timer;
   const remaining = timer ? countdownRemaining(timer, now) : total * 1000;
@@ -131,9 +163,10 @@ function TimerPanel() {
   return (
     <div className="focus-mode" style={focusColorStyle(profile.preferences.colors.timer)}>
       <section className="focus-dial-card" aria-label="Timer">
+        <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
         <p className="focus-phase">
           <span className="focus-phase-chip">{timer?.done ? "Time’s up" : timer?.clock.running ? "Counting down" : timer ? "Paused" : "Timer"}</span>
-          {timer?.label ?? (label || "")}
+          {timer ? timer.label ?? "" : subject}
         </p>
         <Dial progress={timer ? 1 - remaining / timer.duration : 0} label={`Timer: ${formatClock(remaining, "up")} left`}>
           <strong className="focus-time">{formatClock(remaining, "up")}</strong>
@@ -141,7 +174,7 @@ function TimerPanel() {
         </Dial>
         <Controls>
           {!timer || timer.done ? (
-            <button type="button" className="focus-primary" onClick={() => actions.startTimer(total * 1000, label)}><Play size={16} /> {timer?.done ? "Start again" : "Start"}</button>
+            <button type="button" className="focus-primary" onClick={() => actions.startTimer(total * 1000, resolveSubject(subject, papers))}><Play size={16} /> {timer?.done ? "Start again" : "Start"}</button>
           ) : timer.clock.running ? (
             <button type="button" className="focus-primary" onClick={actions.pauseTimer}><Pause size={16} /> Pause</button>
           ) : (
@@ -150,10 +183,7 @@ function TimerPanel() {
           {timer ? <button type="button" onClick={() => actions.extendTimer(60_000)}><Plus size={15} /> 1 min</button> : null}
           {timer ? <button type="button" onClick={actions.stopTimer}><RotateCcw size={15} /> Reset</button> : null}
         </Controls>
-        <label className="focus-task">
-          <span>Label</span>
-          <input placeholder="Tea, a practice exam, a call…" maxLength={80} value={label} onChange={(event) => setLabel(event.target.value)} />
-        </label>
+        <SubjectField label="Label" placeholder="Tea, a practice exam, a paper…" value={subject} onChange={onSubject} active={timer && !timer.done ? timer : undefined} papers={papers} />
       </section>
 
       <section className="focus-settings" aria-label="Timer settings">
@@ -195,11 +225,10 @@ function LiveElapsed({ since, elapsed, running }: { since: number; elapsed: numb
   return <span ref={ref} className="focus-hundredths" aria-hidden="true">.00</span>;
 }
 
-function StopwatchPanel() {
+function StopwatchPanel({ papers, subject, onSubject, onStage }: PanelProps) {
   const { profile, store, actions } = useFocus();
   const now = useFocusClock();
   const setPreferences = usePreferences();
-  const [label, setLabel] = useState("");
   const stopwatch = store.stopwatch;
   const elapsed = stopwatch ? elapsedOf(stopwatch.clock, now) : 0;
   const laps = stopwatch ? lapTimes(stopwatch) : [];
@@ -209,9 +238,10 @@ function StopwatchPanel() {
   return (
     <div className="focus-mode" style={focusColorStyle(profile.preferences.colors.stopwatch)}>
       <section className="focus-dial-card" aria-label="Stopwatch">
+        <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
         <p className="focus-phase">
           <span className="focus-phase-chip">{stopwatch?.clock.running ? "Running" : stopwatch ? "Paused" : "Stopwatch"}</span>
-          {stopwatch?.label ?? (label || "")}
+          {stopwatch ? stopwatch.label ?? "" : subject}
         </p>
         <Dial progress={(elapsed % 60_000) / 60_000} label={`Stopwatch: ${formatClock(elapsed)}`}>
           <strong className="focus-time">
@@ -222,17 +252,14 @@ function StopwatchPanel() {
         </Dial>
         <Controls>
           {!stopwatch || !stopwatch.clock.running ? (
-            <button type="button" className="focus-primary" onClick={() => (stopwatch ? actions.resumeStopwatch() : actions.startStopwatch(label))}><Play size={16} /> {stopwatch ? "Resume" : "Start"}</button>
+            <button type="button" className="focus-primary" onClick={() => (stopwatch ? actions.resumeStopwatch() : actions.startStopwatch(resolveSubject(subject, papers)))}><Play size={16} /> {stopwatch ? "Resume" : "Start"}</button>
           ) : (
             <button type="button" className="focus-primary" onClick={actions.pauseStopwatch}><Pause size={16} /> Pause</button>
           )}
           {stopwatch?.clock.running ? <button type="button" onClick={actions.lapStopwatch}><Flag size={15} /> Lap</button> : null}
           {stopwatch ? <button type="button" onClick={actions.stopStopwatch}><RotateCcw size={15} /> Reset</button> : null}
         </Controls>
-        <label className="focus-task">
-          <span>Label</span>
-          <input placeholder="What you are timing" maxLength={80} value={stopwatch ? stopwatch.label ?? "" : label} disabled={Boolean(stopwatch)} onChange={(event) => setLabel(event.target.value)} />
-        </label>
+        <SubjectField label="Label" placeholder="What you are timing" value={subject} onChange={onSubject} active={stopwatch} papers={papers} />
       </section>
 
       <section className="focus-settings" aria-label="Stopwatch laps and settings">
@@ -448,12 +475,121 @@ function TodayCard({ onProfile }: { onProfile: () => void }) {
 }
 
 /**
+ * Tam ekran: yalnızca büyük saat, faz, bir ilerleme çizgisi ve iki düğme.
+ * Tarayıcı izin verirse gerçekten tam ekran; vermezse sayfayı kaplayan bir katman.
+ */
+function FocusStage({ tab, subject, papers, onClose }: { tab: Exclude<TimerMode, "alarm">; subject: string; papers: readonly Paper[]; onClose: () => void }) {
+  const { profile, store, actions } = useFocus();
+  const now = useFocusClock();
+  const ref = useRef<HTMLDivElement>(null);
+  const entered = useRef(false);
+
+  useEffect(() => {
+    const element = ref.current;
+    element?.focus();
+    const onChange = () => {
+      if (document.fullscreenElement) entered.current = true;
+      else if (entered.current) onClose();
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    if (element?.requestFullscreen && !document.fullscreenElement) void element.requestFullscreen().catch(() => undefined);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    };
+  }, [onClose]);
+
+  let time = "00:00";
+  let caption = "";
+  let progress = 0;
+  let label = "";
+  let running = false;
+  let color = profile.preferences.colors[tab];
+  if (tab === "focus") {
+    const shown = focusDisplay(store.focus, profile, now);
+    time = formatClock(shown.remaining, "up");
+    caption = shown.finished ? "All rounds done" : `${phaseTitle[shown.phase]} · Round ${shown.round}${profile.preferences.focus.rounds ? ` of ${profile.preferences.focus.rounds}` : ""}`;
+    progress = store.focus && !store.focus.finished ? 1 - shown.remaining / shown.total : 0;
+    label = store.focus?.label ?? subject;
+    running = shown.running;
+  } else if (tab === "timer") {
+    const timer = store.timer;
+    const remaining = timer ? countdownRemaining(timer, now) : profile.preferences.timerSeconds * 1000;
+    time = formatClock(remaining, "up");
+    caption = timer?.done ? "Time’s up" : "Timer";
+    progress = timer ? 1 - remaining / timer.duration : 0;
+    label = timer?.label ?? subject;
+    running = Boolean(timer?.clock.running);
+  } else {
+    const stopwatch = store.stopwatch;
+    time = formatClock(stopwatch ? elapsedOf(stopwatch.clock, now) : 0);
+    caption = "Stopwatch";
+    progress = stopwatch ? (elapsedOf(stopwatch.clock, now) % 60_000) / 60_000 : 0;
+    label = stopwatch?.label ?? subject;
+    running = Boolean(stopwatch?.clock.running);
+    color = profile.preferences.colors.stopwatch;
+  }
+  const toggle = () => primaryAction(tab, store, actions, profile.preferences.timerSeconds, resolveSubject(subject, papers));
+
+  return (
+    <div
+      ref={ref}
+      className="focus-stage"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Full-screen timer"
+      tabIndex={-1}
+      style={focusColorStyle(color)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      <p className="focus-stage-phase">{caption}</p>
+      <strong className="focus-stage-time" role="timer">{time}</strong>
+      {label ? <p className="focus-stage-label">{label}</p> : null}
+      <div className="focus-stage-bar" aria-hidden="true"><i style={{ width: `${Math.round(progress * 1000) / 10}%` }} /></div>
+      <div className="focus-controls">
+        <button type="button" className="focus-primary" onClick={toggle}>{running ? <><Pause size={16} /> Pause</> : <><Play size={16} /> {tab === "focus" && store.focus && !store.focus.finished ? "Resume" : "Start"}</>}</button>
+        {tab === "focus" && store.focus && !store.focus.finished ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> Skip</button> : null}
+        <button type="button" onClick={onClose}><Minimize2 size={15} /> Leave full screen</button>
+      </div>
+      <small className="focus-stage-keys">Space to start or pause · Esc to leave</small>
+    </div>
+  );
+}
+
+/** Boşluk tuşu ve tam ekrandaki düğme: sekmedeki sayacı başlat, duraklat ya da sürdür. */
+function primaryAction(tab: Exclude<TimerMode, "alarm">, store: ReturnType<typeof useFocus>["store"], actions: ReturnType<typeof useFocus>["actions"], timerSeconds: number, subject: Subject) {
+  if (tab === "focus") {
+    const focus = store.focus;
+    if (!focus || focus.finished) actions.startFocus(subject);
+    else if (focus.clock.running) actions.pauseFocus();
+    else actions.resumeFocus();
+  } else if (tab === "timer") {
+    const timer = store.timer;
+    if (!timer || timer.done) actions.startTimer(timerSeconds * 1000, subject);
+    else if (timer.clock.running) actions.pauseTimer();
+    else actions.resumeTimer();
+  } else {
+    const stopwatch = store.stopwatch;
+    if (!stopwatch) actions.startStopwatch(subject);
+    else if (stopwatch.clock.running) actions.pauseStopwatch();
+    else actions.resumeStopwatch();
+  }
+}
+
+const typing = (target: EventTarget | null) =>
+  target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName) || Boolean(target.closest("[role='radiogroup'], [role='tablist']")));
+
+/**
  * Çalışma saati: odak turları ve molalar, geri sayım, kronometre ve alarm.
  * Sayaçlar ekrandan çıkınca da sürüyor (`focus-provider.tsx`).
  */
 export function FocusView({ projects, backLabel, onBack, onProfile }: { projects: ResearchProject[]; backLabel: string; onBack: () => void; onProfile: () => void }) {
-  const { profile, profileError } = useFocus();
+  const { profile, profileError, store, actions } = useFocus();
   const now = useFocusClock();
+  const [subjects, setSubjects] = useState<Subjects>({ focus: "", timer: "", stopwatch: "" });
+  const [stage, setStage] = useState(false);
   const [tab, setTab] = useState<TimerMode>(() => {
     try {
       const saved = window.localStorage.getItem(TAB_KEY);
@@ -470,8 +606,44 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
       // yalnızca bu tarayıcıdaki bir kolaylık
     }
   };
-  const papers = useMemo(() => [...new Set(projects.map((project) => project.evidence.paper.title))].slice(0, 200), [projects]);
+  const papers = useMemo<Paper[]>(() => {
+    const seen = new Set<string>();
+    return projects.flatMap((project) => {
+      const title = project.evidence.paper.title;
+      if (seen.has(title)) return [];
+      seen.add(title);
+      return [{ id: project.id, title }];
+    }).slice(0, 300);
+  }, [projects]);
   const firstName = profile.firstName.trim();
+  const timerTab = tab === "alarm" ? undefined : tab;
+  const closeStage = useCallback(() => setStage(false), []);
+
+  // Klavye: boşluk başlat/duraklat, F tam ekran, S atla, L tur, 1–4 sekmeler. Yazarken ya da bir düğmedeyken değil.
+  const latest = useRef({ tab, store, actions, subjects, papers, timerSeconds: profile.preferences.timerSeconds });
+  useEffect(() => {
+    latest.current = { tab, store, actions, subjects, papers, timerSeconds: profile.preferences.timerSeconds };
+  });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented || typing(event.target)) return;
+      const current = latest.current;
+      const key = event.key.toLowerCase();
+      if (/^[1-4]$/.test(key)) {
+        choose(TABS[Number(key) - 1].id);
+        return;
+      }
+      if (current.tab === "alarm") return;
+      if (key === " ") {
+        event.preventDefault();
+        primaryAction(current.tab, current.store, current.actions, current.timerSeconds, resolveSubject(current.subjects[current.tab], current.papers));
+      } else if (key === "f") setStage((open) => !open);
+      else if (key === "s" && current.tab === "focus" && current.store.focus && !current.store.focus.finished) current.actions.skipFocus();
+      else if (key === "l" && current.tab === "stopwatch" && current.store.stopwatch?.clock.running) current.actions.lapStopwatch();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <main className="compare-page focus-page" style={focusColorStyle(profile.preferences.color)}>
@@ -516,11 +688,23 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
             })}
           </div>
           <div id="focus-tabpanel" role="tabpanel" aria-labelledby={`focus-tab-${tab}`}>
-            {tab === "focus" ? <FocusPanel papers={papers} /> : tab === "timer" ? <TimerPanel /> : tab === "stopwatch" ? <StopwatchPanel /> : <AlarmsPanel />}
+            {timerTab ? (
+              (() => {
+                const Panel = timerTab === "focus" ? FocusPanel : timerTab === "timer" ? TimerPanel : StopwatchPanel;
+                return <Panel papers={papers} subject={subjects[timerTab]} onSubject={(text) => setSubjects((current) => ({ ...current, [timerTab]: text }))} onStage={() => setStage(true)} />;
+              })()
+            ) : (
+              <AlarmsPanel />
+            )}
           </div>
+          <datalist id="focus-papers">{papers.map((paper) => <option key={paper.id} value={paper.title} />)}</datalist>
+          <p className="focus-keys">
+            <kbd>Space</kbd> start or pause · <kbd>F</kbd> full screen · <kbd>S</kbd> skip · <kbd>L</kbd> lap · <kbd>1</kbd>–<kbd>4</kbd> switch timers
+          </p>
         </div>
         <TodayCard onProfile={onProfile} />
       </div>
+      {stage && timerTab ? <FocusStage tab={timerTab} subject={subjects[timerTab]} papers={papers} onClose={closeStage} /> : null}
     </main>
   );
 }

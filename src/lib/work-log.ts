@@ -38,6 +38,8 @@ export const workSessionSchema = z
     end: instant,
     kind: z.enum(SESSION_KINDS),
     label: z.string().trim().max(120).optional(),
+    /** Kütüphanedeki makale: süre ona yazılıyor. */
+    projectId: z.string().trim().min(1).max(300).optional(),
     color: focusColorSchema.optional(),
   })
   .refine((session) => Date.parse(session.end) > Date.parse(session.start), "A session ends after it starts.")
@@ -87,7 +89,7 @@ export function addDaysLocal(date: Date, days: number) {
  * Kimlik aralığın başından türüyor; aynı aralığı iki kez kaydetmek tek kayıt.
  */
 export function sessionPieces(
-  base: { kind: SessionKind; label?: string; color?: WorkSession["color"]; id?: string },
+  base: { kind: SessionKind; label?: string; projectId?: string; color?: WorkSession["color"]; id?: string },
   startMs: number,
   endMs: number,
 ): WorkSession[] {
@@ -102,6 +104,7 @@ export function sessionPieces(
       end: new Date(to).toISOString(),
       kind: base.kind,
       ...(base.label?.trim() ? { label: base.label.trim().slice(0, 120) } : {}),
+      ...(base.projectId?.trim() ? { projectId: base.projectId.trim().slice(0, 300) } : {}),
       ...(base.color ? { color: base.color } : {}),
     });
   }
@@ -142,6 +145,28 @@ export function dailyTotals(log: Pick<WorkLog, "sessions" | "archive">, live: Re
   for (const [day, seconds] of Object.entries(log.archive ?? {})) add(day, seconds);
   for (const [day, seconds] of totals) totals.set(day, Math.min(86_400, Math.round(seconds)));
   return totals;
+}
+
+/**
+ * Makale başına süre (saniye): her makalenin aralıklarının birleşimi, isteğe
+ * bağlı bir zaman aralığıyla sınırlı. Makaleye bağlanmamış çalışma `""`
+ * altında. Aynı anda iki makaleye çalışılamayacağı için değil, iki sayacın
+ * aynı makaleye aynı anda sayması iki kez yazılmasın diye birleşim.
+ */
+export function timeByProject(sessions: readonly Pick<WorkSession, "start" | "end" | "projectId">[], range: { from?: number; to?: number } = {}) {
+  const byProject = new Map<string, Array<[number, number]>>();
+  for (const session of sessions) {
+    const start = Math.max(Date.parse(session.start), range.from ?? -Infinity);
+    const end = Math.min(Date.parse(session.end), range.to ?? Infinity);
+    if (end <= start) continue;
+    const key = session.projectId ?? "";
+    byProject.set(key, [...(byProject.get(key) ?? []), [start, end]]);
+  }
+  return new Map(
+    [...byProject]
+      .map(([key, intervals]) => [key, Math.round(mergedIntervals(intervals).reduce((sum, [start, end]) => sum + (end - start), 0) / 1000)] as const)
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])),
+  );
 }
 
 /**

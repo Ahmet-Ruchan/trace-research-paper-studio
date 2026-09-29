@@ -21,6 +21,11 @@ type StudioNavValue = { open: (target: StudioNavTarget) => void; current?: Studi
 const StudioNavContext = createContext<StudioNavValue | undefined>(undefined);
 export const StudioNavProvider = StudioNavContext.Provider;
 
+/** Üst menünün geçişleri: başka bir ekrandan çalışma saatini ya da profili açmak için. */
+export function useStudioNav() {
+  return useContext(StudioNavContext);
+}
+
 const phaseWord = { work: "focus", short: "short break", long: "long break" } as const;
 
 export function StudioNav() {

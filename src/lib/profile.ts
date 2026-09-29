@@ -26,6 +26,16 @@ export const SOUNDS = [
   { id: "none", label: "No sound" },
 ] as const;
 export type SoundId = (typeof SOUNDS)[number]["id"];
+
+/** Odak turu sürerken çalan arka plan sesi; ses dosyası yok, tarayıcıda üretiliyor. */
+export const AMBIENT_SOUNDS = [
+  { id: "none", label: "None" },
+  { id: "white", label: "White noise" },
+  { id: "brown", label: "Brown noise" },
+  { id: "rain", label: "Rain" },
+] as const;
+export type AmbientId = (typeof AMBIENT_SOUNDS)[number]["id"];
+export const ambientSchema = z.enum(AMBIENT_SOUNDS.map((sound) => sound.id) as [AmbientId, ...AmbientId[]]);
 export const soundSchema = z.enum(SOUNDS.map((sound) => sound.id) as [SoundId, ...SoundId[]]);
 
 export const TIMER_MODES = ["focus", "timer", "stopwatch", "alarm"] as const;
@@ -83,6 +93,9 @@ export const preferencesSchema = z.object({
   volume: z.number().min(0).max(1).default(0.6),
   /** Sekme arka plandayken masaüstü bildirimi. */
   notifications: z.boolean().default(false),
+  /** Odak turlarında arka plan sesi ve düzeyi. */
+  ambient: ambientSchema.default("none"),
+  ambientVolume: z.number().min(0).max(1).default(0.35),
 });
 export type Preferences = z.infer<typeof preferencesSchema>;
 

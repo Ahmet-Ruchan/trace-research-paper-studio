@@ -15,6 +15,16 @@ import {
   isStudyFile,
   learningStats,
   REVIEW_INTERVALS_DAYS,
+  addDaysLocal,
+  dailyTotals,
+  dayKey,
+  displayName,
+  formatDuration,
+  parseProfile,
+  parseWorkLog,
+  startOfWeek,
+  timeByProject,
+  workSummary,
   recordCheckedExplanation,
   aliasBatches,
   aliasMap,
@@ -338,6 +348,7 @@ Usage:
   node trace-agent.mjs record
   node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
   node trace-agent.mjs progress
+  node trace-agent.mjs work [--days <n>]
   node trace-agent.mjs concepts --names [--part <n>]
   node trace-agent.mjs alias --a "<name>" --b "<name>" [--different | --forget] [--proposed-by model] [--reason "<why>"]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
@@ -417,6 +428,11 @@ Usage:
             machine's clock, named in timeZone), the cards forgotten most, and
             what explaining a section again added. Counts only; reads the
             library only. No network, no model.
+  work      Prints the reader's work time from the studio's Focus timer
+            (~/.trace/focus-log.json): today, this week and month against the
+            daily goal, streaks, the last --days days (default 7), time by
+            paper this week and in all, and the latest sessions. Days on this
+            machine's clock. Reads only; no network, no model.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -2051,6 +2067,73 @@ function printProgress() {
   }, null, 2));
 }
 
+/**
+ * Çalışma saati (`work-log.ts`): stüdyonun profilindeki süreler. Günler bu
+ * makinenin saatine göre; oturumların birleşimi, iki sayacın aynı anda saydığı
+ * süre bir kez.
+ */
+function printWork(args) {
+  const days = args.days === undefined ? 7 : Number(args.days);
+  if (!Number.isInteger(days) || days < 1 || days > 366) throw new Error("--days must be a whole number from 1 to 366.");
+  const dataDirectory = traceDataDirectory();
+  const readJson = (name) => {
+    try {
+      return JSON.parse(readFileSync(join(dataDirectory, name), "utf8"));
+    } catch {
+      return undefined;
+    }
+  };
+  const now = new Date();
+  const profile = parseProfile(readJson("profile.json"), now.toISOString());
+  const log = parseWorkLog(readJson("focus-log.json"));
+  const { projects, files } = readLibrary();
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  const { weekStart, dailyGoalMinutes } = profile.preferences;
+  const totals = dailyTotals(log);
+  const summary = workSummary(totals, now, { weekStart, goalMinutes: dailyGoalMinutes });
+  const time = (seconds) => ({ seconds, time: formatDuration(seconds) });
+  const papers = (range) =>
+    [...timeByProject(log.sessions, range)].map(([projectId, seconds]) => ({
+      paper: projectId ? byId.get(projectId)?.evidence.paper.title ?? "A paper no longer in the library" : "Other work (no paper named)",
+      projectId: projectId || null,
+      ...(projectId && files.get(projectId) ? { file: files.get(projectId) } : {}),
+      ...time(seconds),
+    }));
+  const weekFrom = startOfWeek(now, weekStart);
+  console.log(JSON.stringify({
+    ok: true,
+    dataDirectory,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    reader: displayName(profile) || null,
+    dailyGoal: time(dailyGoalMinutes * 60),
+    today: time(summary.today),
+    thisWeek: { ...time(summary.week), weekStartsOn: weekStart === 1 ? "Monday" : "Sunday", goalMetOnDays: summary.goalDaysThisWeek },
+    thisMonth: time(summary.month),
+    allTime: { ...time(summary.total), daysWorked: summary.activeDays, dailyAverage: time(summary.average) },
+    streak: { current: summary.currentStreak, longest: summary.longestStreak },
+    bestDay: summary.best ? { day: summary.best.day, ...time(summary.best.seconds) } : null,
+    days: Array.from({ length: days }, (_, index) => {
+      const day = dayKey(addDaysLocal(now, index - days + 1));
+      return { day, ...time(totals.get(day) ?? 0) };
+    }),
+    papers: {
+      thisWeek: papers({ from: weekFrom.getTime(), to: addDaysLocal(weekFrom, 7).getTime() }),
+      allTime: papers({}),
+    },
+    latestSessions: log.sessions.slice(-10).reverse().map((session) => ({
+      kind: session.kind,
+      label: session.label ?? null,
+      paper: session.projectId ? byId.get(session.projectId)?.evidence.paper.title ?? null : null,
+      start: session.start,
+      end: session.end,
+      minutes: Math.round((Date.parse(session.end) - Date.parse(session.start)) / 60_000),
+    })),
+    note: log.sessions.length || Object.keys(log.archive).length
+      ? "Worked time from the studio's Focus timer, counted once where timers overlapped. Give times as written (\"2h 15m\"), compare with the daily goal, and name the papers the time went to. The reader's own record: do not write it into any project."
+      : "No work recorded yet. The studio's Focus timer (the Focus button in its header) records focus rounds, and the countdown and stopwatch if the reader counts them as work.",
+  }, null, 2));
+}
+
 async function main() {
 try {
   const [command, ...rest] = process.argv.slice(2);
@@ -2075,6 +2158,7 @@ try {
   else if (command === "record") printModelRecord();
   else if (command === "concepts") await printConcepts(args);
   else if (command === "progress") printProgress();
+  else if (command === "work") printWork(args);
   else if (command === "alias") recordAlias(args);
   else usage(1);
 } catch (error) {

@@ -36,11 +36,24 @@ export function elapsedOf(clock: Clock, now: number) {
 const startClock = (clock: Clock, now: number): Clock => ({ running: true, since: now, elapsed: clock.elapsed });
 const pauseClock = (clock: Clock, at: number): Clock => ({ running: false, since: 0, elapsed: elapsedOf(clock, at) });
 
-/** Kaydedilecek bir çalışma aralığı. */
-export type Segment = { kind: SessionKind; start: number; end: number; label?: string };
+/**
+ * Ne üzerinde çalışıldığı: serbest bir etiket ve, kütüphanedeki bir makale
+ * seçildiyse, onun kimliği. Süre o makaleye yazılıyor (`timeByProject`).
+ */
+export type Subject = { label?: string; projectId?: string };
 
-const segmentOf = (kind: SessionKind, clock: Clock, until: number, label?: string): Segment[] =>
-  clock.running && until - clock.since >= 1000 ? [{ kind, start: clock.since, end: until, ...(label ? { label } : {}) }] : [];
+/** Kaydedilecek bir çalışma aralığı. */
+export type Segment = { kind: SessionKind; start: number; end: number } & Subject;
+
+function subjectOf(input: string | Subject | undefined): Subject {
+  const subject = typeof input === "string" ? { label: input } : input ?? {};
+  const label = subject.label?.trim();
+  const projectId = subject.projectId?.trim();
+  return { ...(label ? { label } : {}), ...(projectId ? { projectId } : {}) };
+}
+
+const segmentOf = (kind: SessionKind, clock: Clock, until: number, subject: Subject = {}): Segment[] =>
+  clock.running && until - clock.since >= 1000 ? [{ kind, start: clock.since, end: until, ...subjectOf(subject) }] : [];
 
 export type FocusPhase = "work" | "short" | "long";
 
@@ -55,8 +68,7 @@ export type FocusRun = {
   waiting: boolean;
   /** İstenen tur sayısı tamamlandı. */
   finished: boolean;
-  label?: string;
-};
+} & Subject;
 
 export type TimerEvent =
   | { type: "phase-end"; from: FocusPhase; to: FocusPhase | "done"; at: number; autoStarted: boolean }
@@ -74,8 +86,8 @@ export function focusRound(run: Pick<FocusRun, "phase" | "completed">) {
   return run.phase === "work" ? run.completed + 1 : run.completed;
 }
 
-export function startFocus(settings: FocusSettings, now: number, label?: string): FocusRun {
-  return { phase: "work", completed: 0, clock: startClock(idleClock, now), duration: phaseMs(settings, "work"), waiting: false, finished: false, ...(label?.trim() ? { label: label.trim() } : {}) };
+export function startFocus(settings: FocusSettings, now: number, subject?: string | Subject): FocusRun {
+  return { phase: "work", completed: 0, clock: startClock(idleClock, now), duration: phaseMs(settings, "work"), waiting: false, finished: false, ...subjectOf(subject) };
 }
 
 export function focusRemaining(run: FocusRun, now: number) {
@@ -91,7 +103,7 @@ export function nextPhase(settings: FocusSettings, run: Pick<FocusRun, "phase" |
 }
 
 export function pauseFocus(run: FocusRun, now: number): Advance<FocusRun> {
-  return { run: { ...run, clock: pauseClock(run.clock, now) }, segments: run.phase === "work" ? segmentOf("focus", run.clock, now, run.label) : [], events: [] };
+  return { run: { ...run, clock: pauseClock(run.clock, now) }, segments: run.phase === "work" ? segmentOf("focus", run.clock, now, run) : [], events: [] };
 }
 
 /** Duraklatılmış fazı sürdürür ya da bekleyen fazı başlatır. */
@@ -113,13 +125,13 @@ function enter(settings: FocusSettings, run: FocusRun, next: { phase: FocusPhase
 
 /** Sıradaki faza geç: okuyucu istediği için hemen başlıyor. Odaktan atlanırsa çalışılan kısmı kaydediliyor ama tur sayılmıyor. */
 export function skipFocus(run: FocusRun, settings: FocusSettings, now: number): Advance<FocusRun> {
-  const segments = run.phase === "work" ? segmentOf("focus", run.clock, now, run.label) : [];
+  const segments = run.phase === "work" ? segmentOf("focus", run.clock, now, run) : [];
   const next = run.phase === "work" ? { phase: "short" as const, completed: run.completed } : { phase: "work" as const, completed: run.completed };
   return { run: enter(settings, run, next, now, true), segments, events: [] };
 }
 
 export function stopFocus(run: FocusRun, now: number): Segment[] {
-  return run.phase === "work" ? segmentOf("focus", run.clock, now, run.label) : [];
+  return run.phase === "work" ? segmentOf("focus", run.clock, now, run) : [];
 }
 
 /**
@@ -135,7 +147,7 @@ export function advanceFocus(run: FocusRun, settings: FocusSettings, now: number
   for (let guard = 0; guard < 500 && current.clock.running; guard += 1) {
     const endAt = current.clock.since + (current.duration - current.clock.elapsed);
     if (endAt > alive) break;
-    if (current.phase === "work") segments.push(...segmentOf("focus", current.clock, endAt, current.label));
+    if (current.phase === "work") segments.push(...segmentOf("focus", current.clock, endAt, current));
     const next = nextPhase(settings, current);
     if (next === "done") {
       current = { ...current, completed: current.completed + 1, clock: { running: false, since: 0, elapsed: current.duration }, finished: true, waiting: false };
@@ -147,7 +159,7 @@ export function advanceFocus(run: FocusRun, settings: FocusSettings, now: number
     current = enter(settings, current, next, endAt, auto);
   }
   if (alive < now && current.clock.running) {
-    if (current.phase === "work") segments.push(...segmentOf("focus", current.clock, alive, current.label));
+    if (current.phase === "work") segments.push(...segmentOf("focus", current.clock, alive, current));
     current = { ...current, clock: pauseClock(current.clock, alive) };
     events.push({ type: "interrupted", at: alive, timer: "focus" });
   }
@@ -158,10 +170,10 @@ export function advanceFocus(run: FocusRun, settings: FocusSettings, now: number
  * Geri sayım
  * ------------------------------------------------------------------ */
 
-export type CountdownRun = { duration: number; clock: Clock; done: boolean; label?: string };
+export type CountdownRun = { duration: number; clock: Clock; done: boolean } & Subject;
 
-export function startCountdown(duration: number, now: number, label?: string): CountdownRun {
-  return { duration, clock: startClock(idleClock, now), done: false, ...(label?.trim() ? { label: label.trim() } : {}) };
+export function startCountdown(duration: number, now: number, subject?: string | Subject): CountdownRun {
+  return { duration, clock: startClock(idleClock, now), done: false, ...subjectOf(subject) };
 }
 
 export function countdownRemaining(run: CountdownRun, now: number) {
@@ -169,7 +181,7 @@ export function countdownRemaining(run: CountdownRun, now: number) {
 }
 
 export function pauseCountdown(run: CountdownRun, now: number): Advance<CountdownRun> {
-  return { run: { ...run, clock: pauseClock(run.clock, now) }, segments: segmentOf("timer", run.clock, now, run.label), events: [] };
+  return { run: { ...run, clock: pauseClock(run.clock, now) }, segments: segmentOf("timer", run.clock, now, run), events: [] };
 }
 
 export function resumeCountdown(run: CountdownRun, now: number): CountdownRun {
@@ -189,12 +201,12 @@ export function advanceCountdown(run: CountdownRun, now: number, lastAlive: numb
   if (endAt <= alive) {
     return {
       run: { ...run, done: true, clock: { running: false, since: 0, elapsed: run.duration } },
-      segments: segmentOf("timer", run.clock, endAt, run.label),
+      segments: segmentOf("timer", run.clock, endAt, run),
       events: [{ type: "countdown-end", at: endAt, ...(run.label ? { label: run.label } : {}) }],
     };
   }
   if (alive < now) {
-    return { run: { ...run, clock: pauseClock(run.clock, alive) }, segments: segmentOf("timer", run.clock, alive, run.label), events: [{ type: "interrupted", at: alive, timer: "timer" }] };
+    return { run: { ...run, clock: pauseClock(run.clock, alive) }, segments: segmentOf("timer", run.clock, alive, run), events: [{ type: "interrupted", at: alive, timer: "timer" }] };
   }
   return { run, segments: [], events: [] };
 }
@@ -203,14 +215,14 @@ export function advanceCountdown(run: CountdownRun, now: number, lastAlive: numb
  * Kronometre
  * ------------------------------------------------------------------ */
 
-export type StopwatchRun = { clock: Clock; laps: number[]; label?: string };
+export type StopwatchRun = { clock: Clock; laps: number[] } & Subject;
 
-export function startStopwatch(now: number, label?: string): StopwatchRun {
-  return { clock: startClock(idleClock, now), laps: [], ...(label?.trim() ? { label: label.trim() } : {}) };
+export function startStopwatch(now: number, subject?: string | Subject): StopwatchRun {
+  return { clock: startClock(idleClock, now), laps: [], ...subjectOf(subject) };
 }
 
 export function pauseStopwatch(run: StopwatchRun, now: number): Advance<StopwatchRun> {
-  return { run: { ...run, clock: pauseClock(run.clock, now) }, segments: segmentOf("stopwatch", run.clock, now, run.label), events: [] };
+  return { run: { ...run, clock: pauseClock(run.clock, now) }, segments: segmentOf("stopwatch", run.clock, now, run), events: [] };
 }
 
 export function resumeStopwatch(run: StopwatchRun, now: number): StopwatchRun {
@@ -231,7 +243,7 @@ export function advanceStopwatch(run: StopwatchRun, now: number, lastAlive: numb
   if (!run.clock.running || now - lastAlive <= STALE_MS) return { run, segments: [], events: [] };
   return {
     run: { ...run, clock: pauseClock(run.clock, lastAlive) },
-    segments: segmentOf("stopwatch", run.clock, lastAlive, run.label),
+    segments: segmentOf("stopwatch", run.clock, lastAlive, run),
     events: [{ type: "interrupted", at: lastAlive, timer: "stopwatch" }],
   };
 }

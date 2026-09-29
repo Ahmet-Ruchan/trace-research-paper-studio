@@ -140,6 +140,7 @@ function bridgeSmoke(agent, bridge) {
     ["concepts --names", ["concepts", "--names"]],
     ["concepts --references", ["concepts", "--project", "paper.trace.json", "--references", "references.txt"]],
     ["progress", ["progress"]],
+    ["work", ["work", "--days", "3"]],
     ["section", ["section", "--project", "paper.trace.json", "--target", `primer:${project.primer.concepts[0].id}`]],
     ["explain", ["explain", "--project", "paper.trace.json", "--target", `story:${project.story.sections[0].id}`, "--text", "The paper replaces recurrence with attention, so every position can look at every other position in one step and training runs in parallel."]],
     ["deliver --no-open --no-app", ["deliver", "--project", "paper.trace.json", "--no-open", "--no-app", "--out", join(workspace, "site")]],

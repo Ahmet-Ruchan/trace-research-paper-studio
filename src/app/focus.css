@@ -96,7 +96,9 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .focus-tabs button[aria-selected="true"] svg { color: inherit; }
 .focus-mode { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 .focus-dial-card, .focus-settings, .focus-today { padding: 20px; border: 1px solid var(--line); border-radius: var(--radius-card, 16px); background: var(--surface); }
-.focus-dial-card { display: grid; justify-items: center; gap: 14px; border-top: 4px solid var(--focus-line); }
+.focus-dial-card { position: relative; display: grid; justify-items: center; gap: 14px; border-top: 4px solid var(--focus-line); }
+.focus-expand { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink-soft); cursor: pointer; }
+.focus-expand:hover { border-color: var(--line-dark); color: var(--ink); }
 .focus-phase { min-height: 26px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin: 0; color: var(--ink-soft); font-size: var(--text-sm); }
 .focus-phase-chip { padding: 3px 10px; border-radius: 999px; background: color-mix(in oklch, var(--focus) 16%, var(--surface)); color: var(--focus-ink); font-size: var(--text-xs); font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
 .focus-dial { position: relative; width: min(300px, 76vw); aspect-ratio: 1; }
@@ -153,6 +155,38 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .focus-sessions li > span:first-child { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .focus-sessions li > span:nth-child(2) { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
 .focus-sessions strong { font-variant-numeric: tabular-nums; }
+
+.focus-linked, .focus-linked-hint { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); line-height: 1.4; }
+.focus-linked { color: var(--focus-ink); font-weight: 600; }
+.focus-linked svg { display: inline-block; flex: none; }
+.focus-linked-hint { color: var(--ink-soft); }
+.focus-ambient { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.focus-keys { margin: 14px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.8; }
+.focus-keys kbd, .focus-stage-keys kbd { padding: 1px 6px; border: 1px solid var(--line-dark); border-bottom-width: 2px; border-radius: 5px; background: var(--surface); color: var(--ink); font: inherit; font-size: var(--text-xs); }
+
+/* ---------- Tam ekran ---------- */
+.focus-stage { position: fixed; inset: 0; z-index: 200; display: grid; place-content: center; justify-items: center; gap: 22px; padding: 24px; background: var(--paper); color: var(--ink); text-align: center; outline: none; }
+.focus-stage-phase { margin: 0; color: var(--focus-ink); font-size: var(--text-md); font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.focus-stage-time { font: 400 clamp(4.5rem, 19vw, 15rem)/1 Georgia, serif; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+.focus-stage-label { max-width: min(760px, 90vw); margin: 0; color: var(--ink-soft); font: var(--text-xl)/1.4 Georgia, serif; }
+.focus-stage-bar { width: min(640px, 82vw); height: 8px; overflow: hidden; border-radius: 999px; background: var(--track); }
+.focus-stage-bar i { display: block; height: 100%; border-radius: inherit; background: var(--focus-line); transition: width .5s linear; }
+.focus-stage-keys { color: var(--ink-soft); font-size: var(--text-sm); }
+
+/* ---------- Makaleye ayrılan zaman ---------- */
+.focus-offer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-left: 3px solid var(--focus-line); border-radius: 12px; background: var(--surface); }
+.focus-offer > svg { color: var(--focus-ink); }
+.focus-offer strong { display: block; font-size: var(--text-md); }
+.focus-offer p { margin: 4px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
+.focus-offer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.paper-time { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.paper-time li { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(80px, 1fr) auto; align-items: center; gap: 12px; font-size: var(--text-sm); }
+.paper-time button, .paper-time li > span:first-child { overflow: hidden; padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.paper-time li > span:first-child { color: var(--ink-soft); cursor: default; }
+.paper-time button:hover { text-decoration: underline; }
+.paper-time-bar { height: 10px; overflow: hidden; border-radius: 999px; background: var(--track); }
+.paper-time-bar i { display: block; height: 100%; border-radius: inherit; background: var(--focus-line); }
+.paper-time strong { font-variant-numeric: tabular-nums; }
 
 /* ---------- Bildirimler ---------- */
 .focus-alerts { position: fixed; z-index: 120; left: 24px; bottom: 24px; display: grid; gap: 10px; width: min(390px, calc(100vw - 48px)); }
@@ -225,6 +259,8 @@ button.work-cell { cursor: pointer; }
 }
 @media (max-width: 760px) {
   .focus-mode { grid-template-columns: 1fr; }
+  .focus-offer { grid-template-columns: auto minmax(0, 1fr); }
+  .focus-offer-actions { grid-column: 1 / -1; }
   .profile-identity { grid-template-columns: 1fr; justify-items: start; }
   .profile-form, .profile-manual { grid-template-columns: 1fr; }
 }
@@ -238,6 +274,6 @@ button.work-cell { cursor: pointer; }
   .workspace-actions .studio-nav-profile { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .focus-dial-progress, .focus-goal i, .focus-toggle button span, .focus-switch span { transition: none; }
+  .focus-dial-progress, .focus-goal i, .focus-toggle button span, .focus-switch span, .focus-stage-bar i { transition: none; }
   .studio-nav-focus.is-running > i, .focus-alert.is-ringing .focus-alert-icon { animation: none; }
 }

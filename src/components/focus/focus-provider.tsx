@@ -30,11 +30,12 @@ import {
   type FocusRun,
   type Segment,
   type StopwatchRun,
+  type Subject,
   type TimerEvent,
 } from "@/lib/focus-timer";
 import { emptyProfile, WORK_DATA_KIND, type Alarm, type Profile } from "@/lib/profile";
 import { addSessions, emptyWorkLog, formatClock, formatDuration, removeSession, sessionPieces, type WorkLog, type WorkSession } from "@/lib/work-log";
-import { playSound, unlockAudio } from "./focus-sound";
+import { playSound, setAmbient, stopAmbient, unlockAudio } from "./focus-sound";
 
 /**
  * Çalışma saatinin durumu, bütün ekranlar için.
@@ -117,17 +118,17 @@ function writeStore(store: FocusStore) {
 }
 
 export type FocusActions = {
-  startFocus: (label?: string) => void;
+  startFocus: (subject?: Subject) => void;
   pauseFocus: () => void;
   resumeFocus: () => void;
   skipFocus: () => void;
   stopFocus: () => void;
-  startTimer: (ms: number, label?: string) => void;
+  startTimer: (ms: number, subject?: Subject) => void;
   pauseTimer: () => void;
   resumeTimer: () => void;
   extendTimer: (ms: number) => void;
   stopTimer: () => void;
-  startStopwatch: (label?: string) => void;
+  startStopwatch: (subject?: Subject) => void;
   pauseStopwatch: () => void;
   resumeStopwatch: () => void;
   lapStopwatch: () => void;
@@ -152,6 +153,8 @@ export type FocusContextValue = {
   dismissAlert: (id: string) => void;
   runAlert: (alert: FocusAlert) => void;
   previewSound: () => void;
+  /** Arka plan sesini birkaç saniye çalar (odak turu sürmüyorsa sonra susuyor). */
+  previewAmbient: () => void;
 };
 
 const FocusContext = createContext<FocusContextValue | undefined>(undefined);
@@ -257,6 +260,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   const flushing = useRef(false);
   const lastFlush = useRef(0);
   const lastPersist = useRef(0);
+  const ambientPreview = useRef(false);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
 
   const commit = useCallback((next: FocusStore) => {
@@ -292,7 +296,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     const { preferences } = profileRef.current;
     const sessions = segments
       .filter((segment) => segment.kind === "focus" || segment.kind === "manual" || (segment.kind === "timer" ? preferences.timerCountsAsWork : preferences.stopwatchCountsAsWork))
-      .flatMap((segment) => sessionPieces({ kind: segment.kind, label: segment.label, color: preferences.colors[segment.kind === "manual" ? "focus" : segment.kind] }, segment.start, segment.end));
+      .flatMap((segment) =>
+        sessionPieces({ kind: segment.kind, label: segment.label, projectId: segment.projectId, color: preferences.colors[segment.kind === "manual" ? "focus" : segment.kind] }, segment.start, segment.end),
+      );
     if (!sessions.length) return current;
     setLog((existing) => addSessions(existing, sessions));
     return { ...current, pending: [...current.pending, ...sessions] };
@@ -352,7 +358,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   const tick = useCallback(() => {
     const at = Date.now();
     setNow((previous) => (Math.floor(previous / 1000) === Math.floor(at / 1000) ? previous : at));
-    if (!readyRef.current || !loadedRef.current || !isLeader(at)) return;
+    if (!readyRef.current || !loadedRef.current) return;
+    // Arka plan sesi de zil gibi yalnızca önder sekmede: iki sekme iki kez çalmasın.
+    if (!isLeader(at)) return stopAmbient();
     const profileNow = profileRef.current;
     let current = storeRef.current;
     // Dondurulan sekme yeniden çalıştı: arada sayfa açıktı, süre kesintisiz sayılıyor.
@@ -394,6 +402,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       const next = { ...profileNow, alarms: profileNow.alarms.map((alarm) => (onceRung.includes(alarm.id) ? { ...alarm, enabled: false } : alarm)) };
       void saveProfileRef.current(next);
     }
+    const { ambient, ambientVolume } = profileNow.preferences;
+    if (current.focus?.clock.running && current.focus.phase === "work" && ambient !== "none") setAmbient(ambient, ambientVolume);
+    else if (!ambientPreview.current) stopAmbient();
     current = record(segments, current);
     current = raise(alerts, { ...current, snoozes: current.snoozes.filter((snooze) => snooze.at > at) }, at);
     const ringing = current.alerts.some((alert) => alert.ringUntil > at);
@@ -511,6 +522,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     window.addEventListener("pagehide", onHide);
     return () => {
       window.clearInterval(interval);
+      stopAmbient();
       worker?.terminate();
       if (workerUrl) URL.revokeObjectURL(workerUrl);
       document.removeEventListener("visibilitychange", onVisible);
@@ -552,21 +564,21 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   const actions = useMemo<FocusActions>(() => {
     const settings = () => profileRef.current.preferences.focus;
     return {
-      startFocus: (label) =>
+      startFocus: (subject) =>
         act((current, at) => {
           if (current.focus && !current.focus.finished) return { store: { ...withoutAlerts(current, ["phase", "done"]), focus: resumeFocus(current.focus, at) } };
-          return { store: { ...withoutAlerts(current, ["phase", "done"]), focus: startFocus(settings(), at, label) } };
+          return { store: { ...withoutAlerts(current, ["phase", "done"]), focus: startFocus(settings(), at, subject) } };
         }),
       pauseFocus: () => act((current, at) => (current.focus ? (({ run, segments }) => ({ store: { ...current, focus: run }, segments }))(pauseFocus(current.focus, at)) : { store: current })),
       resumeFocus: () => act((current, at) => ({ store: { ...withoutAlerts(current, ["phase"]), ...(current.focus ? { focus: resumeFocus(current.focus, at) } : {}) } })),
       skipFocus: () => act((current, at) => (current.focus ? (({ run, segments }) => ({ store: { ...withoutAlerts(current, ["phase"]), focus: run }, segments }))(skipFocus(current.focus, settings(), at)) : { store: current })),
       stopFocus: () => act((current, at) => ({ store: { ...withoutAlerts(current, ["phase", "done"]), focus: undefined }, segments: current.focus ? stopFocus(current.focus, at) : [] })),
-      startTimer: (ms, label) => act((current, at) => ({ store: { ...withoutAlerts(current, ["timer"]), timer: startCountdown(ms, at, label) } })),
+      startTimer: (ms, subject) => act((current, at) => ({ store: { ...withoutAlerts(current, ["timer"]), timer: startCountdown(ms, at, subject) } })),
       pauseTimer: () => act((current, at) => (current.timer ? (({ run, segments }) => ({ store: { ...current, timer: run }, segments }))(pauseCountdown(current.timer, at)) : { store: current })),
       resumeTimer: () => act((current, at) => ({ store: { ...current, ...(current.timer ? { timer: resumeCountdown(current.timer, at) } : {}) } })),
       extendTimer: (ms) => act((current, at) => ({ store: { ...withoutAlerts(current, ["timer"]), ...(current.timer ? { timer: extendCountdown(current.timer, ms, at) } : {}) } })),
       stopTimer: () => act((current, at) => ({ store: { ...withoutAlerts(current, ["timer"]), timer: undefined }, segments: current.timer && !current.timer.done ? pauseCountdown(current.timer, at).segments : [] })),
-      startStopwatch: (label) => act((current, at) => ({ store: { ...current, stopwatch: current.stopwatch ? resumeStopwatch(current.stopwatch, at) : startStopwatch(at, label) } })),
+      startStopwatch: (subject) => act((current, at) => ({ store: { ...current, stopwatch: current.stopwatch ? resumeStopwatch(current.stopwatch, at) : startStopwatch(at, subject) } })),
       pauseStopwatch: () => act((current, at) => (current.stopwatch ? (({ run, segments }) => ({ store: { ...current, stopwatch: run }, segments }))(pauseStopwatch(current.stopwatch, at)) : { store: current })),
       resumeStopwatch: () => act((current, at) => ({ store: { ...current, ...(current.stopwatch ? { stopwatch: resumeStopwatch(current.stopwatch, at) } : {}) } })),
       lapStopwatch: () => act((current, at) => ({ store: { ...current, ...(current.stopwatch ? { stopwatch: lapStopwatch(current.stopwatch, at) } : {}) } })),
@@ -582,7 +594,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     (alert: FocusAlert) => {
       if (alert.action === "start-next" || (alert.action === "resume" && alert.resume === "focus")) actions.resumeFocus();
       else if (alert.action === "skip-break") actions.skipFocus();
-      else if (alert.action === "restart") actions.startFocus(storeRef.current.focus?.label);
+      else if (alert.action === "restart") actions.startFocus({ label: storeRef.current.focus?.label, projectId: storeRef.current.focus?.projectId });
       else if (alert.action === "extend") actions.extendTimer(60_000);
       else if (alert.action === "resume" && alert.resume === "timer") actions.resumeTimer();
       else if (alert.action === "resume" && alert.resume === "stopwatch") actions.resumeStopwatch();
@@ -660,6 +672,17 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     playSound(profileRef.current.preferences.sound, profileRef.current.preferences.volume);
   }, []);
 
+  const previewAmbient = useCallback(() => {
+    unlockAudio();
+    const { ambient, ambientVolume } = profileRef.current.preferences;
+    ambientPreview.current = true;
+    // Ses bağlamı ilk tıklamada açılıyor; bir an sonra çalmaya hazır.
+    window.setTimeout(() => setAmbient(ambient, ambientVolume), 50);
+    window.setTimeout(() => {
+      ambientPreview.current = false;
+    }, 4_000);
+  }, []);
+
   useEffect(() => {
     saveProfileRef.current = saveProfile;
   }, [saveProfile]);
@@ -682,14 +705,28 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       dismissAlert,
       runAlert,
       previewSound,
+      previewAmbient,
     }),
-    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
+    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, previewAmbient, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
   );
 
   return (
     <FocusContext.Provider value={value}>
       <ClockContext.Provider value={now}>{children}</ClockContext.Provider>
     </FocusContext.Provider>
+  );
+}
+
+/** Şu an süren ve çalışma sayılan aralıklar, oturum biçiminde (makalesiyle birlikte). */
+export function liveSessions(store: FocusStore, profile: Profile, now: number) {
+  const { preferences } = profile;
+  const runs = [
+    store.focus?.clock.running && store.focus.phase === "work" ? store.focus : undefined,
+    store.timer?.clock.running && preferences.timerCountsAsWork ? store.timer : undefined,
+    store.stopwatch?.clock.running && preferences.stopwatchCountsAsWork ? store.stopwatch : undefined,
+  ];
+  return runs.flatMap((run) =>
+    run && now > run.clock.since ? [{ start: new Date(run.clock.since).toISOString(), end: new Date(now).toISOString(), ...(run.projectId ? { projectId: run.projectId } : {}) }] : [],
   );
 }
 

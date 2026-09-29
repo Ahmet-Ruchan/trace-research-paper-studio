@@ -284,6 +284,14 @@ when the browser slows its timers or freezes the tab to save energy. Only when t
 the computer sleeps does the timer pause at that moment, and say so, instead of adding the night to
 your day.
 
+Name a paper from your library in **What are you working on?**, or press **Start a focus round** on
+a paper's overview in the Lab, and the time is counted for that paper: the Lab shows how long you
+have spent on it, and your profile lists your time by paper. **Background sound** plays white noise,
+brown noise or rain during focus rounds and stops for breaks, made in the browser with no audio
+file. The keyboard runs it too: <kbd>Space</kbd> starts or pauses, <kbd>F</kbd> opens a full-screen
+timer with nothing but the time, <kbd>S</kbd> skips, <kbd>L</kbd> marks a lap and <kbd>1</kbd>–<kbd>4</kbd>
+switch timers.
+
 ![The work timer](docs/images/focus.jpg)
 
 ### Your profile, and a calendar of the days you worked
@@ -292,8 +300,13 @@ The round button next to it is your **profile**: your name, role, institution, f
 email and a photo, all editable. Below them is a calendar like a contribution graph, one square per
 day, darker the closer you came to your daily goal, in the colour you choose; show the last twelve
 months or any past year, and choose a day to see its sessions. Around it are today against your
-goal, this week and month, your streak and longest streak, your daily average and your best day.
-Add time you worked without the timer, or delete a session started by mistake.
+goal, this week and month, your streak and longest streak, your daily average and your best day,
+and your time by paper for the period shown, where choosing a paper opens it. Add time you worked
+without the timer, or delete a session started by mistake. Your agent reads the same record:
+
+```text
+How much did I work this week, and on which papers? Use the Trace plugin.
+```
 
 Every minute is kept on your computer, in `~/.trace/profile.json` and `~/.trace/focus-log.json`, never
 in a paper and never sent anywhere. Writes are atomic, a damaged file is set aside rather than
@@ -853,7 +866,8 @@ projects migrate there automatically; removing a Library item removes its stored
 version history, its tags and your study progress on it, after an eight-second window to undo it.
 Earlier versions live under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`,
 study progress and review cards in `~/.trace/library/study.json`, saved templates under
-`~/.trace/templates`.
+`~/.trace/templates`, and your profile and worked time in `~/.trace/profile.json` and
+`~/.trace/focus-log.json`.
 
 ```bash
 git clone https://github.com/Ahmet-Ruchan/trace-research-paper-studio.git
@@ -947,6 +961,9 @@ npm run trace:agent -- concepts
 # The reader's learning statistics: reviews remembered, cards kept, the week ahead
 npm run trace:agent -- progress
 
+# The reader's work time from the Focus timer: today, the week, streaks, time by paper
+npm run trace:agent -- work --days 14
+
 # Concept names across the library (in parts for a large one: --part 2), and the reader's decision that two of them are one concept
 npm run trace:agent -- concepts --names
 npm run trace:agent -- alias --a "Dot product" --b "Scalar product"
@@ -1005,7 +1022,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.24.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.25.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 
