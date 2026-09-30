@@ -13,6 +13,7 @@ import { useFocus, useFocusClock } from "./focus-provider";
 import { Avatar, ColorPicker, NumberField, Toggle } from "./focus-parts";
 import { StudioNav } from "./studio-nav";
 import { PaperTimeCard } from "./paper-time";
+import { WeeklyReport } from "./weekly-report";
 import { WorkCalendar, type CalendarRange } from "./work-calendar";
 
 const longDate = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -447,6 +448,8 @@ export function ProfileView({
           <ColorPicker label="Calendar colour" value={preferences.color} onChange={(color) => void saveProfile({ ...profile, preferences: { ...preferences, color } })} />
         </div>
       </section>
+
+      {logReady && now ? <WeeklyReport projects={projects} onOpen={onOpen} /> : null}
 
       <div className="stats-columns profile-columns">
         <SessionsCard key={selected ?? "recent"} selected={selected} />

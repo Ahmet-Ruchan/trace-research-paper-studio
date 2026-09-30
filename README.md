@@ -311,10 +311,16 @@ day, darker the closer you came to your daily goal, in the colour you choose; sh
 months or any past year, and choose a day to see its sessions. Around it are today against your
 goal, this week and month, your streak and longest streak, your daily average and your best day,
 and your time by paper for the period shown, where choosing a paper opens it. Add time you worked
-without the timer, or delete a session started by mistake. Your agent reads the same record:
+without the timer, or delete a session started by mistake.
+
+**This week against last** sets the week so far against last week *up to the same moment*, so a
+Tuesday afternoon is not measured against a whole week: day by day in paired bars, and paper by
+paper with both weeks' time. Below it, **When you work** shades each hour of each weekday over the
+last four weeks and says which three hours hold most of your work and which day is your busiest.
+Your agent reads the same record:
 
 ```text
-How much did I work this week, and on which papers? Use the Trace plugin.
+How much did I work this week compared with last week, on which papers, and when in the day? Use the Trace plugin.
 ```
 
 Every minute is kept on your computer, in `~/.trace/profile.json` and `~/.trace/focus-log.json`, never
@@ -1189,7 +1195,8 @@ guide), predictions before every chart and derivation step, a guided study path 
 progress, explanations in the reader's own words checked against the evidence, spaced review across
 the library, concepts linked across papers with reading suggestions from the references and a reading order for
 the library, learning statistics, a work timer (focus rounds with breaks, countdown, stopwatch,
-alarms, due review cards offered in short breaks) with a profile and a calendar of the days worked, a learning
+alarms, due review cards offered in short breaks) with a profile, a calendar of the days worked and a
+weekly report, a learning
 health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim

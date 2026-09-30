@@ -215,6 +215,52 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .paper-time-bar i { display: block; height: 100%; border-radius: inherit; background: var(--focus-line); }
 .paper-time strong { font-variant-numeric: tabular-nums; }
 
+/* Haftalık rapor: bu hafta geçen haftayla, makaleler ve günün saatleri. */
+.profile-week > h2 { margin-bottom: 16px; }
+.week-report { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
+.week-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.week-figures div { display: grid; gap: 3px; }
+.week-figures span { color: var(--ink-soft); font-size: var(--text-xs); letter-spacing: .08em; text-transform: uppercase; }
+.week-figures strong { font: 400 2rem/1.1 Georgia, serif; font-variant-numeric: tabular-nums; }
+.week-figures .is-last strong { color: var(--ink-soft); }
+.week-figures small { color: var(--ink-soft); font-size: var(--text-sm); }
+.week-change { margin: 12px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
+.week-change.is-up, .week-change.is-down { color: var(--ink); font-weight: 560; }
+.week-bars { height: 128px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+.week-bars li { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; gap: 6px; }
+.week-bar-pair { width: 100%; max-width: 38px; height: 100%; display: flex; align-items: flex-end; gap: 3px; }
+.week-bar-pair i { flex: 1; border-radius: 4px 4px 0 0; }
+.week-bar-pair .is-this, .week-legend .is-this { background: var(--focus-line); }
+.week-bar-pair .is-last, .week-legend .is-last { background: color-mix(in oklch, var(--ink-soft) 32%, var(--surface)); }
+.week-bars small { color: var(--ink-soft); font-size: var(--text-xs); }
+.week-bars .is-today small { color: var(--ink); font-weight: 650; }
+.week-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 0; color: var(--ink-soft); font-size: var(--text-xs); }
+.week-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.week-legend i.is-last { margin-left: 10px; }
+.week-papers h3, .hour-pattern h3 { margin: 0 0 10px; font-size: var(--text-md); }
+.week-papers table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--text-sm); }
+.week-papers th, .week-papers td { padding: 8px 0 8px 10px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+.week-papers thead th { color: var(--ink-soft); font-size: var(--text-xs); font-weight: 500; }
+.week-papers th:first-child { width: 56%; padding-left: 0; text-align: left; }
+.week-papers tbody th { font-weight: 400; }
+.week-papers tbody th button { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.week-papers tbody th button:hover { text-decoration: underline; }
+.week-papers .is-other th { color: var(--ink-soft); }
+.hour-pattern { margin-top: 26px; }
+.hour-grid { max-width: 660px; display: grid; gap: 3px; }
+.hour-row { display: grid; grid-template-columns: 2.6rem repeat(24, minmax(0, 1fr)); align-items: center; gap: 3px; }
+.hour-row .work-cell { width: 100%; height: auto; aspect-ratio: 1; }
+.hour-day { color: var(--ink-soft); font-size: var(--text-xs); }
+.hour-axis small { overflow: visible; color: var(--ink-soft); font-size: var(--text-xs); white-space: nowrap; }
+@media (max-width: 900px) {
+  .week-report { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .hour-row { gap: 2px; }
+  .hour-grid { gap: 2px; }
+  .week-figures strong { font-size: 1.6rem; }
+}
+
 /* ---------- Bildirimler ---------- */
 .focus-alerts { position: fixed; z-index: 120; left: 24px; bottom: 24px; display: grid; gap: 10px; width: min(390px, calc(100vw - 48px)); }
 .focus-alert { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 16px; border: 1px solid var(--line); border-left: 5px solid var(--focus-line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }

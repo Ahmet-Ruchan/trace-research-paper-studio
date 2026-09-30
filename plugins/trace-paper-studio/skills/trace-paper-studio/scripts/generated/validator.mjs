@@ -21975,6 +21975,105 @@ function formatDuration(seconds) {
 }
 
 //#endregion
+//#region src/lib/work-report.ts
+/** Aynı yerel saat, `days` gün önce (yaz saati geçişinde de saat aynı kalıyor). */
+function sameTimeDaysAgo(now, days) {
+	return new Date(now.getFullYear(), now.getMonth(), now.getDate() - days, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+}
+function secondsWithin(intervals, from, to) {
+	let total = 0;
+	for (const [start, end] of intervals) total += Math.max(0, Math.min(end, to) - Math.max(start, from));
+	return Math.round(total / 1e3);
+}
+const intervalsOf = (sessions) => mergedIntervals(sessions.map((session) => [Date.parse(session.start), Date.parse(session.end)]));
+/**
+* `totals` gün toplamları (`dailyTotals`, arşiv ve süren sayaçlar dahil);
+* `sessions` makale ve "bu saate kadar" için aralıklar (süren sayaçlar dahil).
+*/
+function weekReport(sessions, totals, now, weekStart) {
+	const thisFrom = startOfWeek(now, weekStart);
+	const lastFrom = addDaysLocal(thisFrom, -7);
+	const week = (from) => Array.from({ length: 7 }, (_, index) => {
+		const day = dayKey(addDaysLocal(from, index));
+		return {
+			day,
+			seconds: totals.get(day) ?? 0
+		};
+	});
+	const thisDays = week(thisFrom);
+	const lastDays = week(lastFrom);
+	const today = dayKey(now);
+	const thisSeconds = thisDays.filter((item) => item.day <= today).reduce((sum, item) => sum + item.seconds, 0);
+	const lastSeconds = lastDays.reduce((sum, item) => sum + item.seconds, 0);
+	const byNow = secondsWithin(intervalsOf(sessions), lastFrom.getTime(), sameTimeDaysAgo(now, 7).getTime());
+	const range = (from) => ({
+		from: from.getTime(),
+		to: addDaysLocal(from, 7).getTime()
+	});
+	const current = timeByProject(sessions, range(thisFrom));
+	const previous = timeByProject(sessions, range(lastFrom));
+	const papers = [.../* @__PURE__ */ new Set([...current.keys(), ...previous.keys()])].map((projectId) => ({
+		projectId,
+		thisWeek: current.get(projectId) ?? 0,
+		lastWeek: previous.get(projectId) ?? 0
+	})).sort((left, right) => right.thisWeek - left.thisWeek || right.lastWeek - left.lastWeek || left.projectId.localeCompare(right.projectId));
+	return {
+		thisWeek: {
+			from: dayKey(thisFrom),
+			seconds: thisSeconds,
+			days: thisDays
+		},
+		lastWeek: {
+			from: dayKey(lastFrom),
+			seconds: lastSeconds,
+			days: lastDays,
+			byNow
+		},
+		change: thisSeconds - byNow,
+		papers
+	};
+}
+const PATTERN_WEEKS = 4;
+const HOUR_MS = 36e5;
+/** Günün saatlerine dağılım: aralıklar yerel saat sınırlarında bölünüyor. */
+function hourPattern(sessions, options) {
+	const cells = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+	for (const [start, end] of intervalsOf(sessions)) {
+		let cursor = Math.max(start, options.from);
+		const stop = Math.min(end, options.to);
+		while (cursor < stop) {
+			const moment = new Date(cursor);
+			const nextHour = new Date(moment.getFullYear(), moment.getMonth(), moment.getDate(), moment.getHours() + 1).getTime();
+			const until = Math.min(stop, nextHour > cursor ? nextHour : cursor + HOUR_MS);
+			cells[(moment.getDay() - options.weekStart + 7) % 7][moment.getHours()] += (until - cursor) / 1e3;
+			cursor = until;
+		}
+	}
+	const rounded = cells.map((row) => row.map((seconds) => Math.round(seconds)));
+	const byHour = Array.from({ length: 24 }, (_, hour) => rounded.reduce((sum, row) => sum + row[hour], 0));
+	const byDay = rounded.map((row) => row.reduce((sum, seconds) => sum + seconds, 0));
+	const total = byDay.reduce((sum, seconds) => sum + seconds, 0);
+	let peak;
+	if (total >= 60) for (let hour = 0; hour <= 21; hour += 1) {
+		const seconds = byHour[hour] + byHour[hour + 1] + byHour[hour + 2];
+		if (!peak || seconds > peak.seconds) peak = {
+			from: hour,
+			to: hour + 3,
+			seconds,
+			share: seconds / total
+		};
+	}
+	return {
+		cells: rounded,
+		byHour,
+		byDay,
+		total,
+		max: Math.max(0, ...rounded.flat()),
+		...peak ? { peak } : {}
+	};
+}
+
+//#endregion
 //#region src/lib/publications.ts
 /**
 * Paylaşılabilir yayınlar.
@@ -23248,4 +23347,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { REVIEW_INTERVALS_DAYS, addDaysLocal, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseAliasFile, parseProfile, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseAliasFile, parseProfile, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, weekReport, workSummary };

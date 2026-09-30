@@ -224,7 +224,7 @@ describe("time by paper", () => {
       writeFileSync(join(workspace, "library", "english.trace.json"), JSON.stringify(english));
       const now = Date.now();
       const minutes = (from: number, to: number, projectId?: string, id = `s${from}`): WorkSession => ({ id, start: new Date(now - from * 60_000).toISOString(), end: new Date(now - to * 60_000).toISOString(), kind: "focus", ...(projectId ? { projectId } : {}) });
-      const log = addSessions(emptyWorkLog(), [minutes(50, 25, english.id), minutes(20, 10), minutes(40, 30, "gone")]);
+      const log = addSessions(emptyWorkLog(), [minutes(50, 25, english.id), minutes(20, 10), minutes(40, 30, "gone"), minutes(7 * 1440 + 30, 7 * 1440 + 10, english.id)]);
       writeFileSync(join(workspace, "focus-log.json"), JSON.stringify(log));
       writeFileSync(join(workspace, "profile.json"), JSON.stringify({ version: 1, firstName: "Ada", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z" }));
       const run = spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "work", "--days", "3"], { encoding: "utf8", env: { ...process.env, TRACE_DATA_DIR: workspace } });
@@ -232,7 +232,13 @@ describe("time by paper", () => {
       const report = JSON.parse(run.stdout) as { reader: string; timeZone: string; days: unknown[]; allTime: { seconds: number }; papers: { allTime: Array<{ paper: string; projectId: string | null; seconds: number }> } };
       expect(report).toMatchObject({ reader: "Ada", timeZone: "Europe/Istanbul" });
       expect(report.days).toHaveLength(3);
-      expect(report.papers.allTime.map((item) => [item.projectId, item.seconds])).toEqual([[english.id, 25 * 60], [null, 10 * 60], ["gone", 10 * 60]]);
+      expect(report.papers.allTime.map((item) => [item.projectId, item.seconds])).toEqual([[english.id, 45 * 60], [null, 10 * 60], ["gone", 10 * 60]]);
+      // Geçen haftayla karşılaştırma ve günün saatleri (son dört hafta).
+      const extra = JSON.parse(run.stdout) as { againstLastWeek: { days: unknown[]; change: { direction: string } }; hoursOfDay: { busiestHours: { from: string } | null; byHour: Array<{ minutes: number }> } };
+      expect(extra.againstLastWeek.days).toHaveLength(7);
+      expect(["more", "less", "same"]).toContain(extra.againstLastWeek.change.direction);
+      expect(extra.hoursOfDay.busiestHours?.from).toMatch(/^\d{2}:00$/);
+      expect(Math.abs(extra.hoursOfDay.byHour.reduce((sum, item) => sum + item.minutes, 0) - 55)).toBeLessThanOrEqual(2); // 25 + 10 + 20: iç içe oturum bir kez
       expect(report.papers.allTime[0].paper).toBe(english.evidence.paper.title);
       expect(report.papers.allTime[2].paper).toBe("A paper no longer in the library");
       expect(spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "work", "--days", "0"], { encoding: "utf8", env: { ...process.env, TRACE_DATA_DIR: workspace } }).status).toBe(1);

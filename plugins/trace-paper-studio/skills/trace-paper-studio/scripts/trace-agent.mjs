@@ -25,6 +25,9 @@ import {
   startOfWeek,
   timeByProject,
   workSummary,
+  weekReport,
+  hourPattern,
+  PATTERN_WEEKS,
   recordCheckedExplanation,
   aliasBatches,
   aliasMap,
@@ -2100,6 +2103,11 @@ function printWork(args) {
       ...time(seconds),
     }));
   const weekFrom = startOfWeek(now, weekStart);
+  const report = weekReport(log.sessions, totals, now, weekStart);
+  const tomorrow = addDaysLocal(now, 1).getTime();
+  const pattern = hourPattern(log.sessions, { from: addDaysLocal(now, 1 - PATTERN_WEEKS * 7).getTime(), to: tomorrow, weekStart });
+  const hour = (value) => `${String(value).padStart(2, "0")}:00`;
+  const weekdays = Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat("en", { weekday: "long" }).format(addDaysLocal(weekFrom, index)));
   console.log(JSON.stringify({
     ok: true,
     dataDirectory,
@@ -2116,8 +2124,21 @@ function printWork(args) {
       const day = dayKey(addDaysLocal(now, index - days + 1));
       return { day, ...time(totals.get(day) ?? 0) };
     }),
+    againstLastWeek: {
+      lastWeek: time(report.lastWeek.seconds),
+      lastWeekByThisTime: time(report.lastWeek.byNow),
+      change: { ...time(Math.abs(report.change)), direction: Math.abs(report.change) < 60 ? "same" : report.change > 0 ? "more" : "less" },
+      days: report.thisWeek.days.map((day, index) => ({ day: day.day, thisWeek: time(day.seconds), lastWeek: time(report.lastWeek.days[index].seconds) })),
+    },
+    hoursOfDay: {
+      weeks: PATTERN_WEEKS,
+      busiestHours: pattern.peak ? { from: hour(pattern.peak.from), to: hour(pattern.peak.to), share: Math.round(pattern.peak.share * 100) / 100 } : null,
+      busiestDay: pattern.total ? weekdays[pattern.byDay.indexOf(Math.max(...pattern.byDay))] : null,
+      byHour: pattern.byHour.map((seconds, index) => ({ hour: hour(index), minutes: Math.round(seconds / 60) })).filter((item) => item.minutes > 0),
+    },
     papers: {
       thisWeek: papers({ from: weekFrom.getTime(), to: addDaysLocal(weekFrom, 7).getTime() }),
+      lastWeek: papers({ from: addDaysLocal(weekFrom, -7).getTime(), to: weekFrom.getTime() }),
       allTime: papers({}),
     },
     latestSessions: log.sessions.slice(-10).reverse().map((session) => ({

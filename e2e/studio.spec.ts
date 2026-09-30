@@ -2539,6 +2539,51 @@ test.describe("focus timer and profile", () => {
   });
 });
 
+test.describe("weekly report", () => {
+  test.use({ timezoneId: "Europe/Istanbul" });
+
+  test("sets this week against last week by the same moment, by day and by paper, and shows the hours worked", async ({ page, request }) => {
+    const project = await seed(request, { ...projectNamed("e2e-weekly"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Weekly paper" } } });
+    const span = (id: string, day: string, from: string, to: string, projectId?: string) => ({
+      id,
+      kind: "focus",
+      start: new Date(`${day}T${from}:00+03:00`).toISOString(),
+      end: new Date(`${day}T${to}:00+03:00`).toISOString(),
+      ...(projectId ? { projectId } : {}),
+    });
+    const response = await request.post("/api/profile/sessions", {
+      data: {
+        sessions: [
+          span("w1", "2026-09-07", "09:00", "11:00", project.id), // geçen pazartesi
+          span("w2", "2026-09-09", "10:00", "11:00"), // geçen çarşamba, bu saatten önce
+          span("w3", "2026-09-09", "16:00", "18:00", project.id), // geçen çarşamba, bu saatten sonra
+          span("w4", "2026-09-14", "09:00", "12:00", project.id),
+          span("w5", "2026-09-16", "13:00", "14:30"),
+        ],
+      },
+    });
+    expect(response.ok()).toBe(true);
+    // Tarayıcının saati 16 Eylül 2026 çarşamba 15:00.
+    await page.clock.install({ time: new Date("2026-09-16T15:00:00+03:00") });
+    await page.goto("/?profile=1");
+    const report = page.getByRole("region", { name: "Week by week" });
+    await expect(report.locator(".week-figures")).toContainText("This week4h 30msince Sep 14");
+    await expect(report.locator(".week-figures .is-last")).toContainText("5h");
+    await expect(report.locator(".week-figures .is-last small")).toHaveText("3h by this time");
+    await expect(report.locator(".week-change")).toHaveText("1h 30m more than last week by this time (+50%).");
+    await expect(report.getByRole("list", { name: "Day by day" }).locator("li").first()).toHaveAttribute("aria-label", "Mon: 3h this week, 2h last week");
+    await expect(report.getByRole("list", { name: "Day by day" }).locator("li").nth(3)).toHaveAttribute("aria-label", "Thu: still to come this week, 0m last week");
+
+    const table = report.locator(".week-papers table");
+    await expect(table.locator("tbody tr").first()).toHaveText(/Weekly paper\s*3h\s*4h/);
+    await expect(table.locator("tr.is-other")).toHaveText(/Other work\s*1h 30m\s*1h/);
+    await expect(report.locator(".hour-pattern .focus-note")).toHaveText("Over the last 4 weeks, 63% of your work fell between 9:00 and 12:00, and Monday was your busiest day.");
+    await expect(report.locator(".hour-row").first().locator(".work-cell").nth(10)).toHaveAttribute("title", "Monday, 10:00–11:00: 2h");
+    await table.getByRole("button", { name: "Weekly paper" }).click();
+    await expect(page.locator(".lab-section-header h1")).toHaveText("Weekly paper");
+  });
+});
+
 test.describe("focus on a paper", () => {
   async function setProfile(request: APIRequestContext, change: (profile: Profile) => Profile) {
     const { profile } = (await (await request.get("/api/profile")).json()) as { profile: Profile };
