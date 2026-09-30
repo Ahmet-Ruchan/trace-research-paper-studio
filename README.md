@@ -353,7 +353,9 @@ your study progress and review cards, notes and highlights, reading list, tags a
 and, unless you untick it, the papers themselves. Importing it on another computer merges it with
 what is there and removes nothing: a paper you already have is kept as it is, the same note keeps
 its newer copy, study progress merges as it does between two devices, and a concept decision you made
-there is not overridden. The message after the import says what came in.
+there is not overridden. The message after the import says what came in. Once a week the studio
+also writes the same file, papers included, to `~/.trace/backups/trace-data-<day>.json` by itself,
+keeping the last four, so a deleted folder or a damaged disk sector costs at most a week.
 
 ![Your profile and work calendar](docs/images/profile.jpg)
 
@@ -934,7 +936,8 @@ projects migrate there automatically; removing a Library item removes its stored
 version history, its tags, your study progress and your notes on it, after an eight-second window
 to undo it. Earlier versions live under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`,
 study progress and review cards in `~/.trace/library/study.json`, your notes and highlights in
-`~/.trace/library/notes.json` (a copy of each of the last seven days in `~/.trace/backups`), the
+`~/.trace/library/notes.json` (a copy of each of the last seven days in `~/.trace/backups`, beside a
+weekly backup of everything), the
 works saved to read later in `~/.trace/library/reading-list.json`, saved templates under
 `~/.trace/templates`, and your profile and worked time in `~/.trace/profile.json` and
 `~/.trace/focus-log.json`.

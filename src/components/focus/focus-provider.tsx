@@ -482,6 +482,12 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Haftalık tam yedek (`backup-storage.ts`): açılıştan biraz sonra, ilk yüklemelerle yarışmadan. Sunucu haftada birden fazla yazmıyor.
+  useEffect(() => {
+    const timer = window.setTimeout(() => void fetch("/api/backup", { method: "POST" }).catch(() => undefined), 4000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     const interval = window.setInterval(tick, 500);
     /**

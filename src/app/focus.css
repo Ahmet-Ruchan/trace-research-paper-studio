@@ -217,6 +217,7 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .paper-time strong { font-variant-numeric: tabular-nums; }
 .profile-data-papers { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; color: var(--ink-soft); font-size: var(--text-sm); cursor: pointer; }
 .profile-data-papers input { width: 16px; height: 16px; accent-color: var(--focus-line); }
+.profile-weekly-backup { margin: 0 0 10px; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; }
 
 /* Haftalık rapor: bu hafta geçen haftayla, makaleler ve günün saatleri. */
 .profile-week > h2 { margin-bottom: 16px; }

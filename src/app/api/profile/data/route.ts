@@ -1,21 +1,19 @@
 import { parseAliasFile } from "@/lib/concept-aliases";
-import { backupFileSchema, BACKUP_VERSION, emptyBackupSummary, mergeAliasFiles, mergeNotes, mergeTags, type BackupSummary } from "@/lib/full-backup";
-import { libraryTagsToJson, parseLibraryTags } from "@/lib/library-tags";
-import { isProfile, profileSchema, WORK_DATA_KIND } from "@/lib/profile";
-import { notesFileToJson, parseNotesFile } from "@/lib/reader-notes";
-import { addToReadingList, parseReadingList, readingListToJson } from "@/lib/reading-list";
+import { collectBackup } from "@/lib/backup-storage";
+import { backupFileSchema, emptyBackupSummary, mergeAliasFiles, mergeNotes, mergeTags, type BackupSummary } from "@/lib/full-backup";
+import { parseLibraryTags } from "@/lib/library-tags";
+import { isProfile, profileSchema } from "@/lib/profile";
+import { parseNotesFile } from "@/lib/reader-notes";
+import { addToReadingList, parseReadingList } from "@/lib/reading-list";
 import { researchProjectSchema } from "@/lib/schema";
-import { studyFileToJson, parseStudyFile } from "@/lib/study-path";
+import { parseStudyFile } from "@/lib/study-path";
 import { mergeStudyProgress } from "@/lib/study-transfer";
 import { mergeWorkLogs } from "@/lib/work-log";
 import {
   listStoredProjects,
   readAllReaderNotes,
   readAllStudyProgress,
-  readConceptAliases,
   readLibraryTags,
-  readProfile,
-  readReadingList,
   readStoredProject,
   readWorkLog,
   saveReaderNotes,
@@ -47,31 +45,7 @@ function noStore(body: unknown, init?: ResponseInit) {
 export async function GET(request?: Request) {
   try {
     const withPapers = request ? new URL(request.url).searchParams.get("papers") !== "0" : true;
-    const [profile, log, study, notes, readingList, tags, aliases, papers] = await Promise.all([
-      readProfile(),
-      readWorkLog(),
-      readAllStudyProgress(),
-      readAllReaderNotes(),
-      readReadingList(),
-      readLibraryTags(),
-      readConceptAliases(),
-      withPapers ? listStoredProjects() : Promise.resolve(undefined),
-    ]);
-    return noStore({
-      kind: WORK_DATA_KIND,
-      version: BACKUP_VERSION,
-      exportedAt: new Date().toISOString(),
-      profile,
-      log,
-      library: {
-        study: studyFileToJson(study),
-        notes: notesFileToJson(notes),
-        readingList: readingListToJson(readingList),
-        tags: libraryTagsToJson(tags),
-        aliases,
-        ...(papers ? { papers } : {}),
-      },
-    });
+    return noStore(await collectBackup({ withPapers }));
   } catch (error) {
     return noStore({ error: error instanceof Error ? error.message : "Your data could not be read." }, { status: 500 });
   }

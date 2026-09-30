@@ -2569,6 +2569,21 @@ test.describe("focus timer and profile", () => {
     expect(file.library).toMatchObject({ papers: [], study: { version: 1 }, notes: { version: 1 }, readingList: { version: 1 } });
   });
 
+  test("writes the weekly backup of everything when the studio opens, and says when on the profile", async ({ page, request }) => {
+    const paper = await seed(request, projectNamed("e2e-weekly-backup"));
+    await page.goto("/?profile=1");
+    const data = page.getByRole("region", { name: "Your data" });
+    await expect(data.locator(".profile-weekly-backup")).toContainText("The first one is written as soon as there is something to keep.");
+    // Açılıştan birkaç saniye sonra yazılıyor; bir hafta içinde ikincisi yok.
+    await expect.poll(async () => ((await (await request.get("/api/backup")).json()) as { backups: unknown[] }).backups.length, { timeout: 15_000 }).toBe(1);
+    await page.reload();
+    await expect(data.locator(".profile-weekly-backup")).toContainText(/Latest: \w+ \d+, \d{4} \(\d+ kB\)\./);
+    const again = (await (await request.post("/api/backup")).json()) as { written: boolean; backups: Array<{ day: string }> };
+    expect(again.written).toBe(false);
+    expect(again.backups).toHaveLength(1);
+    expect(paper.id).toBe("e2e-weekly-backup");
+  });
+
   test("restores everything from one file on an empty computer: papers, notes, reading list and study progress", async ({ page, request }) => {
     const paper = projectNamed("e2e-backup");
     const at = new Date(Date.now() - 86_400_000).toISOString();

@@ -30,8 +30,16 @@ yapıldığı ve nasıl test edildiği yazıyor.
   - *Test:* birleştirme kuralları ve iki bilgisayar arasında gidiş-dönüş (aynı dosya ikinci kez
     yüklenince hiçbir şey çoğalmıyor) birim testlerde; boş bir kütüphaneye arayüzden yükleme
     e2e'de.
-- [ ] **24. Otomatik tam yedek.** Aynı tam yedek haftada bir kendiliğinden
+- [x] **24. Otomatik tam yedek.** Aynı tam yedek haftada bir kendiliğinden
   `~/.trace/backups` içine alınır.
+  - *Yapıldı:* Stüdyo açıldıktan birkaç saniye sonra sunucu son yedeğe bakıyor; bir haftadan
+    eskiyse (ya da hiç yoksa) makaleler dahil tam yedeği `trace-data-<gün>.json` olarak
+    yazıyor, en yeni dördü kalıyor (`src/lib/backup-storage.ts`, `/api/backup`). Hiçbir şey
+    kaydedilmemiş bir kurulumda yazmıyor. Profildeki "Your data" kartı son yedeğin gününü ve
+    boyutunu gösteriyor. "Download my data" ile aynı dosya: içe aktarılabiliyor.
+  - *Test:* haftada en çok bir kez yazma, boş kurulumda yazmama, dört yedek sınırı ve yedeğin
+    geri yüklenmesi birim testlerde; stüdyonun açılışta yedeği yazması ve profilde göstermesi
+    e2e'de.
 
 ## Çalışma saati
 

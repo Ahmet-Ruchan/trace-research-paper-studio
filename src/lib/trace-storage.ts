@@ -147,7 +147,7 @@ function isAccentState(value: unknown): value is AccentState {
   );
 }
 
-async function atomicWrite(path: string, contents: string) {
+export async function atomicWrite(path: string, contents: string) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
   try {

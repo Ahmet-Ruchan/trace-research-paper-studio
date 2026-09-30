@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BarChart3, Camera, Download, Pencil, Play, Timer, Trash2, Upload, X } from "lucide-react";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { learningStats } from "@/lib/learning-stats";
@@ -315,6 +315,20 @@ function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChang
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
   const [withPapers, setWithPapers] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [weekly, setWeekly] = useState<{ directory: string; kept: number; backups: Array<{ day: string; bytes: number }> }>();
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/backup", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : undefined))
+      .then((data) => {
+        if (!cancelled && data) setWeekly(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const latest = weekly?.backups[0];
 
   return (
     <section className="stats-block profile-data" aria-label="Your data">
@@ -325,6 +339,14 @@ function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChang
         links. Nothing is sent anywhere. Download it all in one file to move to another computer or keep a backup; importing a file adds what it holds to
         what is here and never removes anything, and a paper you already have is kept as it is.
       </p>
+      {weekly ? (
+        <p className="profile-weekly-backup">
+          Every week Trace also writes all of it, papers included, to <code>{weekly.directory}</code>; the last {weekly.kept} are kept.{" "}
+          {latest
+            ? `Latest: ${new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(dayDate(latest.day))} (${latest.bytes < 1_000_000 ? `${Math.max(1, Math.round(latest.bytes / 1000))} kB` : `${(latest.bytes / 1_000_000).toFixed(1)} MB`}).`
+            : "The first one is written as soon as there is something to keep."}
+        </p>
+      ) : null}
       <label className="profile-data-papers">
         <input type="checkbox" checked={withPapers} onChange={(event) => setWithPapers(event.target.checked)} />
         <span>Include the papers themselves ({papers === 1 ? "1 paper" : `${papers} papers`})</span>
