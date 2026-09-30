@@ -22232,6 +22232,199 @@ function notesFileName(project) {
 }
 
 //#endregion
+//#region src/lib/reading-list.ts
+/**
+* Okuma listesi: "sonra oku" denen, henüz kütüphanede olmayan çalışmalar.
+*
+* Bir çalışma iki yerden geliyor: bir makalenin atıf grafiği (dayandığı ya
+* da ona atıf yapan çalışmalar) ve kavram önerileri (makalenin varsaydığı bir
+* kavramı anlatan kaynak). Nereden geldiği saklanıyor; okuma sırasında bu
+* yüzden yeri belli: bir makalenin dayandığı ya da bir kavramını anlatan
+* çalışma o makaleden ÖNCE, ona atıf yapan çalışma SONRA okunur.
+*
+* Okuyucunun kaydı, makalenin değil: `~/.trace/library/reading-list.json`.
+*/
+const READING_RELATIONS = [
+	"reference",
+	"cited-by",
+	"concept"
+];
+const MAX_READING_ITEMS = 500;
+const webAddress = string().trim().max(2e3).refine((value) => /^https?:\/\//i.test(value), "Only a web address.");
+const readingSourceSchema = object({
+	projectId: string().min(1).max(300),
+	relation: _enum(READING_RELATIONS),
+	/** Kavram önerisinde kavramın adı. */
+	concept: string().trim().max(200).optional()
+});
+const readingItemSchema = object({
+	id: string().min(1).max(600),
+	title: string().trim().min(1).max(500),
+	authors: array(string().trim().max(200)).max(12).default([]),
+	year: number().int().min(1e3).max(3e3).optional(),
+	venue: string().trim().max(300).optional(),
+	/** Analiz için: `arxiv:…`, DOI ya da başlık (`GraphNode.identifier`). */
+	identifier: string().trim().max(600).optional(),
+	url: webAddress.optional(),
+	pdfAvailable: boolean().optional(),
+	citationCount: number().int().min(0).optional(),
+	from: array(readingSourceSchema).max(20).default([]),
+	addedAt: string().max(40)
+});
+const readingListSchema = array(readingItemSchema).max(500);
+const fileSchema = object({
+	version: literal(1),
+	items: array(unknown())
+});
+function isReadingListFile(raw) {
+	return fileSchema.safeParse(raw).success;
+}
+function parseReadingList(raw) {
+	const file = fileSchema.safeParse(raw);
+	if (!file.success) return [];
+	return file.data.items.flatMap((item) => {
+		const parsed = readingItemSchema.safeParse(item);
+		return parsed.success ? [parsed.data] : [];
+	}).slice(0, 500);
+}
+function readingListToJson(items) {
+	return {
+		version: 1,
+		items
+	};
+}
+/** Bir çalışmanın kimliği: DOI, arXiv numarası ya da katlanmış başlık. Aynı çalışma iki yerden kaydedilirse tek kayıt. */
+function workKey(work) {
+	const identifier = work.identifier?.trim();
+	const arxiv = identifier?.match(/^arxiv:(.+)$/i)?.[1];
+	if (arxiv) return `arxiv:${arxiv.toLowerCase().replace(/v\d+$/, "")}`;
+	const doi = (identifier && /^(?:doi:|https?:\/\/(?:dx\.)?doi\.org\/)?10\.\d{4,9}\//i.test(identifier) ? bareDoi(identifier) : void 0) ?? bareDoi(work.doi);
+	if (doi) return `doi:${doi}`;
+	return `title:${normalizePhrase(work.title)}`;
+}
+const sameSource = (left, right) => left.projectId === right.projectId && left.relation === right.relation && (left.concept ?? "") === (right.concept ?? "");
+/**
+* Listeye ekler; çalışma zaten listedeyse nereden geldiği birleşiyor ve
+* bilgileri tazeleniyor, eklenme zamanı ve sırası korunuyor.
+*/
+function addToReadingList(list, incoming) {
+	const existing = list.find((item) => item.id === incoming.id);
+	if (!existing) {
+		if (list.length >= 500) throw new Error(`The reading list holds at most ${500} papers.`);
+		return [...list, incoming];
+	}
+	const from = [...existing.from, ...incoming.from.filter((source) => !existing.from.some((item) => sameSource(item, source)))].slice(0, 20);
+	const merged = {
+		...existing,
+		...Object.fromEntries(Object.entries(incoming).filter(([, value]) => value !== void 0 && value !== "")),
+		from,
+		addedAt: existing.addedAt,
+		id: existing.id
+	};
+	return list.map((item) => item.id === existing.id ? merged : item);
+}
+function removeFromReadingList(list, id) {
+	return list.filter((item) => item.id !== id);
+}
+/**
+* Okuma sırası ile listeyi birleştirir. Bir makalenin dayandığı ya da bir
+* kavramını anlatan çalışma o makalenin hemen önüne (sırada en erken gelen
+* makalenin önüne), ona atıf yapan çalışma arkasına giriyor. Sırada yeri
+* olmayanlar (kaynağı sırada değil ya da kütüphaneden çıkmış) `others`'ta;
+* kütüphaneye girmiş olanlar da orada, "açılabilir" olarak.
+*/
+function mergeReadingOrder(order, list, library) {
+	const byId = new Map(library.map((project) => [project.id, project]));
+	const stepIndex = new Map(order.steps.map((step, index) => [paperKey(step.project), index]));
+	const before = /* @__PURE__ */ new Map();
+	const after = /* @__PURE__ */ new Map();
+	const others = [];
+	for (const item of list) {
+		const owned = libraryPaperFor({
+			title: item.title,
+			identifier: item.identifier
+		}, library);
+		if (owned) {
+			others.push({
+				item,
+				owned
+			});
+			continue;
+		}
+		const placed = item.from.flatMap((source) => {
+			const project = byId.get(source.projectId);
+			const index = project ? stepIndex.get(paperKey(project)) : void 0;
+			return project && index !== void 0 ? [{
+				source,
+				project,
+				index
+			}] : [];
+		});
+		const earlier = placed.filter((entry) => entry.source.relation !== "cited-by").sort((left, right) => left.index - right.index)[0];
+		const later = placed.filter((entry) => entry.source.relation === "cited-by").sort((left, right) => right.index - left.index)[0];
+		const chosen = earlier ?? later;
+		if (!chosen) {
+			const source = item.from.map((entry) => ({
+				entry,
+				project: byId.get(entry.projectId)
+			})).find((entry) => entry.project);
+			others.push({
+				item,
+				...source ? { why: {
+					relation: source.entry.relation,
+					project: source.project,
+					...source.entry.concept ? { concept: source.entry.concept } : {}
+				} } : {}
+			});
+			continue;
+		}
+		const place = {
+			item,
+			why: {
+				relation: chosen.source.relation,
+				project: chosen.project,
+				...chosen.source.concept ? { concept: chosen.source.concept } : {}
+			}
+		};
+		const bucket = earlier ? before : after;
+		bucket.set(chosen.index, [...bucket.get(chosen.index) ?? [], place]);
+	}
+	const entries = [];
+	order.steps.forEach((step, index) => {
+		for (const place of before.get(index) ?? []) entries.push({
+			kind: "saved",
+			place
+		});
+		entries.push({
+			kind: "paper",
+			step
+		});
+		for (const place of after.get(index) ?? []) entries.push({
+			kind: "saved",
+			place
+		});
+	});
+	return {
+		entries,
+		others
+	};
+}
+/** Okuyucuya "neden burada": kavramı anlatıyor, makale ona dayanıyor ya da ona atıf yapıyor. */
+function savedReason(why) {
+	const title = why.project.evidence.paper.title;
+	if (why.relation === "concept") return `Before ${title}: it explains ${why.concept ?? "a concept"}, which that paper assumes.`;
+	if (why.relation === "reference") return `Before ${title}: that paper builds on it.`;
+	return `After ${title}: it cites that paper.`;
+}
+/** Sırada yeri olmayan bir çalışma için: nereden kaydedildiği. */
+function savedFrom(why) {
+	const title = why.project.evidence.paper.title;
+	if (why.relation === "concept") return `It explains ${why.concept ?? "a concept"}, which ${title} assumes.`;
+	if (why.relation === "reference") return `${title} builds on it.`;
+	return `It cites ${title}.`;
+}
+
+//#endregion
 //#region src/lib/publications.ts
 /**
 * Paylaşılabilir yayınlar.
@@ -23505,4 +23698,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, weekReport, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, weekReport, workKey, workSummary };

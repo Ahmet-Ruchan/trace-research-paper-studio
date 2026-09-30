@@ -63,7 +63,7 @@ export function normalizePhrase(text: string) {
     .join(" ");
 }
 
-const bareDoi = (value: string | undefined) => value?.trim().toLowerCase().replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:)/, "") || undefined;
+export const bareDoi = (value: string | undefined) => value?.trim().toLowerCase().replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:)/, "") || undefined;
 
 /**
  * Bir makalenin kimliği: DOI'si, yoksa katlanmış başlığı. Aynı makalenin iki

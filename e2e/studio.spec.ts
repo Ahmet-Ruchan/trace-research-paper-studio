@@ -1270,6 +1270,11 @@ test.describe("colour themes", () => {
     };
     expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
     expect((await request.put(`/api/library/study?id=${companion.id}`, { data: { progress: { ...completeStep(undefined, "start", "finish", iso(-9)), finishedAt: iso(-8) } } })).ok()).toBe(true);
+    // Kavram haritasındaki okuma sırasında kaydedilmiş iki çalışma: biri sırada, biri dışında.
+    for (const item of [
+      { id: "arxiv:2001.00002", title: "A saved work on attention", identifier: "arxiv:2001.00002", year: 2018, url: "https://example.org/w", from: [{ projectId: project.id, relation: "reference" }], addedAt: iso(-1) },
+      { id: "title:a saved work without a place", title: "A saved work without a place", from: [], addedAt: iso(-1) },
+    ]) expect((await request.post("/api/library/reading-list", { data: { item } })).ok()).toBe(true);
     // Notlar ekranı dolu görünsün: vurgu, not ve işaretli iddia.
     const noted = { createdAt: iso(-1), updatedAt: iso(-1) };
     expect((await request.put(`/api/library/notes?id=${project.id}`, { data: { notes: [
@@ -2544,6 +2549,67 @@ test.describe("focus timer and profile", () => {
     expect(file.kind).toBe("trace-work-data");
     expect(file.profile.firstName).toBe("Grace");
     expect(file.log.sessions).toHaveLength(4);
+  });
+});
+
+test.describe("reading list", () => {
+  test("saves works to read later from the concept suggestions and the citation graph, and places them in the reading order", async ({ page, request }) => {
+    await seed(request, {
+      ...projectNamed("e2e-reading-a"),
+      evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Omega foundations", year: "2015" }, glossary: [{ term: "Omega attention", definition: "Attention over zeta-sized windows." }] },
+    });
+    const base = projectNamed("e2e-reading-b");
+    const applied = await seed(request, {
+      ...base,
+      evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Omega applied", year: "2019" } },
+      primer: { ...base.primer!, concepts: base.primer!.concepts.map((concept) => (concept.id === "softmax" ? { ...concept, term: "Omega attention" } : concept)) },
+    });
+    const node = (title: string, identifier: string, year: number) => ({ openAlexId: identifier, title, year, citationCount: 40, authors: ["A. Author"], authorCount: 1, pdfAvailable: true, identifier, url: "https://example.org/work" });
+    await page.route("**/api/citations", (route) => route.fulfill({ json: {
+      ok: true, retrievedAt: "2026-09-01T00:00:00.000Z", source: "OpenAlex", paper: node("Omega applied", "arxiv:1900.00001", 2019),
+      referenceCount: 1, citedByCount: 1, note: "", openAlexUrl: "https://openalex.org/W1",
+      references: [node("Omega attention explained", "arxiv:2001.00002", 2018)],
+      citedBy: [node("A follow-up to Omega", "arxiv:2102.00003", 2021)],
+    } }));
+    let lookedUp: string | null = null;
+    await page.route("**/api/resolve**", (route) => {
+      lookedUp = new URL(route.request().url()).searchParams.get("q");
+      return route.fulfill({ json: { candidates: [] } });
+    });
+
+    // Kavram önerisinden: makalenin varsaydığı kavramı anlatan kaynak.
+    await page.goto(`/?project=${applied.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Concepts" }).click();
+    await page.getByRole("button", { name: "Look in the references" }).click();
+    const suggestion = page.locator(".concept-suggestions li", { hasText: "Omega attention explained" });
+    await suggestion.getByRole("button", { name: "Read later" }).click();
+    await expect(suggestion.getByRole("button", { name: "On your list" })).toHaveAttribute("aria-pressed", "true");
+
+    // Atıf grafiğinden: aynı çalışma zaten listede; ona atıf yapan bir çalışma da ekleniyor.
+    await page.getByRole("button", { name: "Citations" }).click();
+    await expect(page.locator(".citation-columns li", { hasText: "Omega attention explained" }).getByRole("button", { name: "On your list" })).toBeVisible();
+    await page.locator(".citation-columns li", { hasText: "A follow-up to Omega" }).getByRole("button", { name: "Read later" }).click();
+    await expect(page.locator(".citation-columns li", { hasText: "A follow-up to Omega" }).getByRole("button", { name: "On your list" })).toBeVisible();
+    await page.locator(".citation-columns li", { hasText: "Omega attention explained" }).getByRole("button", { name: "On your list" }).click();
+    await page.locator(".citation-columns li", { hasText: "Omega attention explained" }).getByRole("button", { name: "Read later" }).click();
+    await expect.poll(async () => ((await (await request.get("/api/library/reading-list")).json()) as { items: Array<{ title: string; from: unknown[] }> }).items.map((item) => [item.title, item.from.length])).toEqual([
+      ["A follow-up to Omega", 1],
+      ["Omega attention explained", 1],
+    ]);
+
+    // Kütüphane: okuma listesi, okuma sırasında yerinde.
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Reading list (2)" }).click();
+    const order = page.getByRole("region", { name: "A reading order" });
+    await expect(order.locator("ol > li")).toHaveCount(4);
+    const titles = order.locator("ol > li").locator(".reading-head button, .reading-head .reading-title");
+    await expect(titles).toHaveText(["Omega foundations", "Omega attention explained", "Omega applied", "A follow-up to Omega"]);
+    await expect(order.locator("li.is-saved").first().locator(".reading-why")).toHaveText("Before Omega applied: that paper builds on it.");
+    await expect(order.locator("li.is-saved").last().locator(".reading-why")).toHaveText("After Omega applied: it cites that paper.");
+    await order.getByRole("button", { name: "Remove A follow-up to Omega from your reading list" }).click();
+    await expect(order.locator("li.is-saved")).toHaveCount(1);
+    await order.locator("li.is-saved").getByRole("button", { name: "Analyze it" }).click();
+    await expect.poll(() => lookedUp).toBe("arxiv:2001.00002");
   });
 });
 

@@ -31,6 +31,16 @@ import {
   notesMarkdown,
   notesFileName,
   parseNotesFile,
+  addToReadingList,
+  isReadingListFile,
+  mergeReadingOrder,
+  parseReadingList,
+  readingItemSchema,
+  readingListToJson,
+  removeFromReadingList,
+  savedFrom,
+  savedReason,
+  workKey,
   recordCheckedExplanation,
   aliasBatches,
   aliasMap,
@@ -356,6 +366,7 @@ Usage:
   node trace-agent.mjs progress
   node trace-agent.mjs work [--days <n>]
   node trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <notes.md>]
+  node trace-agent.mjs reading [--add <arxiv:id | DOI | title> --title "<title>" [--for <library id> --relation reference|cited-by|concept [--concept "<term>"]] [--year <n>] [--url <link>]] [--remove <id>]
   node trace-agent.mjs concepts --names [--part <n>]
   node trace-agent.mjs alias --a "<name>" --b "<name>" [--different | --forget] [--proposed-by model] [--reason "<why>"]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
@@ -445,6 +456,13 @@ Usage:
             the paper's order: story sections, report sections, claims with
             their page. --obsidian adds YAML front matter and callouts; --out
             writes the file instead. Reads only; no network, no model.
+  reading   Prints the reader's reading list (papers saved to read later in
+            the studio, ~/.trace/library/reading-list.json) placed in the
+            library's reading order: a work a paper builds on, or that explains
+            a concept it assumes, comes before that paper; a work citing it
+            comes after. --add saves a work (from "graph" or "concepts
+            --suggest"), --for says which library paper it serves and how;
+            --remove takes the id printed for it. No network, no model.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -2165,6 +2183,83 @@ function printWork(args) {
 }
 
 /**
+ * Okuma listesi: stüdyoda "Read later" denen çalışmalar, okuma sırasına
+ * yerleştirilmiş. --add ve --remove stüdyonun kilidiyle yazıyor.
+ */
+function readingList(args) {
+  const { library, projects, study, aliases } = readLibrary();
+  const path = join(library, "reading-list.json");
+  const readRaw = () => {
+    try {
+      return { exists: true, raw: JSON.parse(readFileSync(path, "utf8")) };
+    } catch (error) {
+      if (error?.code === "ENOENT") return { exists: false, raw: undefined };
+      if (error instanceof SyntaxError) return { exists: true, raw: undefined };
+      throw error;
+    }
+  };
+  let changed;
+  if (args.add || args.remove) {
+    const release = acquireDirectoryLock(library, "reading-list.lock", "The reading list is busy. Please retry in a moment.");
+    try {
+      const file = readRaw();
+      let items = parseReadingList(file.raw);
+      if (args.remove) {
+        if (!items.some((item) => item.id === args.remove)) throw new Error(`No work with the id "${args.remove}" on the reading list.`);
+        items = removeFromReadingList(items, args.remove);
+        changed = { removed: args.remove };
+      } else {
+        const title = typeof args.title === "string" && args.title.trim() ? args.title.trim() : String(args.add).trim();
+        const identifier = String(args.add).trim();
+        if (args.for && !projects.some((project) => project.id === args.for)) throw new Error(`No paper with the id "${args.for}" in the library.`);
+        const relation = args.relation ?? "reference";
+        if (!["reference", "cited-by", "concept"].includes(relation)) throw new Error("--relation must be reference, cited-by or concept.");
+        const item = readingItemSchema.parse({
+          id: workKey({ title, identifier }),
+          title,
+          identifier,
+          ...(args.year ? { year: Number(args.year) } : {}),
+          ...(args.url ? { url: args.url } : {}),
+          from: args.for ? [{ projectId: args.for, relation, ...(args.concept ? { concept: args.concept } : {}) }] : [],
+          addedAt: new Date().toISOString(),
+        });
+        items = addToReadingList(items, item);
+        changed = { added: item.id };
+      }
+      if (file.exists && !isReadingListFile(file.raw)) renameSync(path, join(library, `reading-list.damaged-${new Date().toISOString().replace(/[-:.]/g, "")}.json`));
+      atomicWrite(path, `${JSON.stringify(readingListToJson(items), null, 2)}\n`);
+    } finally {
+      release();
+    }
+  }
+  const items = parseReadingList(readRaw().raw);
+  const merged = mergeReadingOrder(readingOrder(projects, study, aliases), items, projects);
+  const saved = (place, inOrder) => ({
+    kind: "saved",
+    id: place.item.id,
+    title: place.item.title,
+    year: place.item.year ?? null,
+    identifier: place.item.identifier ?? null,
+    url: place.item.url ?? null,
+    ...(place.owned ? { inLibrary: place.owned.id } : {}),
+    why: place.owned ? "Now in the library." : place.why ? (inOrder ? savedReason(place.why) : savedFrom(place.why)) : place.item.from.length ? "Saved from a paper no longer in the library." : "Saved on its own.",
+  });
+  console.log(JSON.stringify({
+    ok: true,
+    library,
+    ...(changed ?? {}),
+    saved: items.length,
+    order: merged.entries.map((entry) => entry.kind === "paper"
+      ? { kind: "paper", paper: entry.step.project.evidence.paper.title, projectId: entry.step.project.id, status: entry.step.status }
+      : saved(entry.place, true)),
+    alsoSaved: merged.others.map((place) => saved(place, false)),
+    note: items.length
+      ? "The reader's own list. Suggest the next unread item in order; a saved work is analysed with prepare --source <identifier>. Never write the list into a project."
+      : "Nothing saved yet. In the studio, Read later in a paper's citation graph or its concept suggestions saves a work; --add does the same from here.",
+  }, null, 2));
+}
+
+/**
  * Okuyucunun notları: stüdyoda yazılan notlar ve vurgular, Markdown olarak.
  * Proje dosyasına hiç yazılmıyorlar; burada yalnızca okunuyorlar.
  */
@@ -2235,6 +2330,7 @@ try {
   else if (command === "progress") printProgress();
   else if (command === "work") printWork(args);
   else if (command === "notes") printNotes(args);
+  else if (command === "reading") readingList(args);
   else if (command === "alias") recordAlias(args);
   else usage(1);
 } catch (error) {

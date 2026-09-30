@@ -7,6 +7,7 @@ import { loadCitationGraph } from "@/lib/paper-lookup";
 import type { ReadFirst, StudyStatus } from "@/lib/reading-order";
 import type { ResearchProject } from "@/lib/schema";
 import { PaperLink, paperHref } from "./concept-note";
+import { ReadLaterButton } from "./reading-list";
 
 type Lookup =
   | { status: "idle" }
@@ -156,6 +157,7 @@ export function ConceptsView({
                       ) : onAnalyse && item.reference.identifier ? (
                         <button type="button" onClick={() => onAnalyse({ identifier: item.reference.identifier!, title: item.reference.title })}>Analyze it</button>
                       ) : null}
+                      {!owned ? <ReadLaterButton work={item.reference} from={{ projectId: project.id, relation: "concept", concept: item.term }} /> : null}
                       {item.reference.url ? (
                         <a href={item.reference.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.reference.title}`}><ExternalLink size={13} /></a>
                       ) : null}

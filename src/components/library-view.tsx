@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, BookmarkCheck, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import {
   LIBRARY_LAYOUT_KEY,
@@ -26,6 +26,7 @@ import { DisplayControl } from "./display-control";
 import { useReviewForecast } from "./study-progress";
 import { describeDue } from "@/lib/review-schedule";
 import { StudioNav } from "./focus/studio-nav";
+import { useReadingList } from "./reading-list";
 
 type LibraryViewProps = {
   projects: ResearchProject[];
@@ -38,6 +39,8 @@ type LibraryViewProps = {
   onReview: () => void;
   /** Kavram haritası: birden çok makalenin anlattığı kavramlar. */
   onConcepts: () => void;
+  /** Okuma listesi: kavram haritasındaki okuma sırasında. */
+  onReadingList?: () => void;
   onProgress: () => void;
   /** Kart hemen kayboluyor; silme geri alma süresi dolunca sunucuya gidiyor. */
   onDelete: (projectId: string) => void;
@@ -74,7 +77,8 @@ function count(value: number, noun: string) {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onConcepts, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onConcepts, onReadingList, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+  const reading = useReadingList();
   const review = useReviewForecast(projects);
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("papers");
@@ -212,6 +216,9 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
           <DisplayControl />
           <button className="library-import-button" title="What you studied, remembered and have to review" onClick={onProgress}><BarChart3 size={15} /> Progress</button>
           <button className="library-import-button" title="Concepts more than one paper explains" onClick={onConcepts}><Waypoints size={15} /> Concepts</button>
+          {onReadingList && reading?.items.length ? (
+            <button className="library-import-button" title="Papers you saved to read later, in your reading order" onClick={onReadingList}><BookmarkCheck size={15} /> Reading list ({reading.items.length})</button>
+          ) : null}
           <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>
           <button className="library-new-button" onClick={onNew}><Plus size={16} /> New paper</button>

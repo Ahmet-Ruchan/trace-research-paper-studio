@@ -5,6 +5,8 @@ import { ArrowRight, Download, ExternalLink, Network, X } from "lucide-react";
 import { buildBibtex } from "@/lib/exports/bibliography";
 import { loadCitationGraph, type CitationGraph, type GraphNode } from "@/lib/paper-lookup";
 import type { ResearchProject } from "@/lib/schema";
+import type { ReadingSource } from "@/lib/reading-list";
+import { ReadLaterButton } from "./reading-list";
 
 /**
  * Atıf grafiği: makalenin dayandığı çalışmalar solda, onu izleyenler sağda.
@@ -79,8 +81,8 @@ export function CitationPanel({
               </p>
               <GraphMap graph={graph} focused={focused} onFocus={setFocused} />
               <div className="citation-columns">
-                <NodeList heading="Builds on" empty="OpenAlex lists no references for this record." nodes={graph.references} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} />
-                <NodeList heading="Cited by" empty="No citing works are indexed yet." nodes={graph.citedBy} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} />
+                <NodeList heading="Builds on" empty="OpenAlex lists no references for this record." nodes={graph.references} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} from={{ projectId: project.id, relation: "reference" }} />
+                <NodeList heading="Cited by" empty="No citing works are indexed yet." nodes={graph.citedBy} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} from={{ projectId: project.id, relation: "cited-by" }} />
               </div>
             </>
           )}
@@ -160,6 +162,7 @@ function NodeList({
   focused,
   onFocus,
   onAnalyse,
+  from,
 }: {
   heading: string;
   empty: string;
@@ -167,6 +170,8 @@ function NodeList({
   focused?: string;
   onFocus: (id?: string) => void;
   onAnalyse: (node: GraphNode) => void;
+  /** Okuma listesine eklenirse nereden geldiği: bu makalenin kaynağı mı, ona atıf mı. */
+  from: ReadingSource;
 }) {
   return (
     <section>
@@ -189,12 +194,15 @@ function NodeList({
                 </small>
                 <small>{node.citationCount.toLocaleString("en")} citations</small>
               </div>
-              <button
-                title={node.pdfAvailable ? "Find this paper and analyse it" : "No open-access copy on a source Trace downloads from; you can still look it up"}
-                onClick={() => onAnalyse(node)}
-              >
-                {node.pdfAvailable ? "Analyse" : "Look up"} <ArrowRight size={12} />
-              </button>
+              <span className="citation-actions">
+                <button
+                  title={node.pdfAvailable ? "Find this paper and analyse it" : "No open-access copy on a source Trace downloads from; you can still look it up"}
+                  onClick={() => onAnalyse(node)}
+                >
+                  {node.pdfAvailable ? "Analyse" : "Look up"} <ArrowRight size={12} />
+                </button>
+                <ReadLaterButton work={node} from={from} />
+              </span>
             </li>
           ))}
         </ol>

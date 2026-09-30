@@ -73,3 +73,31 @@
   .notes-group header { grid-template-columns: 1fr; }
   .notes-group header button { grid-column: 1; grid-row: auto; justify-self: start; }
 }
+
+/* ---------- Okuma listesi (reading-list.tsx) ---------- */
+.read-later { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; padding: 6px 10px; border: 1px dashed var(--line-dark); border-radius: 20px; background: transparent; color: var(--ink-soft); cursor: pointer; font-size: var(--text-sm); white-space: nowrap; }
+.read-later:hover { border-color: var(--ink-soft); color: var(--ink); }
+.read-later.is-saved { border-style: solid; border-color: var(--ink); color: var(--ink); }
+.read-later:disabled { opacity: .6; cursor: default; }
+.citation-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex-shrink: 0; }
+.citation-columns li .citation-actions .read-later { border-radius: 8px; background: var(--paper); }
+.concept-actions .read-later { padding: 6px 12px; }
+
+.reading-order li.is-saved { border-style: dashed; background: var(--paper); counter-increment: none; }
+.reading-order li.is-saved::before { content: "+"; }
+.reading-title { color: var(--ink); font-size: var(--text-md); font-weight: 600; line-height: 1.4; text-decoration: none; }
+a.reading-title:hover { text-decoration: underline; }
+a.reading-title svg { display: inline-block; vertical-align: -1px; color: var(--ink-soft); }
+.reading-saved { margin-left: auto; padding: 2px 9px; border: 1px dashed var(--line-dark); border-radius: 12px; color: var(--ink-soft); font-size: var(--text-xs); font-weight: 500; white-space: nowrap; }
+.reading-meta { margin: 4px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.45; }
+.reading-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.reading-actions button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.reading-actions .reading-remove { border-color: transparent; background: transparent; color: var(--ink-soft); }
+.reading-actions .reading-remove:hover { color: var(--ink); }
+.reading-others { margin: 18px 0 10px; font-size: var(--text-md); }
+.reading-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.reading-list li { padding: 10px 12px; border: 1px dashed var(--line-dark); border-radius: 10px; background: var(--paper); }
+@media (max-width: 600px) {
+  .citation-columns li { flex-wrap: wrap; }
+  .citation-actions { width: 100%; justify-content: flex-start; }
+}

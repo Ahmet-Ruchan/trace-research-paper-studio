@@ -21,6 +21,7 @@ import { restoreTheme } from "@/lib/theme";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { NoteHighlights, ReaderNotesProvider, SelectionNoteBar } from "./reader-notes";
+import { ReadingListProvider } from "./reading-list";
 import { HistoryPanel } from "./history-panel";
 import { PublishPanel } from "./publish-panel";
 import { LabView } from "./lab-view";
@@ -73,7 +74,9 @@ function download(name: string, content: string, type: string) {
 export function AppShell() {
   return (
     <FocusProvider>
-      <Studio />
+      <ReadingListProvider>
+        <Studio />
+      </ReadingListProvider>
     </FocusProvider>
   );
 }
@@ -92,6 +95,8 @@ function Studio() {
   const [citationsOpen, setCitationsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [paperLookup, setPaperLookup] = useState<{ query: string; expectTitle?: string }>();
+  // Kütüphaneden "Reading list": kavram haritası okuma sırasına kaydırılarak açılıyor.
+  const [conceptsFocus, setConceptsFocus] = useState<"reading">();
   const [initialTeam, setInitialTeam] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("lab");
   const [fileUrl, setFileUrl] = useState<string>();
@@ -605,7 +610,7 @@ function Studio() {
     return withWork(<ModelRecordView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />);
   }
   if (screen === "concepts") {
-    return withWork(<ConceptMapView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} />);
+    return withWork(<ConceptMapView projects={projects} onBack={() => setScreen("library")} onOpen={openProject} onAnalyse={analyseFromGraph} focusReading={conceptsFocus === "reading"} />);
   }
   if (screen === "progress") {
     return withWork(
@@ -646,7 +651,14 @@ function Studio() {
           setReviewScope(undefined);
           setScreen("review");
         }}
-        onConcepts={() => setScreen("concepts")}
+        onConcepts={() => {
+          setConceptsFocus(undefined);
+          setScreen("concepts");
+        }}
+        onReadingList={() => {
+          setConceptsFocus("reading");
+          setScreen("concepts");
+        }}
         onProgress={() => setScreen("progress")}
         onOpen={openProject}
         onOpenClaim={openClaim}

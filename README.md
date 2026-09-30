@@ -377,6 +377,18 @@ other assumes are shown as a pair to read side by side, not put in an invented o
 connects are left out. In the Lab, **Read first** names the papers of your library that define what
 this one assumes, and whether you have studied them.
 
+**Read later.** A work you are not ready to analyse can wait on your reading list: **Read later** sits
+next to every work in a paper's citation graph and every reference suggested for a concept. The list
+takes its place in the reading order, remembering why you saved each work: one that a paper builds on,
+or that explains a concept it assumes, comes just before that paper; one that cites it comes after.
+Each saved work can be analysed from there, opens instead once it is in your library, or can be
+removed. **Reading list** in the library header opens it; the list is kept in
+`~/.trace/library/reading-list.json`, and your agent reads and adds to the same list:
+
+```text
+What should I read next, and save the works this paper builds on for later. Use the Trace plugin.
+```
+
 ![A reading order for the library](docs/images/reading-order.jpg)
 
 **One idea, two names.** Matching by name keeps "scalar product" and "dot product" apart. **Names for
@@ -898,7 +910,8 @@ projects migrate there automatically; removing a Library item removes its stored
 version history, its tags, your study progress and your notes on it, after an eight-second window
 to undo it. Earlier versions live under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`,
 study progress and review cards in `~/.trace/library/study.json`, your notes and highlights in
-`~/.trace/library/notes.json` (a copy of each of the last seven days in `~/.trace/backups`), saved templates under
+`~/.trace/library/notes.json` (a copy of each of the last seven days in `~/.trace/backups`), the
+works saved to read later in `~/.trace/library/reading-list.json`, saved templates under
 `~/.trace/templates`, and your profile and worked time in `~/.trace/profile.json` and
 `~/.trace/focus-log.json`.
 
@@ -999,6 +1012,10 @@ npm run trace:agent -- work --days 14
 
 # The reader's notes and highlights on a paper, as Markdown or into an Obsidian vault
 npm run trace:agent -- notes --project "paper.trace.json" --obsidian --out ~/Vault/Papers
+
+# The reading list placed in the library's reading order; save a work found with graph or concepts --suggest
+npm run trace:agent -- reading
+npm run trace:agent -- reading --add arxiv:1409.0473 --title "Neural Machine Translation by Jointly Learning to Align and Translate" --for <library id> --relation concept --concept "Attention"
 
 # Concept names across the library (in parts for a large one: --part 2), and the reader's decision that two of them are one concept
 npm run trace:agent -- concepts --names
@@ -1217,7 +1234,8 @@ progress, explanations in the reader's own words checked against the evidence, s
 the library, concepts linked across papers with reading suggestions from the references and a reading order for
 the library, learning statistics, a work timer (focus rounds with breaks, countdown, stopwatch,
 alarms, due review cards offered in short breaks) with a profile, a calendar of the days worked and a
-weekly report, your own notes and highlights with Markdown and Obsidian export, a learning
+weekly report, your own notes and highlights with Markdown and Obsidian export, a reading list placed in
+the reading order, a learning
 health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
@@ -1278,6 +1296,7 @@ the two from mixing.
 - [x] Learning that sticks: predictions first, common misreadings, learning health, explaining it back, concepts across papers
 - [x] Study across the library: reading order, confirmed concept aliases, learning statistics, progress carried between devices
 - [x] A work timer and a profile: focus rounds with breaks, countdown, stopwatch, alarms, and a calendar of the days worked
+- [x] Study habits: review cards in short breaks, focus rounds from Study and Review, a weekly report, notes and highlights with Obsidian export, and a reading list in the reading order
 - [ ] Team review with accounts and shared annotations
 
 ---

@@ -31,6 +31,7 @@ import { aliasFileSchema, isAliasFile, parseAliasFile, type AliasFile } from "./
 import { findBuiltInTemplate, templateIssues } from "./narrative-templates";
 import { isStudyFile, parseStudyFile, studyFileToJson, studyProgressSchema, type StudyProgress } from "./study-path";
 import { isNotesFile, notesFileToJson, parseNotesFile, readerNotesSchema, type ReaderNote } from "./reader-notes";
+import { isReadingListFile, parseReadingList, readingListSchema, readingListToJson, type ReadingItem } from "./reading-list";
 import { emptyProfile, isProfile, parseProfile, profileSchema, type Profile } from "./profile";
 import { dayKey, isWorkLog, parseWorkLog, workLogSchema, workLogToJson, type WorkLog } from "./work-log";
 import {
@@ -527,6 +528,39 @@ export async function saveReaderNotes(projectId: string, notes: readonly ReaderN
     if (next.length) current.set(projectId, next);
     else current.delete(projectId);
     await atomicWrite(path, `${JSON.stringify(notesFileToJson(current), null, 2)}\n`);
+    return next;
+  } finally {
+    await release();
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Okuma listesi — ~/.trace/library/reading-list.json
+ *
+ * "Sonra oku" denen, henüz kütüphanede olmayan çalışmalar (`reading-list.ts`).
+ * Kütüphanenin bilgisi; aynı kilit, yedek ve bozuk dosyayı kenara alma kuralı.
+ * ------------------------------------------------------------------ */
+
+const READING_FILE = "reading-list.json";
+const READING_LOCK = "reading-list.lock";
+
+export async function readReadingList() {
+  return parseReadingList((await readJsonFile(join(traceLibraryDirectory(), READING_FILE))).raw);
+}
+
+/** Listeyi değiştirir; değişiklik yoksa dosyaya dokunulmuyor. */
+export async function updateReadingList(change: (items: ReadingItem[]) => ReadingItem[]) {
+  const directory = traceLibraryDirectory();
+  const path = join(directory, READING_FILE);
+  const release = await acquireDirectoryLock(directory, READING_LOCK, "The reading list is busy. Please retry in a moment.");
+  try {
+    const file = await readJsonFile(path);
+    const current = parseReadingList(file.raw);
+    const next = readingListSchema.parse(change(current));
+    if (JSON.stringify(next) === JSON.stringify(current) && file.exists) return next;
+    if (file.exists && !isReadingListFile(file.raw)) await setAsideDamaged(path, "reading-list");
+    else if (file.exists) await dailyBackup(path, "reading-list");
+    await atomicWrite(path, `${JSON.stringify(readingListToJson(next), null, 2)}\n`);
     return next;
   } finally {
     await release();
