@@ -140,6 +140,7 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 
 .focus-today { position: sticky; top: 16px; display: grid; gap: 14px; }
 .focus-today-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.focus-today-head .focus-secondary { flex: none; white-space: nowrap; }
 .focus-today-head span { display: block; color: var(--muted); font-size: var(--text-xs); letter-spacing: .08em; text-transform: uppercase; }
 .focus-today-head strong { display: block; margin: 2px 0; font: 2.25rem/1.1 Georgia, serif; }
 .focus-today-head small { color: var(--ink-soft); font-size: var(--text-sm); }

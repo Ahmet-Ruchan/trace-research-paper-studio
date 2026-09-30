@@ -955,6 +955,22 @@ test.describe("reading comfort", () => {
     }
   });
 
+  test("keeps the paper map's source count below its sections, however many there are", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-nav-fit"));
+    for (const [width, height] of [[1483, 812], [1280, 640], [1100, 560]] as const) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`/?project=${project.id}`);
+      const count = page.locator(".lab-nav > .source-count");
+      await expect(count).toBeVisible();
+      // Konum menünün içinde: menü kaysa da sıra aynı.
+      const overlap = await page.evaluate(() => {
+        const box = document.querySelector<HTMLElement>(".lab-nav > .source-count")!;
+        return [...document.querySelectorAll<HTMLElement>(".lab-nav > button")].some((button) => button.offsetTop + button.offsetHeight > box.offsetTop);
+      });
+      expect(overlap, `${width}×${height}`).toBe(false);
+    }
+  });
+
   test("lets the reader choose a larger text size and remembers it", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-text-size"));
     await page.goto(`/?project=${project.id}`);

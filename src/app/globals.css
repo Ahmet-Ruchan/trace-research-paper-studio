@@ -116,12 +116,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .warning-strip button { border: 0; border-bottom: 1px solid currentColor; background: none; cursor: pointer; }
 
 .lab-layout { min-height: calc(100vh - 67px); display: grid; grid-template-columns: 190px minmax(480px, 1fr) 340px; }
-.lab-nav { position: sticky; top: 67px; height: calc(100vh - 67px); padding: 28px 15px; border-right: 1px solid var(--line); background: var(--surface-2); }
+/* Sütun: bölümler çoğaldıkça kaynak sayısı onların altına iniyor, üstlerine binmiyor; sığmazsa menü kayıyor. */
+.lab-nav { position: sticky; top: 67px; height: calc(100vh - 67px); display: flex; flex-direction: column; overflow-y: auto; padding: 28px 15px; border-right: 1px solid var(--line); background: var(--surface-2); }
 .lab-nav-label { margin: 0 11px 18px; color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.14em; }
-.lab-nav > button { width: 100%; height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 11px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font-size: var(--text-md); text-align: left; }
+.lab-nav > button { width: 100%; height: 38px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 11px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font-size: var(--text-md); text-align: left; }
 .lab-nav > button:hover, .lab-nav > button.active { background: var(--surface); color: var(--ink); }
 .lab-nav > button.active svg { color: var(--accent); }
-.source-count { position: absolute; inset: auto 20px 25px; padding-top: 16px; border-top: 1px solid var(--line); }
+.source-count { margin: auto 5px 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.lab-nav > .source-count { flex: none; }
+.lab-nav > button:last-of-type { margin-bottom: 16px; }
 .source-count span { display: block; font: 2rem/1 Georgia, serif; }
 .source-count small { color: var(--muted); font-size: var(--text-xs); }
 .lab-main { min-width: 0; padding: clamp(38px, 5vw, 78px); background: var(--paper); }
@@ -877,7 +880,7 @@ html[data-text-size="larger"] { font-size: 125%; }
 /* --- Telefonda Lab gezinmesi -------------------------------------------- */
 .lab-nav-select { display: none; }
 @media (max-width: 760px) {
-  .lab-nav { height: auto; align-items: center; overflow: visible; }
+  .lab-nav { height: auto; flex-direction: row; align-items: center; overflow: visible; }
   .lab-nav > button { display: none; }
   .lab-nav-select { flex: 1; display: flex; align-items: center; gap: 12px; }
   .lab-nav-select span { flex-shrink: 0; color: var(--muted); font-size: var(--text-2xs); letter-spacing: .12em; text-transform: uppercase; }

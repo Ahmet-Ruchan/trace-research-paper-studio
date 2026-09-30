@@ -267,6 +267,8 @@ callouts, ready to drop into a vault. Your agent can write the same file into yo
 Put my notes on the Attention paper into my Obsidian vault. Use the Trace plugin.
 ```
 
+![Highlights and notes on the deep report](docs/images/notes.jpg)
+
 ### See what you have learned
 
 **Progress** in the library header adds up your study: papers finished and in progress, how many of
@@ -318,6 +320,8 @@ Answer them while you rest, or choose **Just rest**. What you remember moves the
 in Review; the break is not counted as work, and long breaks stay for rest. Turn it off with
 **Review a few cards in short breaks**.
 
+![Review cards in a short break](docs/images/break-review.jpg)
+
 ![The work timer](docs/images/focus.jpg)
 
 ### Your profile, and a calendar of the days you worked
@@ -346,6 +350,8 @@ overwritten, and a copy of the last seven days is kept in `~/.trace/backups`. **
 puts everything in one file; importing it on another computer adds its sessions and removes none.
 
 ![Your profile and work calendar](docs/images/profile.jpg)
+
+![This week against last, and when you work](docs/images/weekly-report.jpg)
 
 ### Connect what you learn across papers
 
@@ -832,6 +838,18 @@ Which concepts of that paper have I already studied in my other Trace papers, an
 Publish a link to it without the paper's figures, expiring in 30 days.
 ```
 
+```text
+How did my week go against last week, and which papers did the time go to?
+```
+
+```text
+Put my notes and highlights on that paper into my Obsidian vault.
+```
+
+```text
+Save the works that paper builds on to read later, and tell me what to read next.
+```
+
 When it finishes, the browser is already open — both the self-contained site and the full
 application, with the project sitting in your Library. Nothing to export, nothing to import,
 no server to start. The same folder keeps a portable `.trace.json` you can archive or share.
@@ -927,10 +945,11 @@ example project* (or add `?sample=1`) and the fully enriched *Attention Is All Y
 English or Turkish, chosen from your browser language. Both files also ship as plain downloads
 at `/examples/`, and any `.trace.json` imports through **Library → Trace JSON**.
 
-**Workspaces:** `Lab` inspects the evidence and holds **Study**, **Concepts** and the learning
-blocks, `Story` edits the narrative, `Preview` is the reading experience. The library header opens
-**Review** (the cards due today, from every paper) and **Concepts** (the map of what your papers
-share). **Regenerate** on a story section, or on a deep report section in `Lab`,
+**Workspaces:** `Lab` inspects the evidence and holds **Study**, **Concepts**, your **Notes** and
+the learning blocks, `Story` edits the narrative, `Preview` is the reading experience. The library
+header opens **Review** (the cards due today, from every paper), **Concepts** (the map of what your
+papers share, with the reading order) and, once you have saved something, **Reading list**. **Focus**
+and your profile sit in the header of every screen. **Regenerate** on a story section, or on a deep report section in `Lab`,
 rewrites only that section against the locked evidence. The same button appears on primer
 concepts, quiz questions, derivations and equations, and **Strengthen** in the evidence health
 panel rewrites a thin section with more evidence. The history button in the header opens
@@ -1075,7 +1094,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.25.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.27.1  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 
@@ -1210,6 +1229,9 @@ the server.
 - PDF and web content are treated as source material, never as instructions.
 - Provider keys are used only for the active request. They never appear in exports or in the
   browser's storage: the remembered analysis setup has no field for a key.
+- Your notes and your reading list are kept next to the library (`notes.json`,
+  `reading-list.json`), never in a project, its exports or a published page. A saved work's link is
+  accepted only as an `http(s)` address, and a note is plain text, never rendered as HTML.
 - The profile and the work log live in `~/.trace`, behind the same password as the rest of the API.
   A photo is accepted only as a small JPEG, PNG or WebP image (the browser crops it to 192 pixels),
   a session cannot end in the future, and an import adds sessions without removing any; a profile
