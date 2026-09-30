@@ -67,6 +67,7 @@ import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import { useConceptAliases, useLibraryStudy, useStudyProgress } from "./study-progress";
 import { FocusRoundBar, PaperFocusOffer } from "./focus/paper-time";
 import { NotesPanel, useReaderNotes } from "./reader-notes";
+import { ResumeBar, scrollToSection, useReadingTracker } from "./reading-position";
 import { sectionMark } from "@/lib/reader-notes";
 
 type LabViewProps = {
@@ -86,6 +87,8 @@ type LabViewProps = {
   onAnalysePaper?: (work: { identifier: string; title: string }) => void;
   /** Notlardan hikâyedeki bir bölüme gitmek (önizleme). */
   onShowStorySection?: (sectionId: string) => void;
+  /** Dışarıdan bir bölüme gitmek (kütüphanede "Continue reading"); `nonce` her istekte değişiyor. */
+  jump?: { section: string; reportSectionId?: string; nonce: number };
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
@@ -105,7 +108,7 @@ const reportKindLabels = {
   implication: "Implication",
 } as const;
 
-export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview, library, onAnalysePaper, onShowStorySection }: LabViewProps) {
+export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview, library, onAnalysePaper, onShowStorySection, jump }: LabViewProps) {
   const notes = useReaderNotes();
   const notedClaims = useMemo(() => new Set((notes?.notes ?? []).flatMap((note) => (note.target.kind === "claim" ? [note.target.claimId] : []))), [notes?.notes]);
   const t = stringsFor(project.language);
@@ -126,6 +129,19 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   // sağdaki çekmecede zaten görünür, ama bağlantıyı gönderen kişi listedeki
   // yerini de göstermek istemiştir.
   const [section, setSection] = useState(() => (selectedClaimId ? "claims" : "overview"));
+  const jumpNonce = jump?.nonce;
+  useEffect(() => {
+    if (!jump) return;
+    const open = setTimeout(() => {
+      setSection(jump.section);
+      if (jump.reportSectionId) setTimeout(() => scrollToSection("report", jump.reportSectionId!), 80);
+    }, 0);
+    return () => clearTimeout(open);
+    // Yalnızca yeni bir istekte; `jump` nesnesi her çizimde aynı kalmayabilir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpNonce]);
+  const reportSections = useMemo(() => (project.deepReport?.sections ?? []).map((item) => ({ id: item.id, title: item.title })), [project.deepReport]);
+  useReadingTracker(project.id, "report", reportSections, section === "report" && Boolean(onProjectChange));
   // Öğrenme katmanı eksikse (stüdyonun eski analizleri) Lab onu eklemeyi öneriyor.
   const missingLearning = onProjectChange ? missingLearningBlocks(project) : [];
   const [learningOpen, setLearningOpen] = useState(false);
@@ -416,6 +432,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "report" && project.deepReport && (
           <div className="deep-report">
+            {onProjectChange ? <ResumeBar projectId={project.id} place="report" /> : null}
             <header className="report-intro">
               <div><span>Deep report · {project.deepReport.readingTime}</span><h2>{project.deepReport.title}</h2></div>
               <p>{project.deepReport.dek}</p>

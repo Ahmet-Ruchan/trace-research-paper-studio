@@ -2614,6 +2614,44 @@ test.describe("focus timer and profile", () => {
   });
 });
 
+test.describe("where you stopped", () => {
+  const inView = (page: Page, selector: string) =>
+    page.evaluate((target) => {
+      const box = document.querySelector(target)!.getBoundingClientRect();
+      return box.top < window.innerHeight * 0.5 && box.bottom > 0;
+    }, selector);
+
+  test("remembers the report section and the story section you reached, and takes you back from the library", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-resume"));
+    const report = project.deepReport!.sections;
+    const mark = (place: string, id: string) => `[data-note-section="${place}:${id}"]`;
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Deep report" }).click();
+    await page.locator(mark("report", report[3].id)).evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem("trace-reading-positions") ?? ""), { timeout: 8_000 }).toContain(`"sectionId":"${report[3].id}"`);
+
+    // Kütüphane: kartta kaldığın yer; tıklayınca Lab o bölümde açılıyor.
+    await page.getByRole("button", { name: "Library" }).first().click();
+    const resume = page.getByRole("button", { name: `Continue reading ${project.evidence.paper.title} at 4 of ${report.length}: ${report[3].title}` });
+    await expect(resume).toHaveText(`Continue 4/${report.length}`);
+    await resume.click();
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Deep report");
+    await expect.poll(() => inView(page, mark("report", report[3].id))).toBe(true);
+
+    // Hikâye: önizlemede ilerlenen bölüm; yeniden açılınca başta "kaldığın yer".
+    const story = project.story.sections;
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await page.locator(mark("story", story[2].id)).evaluate((element) => element.scrollIntoView({ block: "start" }));
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem("trace-reading-positions") ?? ""), { timeout: 8_000 }).toContain(`"sectionId":"${story[2].id}"`);
+    await page.goto(`/?project=${project.id}&mode=preview`);
+    const bar = page.getByRole("group", { name: "Where you stopped" });
+    await expect(bar).toContainText(`You stopped at 3 of ${story.length}: ${story[2].title}.`);
+    await bar.getByRole("button", { name: "Continue reading" }).click();
+    await expect.poll(() => inView(page, mark("story", story[2].id))).toBe(true);
+    await expect(bar).toHaveCount(0);
+  });
+});
+
 test.describe("reading list", () => {
   test("saves works to read later from the concept suggestions and the citation graph, and places them in the reading order", async ({ page, request }) => {
     await seed(request, {

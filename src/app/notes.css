@@ -101,3 +101,12 @@ a.reading-title svg { display: inline-block; vertical-align: -1px; color: var(--
   .citation-columns li { flex-wrap: wrap; }
   .citation-actions { width: 100%; justify-content: flex-start; }
 }
+
+/* ---------- Kaldığın yer (reading-position.tsx) ---------- */
+.resume-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 auto 22px; padding: 10px 12px 10px 16px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--surface); color: var(--ink-soft); }
+.story-page .resume-bar { width: min(960px, calc(100% - 40px)); margin-top: 18px; }
+.resume-bar > svg { flex: none; color: var(--accent-ink, var(--ink)); }
+.resume-bar p { flex: 1 1 14rem; min-width: 0; margin: 0; font-size: var(--text-sm); line-height: 1.5; }
+.resume-go { min-height: 34px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 999px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); }
+.resume-close { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink-soft); cursor: pointer; }
+.library-continue { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--ink); white-space: nowrap; }

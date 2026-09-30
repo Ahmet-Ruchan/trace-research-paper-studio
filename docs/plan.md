@@ -69,8 +69,16 @@ yapıldığı ve nasıl test edildiği yazıyor.
 ## Okuma
 
 - [ ] **17. Sesli okuma.** Hikâye ve rapor bölümleri tarayıcının kendi sesiyle okunur.
-- [ ] **18. Kaldığın yeri hatırlama.** Story ve raporda en son okunan yer saklanır;
+- [x] **18. Kaldığın yeri hatırlama.** Story ve raporda en son okunan yer saklanır;
   kütüphane kartında "Continue reading".
+  - *Yapıldı:* Ekranın üst yarısındaki bölüm, bir buçuk saniye kalınca "okunan" sayılıp bu
+    tarayıcıda saklanıyor (makale başına bir konum, en yeni 200 makale;
+    `src/lib/reading-position.ts`). Story önizlemesinin ve Deep report'un başında "You stopped
+    at 4 of 8: …" şeridi ve **Continue reading**; kütüphane kartında **Continue 4/8**, makaleyi
+    o bölümde açıyor (rapor için Lab'in Deep report bölümü, hikâye için önizleme). İlk bölümde
+    kalındıysa devam önerilmiyor.
+  - *Test:* konum saklama, 200 sınırı, bozuk değer, kapalı depolama birim testlerde; rapor ve
+    hikâyede ilerleyip kütüphaneden ve şeritten geri dönmek e2e'de.
 - [ ] **19. Makale içi arama.** Tek makalenin iddialarında, raporunda, kavramlarında ve
   notlarında birlikte arama.
 - [ ] **20. Komut paleti (Ctrl+K).** Makaleye, bölüme ya da eyleme yazarak gitmek.

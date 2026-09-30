@@ -439,6 +439,11 @@ for a primer concept why this paper needs it, opens under the paragraph. Each se
 the concepts to know before reading it, taken from the claims it shares with the primer. The deep
 report does the same. Nothing is generated for this; it all comes from the project.
 
+Trace remembers where you stopped, in the story and in the deep report. Opening either again starts
+with *You stopped at 4 of 8: …* and **Continue reading**, and the paper's card in the library has
+**Continue 4/8**, which opens it at that section. The place is kept in this browser only, one per
+paper; another device keeps its own.
+
 ![Visual story](docs/images/story.jpg)
 
 ### See where the evidence is thin

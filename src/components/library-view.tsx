@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BarChart3, BookmarkCheck, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, BookMarked, BookmarkCheck, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import {
   LIBRARY_LAYOUT_KEY,
@@ -27,6 +27,8 @@ import { useReviewForecast } from "./study-progress";
 import { describeDue } from "@/lib/review-schedule";
 import { StudioNav } from "./focus/studio-nav";
 import { useReadingList } from "./reading-list";
+import { useReadingPositions } from "./reading-position";
+import { positionLabel, worthContinuing, type ReadingPosition } from "@/lib/reading-position";
 
 type LibraryViewProps = {
   projects: ResearchProject[];
@@ -41,6 +43,8 @@ type LibraryViewProps = {
   onConcepts: () => void;
   /** Okuma listesi: kavram haritasındaki okuma sırasında. */
   onReadingList?: () => void;
+  /** Kaldığın yerden: makale, kalınan bölümde açılıyor. */
+  onContinue?: (project: ResearchProject, position: ReadingPosition) => void;
   onProgress: () => void;
   /** Kart hemen kayboluyor; silme geri alma süresi dolunca sunucuya gidiyor. */
   onDelete: (projectId: string) => void;
@@ -77,8 +81,9 @@ function count(value: number, noun: string) {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onConcepts, onReadingList, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onConcepts, onReadingList, onContinue, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const reading = useReadingList();
+  const positions = useReadingPositions();
   const review = useReviewForecast(projects);
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>("papers");
@@ -396,6 +401,16 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
                       setImportError(undefined);
                       onDelete(project.id);
                     }}><Trash2 size={15} /></button>
+                    {onContinue && worthContinuing(positions[project.id]) ? (
+                      <button
+                        className="library-continue"
+                        title={`You stopped at ${positionLabel(positions[project.id])}`}
+                        aria-label={`Continue reading ${project.evidence.paper.title} at ${positionLabel(positions[project.id])}`}
+                        onClick={() => onContinue(project, positions[project.id])}
+                      >
+                        <BookMarked size={14} /> Continue {positions[project.id].index + 1}/{positions[project.id].total}
+                      </button>
+                    ) : null}
                     <button className="library-open" onClick={() => onOpen(project)}>Open <ArrowRight size={15} /></button>
                   </div>
                 </footer>

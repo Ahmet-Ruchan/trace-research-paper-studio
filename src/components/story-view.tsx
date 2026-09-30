@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, BookOpen, ExternalLink } from "lucide-react";
 import { elementId, parseDeepLink, scrollToDeepLink, sectionHash } from "@/lib/deep-link";
 import { sectionMark } from "@/lib/reader-notes";
+import { ResumeBar, useReadingTracker } from "./reading-position";
 import type { ResearchProject } from "@/lib/schema";
 import {
   FiguresView,
@@ -75,6 +76,10 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
     return () => window.removeEventListener("hashchange", goToHash);
   }, []);
 
+  // Kaldığın yer: yalnızca stüdyonun önizlemesinde (`reading-position.tsx`).
+  const storySections = useMemo(() => project.story.sections.map((section) => ({ id: section.id, title: section.title })), [project.story.sections]);
+  useReadingTracker(project.id, "story", storySections, embedded);
+
   const activeIndex = Math.max(
     project.story.sections.findIndex((section) => section.id === activeId),
     0,
@@ -112,6 +117,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
         </button>
       </header>
 
+      {embedded ? <ResumeBar projectId={project.id} place="story" /> : null}
       <div className="story-body">
         <div className="story-copy-column">
           {project.story.sections.map((section) => (

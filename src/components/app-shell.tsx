@@ -22,6 +22,8 @@ import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@
 import { EvidenceDrawer } from "./evidence-drawer";
 import { NoteHighlights, ReaderNotesProvider, SelectionNoteBar } from "./reader-notes";
 import { ReadingListProvider } from "./reading-list";
+import { scrollToSection } from "./reading-position";
+import type { ReadingPosition } from "@/lib/reading-position";
 import { HistoryPanel } from "./history-panel";
 import { PublishPanel } from "./publish-panel";
 import { LabView } from "./lab-view";
@@ -97,6 +99,7 @@ function Studio() {
   const [paperLookup, setPaperLookup] = useState<{ query: string; expectTitle?: string }>();
   // Kütüphaneden "Reading list": kavram haritası okuma sırasına kaydırılarak açılıyor.
   const [conceptsFocus, setConceptsFocus] = useState<"reading">();
+  const [labJump, setLabJump] = useState<{ section: string; reportSectionId?: string; nonce: number }>();
   const [initialTeam, setInitialTeam] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("lab");
   const [fileUrl, setFileUrl] = useState<string>();
@@ -482,6 +485,17 @@ function Studio() {
     setWarnings([]);
   }
 
+  /** Kaldığın yerden: hikâyede önizleme, raporda Lab açılıp bölüme kaydırılıyor. */
+  function continueReading(nextProject: ResearchProject, position: ReadingPosition) {
+    openProject(nextProject);
+    if (position.place === "story") {
+      setMode("preview");
+      window.setTimeout(() => scrollToSection("story", position.sectionId), 150);
+    } else {
+      setLabJump({ section: "report", reportSectionId: position.sectionId, nonce: Date.now() });
+    }
+  }
+
   /** Kütüphanedeki iddia aramasından: proje laboratuvarda, o iddia seçili ve görünür açılır. */
   function openClaim(nextProject: ResearchProject, claimId: string) {
     openProject(nextProject);
@@ -656,6 +670,7 @@ function Studio() {
           setConceptsFocus(undefined);
           setScreen("concepts");
         }}
+        onContinue={continueReading}
         onReadingList={() => {
           setConceptsFocus("reading");
           setScreen("concepts");
@@ -745,7 +760,7 @@ function Studio() {
       </header>
       {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
       <div className="workspace-content">
-        {mode === "lab" && <LabView project={project} library={projects} onAnalysePaper={analyseFromGraph} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} onShowStorySection={showStorySection} />}
+        {mode === "lab" && <LabView project={project} library={projects} onAnalysePaper={analyseFromGraph} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} onShowStorySection={showStorySection} jump={labJump} />}
         {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
         {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
       </div>
