@@ -30,6 +30,7 @@ import { isLibraryTagsFile, libraryTagsToJson, parseLibraryTags, tagListSchema }
 import { aliasFileSchema, isAliasFile, parseAliasFile, type AliasFile } from "./concept-aliases";
 import { findBuiltInTemplate, templateIssues } from "./narrative-templates";
 import { isStudyFile, parseStudyFile, studyFileToJson, studyProgressSchema, type StudyProgress } from "./study-path";
+import { isNotesFile, notesFileToJson, parseNotesFile, readerNotesSchema, type ReaderNote } from "./reader-notes";
 import { emptyProfile, isProfile, parseProfile, profileSchema, type Profile } from "./profile";
 import { dayKey, isWorkLog, parseWorkLog, workLogSchema, workLogToJson, type WorkLog } from "./work-log";
 import {
@@ -373,6 +374,8 @@ export async function deleteStoredProject(projectId: string) {
   await saveStoredProjectTags(projectId, []).catch(() => undefined);
   // Çalışma ilerlemesi de: aynı kimlikle eklenen başka bir makale eski yanıtları devralmamalı.
   await saveStudyProgress(projectId, undefined).catch(() => undefined);
+  // Notlar da; günlük yedekte yedi gün kalıyorlar (`saveReaderNotes`).
+  await saveReaderNotes(projectId, []).catch(() => undefined);
   try {
     await unlink(path);
     return true;
@@ -484,6 +487,46 @@ export async function saveStudyProgress(projectId: string, progress: StudyProgre
     if (next) current.set(projectId, next);
     else current.delete(projectId);
     await atomicWrite(join(directory, STUDY_FILE), `${JSON.stringify(studyFileToJson(current), null, 2)}\n`);
+    return next;
+  } finally {
+    await release();
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Okuyucunun notları — ~/.trace/library/notes.json
+ *
+ * Çalışma ilerlemesi gibi okuyucunun kaydı (`reader-notes.ts`). Notlar
+ * okuyucunun kendi yazdığı metin: her günün ilk yazımından önce dosyanın bir
+ * kopyası `~/.trace/backups` içine alınıyor, bozuk dosya kenara konuyor.
+ * ------------------------------------------------------------------ */
+
+const NOTES_FILE = "notes.json";
+const NOTES_LOCK = "notes.lock";
+
+export async function readAllReaderNotes() {
+  return parseNotesFile((await readJsonFile(join(traceLibraryDirectory(), NOTES_FILE))).raw);
+}
+
+export async function readReaderNotes(projectId: string) {
+  return (await readAllReaderNotes()).get(projectId) ?? [];
+}
+
+/** Bir makalenin notlarını yazar; boş liste kaydı kaldırır. Değişiklik yoksa dosyaya dokunulmuyor. */
+export async function saveReaderNotes(projectId: string, notes: readonly ReaderNote[]) {
+  const next = readerNotesSchema.parse(notes);
+  const directory = traceLibraryDirectory();
+  const path = join(directory, NOTES_FILE);
+  const release = await acquireDirectoryLock(directory, NOTES_LOCK, "Your notes are busy. Please retry in a moment.");
+  try {
+    const file = await readJsonFile(path);
+    const current = parseNotesFile(file.raw);
+    if (!next.length && !current.has(projectId)) return next;
+    if (file.exists && !isNotesFile(file.raw)) await setAsideDamaged(path, "notes");
+    else if (file.exists) await dailyBackup(path, "notes");
+    if (next.length) current.set(projectId, next);
+    else current.delete(projectId);
+    await atomicWrite(path, `${JSON.stringify(notesFileToJson(current), null, 2)}\n`);
     return next;
   } finally {
     await release();

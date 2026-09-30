@@ -5,6 +5,7 @@ import { Check, ExternalLink, FileText, ScanSearch, X } from "lucide-react";
 import type { Claim, ClaimReview, PaperEvidence } from "@/lib/schema";
 import { useStrings } from "@/visuals";
 import { ExcerptOnPage } from "./excerpt-on-page";
+import { ClaimNotes } from "./reader-notes";
 
 type EvidenceDrawerProps = {
   claim?: Claim;
@@ -98,6 +99,7 @@ export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, pers
               );
             })}
           </div>
+          <ClaimNotes key={claim.id} claimId={claim.id} />
         </div>
       )}
       {onPage && fileUrl && <ExcerptOnPage fileUrl={fileUrl} page={onPage.page} excerpt={onPage.excerpt} onClose={() => setOnPage(undefined)} />}

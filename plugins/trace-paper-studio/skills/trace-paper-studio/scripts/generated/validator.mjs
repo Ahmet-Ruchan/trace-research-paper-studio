@@ -20696,10 +20696,10 @@ function studyPath(project, drill) {
 		questions
 	};
 }
-const MAX_ID = 300;
+const MAX_ID$1 = 300;
 const MAX_ENTRIES = 400;
 const studyAnswerSchema = object({
-	id: string().min(1).max(MAX_ID),
+	id: string().min(1).max(MAX_ID$1),
 	correct: boolean(),
 	attempts: number().int().min(1).max(99),
 	revealed: boolean(),
@@ -20714,13 +20714,13 @@ const studyAnswerSchema = object({
 */
 const studyExplanationSchema = object({
 	/** "story:<id>" ya da "report:<id>". */
-	target: string().min(1).max(MAX_ID),
+	target: string().min(1).max(MAX_ID$1),
 	at: string().max(40),
 	/** Anlatış 3000 karakterle sınırlı (`explain-back.ts`); bu yalnızca bir akıl sınırı. */
 	text: string().min(1).max(4e3),
 	model: string().max(200),
-	covered: array(string().max(MAX_ID)).max(200),
-	missed: array(string().max(MAX_ID)).max(200),
+	covered: array(string().max(MAX_ID$1)).max(200),
+	missed: array(string().max(MAX_ID$1)).max(200),
 	misstated: number().int().min(0).max(200),
 	unsupported: number().int().min(0).max(200),
 	total: number().int().min(0).max(200),
@@ -20745,8 +20745,8 @@ function trimExplanations(items) {
 }
 const studyProgressSchema = object({
 	version: literal(1),
-	current: string().max(MAX_ID).optional(),
-	done: array(string().max(MAX_ID)).max(400),
+	current: string().max(MAX_ID$1).optional(),
+	done: array(string().max(MAX_ID$1)).max(400),
 	answers: array(studyAnswerSchema).max(400),
 	startedAt: string().max(40),
 	updatedAt: string().max(40),
@@ -20811,7 +20811,7 @@ const studyFileSchema = object({
 	projects: array(unknown())
 });
 const studyEntrySchema = object({
-	id: string().min(1).max(MAX_ID),
+	id: string().min(1).max(MAX_ID$1),
 	progress: studyProgressSchema
 });
 function isStudyFile(raw) {
@@ -21296,7 +21296,7 @@ const KIND_TEXT = {
 const KINDS$1 = Object.keys(KIND_TEXT);
 const random = seededRandom;
 const shuffle = seededShuffle;
-const quoted = (text) => `“${text.trim()}”`;
+const quoted$1 = (text) => `“${text.trim()}”`;
 const pageOf = (claim) => claim.sourceRefs.find((reference) => reference.page)?.page;
 const onPage = (page) => page ? ` (p. ${page})` : "";
 function kindQuestion(claim, next) {
@@ -21308,7 +21308,7 @@ function kindQuestion(claim, next) {
 	}));
 	return {
 		id: `drill-kind-${claim.id}`,
-		prompt: `What kind of statement is this? ${quoted(claim.statement)}`,
+		prompt: `What kind of statement is this? ${quoted$1(claim.statement)}`,
 		kind: "single",
 		options,
 		claimIds: [claim.id],
@@ -21328,17 +21328,17 @@ function quoteQuestion(claim, pool, next) {
 	}).filter((item, index, all) => all.findIndex((entry) => entry.excerpt === item.excerpt) === index).slice(0, 3);
 	if (distractors.length < 2) return void 0;
 	const options = shuffle([{
-		label: quoted(excerpt),
+		label: quoted$1(excerpt),
 		correct: true,
 		explanation: `This is the sentence the claim rests on${onPage(own.page)}.`
 	}, ...distractors.map(({ claim: other, excerpt: text }) => ({
-		label: quoted(text),
+		label: quoted$1(text),
 		correct: false,
-		explanation: `This sentence supports a different claim: ${quoted(other.statement)}`
+		explanation: `This sentence supports a different claim: ${quoted$1(other.statement)}`
 	}))], next);
 	return {
 		id: `drill-quote-${claim.id}`,
-		prompt: `Which sentence from the paper supports this claim? ${quoted(claim.statement)}`,
+		prompt: `Which sentence from the paper supports this claim? ${quoted$1(claim.statement)}`,
 		kind: "single",
 		options,
 		claimIds: [claim.id],
@@ -21352,7 +21352,7 @@ function numberQuestion(metric, metrics, claims, next) {
 	const options = shuffle([{
 		label: metric.displayValue,
 		correct: true,
-		explanation: `${metric.context}. The paper: ${quoted(metric.sourceRef.excerpt)}${onPage(metric.sourceRef.page)}`
+		explanation: `${metric.context}. The paper: ${quoted$1(metric.sourceRef.excerpt)}${onPage(metric.sourceRef.page)}`
 	}, ...alternatives.slice(0, 3).map((other) => ({
 		label: other.displayValue,
 		correct: false,
@@ -22071,6 +22071,164 @@ function hourPattern(sessions, options) {
 		max: Math.max(0, ...rounded.flat()),
 		...peak ? { peak } : {}
 	};
+}
+
+//#endregion
+//#region src/lib/reader-notes.ts
+/**
+* Okuyucunun notları ve vurguları.
+*
+* Bir iddiaya ya da bir bölüme (hikâye ya da derin rapor) bağlı: bölümde
+* seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
+* iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
+*
+* Çalışma ilerlemesi gibi okuyucunun kaydı, makalenin değil: proje
+* dosyasına, dışa aktarımlara ve yayınlara girmiyor; kütüphanenin yanında
+* `notes.json` içinde duruyor. Markdown'a ya da Obsidian'a (ön bilgi,
+* etiketler ve callout'larla) buradan çıkıyor.
+*/
+const NOTE_COLORS = [
+	"yellow",
+	"green",
+	"blue",
+	"pink",
+	"purple"
+];
+const MAX_NOTES_PER_PAPER = 1e3;
+const MAX_NOTE_TEXT = 4e3;
+const MAX_NOTE_QUOTE = 1200;
+const MAX_ID = 300;
+const noteTargetSchema = discriminatedUnion("kind", [object({
+	kind: literal("claim"),
+	claimId: string().min(1).max(160)
+}), object({
+	kind: literal("section"),
+	place: _enum(["story", "report"]),
+	sectionId: string().min(1).max(160)
+})]);
+const readerNoteSchema = object({
+	id: string().min(1).max(80),
+	target: noteTargetSchema,
+	/** Vurgulanan metin, bölümde göründüğü gibi. */
+	quote: string().trim().min(1).max(MAX_NOTE_QUOTE).optional(),
+	text: string().trim().max(MAX_NOTE_TEXT).default(""),
+	color: _enum(NOTE_COLORS).default("yellow"),
+	createdAt: string().max(40),
+	updatedAt: string().max(40)
+}).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
+const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
+const notesFileSchema = object({
+	version: literal(1),
+	projects: array(unknown())
+});
+const notesEntrySchema = object({
+	id: string().min(1).max(MAX_ID),
+	notes: array(unknown())
+});
+/** Proje kimliği → notlar. Bozuk bir not tek başına düşüyor, diğerleri kalıyor. */
+function parseNotesFile(raw) {
+	const entries = /* @__PURE__ */ new Map();
+	const file = notesFileSchema.safeParse(raw);
+	if (!file.success) return entries;
+	for (const item of file.data.projects) {
+		const entry = notesEntrySchema.safeParse(item);
+		if (!entry.success) continue;
+		const notes = entry.data.notes.flatMap((note) => {
+			const parsed = readerNoteSchema.safeParse(note);
+			return parsed.success ? [parsed.data] : [];
+		});
+		if (notes.length) entries.set(entry.data.id, notes.slice(0, MAX_NOTES_PER_PAPER));
+	}
+	return entries;
+}
+const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
+/**
+* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, sonra
+* iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
+* "no longer in the paper" başlığıyla kalıyor.
+*/
+function groupNotes(project, notes) {
+	const groups = [];
+	const used = /* @__PURE__ */ new Set();
+	const take = (target, heading, place, extra = {}) => {
+		const matched = notes.filter((note) => sameTarget(note.target, target)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+		if (!matched.length) return;
+		matched.forEach((note) => used.add(note.id));
+		groups.push({
+			target,
+			heading,
+			place,
+			notes: matched,
+			...extra
+		});
+	};
+	for (const section of project.story.sections) take({
+		kind: "section",
+		place: "story",
+		sectionId: section.id
+	}, section.title, "Story");
+	for (const section of project.deepReport?.sections ?? []) take({
+		kind: "section",
+		place: "report",
+		sectionId: section.id
+	}, section.title, "Deep report");
+	for (const claim of project.evidence.claims) {
+		const reference = claim.sourceRefs[0];
+		take({
+			kind: "claim",
+			claimId: claim.id
+		}, claim.statement, "Claim", {
+			...reference?.page ? { page: reference.page } : {},
+			...reference?.excerpt ? { excerpt: reference.excerpt } : {}
+		});
+	}
+	const orphans = notes.filter((note) => !used.has(note.id));
+	if (orphans.length) groups.push({
+		target: orphans[0].target,
+		heading: "No longer in the paper",
+		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
+		notes: orphans
+	});
+	return groups;
+}
+const quoted = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
+const yamlString = (value) => JSON.stringify(value);
+/**
+* Markdown dışa aktarımı. `obsidian`: YAML ön bilgisi (başlık, yazarlar, yıl,
+* DOI, etiketler), vurgular `[!quote]`, iddianın kaynağı `[!cite]` callout'u.
+* Düz Markdown'da aynı içerik alıntı bloklarıyla.
+*/
+function notesMarkdown(project, notes, options) {
+	const { paper } = project.evidence;
+	const lines = [];
+	if (options.obsidian) lines.push("---", `title: ${yamlString(paper.title)}`, `authors: [${paper.authors.map(yamlString).join(", ")}]`, ...paper.year ? [`year: ${yamlString(paper.year)}`] : [], ...paper.venue ? [`venue: ${yamlString(paper.venue)}`] : [], ...paper.doi ? [`doi: ${yamlString(paper.doi)}`] : [], "tags: [trace, paper-notes]", `exported: ${options.exportedAt.slice(0, 10)}`, "---", "");
+	lines.push(`# ${paper.title}: notes`, "");
+	if (!options.obsidian) {
+		const byline = [
+			paper.authors.join(", "),
+			paper.venue,
+			paper.year
+		].filter(Boolean).join(" · ");
+		if (byline) lines.push(`*${byline}*`, "");
+		if (paper.doi) lines.push(`DOI: ${paper.doi}`, "");
+	}
+	const groups = groupNotes(project, notes);
+	if (!groups.length) lines.push("No notes or highlights yet.", "");
+	for (const group of groups) {
+		lines.push(`## ${group.place === "Claim" ? "Claim" : group.place}: ${group.heading}${group.page ? ` (p. ${group.page})` : ""}`, "");
+		if (group.excerpt) lines.push(options.obsidian ? `> [!cite] The paper, p. ${group.page ?? "?"}\n${quoted(`“${group.excerpt}”`)}` : quoted(`“${group.excerpt}” (p. ${group.page ?? "?"})`), "");
+		for (const note of group.notes) {
+			if (note.quote) lines.push(options.obsidian ? `> [!quote] Highlight\n${quoted(note.quote)}` : quoted(note.quote), "");
+			if (note.text) lines.push(note.text, "");
+			if (!note.quote && !note.text) lines.push(options.obsidian ? "#highlighted" : "*Marked as important.*", "");
+		}
+	}
+	if (!options.obsidian) lines.push(`Exported from Trace on ${options.exportedAt.slice(0, 10)}.`);
+	return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
+}
+/** Dosya adı: başlıktan, güvenli karakterlerle. */
+function notesFileName(project) {
+	return `${project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "trace-paper"}-notes.md`;
 }
 
 //#endregion
@@ -23347,4 +23505,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, paperKey, parseAliasFile, parseProfile, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, weekReport, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingOrder, recordCheckedExplanation, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, weekReport, workSummary };

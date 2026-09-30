@@ -1270,6 +1270,13 @@ test.describe("colour themes", () => {
     };
     expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
     expect((await request.put(`/api/library/study?id=${companion.id}`, { data: { progress: { ...completeStep(undefined, "start", "finish", iso(-9)), finishedAt: iso(-8) } } })).ok()).toBe(true);
+    // Notlar ekranı dolu görünsün: vurgu, not ve işaretli iddia.
+    const noted = { createdAt: iso(-1), updatedAt: iso(-1) };
+    expect((await request.put(`/api/library/notes?id=${project.id}`, { data: { notes: [
+      { id: "c1", target: { kind: "section", place: "report", sectionId: project.deepReport!.sections[0].id }, quote: "a highlighted line", text: "Why does this hold?", color: "purple", ...noted },
+      { id: "c2", target: { kind: "claim", claimId: project.evidence.claims[0].id }, text: "Check against the ablation.", ...noted },
+      { id: "c3", target: { kind: "claim", claimId: project.evidence.claims[1].id }, ...noted },
+    ] } })).ok()).toBe(true);
     expect((await request.put("/api/library/aliases", { data: { a: project.primer!.concepts[1].term, b: "Contrast scaled scores", decision: "same" } })).ok()).toBe(true);
     // Çalışma saati ve profil: açık renkli dolgular (koyu yazı) ve koyu olanlar (beyaz yazı), bir alarm, bir yıllık kayıt.
     const { profile } = (await (await request.get("/api/profile")).json()) as { profile: Profile };
@@ -1347,6 +1354,7 @@ test.describe("colour themes", () => {
         lab("Claims"),
         lab("Learning health"),
         lab("Review"),
+        lab("Notes", ".note-item"),
         lab("Evidence health"),
         { name: "story", url: `/?project=${project.id}&mode=story` },
         { name: "preview", url: `/?project=${project.id}&mode=preview` },
@@ -2536,6 +2544,96 @@ test.describe("focus timer and profile", () => {
     expect(file.kind).toBe("trace-work-data");
     expect(file.profile.firstName).toBe("Grace");
     expect(file.log.sessions).toHaveLength(4);
+  });
+});
+
+test.describe("reader notes", () => {
+  /** Bir bölümün ilk uzun metin düğümünden ilk `length` karakteri seçer, okuyucunun sürüklemesi gibi. */
+  async function selectIn(page: Page, selector: string, length = 34) {
+    return page.evaluate(({ selector, length }) => {
+      const root = document.querySelector(selector)!;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode() as Text | null;
+      while (node && node.data.trim().length < length + 5) node = walker.nextNode() as Text | null;
+      const range = document.createRange();
+      const start = node!.data.search(/\S/);
+      range.setStart(node!, start);
+      range.setEnd(node!, start + length);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return selection.toString().replace(/\s+/g, " ").trim();
+    }, { selector, length });
+  }
+  const stored = async (request: APIRequestContext, id: string) => ((await (await request.get(`/api/library/notes?id=${id}`)).json()) as { notes: Array<{ quote?: string; text: string; color: string; target: { kind: string } }> }).notes;
+  const painted = (page: Page, color: string) => page.evaluate((name) => (CSS as unknown as { highlights: Map<string, Set<Range>> }).highlights.get(name)?.size ?? 0, `trace-note-${color}`);
+
+  test("highlights and notes text in the report and the story, notes a claim, and exports them for Obsidian, never into the project", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-notes"));
+    const report = project.deepReport!.sections[0];
+    const claim = project.evidence.claims[0];
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Deep report" }).click();
+
+    // Rapor: seçilen metin yeşille vurgulanıyor.
+    const first = await selectIn(page, `[data-note-section="report:${report.id}"] .report-analysis`);
+    const bar = page.getByRole("toolbar", { name: "Highlight the selected text" });
+    await bar.getByRole("button", { name: "Highlight in green" }).click();
+    await expect(bar).toHaveCount(0);
+    await expect.poll(() => stored(request, project.id)).toEqual([expect.objectContaining({ quote: first, color: "green", text: "", target: { kind: "section", place: "report", sectionId: report.id } })]);
+    await expect.poll(() => painted(page, "green")).toBe(1);
+
+    // Başka bir yer: vurgulayıp not yazılıyor.
+    const second = await selectIn(page, `[data-note-section="report:${project.deepReport!.sections[1].id}"] .report-analysis`, 20);
+    await bar.getByRole("button", { name: "Note" }).click();
+    const form = page.getByRole("form", { name: "Note on the highlight" });
+    await form.getByLabel("Your note").fill("Compare with the BLEU table.");
+    await form.getByRole("button", { name: "Save" }).click();
+    await expect.poll(async () => (await stored(request, project.id)).map((note) => [note.quote, note.text])).toEqual([[first, ""], [second, "Compare with the BLEU table."]]);
+    await expect.poll(() => painted(page, "yellow")).toBe(1);
+
+    // İddia: not ve "önemli" işareti; iddia listesinde yıldız.
+    await page.locator(".lab-nav > button", { hasText: "Claims" }).click();
+    await page.locator(".claim-row").first().locator("button").first().click();
+    const notes = page.getByRole("region", { name: "Your notes on this claim" });
+    await notes.getByLabel("A note on this claim").fill("Is this true for short sequences too?");
+    await notes.getByRole("button", { name: "Save note" }).click();
+    await notes.getByRole("button", { name: "Mark as important" }).click();
+    await expect(notes.getByRole("button", { name: "Marked as important" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".claim-row").first().getByLabel("You noted this claim")).toBeVisible();
+
+    // Notlar: sırayla, düzenleniyor, siliniyor, Obsidian'a çıkıyor.
+    await page.locator(".lab-nav > button", { hasText: "Notes (4)" }).click();
+    const groups = page.locator(".notes-group h3");
+    await expect(groups).toHaveText([report.title, project.deepReport!.sections[1].title, claim.statement]);
+    const noted = page.locator(".notes-group").nth(1).locator(".note-item");
+    await noted.getByRole("button", { name: "Edit" }).click();
+    await noted.getByLabel("Edit the note").fill("Compare with Table 2.");
+    await noted.getByRole("button", { name: "Save" }).click();
+    await noted.getByRole("radio", { name: "purple" }).click();
+    await expect.poll(async () => (await stored(request, project.id)).find((note) => note.quote === second)).toMatchObject({ text: "Compare with Table 2.", color: "purple" });
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "For Obsidian" }).click()]);
+    expect(download.suggestedFilename()).toBe("attention-is-all-you-need-notes.md");
+    const markdown = readFileSync((await download.path())!, "utf8");
+    expect(markdown).toContain("tags: [trace, paper-notes]");
+    expect(markdown).toContain(`> [!quote] Highlight\n> ${second}\n\nCompare with Table 2.`);
+    expect(markdown).toContain("Is this true for short sequences too?");
+    await page.locator(".notes-group").first().getByRole("button", { name: "Delete this note" }).click();
+    await expect.poll(async () => (await stored(request, project.id)).length).toBe(3);
+
+    // Hikâye önizlemesi: orada da seçilip vurgulanıyor; yenilenince vurgular yerinde.
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    const story = project.story.sections[0];
+    await selectIn(page, `[data-note-section="story:${story.id}"]`, 24);
+    await bar.getByRole("button", { name: "Highlight in blue" }).click();
+    await expect.poll(async () => (await stored(request, project.id)).length).toBe(4);
+    await page.reload();
+    await expect.poll(() => painted(page, "blue")).toBe(1);
+
+    // Proje dosyasında hiçbiri yok.
+    const saved = JSON.stringify(await (await request.get(`/api/library?id=${project.id}`)).json());
+    expect(saved).not.toContain("Compare with Table 2.");
+    expect(saved).not.toContain("short sequences too");
   });
 });
 

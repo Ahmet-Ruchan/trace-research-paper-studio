@@ -14,6 +14,7 @@ import {
   Lightbulb,
   ListChecks,
   MessageCircleQuestion,
+  NotebookPen,
   Quote,
   RefreshCw,
   Route,
@@ -21,6 +22,7 @@ import {
   Sigma,
   SlidersHorizontal,
   Sparkles,
+  Star,
   TriangleAlert,
   UserCheck,
   Waypoints,
@@ -64,6 +66,8 @@ import { studyPath, studySummary } from "@/lib/study-path";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import { useConceptAliases, useLibraryStudy, useStudyProgress } from "./study-progress";
 import { FocusRoundBar, PaperFocusOffer } from "./focus/paper-time";
+import { NotesPanel, useReaderNotes } from "./reader-notes";
+import { sectionMark } from "@/lib/reader-notes";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -80,6 +84,8 @@ type LabViewProps = {
   library?: readonly ResearchProject[];
   /** Kaynaklardan önerilen bir makaleyi analiz etmek (ana ekrandaki arama). */
   onAnalysePaper?: (work: { identifier: string; title: string }) => void;
+  /** Notlardan hikâyedeki bir bölüme gitmek (önizleme). */
+  onShowStorySection?: (sectionId: string) => void;
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
@@ -99,7 +105,9 @@ const reportKindLabels = {
   implication: "Implication",
 } as const;
 
-export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview, library, onAnalysePaper }: LabViewProps) {
+export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview, library, onAnalysePaper, onShowStorySection }: LabViewProps) {
+  const notes = useReaderNotes();
+  const notedClaims = useMemo(() => new Set((notes?.notes ?? []).flatMap((note) => (note.target.kind === "claim" ? [note.target.claimId] : []))), [notes?.notes]);
   const t = stringsFor(project.language);
   const regeneration = useSectionRegeneration(project, onProjectChange);
   /** Öğrenme katmanı öğeleri için aynı tetikleyici; görüntüleyicide hiç çizilmiyor. */
@@ -241,6 +249,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     ...(hasPractice ? [{ id: "practice", label: t.navPractice, icon: SlidersHorizontal }] : []),
     ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
     { id: "claims", label: "Claims", icon: Quote },
+    // Okuyucunun notları stüdyoda; sağlayıcı yoksa (salt okunur görünüm) sekme de yok.
+    ...(notes ? [{ id: "notes", label: notes.notes.length ? `Notes (${notes.notes.length})` : "Notes", icon: NotebookPen }] : []),
     { id: "health", label: t.navHealth, icon: ShieldCheck },
     // Öğrenme sağlığı düzeltmeleri yeniden üretimle yapılıyor; salt okunur görünümde yok.
     ...(onProjectChange ? [{ id: "learning", label: "Learning health", icon: Activity }] : []),
@@ -413,7 +423,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             {regeneration.undoBar}
             <div className="report-sections">
               {project.deepReport.sections.map((item, index) => (
-                <article className={`report-section report-${item.kind}`} key={item.id}>
+                <article className={`report-section report-${item.kind}`} key={item.id} data-note-section={sectionMark("report", item.id)}>
                   <header>
                     <span>
                       {String(index + 1).padStart(2, "0")} · {reportKindLabels[item.kind]}
@@ -461,7 +471,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                   className={selectedClaimId === claim.id ? "claim-row selected" : "claim-row"}
                 >
                   <button onClick={() => onClaimSelect(claim.id)}>
-                    <span className="claim-kind">{kindLabels[claim.kind]}</span>
+                    <span className="claim-kind">{kindLabels[claim.kind]}{notedClaims.has(claim.id) ? <Star className="claim-noted" size={12} aria-label="You noted this claim" /> : null}</span>
                     <p>{claim.statement}</p>
                     <span className={`claim-confidence ${claim.confidence}`}>
                       {claim.confidence === "verified" ? "Verified" : "Review"}
@@ -474,6 +484,24 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {section === "notes" && (
+          <section className="lab-block">
+            <div className="block-title"><NotebookPen size={16} /> Your notes and highlights</div>
+            <NotesPanel
+              project={project}
+              onClaimSelect={(claimId) => {
+                setSection("claims");
+                onClaimSelect(claimId);
+              }}
+              onShowSection={(place, sectionId) => {
+                if (place === "story") return onShowStorySection?.(sectionId);
+                setSection("report");
+                window.setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(sectionMark("report", sectionId))}"]`)?.scrollIntoView({ block: "start" }), 60);
+              }}
+            />
           </section>
         )}
 

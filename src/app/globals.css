@@ -4,6 +4,7 @@
 @import "../visuals/styles.css";
 @import "../visuals/learning.css";
 @import "./focus.css";
+@import "./notes.css";
 @theme inline {
   --color-background: var(--paper);
   --color-foreground: var(--ink);

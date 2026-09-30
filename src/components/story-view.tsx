@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, BookOpen, ExternalLink } from "lucide-react";
 import { elementId, parseDeepLink, scrollToDeepLink, sectionHash } from "@/lib/deep-link";
+import { sectionMark } from "@/lib/reader-notes";
 import type { ResearchProject } from "@/lib/schema";
 import {
   FiguresView,
@@ -119,6 +120,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
               key={section.id}
               ref={(node) => { sectionRefs.current[section.id] = node; }}
               className={`story-section ${activeId === section.id ? "is-active" : ""}`}
+              data-note-section={sectionMark("story", section.id)}
             >
               <span className="story-index">{section.indexLabel}</span>
               <p className="story-kicker" lang={project.language}>{section.kicker}</p>

@@ -28,6 +28,9 @@ import {
   weekReport,
   hourPattern,
   PATTERN_WEEKS,
+  notesMarkdown,
+  notesFileName,
+  parseNotesFile,
   recordCheckedExplanation,
   aliasBatches,
   aliasMap,
@@ -352,6 +355,7 @@ Usage:
   node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
   node trace-agent.mjs progress
   node trace-agent.mjs work [--days <n>]
+  node trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <notes.md>]
   node trace-agent.mjs concepts --names [--part <n>]
   node trace-agent.mjs alias --a "<name>" --b "<name>" [--different | --forget] [--proposed-by model] [--reason "<why>"]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
@@ -436,6 +440,11 @@ Usage:
             daily goal, streaks, the last --days days (default 7), time by
             paper this week and in all, and the latest sessions. Days on this
             machine's clock. Reads only; no network, no model.
+  notes     Prints the reader's own notes and highlights on a paper (kept in
+            ~/.trace/library/notes.json, never in the project) as Markdown, in
+            the paper's order: story sections, report sections, claims with
+            their page. --obsidian adds YAML front matter and callouts; --out
+            writes the file instead. Reads only; no network, no model.
   --template
             prepare only. A narrative template id (see "templates") or a path
             to a template JSON. It fixes the story's sections, their visuals
@@ -513,7 +522,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest", "no-save", "names", "different", "forget"].includes(key)) {
+    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest", "no-save", "names", "different", "forget", "obsidian"].includes(key)) {
       args[key] = true;
       continue;
     }
@@ -2155,6 +2164,51 @@ function printWork(args) {
   }, null, 2));
 }
 
+/**
+ * Okuyucunun notları: stüdyoda yazılan notlar ve vurgular, Markdown olarak.
+ * Proje dosyasına hiç yazılmıyorlar; burada yalnızca okunuyorlar.
+ */
+function printNotes(args) {
+  const { library, projects, files } = readLibrary();
+  let project;
+  if (args.project) {
+    const outcome = validateProjectObject(JSON.parse(readFileSync(resolve(args.project), "utf8")));
+    if (!outcome.ok) throw new Error("The project file is not a valid Trace project.");
+    project = projects.find((item) => item.id === outcome.project.id) ?? outcome.project;
+  } else if (args.id) {
+    project = projects.find((item) => item.id === args.id);
+    if (!project) throw new Error(`No paper with the id "${args.id}" in the library (${library}).`);
+  } else {
+    throw new Error("--project <project.trace.json> or --id <library id> is required.");
+  }
+  let all = new Map();
+  try {
+    all = parseNotesFile(JSON.parse(readFileSync(join(library, "notes.json"), "utf8")));
+  } catch {
+    // Not kaydı yoksa ya da okunamıyorsa not yok.
+  }
+  const notes = all.get(project.id) ?? [];
+  const markdown = notesMarkdown(project, notes, { obsidian: Boolean(args.obsidian), exportedAt: new Date().toISOString() });
+  const summary = {
+    ok: true,
+    paper: project.evidence.paper.title,
+    projectId: project.id,
+    ...(files.get(project.id) ? { file: files.get(project.id) } : {}),
+    notes: notes.filter((note) => note.text).length,
+    highlights: notes.filter((note) => note.quote).length,
+    marked: notes.filter((note) => !note.text && !note.quote).length,
+    format: args.obsidian ? "obsidian" : "markdown",
+  };
+  if (args.out) {
+    const target = resolve(args.out.endsWith(".md") ? args.out : join(args.out, notesFileName(project)));
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, markdown, "utf8");
+    console.log(JSON.stringify({ ...summary, wrote: target }, null, 2));
+    return;
+  }
+  console.log(JSON.stringify({ ...summary, markdown, note: notes.length ? "The reader's own notes, from the studio. Show or save them as they are; never write them into the project." : "No notes on this paper yet. In the studio, select text in the Deep report or the Story preview to highlight it, or open a claim to write a note." }, null, 2));
+}
+
 async function main() {
 try {
   const [command, ...rest] = process.argv.slice(2);
@@ -2180,6 +2234,7 @@ try {
   else if (command === "concepts") await printConcepts(args);
   else if (command === "progress") printProgress();
   else if (command === "work") printWork(args);
+  else if (command === "notes") printNotes(args);
   else if (command === "alias") recordAlias(args);
   else usage(1);
 } catch (error) {

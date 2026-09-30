@@ -20,6 +20,7 @@ import { restoreTextSize } from "@/lib/text-size";
 import { restoreTheme } from "@/lib/theme";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
 import { EvidenceDrawer } from "./evidence-drawer";
+import { NoteHighlights, ReaderNotesProvider, SelectionNoteBar } from "./reader-notes";
 import { HistoryPanel } from "./history-panel";
 import { PublishPanel } from "./publish-panel";
 import { LabView } from "./lab-view";
@@ -671,10 +672,18 @@ function Studio() {
   }
 
   const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);
+  // Notlardan hikâyedeki bir bölüme: önizleme açılıp bölüme kaydırılıyor.
+  const showStorySection = (sectionId: string) => {
+    setMode("preview");
+    window.setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ block: "start" }), 80);
+  };
   const slug = project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trace-story";
 
   return withWork(
+    <ReaderNotesProvider key={project.id} projectId={project.id}>
     <div className="workspace-shell" style={{ "--accent": project.story.accent } as React.CSSProperties}>
+      <NoteHighlights />
+      <SelectionNoteBar />
       <header className="workspace-header">
         <button className="workspace-brand" onClick={() => setScreen("home")}><span className="brand-glyph">t</span><span><strong>trace</strong><small>research studio</small></span></button>
         <div className="project-identity"><span>Current paper</span><strong>{project.evidence.paper.title}</strong></div>
@@ -723,7 +732,7 @@ function Studio() {
       </header>
       {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
       <div className="workspace-content">
-        {mode === "lab" && <LabView project={project} library={projects} onAnalysePaper={analyseFromGraph} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} />}
+        {mode === "lab" && <LabView project={project} library={projects} onAnalysePaper={analyseFromGraph} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} onShowStorySection={showStorySection} />}
         {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
         {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
       </div>
@@ -750,7 +759,8 @@ function Studio() {
         />
       )}
       {mode === "preview" && selectedClaim && <div className="drawer-overlay" onClick={() => setSelectedClaimId(undefined)}><div onClick={(event) => event.stopPropagation()}><EvidenceDrawer claim={selectedClaim} review={project.claimReviews?.[selectedClaim.id]} evidence={project.evidence} fileUrl={fileUrl} onClose={() => setSelectedClaimId(undefined)} /></div></div>}
-    </div>,
+    </div>
+    </ReaderNotesProvider>,
   );
 }
 

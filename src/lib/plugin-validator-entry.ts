@@ -28,6 +28,7 @@ export { REVIEW_INTERVALS_DAYS } from "./review-schedule";
 export { displayName, parseProfile } from "./profile";
 export { addDaysLocal, dailyTotals, dayKey, formatDuration, parseWorkLog, startOfWeek, timeByProject, workSummary } from "./work-log";
 export { hourPattern, PATTERN_WEEKS, weekReport } from "./work-report";
+export { notesFileName, notesMarkdown, parseNotesFile } from "./reader-notes";
 export {
   defaultPublicationInclude,
   expiryFromDays,

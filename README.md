@@ -250,6 +250,23 @@ in the project file.
 
 ![Review across the library](docs/images/review.jpg)
 
+### Highlight what matters, and keep your own notes
+
+Select any text in the Deep report or the Story preview and a small bar offers five highlight
+colours and **Note**: the passage is highlighted where it stands, and the note sits beside it. Open a
+claim and write a note on it, or mark it as important; the claim list shows a star next to it.
+**Notes** in the Lab gathers everything for the paper in reading order (story, report, then claims
+with their page) to edit, recolour or delete, and to add a note to any section or claim.
+
+Notes are yours, not the paper's: they are kept in your library, never in the project file, so an
+export, a shared JSON or a published page never carries them. **Markdown** downloads them as a
+plain file; **For Obsidian** adds front matter (title, authors, year, venue, DOI, tags) and
+callouts, ready to drop into a vault. Your agent can write the same file into your vault:
+
+```text
+Put my notes on the Attention paper into my Obsidian vault. Use the Trace plugin.
+```
+
 ### See what you have learned
 
 **Progress** in the library header adds up your study: papers finished and in progress, how many of
@@ -878,9 +895,10 @@ The plugin is one way in. The web app adds generation with your own provider key
 narrative, and a local library. Projects are stored as files under `~/.trace/library`, shared by
 Codex, Claude Code, Antigravity and every Trace Studio launch directory. Existing browser-only
 projects migrate there automatically; removing a Library item removes its stored file, its
-version history, its tags and your study progress on it, after an eight-second window to undo it.
-Earlier versions live under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`,
-study progress and review cards in `~/.trace/library/study.json`, saved templates under
+version history, its tags, your study progress and your notes on it, after an eight-second window
+to undo it. Earlier versions live under `~/.trace/library/revisions`, tags in `~/.trace/library/tags.json`,
+study progress and review cards in `~/.trace/library/study.json`, your notes and highlights in
+`~/.trace/library/notes.json` (a copy of each of the last seven days in `~/.trace/backups`), saved templates under
 `~/.trace/templates`, and your profile and worked time in `~/.trace/profile.json` and
 `~/.trace/focus-log.json`.
 
@@ -976,8 +994,11 @@ npm run trace:agent -- concepts
 # The reader's learning statistics: reviews remembered, cards kept, the week ahead
 npm run trace:agent -- progress
 
-# The reader's work time from the Focus timer: today, the week, streaks, time by paper
+# The reader's work time from the Focus timer: today, against last week, when in the day, time by paper
 npm run trace:agent -- work --days 14
+
+# The reader's notes and highlights on a paper, as Markdown or into an Obsidian vault
+npm run trace:agent -- notes --project "paper.trace.json" --obsidian --out ~/Vault/Papers
 
 # Concept names across the library (in parts for a large one: --part 2), and the reader's decision that two of them are one concept
 npm run trace:agent -- concepts --names
@@ -1196,7 +1217,7 @@ progress, explanations in the reader's own words checked against the evidence, s
 the library, concepts linked across papers with reading suggestions from the references and a reading order for
 the library, learning statistics, a work timer (focus rounds with breaks, countdown, stopwatch,
 alarms, due review cards offered in short breaks) with a profile, a calendar of the days worked and a
-weekly report, a learning
+weekly report, your own notes and highlights with Markdown and Obsidian export, a learning
 health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim

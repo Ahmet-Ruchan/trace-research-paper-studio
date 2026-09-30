@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Turns a research paper (a PDF, a title, a DOI or a repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite a section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; to tell a reader which concepts they already studied in other papers and which cited works teach the rest, to order a library for reading, and to report a reader's study progress and work time.
+description: Turns a research paper (a PDF, a title, a DOI or a repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite a section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; to tell a reader which concepts they already studied in other papers and which cited works teach the rest, to order a library for reading, and to report a reader's study progress, work time and notes.
 ---
 
 # Trace Paper Studio
@@ -229,6 +229,16 @@ node scripts/trace-agent.mjs work [--days 14]
 ```
 
 It reads the studio's Focus timer record (`~/.trace/focus-log.json`) and prints today, this week and this month against the daily goal, the streak, the last `--days` days, this week against last week (`againstLastWeek`: last week in all and up to this same moment, which is the fair comparison mid-week, and day by day), when in the day the user works over the last four weeks (`hoursOfDay`: the busiest three hours, the busiest weekday, minutes per hour), time by paper this week, last week and in all (`papers`, a session counts for a paper when the user named it on the timer or started the round from its Lab, Study path or Review), and the latest sessions. Sessions of kind `review` are time spent answering review cards in the studio, at most five minutes a card. Time where two timers ran at once is counted once, and days follow this machine's clock (`timeZone`). Give times as written ("2h 15m"). It is the user's own record: never write it into a project.
+
+## Reader notes
+
+When the user asks for their notes or highlights on a paper, or to put them in Obsidian or a Markdown file, run:
+
+```bash
+node scripts/trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <file.md or folder>]
+```
+
+It prints (or with `--out` writes) the notes and highlights the user made in the studio, in the paper's order: story sections, report sections, then claims with their page and quote. `--obsidian` adds YAML front matter (title, authors, year, venue, DOI, tags) and callouts; give `--out` the user's vault folder to save it there. The notes are the user's own: keep them as written, and never write them into a project.
 
 ## Model record
 
