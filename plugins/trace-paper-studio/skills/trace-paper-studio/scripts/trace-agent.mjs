@@ -41,6 +41,7 @@ import {
   savedFrom,
   savedReason,
   workKey,
+  todayBrief,
   recordCheckedExplanation,
   aliasBatches,
   aliasMap,
@@ -365,6 +366,7 @@ Usage:
   node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
   node trace-agent.mjs progress
   node trace-agent.mjs work [--days <n>]
+  node trace-agent.mjs today
   node trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <notes.md>]
   node trace-agent.mjs reading [--add <arxiv:id | DOI | title> --title "<title>" [--for <library id> --relation reference|cited-by|concept [--concept "<term>"]] [--year <n>] [--url <link>]] [--remove <id>]
   node trace-agent.mjs concepts --names [--part <n>]
@@ -451,6 +453,11 @@ Usage:
             daily goal, streaks, the last --days days (default 7), time by
             paper this week and in all, and the latest sessions. Days on this
             machine's clock. Reads only; no network, no model.
+  today     Prints the reader's day in one place: review cards due (and from
+            which papers), papers studied halfway, the next paper or saved work
+            in the reading order, today's and this week's work time against the
+            goal, and suggestions to tell the reader in that order. Reads only;
+            no network, no model.
   notes     Prints the reader's own notes and highlights on a paper (kept in
             ~/.trace/library/notes.json, never in the project) as Markdown, in
             the paper's order: story sections, report sections, claims with
@@ -2182,6 +2189,37 @@ function printWork(args) {
   }, null, 2));
 }
 
+/** Günün özeti (`today.ts`): kartlar, yarım kalanlar, sıradaki okuma, çalışma süresi. */
+function printToday() {
+  const { library, projects, study, aliases } = readLibrary();
+  const readJson = (path) => {
+    try {
+      return JSON.parse(readFileSync(path, "utf8"));
+    } catch {
+      return undefined;
+    }
+  };
+  const now = new Date();
+  const profile = parseProfile(readJson(join(traceDataDirectory(), "profile.json")), now.toISOString());
+  const log = parseWorkLog(readJson(join(traceDataDirectory(), "focus-log.json")));
+  const readingList = parseReadingList(readJson(join(library, "reading-list.json")));
+  const brief = todayBrief({ projects, study, readingList, aliases, log, goalMinutes: profile.preferences.dailyGoalMinutes, weekStart: profile.preferences.weekStart, now });
+  const time = (seconds) => ({ seconds, time: formatDuration(seconds) });
+  console.log(JSON.stringify({
+    ok: true,
+    library,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    reader: displayName(profile) || null,
+    day: brief.day,
+    review: brief.review,
+    continueStudying: brief.continueStudying,
+    readNext: brief.readNext ?? null,
+    work: { today: time(brief.work.today), goal: time(brief.work.goal), thisWeek: time(brief.work.week), lastWeekByThisTime: time(brief.work.lastWeekByNow), streak: brief.work.streak },
+    suggestions: brief.suggestions,
+    note: "The reader's day, from their own record in the studio. Give the suggestions in this order, briefly; offer to start with the first. Review cards are answered in the studio (Review) or with the review commands if available. Never write any of this into a project.",
+  }, null, 2));
+}
+
 /**
  * Okuma listesi: stüdyoda "Read later" denen çalışmalar, okuma sırasına
  * yerleştirilmiş. --add ve --remove stüdyonun kilidiyle yazıyor.
@@ -2330,6 +2368,7 @@ try {
   else if (command === "progress") printProgress();
   else if (command === "work") printWork(args);
   else if (command === "notes") printNotes(args);
+  else if (command === "today") printToday();
   else if (command === "reading") readingList(args);
   else if (command === "alias") recordAlias(args);
   else usage(1);

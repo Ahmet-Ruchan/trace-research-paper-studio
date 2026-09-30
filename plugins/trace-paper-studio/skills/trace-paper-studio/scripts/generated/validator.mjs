@@ -21413,6 +21413,7 @@ function readingDrillFor(project) {
 
 //#endregion
 //#region src/lib/review-queue.ts
+const REVIEW_SESSION_SIZE = 20;
 function reviewCards(projects, progress) {
 	const cards = [];
 	for (const project of projects) {
@@ -21449,6 +21450,28 @@ function reviewCards(projects, progress) {
 		}
 	}
 	return cards;
+}
+/** Vadesi gelmiş kartlar, en eskisi önce, makaleler sırayla karışık; en fazla bir oturumluk. */
+function dueCards(cards, now, limit = 20) {
+	const byPaper = /* @__PURE__ */ new Map();
+	for (const card of [...cards].filter((item) => isDue(item.review, now)).sort((left, right) => left.review.due.localeCompare(right.review.due))) byPaper.set(card.projectId, [...byPaper.get(card.projectId) ?? [], card]);
+	const queues = [...byPaper.values()];
+	const ordered = [];
+	while (ordered.length < limit && queues.some((queue) => queue.length)) for (const queue of queues) {
+		const next = queue.shift();
+		if (next && ordered.length < limit) ordered.push(next);
+	}
+	return ordered;
+}
+function reviewForecast(cards, now) {
+	const due = cards.filter((card) => isDue(card.review, now));
+	const later = cards.filter((card) => !isDue(card.review, now)).map((card) => card.review.due).sort();
+	return {
+		due: due.length,
+		papers: new Set(due.map((card) => card.projectId)).size,
+		total: cards.length,
+		nextDue: later[0]
+	};
 }
 
 //#endregion
@@ -22074,164 +22097,6 @@ function hourPattern(sessions, options) {
 }
 
 //#endregion
-//#region src/lib/reader-notes.ts
-/**
-* Okuyucunun notları ve vurguları.
-*
-* Bir iddiaya ya da bir bölüme (hikâye ya da derin rapor) bağlı: bölümde
-* seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
-* iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
-*
-* Çalışma ilerlemesi gibi okuyucunun kaydı, makalenin değil: proje
-* dosyasına, dışa aktarımlara ve yayınlara girmiyor; kütüphanenin yanında
-* `notes.json` içinde duruyor. Markdown'a ya da Obsidian'a (ön bilgi,
-* etiketler ve callout'larla) buradan çıkıyor.
-*/
-const NOTE_COLORS = [
-	"yellow",
-	"green",
-	"blue",
-	"pink",
-	"purple"
-];
-const MAX_NOTES_PER_PAPER = 1e3;
-const MAX_NOTE_TEXT = 4e3;
-const MAX_NOTE_QUOTE = 1200;
-const MAX_ID = 300;
-const noteTargetSchema = discriminatedUnion("kind", [object({
-	kind: literal("claim"),
-	claimId: string().min(1).max(160)
-}), object({
-	kind: literal("section"),
-	place: _enum(["story", "report"]),
-	sectionId: string().min(1).max(160)
-})]);
-const readerNoteSchema = object({
-	id: string().min(1).max(80),
-	target: noteTargetSchema,
-	/** Vurgulanan metin, bölümde göründüğü gibi. */
-	quote: string().trim().min(1).max(MAX_NOTE_QUOTE).optional(),
-	text: string().trim().max(MAX_NOTE_TEXT).default(""),
-	color: _enum(NOTE_COLORS).default("yellow"),
-	createdAt: string().max(40),
-	updatedAt: string().max(40)
-}).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
-const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
-const notesFileSchema = object({
-	version: literal(1),
-	projects: array(unknown())
-});
-const notesEntrySchema = object({
-	id: string().min(1).max(MAX_ID),
-	notes: array(unknown())
-});
-/** Proje kimliği → notlar. Bozuk bir not tek başına düşüyor, diğerleri kalıyor. */
-function parseNotesFile(raw) {
-	const entries = /* @__PURE__ */ new Map();
-	const file = notesFileSchema.safeParse(raw);
-	if (!file.success) return entries;
-	for (const item of file.data.projects) {
-		const entry = notesEntrySchema.safeParse(item);
-		if (!entry.success) continue;
-		const notes = entry.data.notes.flatMap((note) => {
-			const parsed = readerNoteSchema.safeParse(note);
-			return parsed.success ? [parsed.data] : [];
-		});
-		if (notes.length) entries.set(entry.data.id, notes.slice(0, MAX_NOTES_PER_PAPER));
-	}
-	return entries;
-}
-const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
-/**
-* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, sonra
-* iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
-* "no longer in the paper" başlığıyla kalıyor.
-*/
-function groupNotes(project, notes) {
-	const groups = [];
-	const used = /* @__PURE__ */ new Set();
-	const take = (target, heading, place, extra = {}) => {
-		const matched = notes.filter((note) => sameTarget(note.target, target)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-		if (!matched.length) return;
-		matched.forEach((note) => used.add(note.id));
-		groups.push({
-			target,
-			heading,
-			place,
-			notes: matched,
-			...extra
-		});
-	};
-	for (const section of project.story.sections) take({
-		kind: "section",
-		place: "story",
-		sectionId: section.id
-	}, section.title, "Story");
-	for (const section of project.deepReport?.sections ?? []) take({
-		kind: "section",
-		place: "report",
-		sectionId: section.id
-	}, section.title, "Deep report");
-	for (const claim of project.evidence.claims) {
-		const reference = claim.sourceRefs[0];
-		take({
-			kind: "claim",
-			claimId: claim.id
-		}, claim.statement, "Claim", {
-			...reference?.page ? { page: reference.page } : {},
-			...reference?.excerpt ? { excerpt: reference.excerpt } : {}
-		});
-	}
-	const orphans = notes.filter((note) => !used.has(note.id));
-	if (orphans.length) groups.push({
-		target: orphans[0].target,
-		heading: "No longer in the paper",
-		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
-		notes: orphans
-	});
-	return groups;
-}
-const quoted = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
-const yamlString = (value) => JSON.stringify(value);
-/**
-* Markdown dışa aktarımı. `obsidian`: YAML ön bilgisi (başlık, yazarlar, yıl,
-* DOI, etiketler), vurgular `[!quote]`, iddianın kaynağı `[!cite]` callout'u.
-* Düz Markdown'da aynı içerik alıntı bloklarıyla.
-*/
-function notesMarkdown(project, notes, options) {
-	const { paper } = project.evidence;
-	const lines = [];
-	if (options.obsidian) lines.push("---", `title: ${yamlString(paper.title)}`, `authors: [${paper.authors.map(yamlString).join(", ")}]`, ...paper.year ? [`year: ${yamlString(paper.year)}`] : [], ...paper.venue ? [`venue: ${yamlString(paper.venue)}`] : [], ...paper.doi ? [`doi: ${yamlString(paper.doi)}`] : [], "tags: [trace, paper-notes]", `exported: ${options.exportedAt.slice(0, 10)}`, "---", "");
-	lines.push(`# ${paper.title}: notes`, "");
-	if (!options.obsidian) {
-		const byline = [
-			paper.authors.join(", "),
-			paper.venue,
-			paper.year
-		].filter(Boolean).join(" · ");
-		if (byline) lines.push(`*${byline}*`, "");
-		if (paper.doi) lines.push(`DOI: ${paper.doi}`, "");
-	}
-	const groups = groupNotes(project, notes);
-	if (!groups.length) lines.push("No notes or highlights yet.", "");
-	for (const group of groups) {
-		lines.push(`## ${group.place === "Claim" ? "Claim" : group.place}: ${group.heading}${group.page ? ` (p. ${group.page})` : ""}`, "");
-		if (group.excerpt) lines.push(options.obsidian ? `> [!cite] The paper, p. ${group.page ?? "?"}\n${quoted(`“${group.excerpt}”`)}` : quoted(`“${group.excerpt}” (p. ${group.page ?? "?"})`), "");
-		for (const note of group.notes) {
-			if (note.quote) lines.push(options.obsidian ? `> [!quote] Highlight\n${quoted(note.quote)}` : quoted(note.quote), "");
-			if (note.text) lines.push(note.text, "");
-			if (!note.quote && !note.text) lines.push(options.obsidian ? "#highlighted" : "*Marked as important.*", "");
-		}
-	}
-	if (!options.obsidian) lines.push(`Exported from Trace on ${options.exportedAt.slice(0, 10)}.`);
-	return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
-}
-/** Dosya adı: başlıktan, güvenli karakterlerle. */
-function notesFileName(project) {
-	return `${project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "trace-paper"}-notes.md`;
-}
-
-//#endregion
 //#region src/lib/reading-list.ts
 /**
 * Okuma listesi: "sonra oku" denen, henüz kütüphanede olmayan çalışmalar.
@@ -22422,6 +22287,263 @@ function savedFrom(why) {
 	if (why.relation === "concept") return `It explains ${why.concept ?? "a concept"}, which ${title} assumes.`;
 	if (why.relation === "reference") return `${title} builds on it.`;
 	return `It cites ${title}.`;
+}
+
+//#endregion
+//#region src/lib/today.ts
+const minutes = (seconds) => {
+	const total = Math.round(seconds / 60);
+	const hours = Math.floor(total / 60);
+	return hours ? `${hours}h${total % 60 ? ` ${total % 60}m` : ""}` : `${total}m`;
+};
+function todayBrief(input) {
+	const { projects, study, now } = input;
+	const iso = now.toISOString();
+	const byId = new Map(projects.map((project) => [project.id, project]));
+	const cards = reviewCards(projects, study);
+	const forecast = reviewForecast(cards, iso);
+	const due = dueCards(cards, iso, Number.MAX_SAFE_INTEGER);
+	const perPaper = /* @__PURE__ */ new Map();
+	for (const card of due) perPaper.set(card.projectId, (perPaper.get(card.projectId) ?? 0) + 1);
+	const review = {
+		due: forecast.due,
+		papers: [...perPaper].map(([projectId, count]) => ({
+			projectId,
+			paper: byId.get(projectId)?.evidence.paper.title ?? projectId,
+			due: count
+		})).sort((left, right) => right.due - left.due),
+		...forecast.nextDue ? { nextDue: forecast.nextDue } : {}
+	};
+	const continueStudying = projects.flatMap((project) => {
+		const progress = study.get(project.id);
+		if (studyStatus(progress) !== "started") return [];
+		const summary = studySummary(project, studyPath(project, readingDrillFor(project)), progress);
+		return [{
+			projectId: project.id,
+			paper: project.evidence.paper.title,
+			done: summary.done,
+			total: summary.total,
+			lastStudied: progress.updatedAt
+		}];
+	}).sort((left, right) => right.lastStudied.localeCompare(left.lastStudied)).slice(0, 3);
+	const order = readingOrder(projects, study, input.aliases);
+	const merged = mergeReadingOrder(order, input.readingList, projects);
+	const first = merged.entries.find((entry) => entry.kind === "saved" || entry.step.status !== "finished");
+	const saved = merged.others.find((place) => !place.owned);
+	const unstarted = projects.filter((project) => studyStatus(study.get(project.id)) === "new").sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+	const readNext = first ? first.kind === "paper" ? {
+		kind: "paper",
+		projectId: first.step.project.id,
+		paper: first.step.project.evidence.paper.title,
+		status: first.step.status,
+		from: "reading order"
+	} : {
+		kind: "saved",
+		title: first.place.item.title,
+		...first.place.item.identifier ? { identifier: first.place.item.identifier } : {},
+		why: first.place.why ? savedReason(first.place.why) : "On your reading list."
+	} : saved ? {
+		kind: "saved",
+		title: saved.item.title,
+		...saved.item.identifier ? { identifier: saved.item.identifier } : {},
+		why: saved.why ? savedFrom(saved.why) : "On your reading list."
+	} : unstarted ? {
+		kind: "paper",
+		projectId: unstarted.id,
+		paper: unstarted.evidence.paper.title,
+		status: "new",
+		from: "library"
+	} : void 0;
+	const totals = dailyTotals(input.log);
+	const summary = workSummary(totals, now, {
+		weekStart: input.weekStart,
+		goalMinutes: input.goalMinutes
+	});
+	const week = weekReport(input.log.sessions, totals, now, input.weekStart);
+	const work = {
+		today: summary.today,
+		goal: input.goalMinutes * 60,
+		week: summary.week,
+		lastWeekByNow: week.lastWeek.byNow,
+		streak: summary.currentStreak
+	};
+	const suggestions = [];
+	if (review.due) {
+		const reviewMinutes = Math.max(1, Math.round(review.due * .75));
+		suggestions.push(`Review ${review.due} ${review.due === 1 ? "card" : "cards"}${review.papers.length > 1 ? ` from ${review.papers.length} papers` : ` from ${review.papers[0]?.paper}`}, about ${reviewMinutes} ${reviewMinutes === 1 ? "minute" : "minutes"}.`);
+	}
+	const studying = continueStudying[0];
+	if (studying) suggestions.push(`Continue studying ${studying.paper}: ${studying.done} of ${studying.total} steps done.`);
+	if (readNext?.kind === "paper" && readNext.projectId !== studying?.projectId) suggestions.push(readNext.from === "reading order" ? `Next in your reading order: ${readNext.paper}.` : `Not started yet: ${readNext.paper}.`);
+	if (readNext?.kind === "saved") suggestions.push(`Next on your reading list: ${readNext.title}. ${readNext.why}`);
+	if (work.today < work.goal) suggestions.push(`${minutes(work.goal - work.today)} to go for today's goal of ${minutes(work.goal)}${work.streak > 1 ? `, and a ${work.streak}-day streak to keep` : ""}.`);
+	else suggestions.push(`Today's goal of ${minutes(work.goal)} is met.`);
+	return {
+		day: dayKey(now),
+		review,
+		continueStudying,
+		...readNext ? { readNext } : {},
+		work,
+		suggestions
+	};
+}
+
+//#endregion
+//#region src/lib/reader-notes.ts
+/**
+* Okuyucunun notları ve vurguları.
+*
+* Bir iddiaya ya da bir bölüme (hikâye ya da derin rapor) bağlı: bölümde
+* seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
+* iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
+*
+* Çalışma ilerlemesi gibi okuyucunun kaydı, makalenin değil: proje
+* dosyasına, dışa aktarımlara ve yayınlara girmiyor; kütüphanenin yanında
+* `notes.json` içinde duruyor. Markdown'a ya da Obsidian'a (ön bilgi,
+* etiketler ve callout'larla) buradan çıkıyor.
+*/
+const NOTE_COLORS = [
+	"yellow",
+	"green",
+	"blue",
+	"pink",
+	"purple"
+];
+const MAX_NOTES_PER_PAPER = 1e3;
+const MAX_NOTE_TEXT = 4e3;
+const MAX_NOTE_QUOTE = 1200;
+const MAX_ID = 300;
+const noteTargetSchema = discriminatedUnion("kind", [object({
+	kind: literal("claim"),
+	claimId: string().min(1).max(160)
+}), object({
+	kind: literal("section"),
+	place: _enum(["story", "report"]),
+	sectionId: string().min(1).max(160)
+})]);
+const readerNoteSchema = object({
+	id: string().min(1).max(80),
+	target: noteTargetSchema,
+	/** Vurgulanan metin, bölümde göründüğü gibi. */
+	quote: string().trim().min(1).max(MAX_NOTE_QUOTE).optional(),
+	text: string().trim().max(MAX_NOTE_TEXT).default(""),
+	color: _enum(NOTE_COLORS).default("yellow"),
+	createdAt: string().max(40),
+	updatedAt: string().max(40)
+}).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
+const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
+const notesFileSchema = object({
+	version: literal(1),
+	projects: array(unknown())
+});
+const notesEntrySchema = object({
+	id: string().min(1).max(MAX_ID),
+	notes: array(unknown())
+});
+/** Proje kimliği → notlar. Bozuk bir not tek başına düşüyor, diğerleri kalıyor. */
+function parseNotesFile(raw) {
+	const entries = /* @__PURE__ */ new Map();
+	const file = notesFileSchema.safeParse(raw);
+	if (!file.success) return entries;
+	for (const item of file.data.projects) {
+		const entry = notesEntrySchema.safeParse(item);
+		if (!entry.success) continue;
+		const notes = entry.data.notes.flatMap((note) => {
+			const parsed = readerNoteSchema.safeParse(note);
+			return parsed.success ? [parsed.data] : [];
+		});
+		if (notes.length) entries.set(entry.data.id, notes.slice(0, MAX_NOTES_PER_PAPER));
+	}
+	return entries;
+}
+const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
+/**
+* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, sonra
+* iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
+* "no longer in the paper" başlığıyla kalıyor.
+*/
+function groupNotes(project, notes) {
+	const groups = [];
+	const used = /* @__PURE__ */ new Set();
+	const take = (target, heading, place, extra = {}) => {
+		const matched = notes.filter((note) => sameTarget(note.target, target)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+		if (!matched.length) return;
+		matched.forEach((note) => used.add(note.id));
+		groups.push({
+			target,
+			heading,
+			place,
+			notes: matched,
+			...extra
+		});
+	};
+	for (const section of project.story.sections) take({
+		kind: "section",
+		place: "story",
+		sectionId: section.id
+	}, section.title, "Story");
+	for (const section of project.deepReport?.sections ?? []) take({
+		kind: "section",
+		place: "report",
+		sectionId: section.id
+	}, section.title, "Deep report");
+	for (const claim of project.evidence.claims) {
+		const reference = claim.sourceRefs[0];
+		take({
+			kind: "claim",
+			claimId: claim.id
+		}, claim.statement, "Claim", {
+			...reference?.page ? { page: reference.page } : {},
+			...reference?.excerpt ? { excerpt: reference.excerpt } : {}
+		});
+	}
+	const orphans = notes.filter((note) => !used.has(note.id));
+	if (orphans.length) groups.push({
+		target: orphans[0].target,
+		heading: "No longer in the paper",
+		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
+		notes: orphans
+	});
+	return groups;
+}
+const quoted = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
+const yamlString = (value) => JSON.stringify(value);
+/**
+* Markdown dışa aktarımı. `obsidian`: YAML ön bilgisi (başlık, yazarlar, yıl,
+* DOI, etiketler), vurgular `[!quote]`, iddianın kaynağı `[!cite]` callout'u.
+* Düz Markdown'da aynı içerik alıntı bloklarıyla.
+*/
+function notesMarkdown(project, notes, options) {
+	const { paper } = project.evidence;
+	const lines = [];
+	if (options.obsidian) lines.push("---", `title: ${yamlString(paper.title)}`, `authors: [${paper.authors.map(yamlString).join(", ")}]`, ...paper.year ? [`year: ${yamlString(paper.year)}`] : [], ...paper.venue ? [`venue: ${yamlString(paper.venue)}`] : [], ...paper.doi ? [`doi: ${yamlString(paper.doi)}`] : [], "tags: [trace, paper-notes]", `exported: ${options.exportedAt.slice(0, 10)}`, "---", "");
+	lines.push(`# ${paper.title}: notes`, "");
+	if (!options.obsidian) {
+		const byline = [
+			paper.authors.join(", "),
+			paper.venue,
+			paper.year
+		].filter(Boolean).join(" · ");
+		if (byline) lines.push(`*${byline}*`, "");
+		if (paper.doi) lines.push(`DOI: ${paper.doi}`, "");
+	}
+	const groups = groupNotes(project, notes);
+	if (!groups.length) lines.push("No notes or highlights yet.", "");
+	for (const group of groups) {
+		lines.push(`## ${group.place === "Claim" ? "Claim" : group.place}: ${group.heading}${group.page ? ` (p. ${group.page})` : ""}`, "");
+		if (group.excerpt) lines.push(options.obsidian ? `> [!cite] The paper, p. ${group.page ?? "?"}\n${quoted(`“${group.excerpt}”`)}` : quoted(`“${group.excerpt}” (p. ${group.page ?? "?"})`), "");
+		for (const note of group.notes) {
+			if (note.quote) lines.push(options.obsidian ? `> [!quote] Highlight\n${quoted(note.quote)}` : quoted(note.quote), "");
+			if (note.text) lines.push(note.text, "");
+			if (!note.quote && !note.text) lines.push(options.obsidian ? "#highlighted" : "*Marked as important.*", "");
+		}
+	}
+	if (!options.obsidian) lines.push(`Exported from Trace on ${options.exportedAt.slice(0, 10)}.`);
+	return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
+}
+/** Dosya adı: başlıktan, güvenli karakterlerle. */
+function notesFileName(project) {
+	return `${project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "trace-paper"}-notes.md`;
 }
 
 //#endregion
@@ -23698,4 +23820,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, validateProjectObject, weekReport, workKey, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };

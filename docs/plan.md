@@ -92,8 +92,16 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Ajanlar
 
-- [ ] **21. `today` komutu.** Günün özeti: vadesi gelen kartlar, okuma listesinde sıradaki,
+- [x] **21. `today` komutu.** Günün özeti: vadesi gelen kartlar, okuma listesinde sıradaki,
   bu haftanın süresi, yarım kalan makale.
+  - *Yapıldı:* `trace-agent.mjs today` (`src/lib/today.ts`) tek cevapta vadesi gelen kartları
+    ve hangi makalelerden olduklarını, yarım kalan makaleleri ve kaç adımın bittiğini, sıradaki
+    okumayı (okuma sırasındaki makale, okuma listesindeki çalışma ya da başlanmamış bir makale),
+    bugünü ve bu haftayı hedefe göre, seriyi veriyor; `suggestions` bunları önem sırasıyla
+    cümle olarak söylüyor. SKILL.md'de "Today", README'de komut ve örnek istem; eklenti 0.28.0.
+  - *Test:* kartlar, yarım makale, okuma listesi, okuma sırası, hedef tutmuş ve boş kütüphane
+    birim testlerde; köprü komutu gerçek bir `~/.trace` klasöründe çalıştırılıyor; eklenti smoke
+    testi Codex, Claude Code ve Antigravity'de `bridge today`.
 - [ ] **22. Sohbette tekrar.** Ajan vadesi gelen kartları sohbette sorar ve sonucu
   stüdyonun kaydına yazar.
 - [ ] **23. MCP sunucusu.** Kütüphane, iddia araması, notlar ve okuma listesi MCP araçları

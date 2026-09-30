@@ -344,6 +344,13 @@ Your agent reads the same record:
 How much did I work this week compared with last week, on which papers, and when in the day? Use the Trace plugin.
 ```
 
+Or ask for the whole day at once: the cards due and from which papers, the paper you left half way,
+what to read next, and the time left for today's goal.
+
+```text
+What should I do today, and where did I leave off? Use the Trace plugin.
+```
+
 Every minute is kept on your computer, in `~/.trace/profile.json` and `~/.trace/focus-log.json`, never
 in a paper and never sent anywhere. Writes are atomic, a damaged file is set aside rather than
 overwritten, and a copy of the last seven days is kept in `~/.trace/backups`.
@@ -863,6 +870,10 @@ Put my notes and highlights on that paper into my Obsidian vault.
 Save the works that paper builds on to read later, and tell me what to read next.
 ```
 
+```text
+What should I do today?
+```
+
 When it finishes, the browser is already open — both the self-contained site and the full
 application, with the project sitting in your Library. Nothing to export, nothing to import,
 no server to start. The same folder keeps a portable `.trace.json` you can archive or share.
@@ -1036,6 +1047,9 @@ npm run trace:agent -- explain-check --brief "explanations/story-<section-id>.br
 # --suggest looks through the paper's references for works that teach the rest
 npm run trace:agent -- concepts --project "paper.trace.json" --suggest
 npm run trace:agent -- concepts
+
+# The reader's day: cards due, a paper left half way, what to read next, time against the goal
+npm run trace:agent -- today
 
 # The reader's learning statistics: reviews remembered, cards kept, the week ahead
 npm run trace:agent -- progress

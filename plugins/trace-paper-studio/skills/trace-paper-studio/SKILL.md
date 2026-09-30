@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Turns a research paper (a PDF, a title, a DOI or a repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite a section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; to tell a reader which concepts they already studied in other papers and which cited works teach the rest, to order a library for reading, and to report a reader's study progress, work time, notes and reading list.
+description: Turns a research paper (a PDF, title, DOI or repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite a section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; to tell a reader which concepts they already studied in other papers and which cited works teach the rest, to order a library for reading, and to report a reader's day, study progress, work time, notes and reading list.
 ---
 
 # Trace Paper Studio
@@ -209,6 +209,16 @@ For each primer concept of the project it lists `studiedHere`, `studiedIn` (anot
 - When the user asks what to read next, lead with `readingOrder.next` and say why, from `after`: which concepts it defines that a later paper assumes. Papers in `together` each define something the other assumes; suggest reading them side by side.
 - Concepts under different names are two concepts until the user links them. `concepts --names` lists every concept name in the library with its paper's definition, and the decisions so far. In a large library the names come in parts (`part` of `parts`), names with similar definitions in the same part: read each with `--part <n>` and look for pairs within it. If you notice two names that clearly mean the same idea (not a special case and its general concept), ask the user; only after they confirm, run `alias --a "<name>" --b "<name>" --proposed-by model --reason "<why>"`. If they say no, record `--different` so the pair is not raised again. Never link on your own.
 - This is about the user, not the paper: never write it into the project.
+
+## Today
+
+When the user asks what to do today, where they left off, or how their day is going, run:
+
+```bash
+node scripts/trace-agent.mjs today
+```
+
+It reads the user's own record in the studio and prints the day in one answer: review cards due now and from which papers (`review`), papers they started studying and left, with steps done (`continueStudying`), what to read next (`readNext`: the next paper in the library's reading order, a work on their reading list, or a paper not started yet), and today and this week against the daily goal with the streak (`work`). `suggestions` says the same in order of importance, as sentences for the user: give them briefly in that order and offer to start with the first. Cards are answered in the studio (Review). It is the user's own record: never write it into a project.
 
 ## Learning progress
 
