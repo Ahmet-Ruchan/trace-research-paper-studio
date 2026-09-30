@@ -2547,4 +2547,61 @@ test.describe("focus on a paper", () => {
     await expect(page.getByRole("button", { name: "Listen" })).toBeEnabled();
     await expect.poll(async () => ((await (await request.get("/api/profile")).json()) as { profile: Profile }).profile.preferences.ambient).toBe("rain");
   });
+
+  test("offers the due review cards in a short break, from full screen too, and saves what was remembered", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-break-review"));
+    // Üç gün önce çalışılmış gibi: soru ve kavram bugün vadeli.
+    const at = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const question = project.quiz!.questions[0];
+    const concept = project.primer!.concepts[0];
+    const progress = completeStep(recordAnswer(undefined, question, { correct: false, attempts: 1, revealed: true }, at), `concept:${concept.id}`, "start", at);
+    expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
+    await setProfile(request, (profile) => ({ ...profile, preferences: { ...profile.preferences, sound: "none", focus: { ...profile.preferences.focus, work: 1, shortBreak: 3 } } }));
+    await page.clock.install();
+    await page.goto("/?focus=1");
+    await page.getByRole("button", { name: "Start focus" }).click();
+    const review = page.getByRole("region", { name: "Review in the break" });
+    await page.clock.runFor(30_000);
+    await expect(review).toHaveCount(0);
+
+    // İlk mola: öneri geliyor; okuyucu dinlenmeyi seçiyor.
+    await page.clock.runFor(31_000);
+    await expect(review).toContainText("2 review cards are due.");
+    await review.getByRole("button", { name: "Just rest" }).click();
+    await expect(review).toHaveCount(0);
+
+    // İkinci mola başka bir mola: öneri yeniden; tam ekrandan açılıyor.
+    await page.getByRole("region", { name: "Focus rounds" }).getByRole("button", { name: "Skip the break" }).click();
+    await page.clock.runFor(61_000);
+    await expect(review).toContainText("2 review cards are due.");
+    await page.getByRole("button", { name: "Full screen" }).click();
+    const stage = page.getByRole("dialog", { name: "Full-screen timer" });
+    await stage.getByRole("button", { name: "Review 2 cards in this break" }).click();
+    await expect(stage).toHaveCount(0);
+
+    for (let index = 0; index < 2; index += 1) {
+      await expect(review.locator(".review-count")).toHaveText(`${index + 1} / 2`);
+      await expect(review.locator(".break-review-paper")).toHaveText(project.evidence.paper.title);
+      if ((await review.locator(".review-kind").textContent()) === "Question") {
+        await review.getByText(question.options.find((option) => option.correct)!.label, { exact: true }).click();
+        await review.getByRole("button", { name: "Check answer" }).click();
+      } else {
+        await expect(review.locator(".review-concept h2")).toHaveText(concept.term);
+        await review.getByRole("button", { name: "Show the answer" }).click();
+        await review.getByRole("button", { name: "I remembered it" }).click();
+      }
+      await expect(review.locator(".review-card-foot")).toContainText("Remembered. This card comes back in 3 days.");
+      await review.getByRole("button", { name: index ? "Done" : "Next card" }).click();
+    }
+    await expect(review).toContainText("You remembered 2 of 2 cards. Enjoy the rest of your break.");
+    await expect.poll(async () => {
+      const { progress: saved } = (await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress: StudyProgress };
+      return saved.reviews!.map((item) => [item.id, item.box]).sort();
+    }).toEqual([[`c:${concept.id}`, 1], [`q:${question.id}`, 1]]);
+    // Mola bitince özet de kalkıyor; molada geçen süre çalışma sayılmıyor.
+    await page.clock.runFor(3 * 60_000);
+    await expect(review).toHaveCount(0);
+    await expect(page.locator(".focus-phase-chip")).toHaveText("Focus");
+    await expect.poll(async () => (await sessions(request)).map((session) => Date.parse(session.end) - Date.parse(session.start))).toEqual([60_000, 60_000]);
+  });
 });

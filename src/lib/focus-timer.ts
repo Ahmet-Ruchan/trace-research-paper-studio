@@ -68,6 +68,8 @@ export type FocusRun = {
   waiting: boolean;
   /** İstenen tur sayısı tamamlandı. */
   finished: boolean;
+  /** Turların başladığı an: aynı sayıdaki molaları iki ayrı çalışmada ayırmak için. */
+  startedAt?: number;
 } & Subject;
 
 export type TimerEvent =
@@ -81,13 +83,22 @@ export function phaseMs(settings: FocusSettings, phase: FocusPhase) {
   return (phase === "work" ? settings.work : phase === "short" ? settings.shortBreak : settings.longBreak) * 60_000;
 }
 
-/** Ekrandaki tur: odakta sıradaki, molada az önce biten. */
+/** Ekrandaki tur: odakta sıradaki, molada az önce biten. İlk turdan molaya atlanınca "Round 0" değil. */
 export function focusRound(run: Pick<FocusRun, "phase" | "completed">) {
-  return run.phase === "work" ? run.completed + 1 : run.completed;
+  return run.phase === "work" ? run.completed + 1 : Math.max(1, run.completed);
 }
 
 export function startFocus(settings: FocusSettings, now: number, subject?: string | Subject): FocusRun {
-  return { phase: "work", completed: 0, clock: startClock(idleClock, now), duration: phaseMs(settings, "work"), waiting: false, finished: false, ...subjectOf(subject) };
+  return { phase: "work", completed: 0, clock: startClock(idleClock, now), duration: phaseMs(settings, "work"), waiting: false, finished: false, startedAt: now, ...subjectOf(subject) };
+}
+
+/**
+ * Süren kısa molanın kimliği; molada değilse `undefined`. Molada tekrar
+ * (`break-review.tsx`) her molada bir kez kuruluyor: kimlik değişmedikçe aynı
+ * kartlar kalıyor. Uzun mola dinlenmek için; orada kart sorulmuyor.
+ */
+export function shortBreakKey(run: FocusRun | undefined): string | undefined {
+  return run && run.phase === "short" && !run.finished ? `${run.startedAt ?? 0}:${run.completed}` : undefined;
 }
 
 export function focusRemaining(run: FocusRun, now: number) {

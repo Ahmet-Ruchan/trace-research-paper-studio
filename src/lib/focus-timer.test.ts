@@ -16,6 +16,7 @@ import {
   pauseFocus,
   pauseStopwatch,
   resumeFocus,
+  shortBreakKey,
   skipFocus,
   STALE_MS,
   startCountdown,
@@ -88,6 +89,22 @@ describe("focus cycles", () => {
     expect(startCountdown(MIN, T0, "Tea")).toMatchObject({ label: "Tea" });
   });
 
+  it("names each short break once, so a few review cards are chosen once per break and never in a long one", () => {
+    const run = startFocus(settings(), T0);
+    expect(shortBreakKey(run)).toBeUndefined();
+    const first = advanceFocus(run, settings(), T0 + 26 * MIN, T0 + 26 * MIN).run;
+    const key = shortBreakKey(first);
+    expect(key).toBeDefined();
+    expect(shortBreakKey(advanceFocus(first, settings(), T0 + 28 * MIN, T0 + 28 * MIN).run)).toBe(key);
+    // İkinci turdan sonra uzun mola (her 2 turda bir): kart yok.
+    expect(advanceFocus(run, settings(), T0 + 56 * MIN, T0 + 56 * MIN).run.phase).toBe("long");
+    expect(shortBreakKey(advanceFocus(run, settings(), T0 + 56 * MIN, T0 + 56 * MIN).run)).toBeUndefined();
+    // Aynı sayıdaki mola, yeniden başlatılmış bir çalışmada başka bir mola.
+    const again = advanceFocus(startFocus(settings(), T0 + 90 * MIN), settings(), T0 + 116 * MIN, T0 + 116 * MIN).run;
+    expect(shortBreakKey(again)).not.toBe(key);
+    expect(shortBreakKey(skipFocus(run, settings(), T0 + MIN).run)).toBeDefined();
+  });
+
   it("records the worked part when paused, skipped or stopped, and never a break", () => {
     const run = startFocus(settings(), T0);
     const paused = pauseFocus(run, T0 + 12 * MIN);
@@ -98,6 +115,7 @@ describe("focus cycles", () => {
     const skipped = skipFocus(resumed, settings(), T0 + 25 * MIN);
     expect(skipped.segments.map((segment) => (segment.end - segment.start) / MIN)).toEqual([5]);
     expect(skipped.run).toMatchObject({ phase: "short", completed: 0 });
+    expect(focusRound(skipped.run)).toBe(1);
     expect(skipped.run.clock.running).toBe(true);
     expect(stopFocus(skipped.run, T0 + 27 * MIN)).toEqual([]);
   });

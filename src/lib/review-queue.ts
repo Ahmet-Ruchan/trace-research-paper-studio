@@ -22,6 +22,8 @@ export type ReviewCard =
   | (CardBase & { kind: "concept"; concept: PrimerConcept });
 
 export const REVIEW_SESSION_SIZE = 20;
+/** Kısa molada önerilen en fazla kart: birkaç dakikalık molaya sığacak kadar. */
+export const BREAK_REVIEW_SIZE = 3;
 
 export function reviewCards(projects: readonly ResearchProject[], progress: ReadonlyMap<string, StudyProgress>): ReviewCard[] {
   const cards: ReviewCard[] = [];

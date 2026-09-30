@@ -21747,7 +21747,9 @@ const preferencesSchema = object({
 	notifications: boolean().default(false),
 	/** Odak turlarında arka plan sesi ve düzeyi. */
 	ambient: ambientSchema.default("none"),
-	ambientVolume: number().min(0).max(1).default(.35)
+	ambientVolume: number().min(0).max(1).default(.35),
+	/** Kısa molada vadesi gelmiş birkaç tekrar kartı önerilsin mi. */
+	breakReview: boolean().default(true)
 });
 const profileSchema = object({
 	version: literal(1),

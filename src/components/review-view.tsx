@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Layers } from "lucide-react";
-import { ConceptBody, LanguageProvider, QuizView } from "@/visuals";
+import { LanguageProvider } from "@/visuals";
 import { dueCards, recordReview, reviewCards, reviewForecast, type ReviewCard } from "@/lib/review-queue";
 import { REVIEW_INTERVALS_DAYS, describeDue } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyProgress } from "@/lib/study-path";
-import { readLibraryStudy } from "./study-progress";
+import { putStudyProgress, readLibraryStudy } from "./study-progress";
+import { ReviewCardBody } from "./review-card";
 import { StudioNav } from "./focus/studio-nav";
 
 type Load = { status: "loading" } | { status: "failed"; message: string } | { status: "ready" };
@@ -18,10 +19,8 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
 /**
  * Tekrar: kütüphanedeki bütün makalelerin vadesi gelmiş kartları, tek tek.
  *
- * Soru kartı çalışmadaki gibi yanıtlanıyor; yalnızca ilk denemede doğru
- * yanıt "hatırlandı" sayılıyor. Kavram kartında okuyucu önce kendisi
- * hatırlamaya çalışıyor, sonra açıp dürüstçe işaretliyor: seçenek olmadan
- * hatırlamak, seçenekler arasından tanımaktan daha zor ve daha kalıcı.
+ * Kartın kendisi `review-card.tsx`'te. Kavram kartında seçenek yok: seçenek
+ * olmadan hatırlamak, seçenekler arasından tanımaktan daha zor ve daha kalıcı.
  *
  * Oturum açılışta bir kez kuruluyor; yanıtlandıkça kuyruk yeniden
  * hesaplanmıyor, yoksa ertesi güne atılan bir kart okuyucunun gözü önünde
@@ -47,7 +46,6 @@ export function ReviewView({
   const [session, setSession] = useState<ReviewCard[]>([]);
   const [index, setIndex] = useState(0);
   const [grade, setGrade] = useState<Grade>();
-  const [revealed, setRevealed] = useState(false);
   const [results, setResults] = useState<boolean[]>([]);
   const [saveError, setSaveError] = useState<string>();
   const [now] = useState(() => new Date().toISOString());
@@ -80,15 +78,7 @@ export function ReviewView({
   function save(target: string, progress: StudyProgress) {
     queue.current = queue.current.then(async () => {
       try {
-        const response = await fetch(`/api/library/study?id=${encodeURIComponent(target)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ progress }),
-        });
-        if (!response.ok) {
-          const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-          throw new Error(data?.error ?? "The review could not be saved.");
-        }
+        await putStudyProgress(target, progress);
         setSaveError(undefined);
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : "The review could not be saved.");
@@ -108,7 +98,6 @@ export function ReviewView({
 
   function advance() {
     setGrade(undefined);
-    setRevealed(false);
     setIndex((current) => current + 1);
   }
 
@@ -117,7 +106,6 @@ export function ReviewView({
     setIndex(0);
     setResults([]);
     setGrade(undefined);
-    setRevealed(false);
   }
 
   const finished = load.status === "ready" && session.length > 0 && index >= session.length;
@@ -189,32 +177,7 @@ export function ReviewView({
             </header>
             <div className="review-progress" aria-hidden="true"><i style={{ width: `${(index / session.length) * 100}%` }} /></div>
 
-            {card.kind === "question" ? (
-              <QuizView
-                key={card.key}
-                quiz={{ title: "", intro: "", questions: [card.question] }}
-                claims={project.evidence.claims}
-                onResult={(_, result) => mark(result.correct && result.attempts === 1)}
-              />
-            ) : (
-              <div className="review-concept" key={card.key}>
-                <p className="review-prompt">What does it mean, and why does this paper need it?</p>
-                <h2 lang={card.language}>{card.concept.term}</h2>
-                {revealed ? (
-                  <div className="primer-body" lang={card.language}>
-                    <ConceptBody concept={card.concept} prerequisites={[]} />
-                  </div>
-                ) : (
-                  <button className="quiz-check" onClick={() => setRevealed(true)}>Show the answer</button>
-                )}
-                {revealed && !grade ? (
-                  <div className="review-grade" role="group" aria-label="Did you remember it?">
-                    <button onClick={() => mark(true)}>I remembered it</button>
-                    <button onClick={() => mark(false)}>Not yet</button>
-                  </div>
-                ) : null}
-              </div>
-            )}
+            <ReviewCardBody key={card.key} card={card} project={project} graded={Boolean(grade)} onMark={mark} />
 
             <footer className="review-card-foot">
               {grade ? (

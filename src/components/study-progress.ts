@@ -80,6 +80,15 @@ export function useStudyProgress(projectId: string) {
   return { state, save, saveError };
 }
 
+/** Bir makalenin çalışma kaydını yazar; tekrar ekranı ve moladaki tekrar için. Hata olursa fırlatıyor. */
+export async function putStudyProgress(projectId: string, progress: StudyProgress) {
+  const response = await fetch(endpoint(projectId), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ progress }) });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
+    throw new Error(data?.error ?? "The review could not be saved.");
+  }
+}
+
 /** Kütüphanenin bütün çalışma kayıtları; tekrar kuyruğu ve kütüphane özeti için. */
 export async function readLibraryStudy(): Promise<Map<string, StudyProgress>> {
   const response = await fetch("/api/library/study", { cache: "no-store" });

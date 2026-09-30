@@ -243,9 +243,10 @@ The library shows how many cards are due, and **Review** asks them one at a time
 once, alternating between papers so one answer does not give away the next. A question counts as
 remembered only when it is right on the first try. A concept card shows the term, you try to recall
 what it means and why the paper needs it, then open it and say honestly whether you did. The Lab has
-the same queue for a single paper. Nothing is generated: a card is the project's own question or
-concept, so a rewritten question or a deleted paper simply drops out of the queue. The schedule is
-kept next to your study progress, never in the project file.
+the same queue for a single paper, and a short break on the work timer offers a few due cards too.
+Nothing is generated: a card is the project's own question or concept, so a rewritten question or a
+deleted paper simply drops out of the queue. The schedule is kept next to your study progress, never
+in the project file.
 
 ![Review across the library](docs/images/review.jpg)
 
@@ -291,6 +292,12 @@ brown noise or rain during focus rounds and stops for breaks, made in the browse
 file. The keyboard runs it too: <kbd>Space</kbd> starts or pauses, <kbd>F</kbd> opens a full-screen
 timer with nothing but the time, <kbd>S</kbd> skips, <kbd>L</kbd> marks a lap and <kbd>1</kbd>–<kbd>4</kbd>
 switch timers.
+
+A short break can also bring back what you studied: when review cards are due, the break offers up
+to three of them, mixed across papers, under the timer (and as a button on the full-screen timer).
+Answer them while you rest, or choose **Just rest**. What you remember moves the card on, exactly as
+in Review; the break is not counted as work, and long breaks stay for rest. Turn it off with
+**Review a few cards in short breaks**.
 
 ![The work timer](docs/images/focus.jpg)
 
@@ -1180,7 +1187,7 @@ guide), predictions before every chart and derivation step, a guided study path 
 progress, explanations in the reader's own words checked against the evidence, spaced review across
 the library, concepts linked across papers with reading suggestions from the references and a reading order for
 the library, learning statistics, a work timer (focus rounds with breaks, countdown, stopwatch,
-alarms) with a profile and a calendar of the days worked, a learning
+alarms, due review cards offered in short breaks) with a profile and a calendar of the days worked, a learning
 health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim

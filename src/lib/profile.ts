@@ -96,6 +96,8 @@ export const preferencesSchema = z.object({
   /** Odak turlarında arka plan sesi ve düzeyi. */
   ambient: ambientSchema.default("none"),
   ambientVolume: z.number().min(0).max(1).default(0.35),
+  /** Kısa molada vadesi gelmiş birkaç tekrar kartı önerilsin mi. */
+  breakReview: z.boolean().default(true),
 });
 export type Preferences = z.infer<typeof preferencesSchema>;
 

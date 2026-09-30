@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AlarmClock, ArrowLeft, Bell, BookOpen, Flag, Hourglass, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, SkipForward, Square, Timer, Trash2, Volume2, Watch } from "lucide-react";
+import { AlarmClock, ArrowLeft, Bell, BookOpen, Flag, Hourglass, Layers, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, SkipForward, Square, Timer, Trash2, Volume2, Watch } from "lucide-react";
 import { focusColorStyle, type FocusColorId } from "@/lib/focus-colors";
-import { countdownRemaining, elapsedOf, lapTimes, nextAlarm, type Subject } from "@/lib/focus-timer";
+import { countdownRemaining, elapsedOf, lapTimes, nextAlarm, shortBreakKey, type Subject } from "@/lib/focus-timer";
 import { AMBIENT_SOUNDS, MAX_ALARMS, type Alarm, type AmbientId, type Preferences, type TimerMode } from "@/lib/profile";
 import type { ResearchProject } from "@/lib/schema";
 import { addDaysLocal, dailyTotals, dayKey, formatClock, formatDuration, startOfWeek, workSummary } from "@/lib/work-log";
 import { DisplayControl } from "../display-control";
+import { BreakReviewCard, useBreakReview, type BreakReview } from "./break-review";
 import { focusDisplay, useFocus, useFocusClock } from "./focus-provider";
 import { ColorPicker, Dial, NumberField, Toggle } from "./focus-parts";
 import { StudioNav } from "./studio-nav";
@@ -68,7 +69,7 @@ function SubjectField({ label, placeholder, value, onChange, active, papers }: {
 
 type PanelProps = { papers: readonly Paper[]; subject: string; onSubject: (text: string) => void; onStage: () => void };
 
-function FocusPanel({ papers, subject, onSubject, onStage }: PanelProps) {
+function FocusPanel({ papers, subject, onSubject, onStage, review, projects }: PanelProps & { review: BreakReview; projects: readonly ResearchProject[] }) {
   const { profile, store, actions, previewAmbient } = useFocus();
   const now = useFocusClock();
   const setPreferences = usePreferences();
@@ -84,32 +85,35 @@ function FocusPanel({ papers, subject, onSubject, onStage }: PanelProps) {
 
   return (
     <div className="focus-mode" style={focusColorStyle(profile.preferences.colors.focus)}>
-      <section className="focus-dial-card" aria-label="Focus rounds">
-        <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
-        <p className="focus-phase">
-          <span className={`focus-phase-chip is-${shown.phase}`}>{shown.finished ? "Done" : phaseTitle[shown.phase]}</span>
-          {shown.finished ? `${focus?.completed ?? 0} rounds done` : rounds}
-        </p>
-        <Dial progress={active ? 1 - shown.remaining / shown.total : 0} label={`${phaseTitle[shown.phase]}: ${formatClock(shown.remaining, "up")} left`}>
-          <strong className="focus-time">{formatClock(shown.remaining, "up")}</strong>
-          <small>{shown.waiting ? `Ready for ${phaseTitle[shown.phase].toLowerCase()}` : shown.running ? (shown.phase === "work" ? "Stay with it" : "Rest your eyes") : active ? "Paused" : `${settings.work} min focus · ${settings.shortBreak} min break`}</small>
-        </Dial>
-        <ol className="focus-cycle" aria-label={`${focus?.completed ?? 0} rounds done; a long break after every ${settings.longEvery}`}>
-          {cycle.map((done, index) => <li key={index} className={done ? "is-done" : ""} />)}
-        </ol>
-        <Controls>
-          {!active ? (
-            <button type="button" className="focus-primary" onClick={() => actions.startFocus(resolveSubject(subject, papers))}><Play size={16} /> {focus?.finished ? "Start again" : "Start focus"}</button>
-          ) : shown.running ? (
-            <button type="button" className="focus-primary" onClick={actions.pauseFocus}><Pause size={16} /> Pause</button>
-          ) : (
-            <button type="button" className="focus-primary" onClick={actions.resumeFocus}><Play size={16} /> {shown.waiting ? `Start ${phaseTitle[shown.phase].toLowerCase()}` : "Resume"}</button>
-          )}
-          {active ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> {shown.phase === "work" ? "Skip to a break" : "Skip the break"}</button> : null}
-          {focus ? <button type="button" onClick={actions.stopFocus}><Square size={14} /> Stop</button> : null}
-        </Controls>
-        <SubjectField label="What are you working on?" placeholder="A paper, a chapter, a problem set…" value={subject} onChange={onSubject} active={active ? focus : undefined} papers={papers} />
-      </section>
+      <div className="focus-stack">
+        <section className="focus-dial-card" aria-label="Focus rounds">
+          <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
+          <p className="focus-phase">
+            <span className={`focus-phase-chip is-${shown.phase}`}>{shown.finished ? "Done" : phaseTitle[shown.phase]}</span>
+            {shown.finished ? `${focus?.completed ?? 0} rounds done` : rounds}
+          </p>
+          <Dial progress={active ? 1 - shown.remaining / shown.total : 0} label={`${phaseTitle[shown.phase]}: ${formatClock(shown.remaining, "up")} left`}>
+            <strong className="focus-time">{formatClock(shown.remaining, "up")}</strong>
+            <small>{shown.waiting ? `Ready for ${phaseTitle[shown.phase].toLowerCase()}` : shown.running ? (shown.phase === "work" ? "Stay with it" : "Rest your eyes") : active ? "Paused" : `${settings.work} min focus · ${settings.shortBreak} min break`}</small>
+          </Dial>
+          <ol className="focus-cycle" aria-label={`${focus?.completed ?? 0} rounds done; a long break after every ${settings.longEvery}`}>
+            {cycle.map((done, index) => <li key={index} className={done ? "is-done" : ""} />)}
+          </ol>
+          <Controls>
+            {!active ? (
+              <button type="button" className="focus-primary" onClick={() => actions.startFocus(resolveSubject(subject, papers))}><Play size={16} /> {focus?.finished ? "Start again" : "Start focus"}</button>
+            ) : shown.running ? (
+              <button type="button" className="focus-primary" onClick={actions.pauseFocus}><Pause size={16} /> Pause</button>
+            ) : (
+              <button type="button" className="focus-primary" onClick={actions.resumeFocus}><Play size={16} /> {shown.waiting ? `Start ${phaseTitle[shown.phase].toLowerCase()}` : "Resume"}</button>
+            )}
+            {active ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> {shown.phase === "work" ? "Skip to a break" : "Skip the break"}</button> : null}
+            {focus ? <button type="button" onClick={actions.stopFocus}><Square size={14} /> Stop</button> : null}
+          </Controls>
+          <SubjectField label="What are you working on?" placeholder="A paper, a chapter, a problem set…" value={subject} onChange={onSubject} active={active ? focus : undefined} papers={papers} />
+        </section>
+        <BreakReviewCard review={review} projects={projects} />
+      </div>
 
       <section className="focus-settings" aria-label="Focus settings">
         <h2>Rounds and breaks</h2>
@@ -128,6 +132,7 @@ function FocusPanel({ papers, subject, onSubject, onStage }: PanelProps) {
         </label>
         <Toggle checked={settings.autoStartBreaks} onChange={(autoStartBreaks) => setFocus({ autoStartBreaks })} label="Start breaks on their own" hint="Otherwise the timer waits for you after each round." />
         <Toggle checked={settings.autoStartWork} onChange={(autoStartWork) => setFocus({ autoStartWork })} label="Start the next round after a break" hint="With both on, rounds and breaks follow each other until you stop." />
+        <Toggle checked={profile.preferences.breakReview} onChange={(breakReview) => void setPreferences({ breakReview })} label="Review a few cards in short breaks" hint="Up to three cards from your library that are due. Long breaks stay for rest." />
         <p className="focus-note">Changes apply from the next round. Only focus time is counted as work, never a break.</p>
         <div className="focus-ambient">
           <label className="focus-select">
@@ -478,7 +483,7 @@ function TodayCard({ onProfile }: { onProfile: () => void }) {
  * Tam ekran: yalnızca büyük saat, faz, bir ilerleme çizgisi ve iki düğme.
  * Tarayıcı izin verirse gerçekten tam ekran; vermezse sayfayı kaplayan bir katman.
  */
-function FocusStage({ tab, subject, papers, onClose }: { tab: Exclude<TimerMode, "alarm">; subject: string; papers: readonly Paper[]; onClose: () => void }) {
+function FocusStage({ tab, subject, papers, onClose, reviewWaiting, onReview }: { tab: Exclude<TimerMode, "alarm">; subject: string; papers: readonly Paper[]; onClose: () => void; reviewWaiting: number; onReview: () => void }) {
   const { profile, store, actions } = useFocus();
   const now = useFocusClock();
   const ref = useRef<HTMLDivElement>(null);
@@ -553,6 +558,9 @@ function FocusStage({ tab, subject, papers, onClose }: { tab: Exclude<TimerMode,
         {tab === "focus" && store.focus && !store.focus.finished ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> Skip</button> : null}
         <button type="button" onClick={onClose}><Minimize2 size={15} /> Leave full screen</button>
       </div>
+      {tab === "focus" && reviewWaiting ? (
+        <button type="button" className="focus-stage-review" onClick={onReview}><Layers size={15} /> Review {reviewWaiting === 1 ? "1 card" : `${reviewWaiting} cards`} in this break</button>
+      ) : null}
       <small className="focus-stage-keys">Space to start or pause · Esc to leave</small>
     </div>
   );
@@ -618,6 +626,7 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
   const firstName = profile.firstName.trim();
   const timerTab = tab === "alarm" ? undefined : tab;
   const closeStage = useCallback(() => setStage(false), []);
+  const review = useBreakReview(projects, profile.preferences.breakReview ? shortBreakKey(store.focus) : undefined);
 
   // Klavye: boşluk başlat/duraklat, F tam ekran, S atla, L tur, 1–4 sekmeler. Yazarken ya da bir düğmedeyken değil.
   const latest = useRef({ tab, store, actions, subjects, papers, timerSeconds: profile.preferences.timerSeconds });
@@ -690,8 +699,10 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
           <div id="focus-tabpanel" role="tabpanel" aria-labelledby={`focus-tab-${tab}`}>
             {timerTab ? (
               (() => {
-                const Panel = timerTab === "focus" ? FocusPanel : timerTab === "timer" ? TimerPanel : StopwatchPanel;
-                return <Panel papers={papers} subject={subjects[timerTab]} onSubject={(text) => setSubjects((current) => ({ ...current, [timerTab]: text }))} onStage={() => setStage(true)} />;
+                const props: PanelProps = { papers, subject: subjects[timerTab], onSubject: (text) => setSubjects((current) => ({ ...current, [timerTab]: text })), onStage: () => setStage(true) };
+                if (timerTab === "focus") return <FocusPanel {...props} review={review} projects={projects} />;
+                const Panel = timerTab === "timer" ? TimerPanel : StopwatchPanel;
+                return <Panel {...props} />;
               })()
             ) : (
               <AlarmsPanel />
@@ -704,7 +715,19 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
         </div>
         <TodayCard onProfile={onProfile} />
       </div>
-      {stage && timerTab ? <FocusStage tab={timerTab} subject={subjects[timerTab]} papers={papers} onClose={closeStage} /> : null}
+      {stage && timerTab ? (
+        <FocusStage
+          tab={timerTab}
+          subject={subjects[timerTab]}
+          papers={papers}
+          onClose={closeStage}
+          reviewWaiting={review.waiting}
+          onReview={() => {
+            closeStage();
+            review.begin();
+          }}
+        />
+      ) : null}
     </main>
   );
 }

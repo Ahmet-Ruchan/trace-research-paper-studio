@@ -172,6 +172,25 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .focus-stage-bar { width: min(640px, 82vw); height: 8px; overflow: hidden; border-radius: 999px; background: var(--track); }
 .focus-stage-bar i { display: block; height: 100%; border-radius: inherit; background: var(--focus-line); transition: width .5s linear; }
 .focus-stage-keys { color: var(--ink-soft); font-size: var(--text-sm); }
+.focus-stage-review { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 18px; border: 1px solid var(--focus-line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+
+/* Molada kısa tekrar: kadranın altında, dar sütuna sığacak biçimde. */
+.focus-stack { display: grid; gap: 14px; min-width: 0; }
+.focus-offer.break-review { grid-template-columns: auto minmax(0, 1fr); }
+.focus-offer.break-review .focus-offer-actions { grid-column: 1 / -1; }
+.break-review.is-open, .break-review.is-done { display: grid; gap: 12px; min-width: 0; padding: 18px 20px; border: 1px solid var(--line); border-left: 3px solid var(--focus-line); border-radius: 12px; background: var(--surface); }
+.break-review-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
+.break-review-paper { overflow: hidden; color: var(--ink-soft); font: italic var(--text-sm) Georgia, serif; text-overflow: ellipsis; white-space: nowrap; }
+.break-review-close { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-soft); cursor: pointer; }
+.break-review-close:hover { border-color: var(--line-dark); color: var(--ink); }
+.break-review .quiz-score { display: none; }
+.break-review .quiz-list { margin: 0; }
+.break-review .quiz-question { padding: 0; border: 0; }
+.break-review .review-concept h2 { margin: 4px 0 12px; font-size: 1.5rem; }
+.break-review .review-grade { margin-top: 12px; }
+.break-review .review-card-foot { flex-wrap: wrap; margin-top: 0; padding-top: 12px; }
+.break-review.is-done { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.break-review.is-done p { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
 
 /* ---------- Makaleye ayrılan zaman ---------- */
 .focus-offer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-left: 3px solid var(--focus-line); border-radius: 12px; background: var(--surface); }
