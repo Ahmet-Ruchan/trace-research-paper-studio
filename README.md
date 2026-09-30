@@ -1321,6 +1321,9 @@ the two from mixing.
 - [x] Study habits: review cards in short breaks, focus rounds from Study and Review, a weekly report, notes and highlights with Obsidian export, and a reading list in the reading order
 - [ ] Team review with accounts and shared annotations
 
+The work planned next, in order and ticked off as each item is tested and merged, is kept in
+[docs/plan.md](docs/plan.md).
+
 ---
 
 ## Star history
