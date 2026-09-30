@@ -6,7 +6,7 @@ import { focusColorStyle } from "@/lib/focus-colors";
 import { learningStats } from "@/lib/learning-stats";
 import { displayName, MAX_PHOTO_CHARS, SOUNDS, type Preferences, type Profile, type SoundId } from "@/lib/profile";
 import type { ResearchProject } from "@/lib/schema";
-import { calendarYears, dailyTotals, dayDate, dayKey, formatDuration, sessionPieces, workSummary, type WorkSession } from "@/lib/work-log";
+import { calendarYears, dailyTotals, dayDate, dayKey, formatDuration, SESSION_KIND_LABELS, sessionPieces, workSummary, type WorkSession } from "@/lib/work-log";
 import { DisplayControl } from "../display-control";
 import { useLibraryStudyState } from "../study-progress";
 import { useFocus, useFocusClock } from "./focus-provider";
@@ -15,7 +15,6 @@ import { StudioNav } from "./studio-nav";
 import { PaperTimeCard } from "./paper-time";
 import { WorkCalendar, type CalendarRange } from "./work-calendar";
 
-const kindLabel = { focus: "Focus", timer: "Timer", stopwatch: "Stopwatch", manual: "Added by hand" } as const;
 const longDate = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short" });
 const memberSince = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" });
@@ -236,6 +235,7 @@ function PreferencesCard() {
         label="Desktop notifications"
         hint={permission === "denied" ? "Blocked in this browser; allow them in the site settings." : "When a round ends or an alarm rings while Trace is in the background."}
       />
+      <Toggle checked={preferences.reviewCountsAsWork} onChange={(reviewCountsAsWork) => set({ reviewCountsAsWork })} label="Count review time as work" hint="The time you spend on cards in Review, up to five minutes a card, is added to your calendar." />
     </section>
   );
 }
@@ -258,7 +258,7 @@ function SessionsCard({ selected }: { selected?: string }) {
           {shown.map((session: WorkSession) => (
             <li key={session.id}>
               <span>{selected ? "" : `${shortDate.format(new Date(session.start))}, `}{time.format(new Date(session.start))}–{time.format(new Date(session.end))}</span>
-              <span>{session.label || kindLabel[session.kind]}</span>
+              <span>{session.label || SESSION_KIND_LABELS[session.kind]}</span>
               <strong>{formatDuration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
               <button type="button" className="focus-icon-button" aria-label={`Delete the session at ${time.format(new Date(session.start))}`} onClick={() => void deleteSession(session.id)}><Trash2 size={14} /></button>
             </li>

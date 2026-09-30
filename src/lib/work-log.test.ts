@@ -11,12 +11,14 @@ import {
   dailyTotals,
   dayKey,
   emptyWorkLog,
+  extendReviewBlock,
   formatClock,
   formatDuration,
   heatLevel,
   heatmap,
   MAX_SESSIONS,
   mergeWorkLogs,
+  REVIEW_CARD_CAP_MS,
   parseWorkLog,
   removeSession,
   sessionPieces,
@@ -164,6 +166,35 @@ describe("the reader's week and streaks", () => {
     expect(formatClock(400, "up")).toBe("00:01");
     expect(formatClock(3_723_000)).toBe("1:02:03");
     expect(dayKey(new Date(at("2026-09-20", "00:30")))).toBe("2026-09-20");
+  });
+});
+
+describe("time in review", () => {
+  const MIN = 60_000;
+  const T0 = Date.parse("2026-09-28T09:00:00.000Z");
+  let ids = 0;
+  const newId = () => `review-${(ids += 1)}`;
+
+  it("grows one session card by card, counts at most five minutes a card, and starts again after a gap", () => {
+    let block = extendReviewBlock(undefined, T0, T0 + 2 * MIN, newId);
+    block = extendReviewBlock(block, T0 + 2 * MIN, T0 + 3 * MIN, newId);
+    expect(block).toEqual({ id: "review-1", start: T0, end: T0 + 3 * MIN });
+    // Kart açık bırakılıp gidildi: beş dakikası sayılıyor, sonraki kart yeni oturum.
+    block = extendReviewBlock(block, T0 + 3 * MIN, T0 + 40 * MIN, newId);
+    expect(block).toEqual({ id: "review-1", start: T0, end: T0 + 3 * MIN + REVIEW_CARD_CAP_MS });
+    block = extendReviewBlock(block, T0 + 40 * MIN, T0 + 41 * MIN, newId);
+    expect(block).toEqual({ id: "review-2", start: T0 + 40 * MIN, end: T0 + 41 * MIN });
+    expect(extendReviewBlock(block, T0 + 41 * MIN, T0 + 41 * MIN, newId)).toBe(block);
+  });
+
+  it("keeps review time as its own kind of session, counted once with a focus round beside it", () => {
+    const review = sessionPieces({ kind: "review", id: "review-1", projectId: "attention" }, T0, T0 + 10 * MIN);
+    expect(workLogSchema.safeParse({ ...emptyWorkLog(), sessions: review }).success).toBe(true);
+    const focus = sessionPieces({ kind: "focus", projectId: "attention" }, T0 - 5 * MIN, T0 + 5 * MIN);
+    expect(timeByProject([...focus, ...review]).get("attention")).toBe(15 * 60);
+    // Oturum büyüdükçe aynı kimlikle yeniden yazılıyor; kayıtta bir tane kalıyor.
+    const longer = sessionPieces({ kind: "review", id: "review-1", projectId: "attention" }, T0, T0 + 12 * MIN);
+    expect(addSessions(addSessions(emptyWorkLog(), review), longer).sessions.map((item) => [item.id, item.end])).toEqual([["review-1", new Date(T0 + 12 * MIN).toISOString()]]);
   });
 });
 

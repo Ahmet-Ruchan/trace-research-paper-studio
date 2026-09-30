@@ -84,6 +84,8 @@ export const preferencesSchema = z.object({
   /** Geri sayım ve kronometre çalışma süresi sayılsın mı. */
   timerCountsAsWork: z.boolean().default(true),
   stopwatchCountsAsWork: z.boolean().default(true),
+  /** Tekrar ekranında geçen süre çalışma sayılsın mı. */
+  reviewCountsAsWork: z.boolean().default(true),
   /** Günlük hedef, dakika; takvimin en koyu tonu hedefe ulaşılan gün. */
   dailyGoalMinutes: z.number().int().min(15).max(24 * 60).default(4 * 60),
   /** Haftanın ilk günü: 1 pazartesi, 0 pazar. */

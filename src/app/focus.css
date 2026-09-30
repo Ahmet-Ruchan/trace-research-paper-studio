@@ -33,6 +33,8 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .studio-nav-profile { width: 36px; height: 36px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
 .studio-nav-profile[aria-current="page"] .focus-avatar { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .workspace-actions .studio-nav-focus.has-timer span { display: inline; }
+/* Dar başlıkta düğme etiketleri gizleniyor; profil resmi bir etiket değil. */
+.workspace-actions .studio-nav-profile span.focus-avatar { display: grid; }
 @keyframes studio-pulse { 50% { opacity: .3; } }
 
 .focus-avatar { display: grid; place-items: center; flex: none; overflow: hidden; border-radius: 50%; background: var(--focus-fill); color: var(--on-focus); font-weight: 650; letter-spacing: .02em; }
@@ -198,6 +200,12 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .focus-offer strong { display: block; font-size: var(--text-md); }
 .focus-offer p { margin: 4px 0 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
 .focus-offer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.focus-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px 10px 16px; border: 1px solid var(--line); border-left: 3px solid var(--focus-line); border-radius: 12px; background: var(--surface); }
+.focus-bar > svg { flex: none; color: var(--focus-ink); }
+.focus-bar p { flex: 1 1 16rem; min-width: 0; margin: 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
+.focus-bar p strong { color: var(--ink); }
+.focus-bar .focus-primary { min-height: 38px; padding: 0 16px; font-size: var(--text-sm); }
+.review-page .focus-bar { max-width: 760px; margin: 0 auto 16px; }
 .paper-time { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .paper-time li { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(80px, 1fr) auto; align-items: center; gap: 12px; font-size: var(--text-sm); }
 .paper-time button, .paper-time li > span:first-child { overflow: hidden; padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; }

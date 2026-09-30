@@ -286,8 +286,10 @@ the computer sleeps does the timer pause at that moment, and say so, instead of 
 your day.
 
 Name a paper from your library in **What are you working on?**, or press **Start a focus round** on
-a paper's overview in the Lab, and the time is counted for that paper: the Lab shows how long you
-have spent on it, and your profile lists your time by paper. **Background sound** plays white noise,
+a paper's overview in the Lab, in its Study path or in Review, and the time is counted for that
+paper: the Lab shows how long you have spent on it, and your profile lists your time by paper. Time
+in Review counts as work even without a timer, up to five minutes a card so a card left open does
+not count the night, and shows as Review in your sessions (turn it off in your profile). **Background sound** plays white noise,
 brown noise or rain during focus rounds and stops for breaks, made in the browser with no audio
 file. The keyboard runs it too: <kbd>Space</kbd> starts or pauses, <kbd>F</kbd> opens a full-screen
 timer with nothing but the time, <kbd>S</kbd> skips, <kbd>L</kbd> marks a lap and <kbd>1</kbd>–<kbd>4</kbd>

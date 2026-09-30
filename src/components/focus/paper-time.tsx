@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Timer } from "lucide-react";
 import { focusColorStyle } from "@/lib/focus-colors";
+import type { Subject } from "@/lib/focus-timer";
 import type { ResearchProject } from "@/lib/schema";
 import { addDaysLocal, formatDuration, startOfWeek, timeByProject } from "@/lib/work-log";
 import { focusDisplay, liveSessions, useFocus, useFocusClock } from "./focus-provider";
@@ -51,6 +52,42 @@ export function PaperFocusOffer({ project }: { project: ResearchProject }) {
         )}
       </div>
     </section>
+  );
+}
+
+const phaseName = { work: "Focus round", short: "Short break", long: "Long break" } as const;
+
+/**
+ * Çalışma ve tekrar ekranlarında ince bir şerit: buradan bir odak turu
+ * başlatılıyor ve süre verilen konuya (makale ya da tekrar) yazılıyor. Tur
+ * zaten sürüyorsa kalan süre ve zamanlayıcıya giden bir düğme.
+ */
+export function FocusRoundBar({ subject, hint }: { subject: Subject; hint: string }) {
+  const { profile, store, actions } = useFocus();
+  const now = useFocusClock();
+  const nav = useStudioNav();
+  const focus = store.focus && !store.focus.finished ? store.focus : undefined;
+  const shown = focus ? focusDisplay(focus, profile, now) : undefined;
+  const here = Boolean(focus && subject.projectId && focus.projectId === subject.projectId);
+
+  return (
+    <div className="focus-bar" style={focusColorStyle(profile.preferences.colors.focus)} role="group" aria-label="Focus round">
+      <Timer size={16} aria-hidden="true" />
+      {focus && shown ? (
+        <>
+          <p role="status">
+            <strong>{phaseName[shown.phase]}</strong> · {Math.ceil(shown.remaining / 60_000)} min left{shown.running ? "" : ", paused"}
+            {here ? " · counted for this paper" : ""}
+          </p>
+          <button type="button" className="focus-secondary" onClick={() => nav?.open("focus")}>Open the timer</button>
+        </>
+      ) : (
+        <>
+          <p>{hint}</p>
+          <button type="button" className="focus-primary" onClick={() => actions.startFocus(subject)}><Timer size={15} /> Start a focus round</button>
+        </>
+      )}
+    </div>
   );
 }
 

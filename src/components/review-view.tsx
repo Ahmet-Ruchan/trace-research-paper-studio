@@ -5,10 +5,13 @@ import { ArrowLeft, ArrowRight, Layers } from "lucide-react";
 import { LanguageProvider } from "@/visuals";
 import { dueCards, recordReview, reviewCards, reviewForecast, type ReviewCard } from "@/lib/review-queue";
 import { REVIEW_INTERVALS_DAYS, describeDue } from "@/lib/review-schedule";
+import { extendReviewBlock, type ReviewBlock } from "@/lib/work-log";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyProgress } from "@/lib/study-path";
 import { putStudyProgress, readLibraryStudy } from "./study-progress";
 import { ReviewCardBody } from "./review-card";
+import { useFocus } from "./focus/focus-provider";
+import { FocusRoundBar } from "./focus/paper-time";
 import { StudioNav } from "./focus/studio-nav";
 
 type Load = { status: "loading" } | { status: "failed"; message: string } | { status: "ready" };
@@ -50,6 +53,9 @@ export function ReviewView({
   const [saveError, setSaveError] = useState<string>();
   const [now] = useState(() => new Date().toISOString());
   const queue = useRef<Promise<void>>(Promise.resolve());
+  const { logReviewTime } = useFocus();
+  const shownAt = useRef<number | undefined>(undefined);
+  const block = useRef<ReviewBlock | undefined>(undefined);
 
   // Kartlar açılışta okunuyor; oturum o anki kuyruktan kuruluyor.
   useEffect(() => {
@@ -74,6 +80,13 @@ export function ReviewView({
   const card = session[index];
   const project = card ? scoped.find((item) => item.id === card.projectId) : undefined;
   const paper = projectId ? scoped[0]?.evidence.paper.title : undefined;
+  const subject = useMemo(() => (projectId && paper ? { label: paper, projectId } : {}), [paper, projectId]);
+
+  // Kartın göründüğü an: geçilince aradaki süre tekrar oturumuna ekleniyor.
+  const cardKey = card?.key;
+  useEffect(() => {
+    shownAt.current = cardKey ? Date.now() : undefined;
+  }, [cardKey]);
 
   function save(target: string, progress: StudyProgress) {
     queue.current = queue.current.then(async () => {
@@ -96,7 +109,20 @@ export function ReviewView({
     save(card.projectId, next);
   }
 
+  /** Bu kartta geçen süre çalışma saatine; kart başına en çok beş dakika. */
+  function countTime() {
+    const shown = shownAt.current;
+    if (shown === undefined) return;
+    const at = Date.now();
+    shownAt.current = at;
+    const next = extendReviewBlock(block.current, shown, at, () => `review-${at}`);
+    if (!next || next === block.current) return;
+    block.current = next;
+    logReviewTime(next, subject);
+  }
+
   function advance() {
+    countTime();
     setGrade(undefined);
     setIndex((current) => current + 1);
   }
@@ -142,6 +168,12 @@ export function ReviewView({
         </p>
       </section>
 
+      {session.length > 0 && !finished ? (
+        <FocusRoundBar
+          subject={projectId && paper ? subject : { label: "Review" }}
+          hint={projectId ? "Review in a focus round: the time is counted for this paper." : "Review in a focus round, with a break after it. Time on the cards counts as work either way."}
+        />
+      ) : null}
       {load.status === "loading" && <p className="review-status" role="status">Loading your review cards…</p>}
       {load.status === "failed" && <p className="regen-error" role="alert">{load.message}</p>}
       {saveError && <p className="regen-error" role="status">Not saved: {saveError}</p>}

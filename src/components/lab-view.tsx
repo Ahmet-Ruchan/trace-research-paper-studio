@@ -63,7 +63,7 @@ import { termIndex } from "@/lib/term-index";
 import { studyPath, studySummary } from "@/lib/study-path";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import { useConceptAliases, useLibraryStudy, useStudyProgress } from "./study-progress";
-import { PaperFocusOffer } from "./focus/paper-time";
+import { FocusRoundBar, PaperFocusOffer } from "./focus/paper-time";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -382,6 +382,9 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "study" && (
           <div className="lab-content-stack">
+            {onProjectChange ? (
+              <FocusRoundBar subject={{ label: project.evidence.paper.title, projectId: project.id }} hint="Work through the path in a focus round, with a break after it: the time is counted for this paper." />
+            ) : null}
             {study.state.status === "loading" ? <p className="section-intro" role="status">Loading your study progress…</p> : null}
             {study.state.status === "failed" ? (
               <p className="regen-error" role="alert">{study.state.message} Nothing was changed; reload the page to try again.</p>

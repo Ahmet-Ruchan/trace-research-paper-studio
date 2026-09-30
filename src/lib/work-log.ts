@@ -25,8 +25,26 @@ export const MAX_SESSIONS = 20_000;
 export const MAX_SESSION_SECONDS = 12 * 3600;
 /** Bir gün en az bu kadar çalışılmışsa "çalışılan gün" (seri ve ortalama için). */
 export const ACTIVE_DAY_SECONDS = 60;
-export const SESSION_KINDS = ["focus", "timer", "stopwatch", "manual"] as const;
+export const SESSION_KINDS = ["focus", "timer", "stopwatch", "manual", "review"] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
+/** Oturum listelerinde adı olmayan bir oturumun adı. */
+export const SESSION_KIND_LABELS: Record<SessionKind, string> = { focus: "Focus", timer: "Timer", stopwatch: "Stopwatch", manual: "Added by hand", review: "Review" };
+
+/** Tekrarda bir kartın en çok sayılan süresi: açık kalıp unutulan bir kart geceyi çalışma saymasın. */
+export const REVIEW_CARD_CAP_MS = 5 * 60_000;
+export type ReviewBlock = { id: string; start: number; end: number };
+
+/**
+ * Tekrar ekranında geçen süre, kart kart: kart göründüğü andan geçildiği ana
+ * kadar, en çok `REVIEW_CARD_CAP_MS`. Kartlar arka arkaya geldikçe aynı oturum
+ * uzuyor (aynı kimlik, daha geç bitiş); araya boşluk girdiyse yeni oturum.
+ */
+export function extendReviewBlock(block: ReviewBlock | undefined, shownAt: number, doneAt: number, newId: () => string): ReviewBlock | undefined {
+  const end = Math.min(doneAt, shownAt + REVIEW_CARD_CAP_MS);
+  if (end <= shownAt) return block;
+  if (block && shownAt >= block.start && shownAt - block.end <= 1000) return { ...block, end: Math.max(block.end, end) };
+  return { id: newId(), start: shownAt, end };
+}
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const instant = z.string().max(40).refine((value) => Number.isFinite(Date.parse(value)), "Not a date.");

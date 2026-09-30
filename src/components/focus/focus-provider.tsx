@@ -34,7 +34,7 @@ import {
   type TimerEvent,
 } from "@/lib/focus-timer";
 import { emptyProfile, WORK_DATA_KIND, type Alarm, type Profile } from "@/lib/profile";
-import { addSessions, emptyWorkLog, formatClock, formatDuration, removeSession, sessionPieces, type WorkLog, type WorkSession } from "@/lib/work-log";
+import { addSessions, emptyWorkLog, formatClock, formatDuration, removeSession, sessionPieces, type ReviewBlock, type WorkLog, type WorkSession } from "@/lib/work-log";
 import { playSound, setAmbient, stopAmbient, unlockAudio } from "./focus-sound";
 
 /**
@@ -155,6 +155,8 @@ export type FocusContextValue = {
   previewSound: () => void;
   /** Arka plan sesini birkaç saniye çalar (odak turu sürmüyorsa sonra susuyor). */
   previewAmbient: () => void;
+  /** Tekrar ekranında geçen süre (`extendReviewBlock`); ayar kapalıysa yazılmıyor. */
+  logReviewTime: (block: ReviewBlock, subject?: Subject) => void;
 };
 
 const FocusContext = createContext<FocusContextValue | undefined>(undefined);
@@ -297,7 +299,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     const sessions = segments
       .filter((segment) => segment.kind === "focus" || segment.kind === "manual" || (segment.kind === "timer" ? preferences.timerCountsAsWork : preferences.stopwatchCountsAsWork))
       .flatMap((segment) =>
-        sessionPieces({ kind: segment.kind, label: segment.label, projectId: segment.projectId, color: preferences.colors[segment.kind === "manual" ? "focus" : segment.kind] }, segment.start, segment.end),
+        sessionPieces({ kind: segment.kind, label: segment.label, projectId: segment.projectId, color: preferences.colors[segment.kind === "manual" || segment.kind === "review" ? "focus" : segment.kind] }, segment.start, segment.end),
       );
     if (!sessions.length) return current;
     setLog((existing) => addSessions(existing, sessions));
@@ -634,6 +636,21 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // Tekrar oturumu büyüdükçe aynı kimlikle yeniden yazılıyor; bekleyen eski hâli yenisiyle değişiyor.
+  const logReviewTime = useCallback(
+    (block: ReviewBlock, subject: Subject = {}) => {
+      const { preferences } = profileRef.current;
+      if (!preferences.reviewCountsAsWork) return;
+      const sessions = sessionPieces({ kind: "review", id: block.id, label: subject.label, projectId: subject.projectId, color: preferences.colors.focus }, block.start, block.end);
+      if (!sessions.length) return;
+      const ids = new Set(sessions.map((session) => session.id));
+      setLog((existing) => addSessions(existing, sessions));
+      commit({ ...storeRef.current, pending: [...storeRef.current.pending.filter((session) => !ids.has(session.id)), ...sessions] });
+      void flush();
+    },
+    [commit, flush],
+  );
+
   const deleteSession = useCallback(async (id: string) => {
     const response = await fetch(`/api/profile/sessions?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
     if (!response?.ok && response?.status !== 404) {
@@ -706,8 +723,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       runAlert,
       previewSound,
       previewAmbient,
+      logReviewTime,
     }),
-    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, previewAmbient, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
+    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, logReviewTime, previewAmbient, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
   );
 
   return (

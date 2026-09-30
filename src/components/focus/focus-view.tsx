@@ -6,7 +6,7 @@ import { focusColorStyle, type FocusColorId } from "@/lib/focus-colors";
 import { countdownRemaining, elapsedOf, lapTimes, nextAlarm, shortBreakKey, type Subject } from "@/lib/focus-timer";
 import { AMBIENT_SOUNDS, MAX_ALARMS, type Alarm, type AmbientId, type Preferences, type TimerMode } from "@/lib/profile";
 import type { ResearchProject } from "@/lib/schema";
-import { addDaysLocal, dailyTotals, dayKey, formatClock, formatDuration, startOfWeek, workSummary } from "@/lib/work-log";
+import { addDaysLocal, dailyTotals, dayKey, formatClock, formatDuration, SESSION_KIND_LABELS, startOfWeek, workSummary } from "@/lib/work-log";
 import { DisplayControl } from "../display-control";
 import { BreakReviewCard, useBreakReview, type BreakReview } from "./break-review";
 import { focusDisplay, useFocus, useFocusClock } from "./focus-provider";
@@ -467,7 +467,7 @@ function TodayCard({ onProfile }: { onProfile: () => void }) {
           {sessions.map((session) => (
             <li key={session.id}>
               <span>{time.format(new Date(session.start))}–{time.format(new Date(session.end))}</span>
-              <span>{session.label || { focus: "Focus", timer: "Timer", stopwatch: "Stopwatch", manual: "Added by hand" }[session.kind]}</span>
+              <span>{session.label || SESSION_KIND_LABELS[session.kind]}</span>
               <strong>{formatDuration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
             </li>
           ))}

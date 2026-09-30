@@ -228,7 +228,7 @@ When the user asks how much they worked or studied, how the week went against th
 node scripts/trace-agent.mjs work [--days 14]
 ```
 
-It reads the studio's Focus timer record (`~/.trace/focus-log.json`) and prints today, this week and this month against the daily goal, the streak, the last `--days` days, time by paper this week and in all (`papers`, a session counts for a paper when the user named it on the timer or started the round from its Lab), and the latest sessions. Time where two timers ran at once is counted once, and days follow this machine's clock (`timeZone`). Give times as written ("2h 15m"). It is the user's own record: never write it into a project.
+It reads the studio's Focus timer record (`~/.trace/focus-log.json`) and prints today, this week and this month against the daily goal, the streak, the last `--days` days, time by paper this week and in all (`papers`, a session counts for a paper when the user named it on the timer or started the round from its Lab, Study path or Review), and the latest sessions. Sessions of kind `review` are time spent answering review cards in the studio, at most five minutes a card. Time where two timers ran at once is counted once, and days follow this machine's clock (`timeZone`). Give times as written ("2h 15m"). It is the user's own record: never write it into a project.
 
 ## Model record
 

@@ -98,7 +98,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .landing-proof i { width: 34px; height: 1px; background: var(--line-dark); }
 
 .workspace-shell { min-height: 100vh; display: flex; flex-direction: column; }
-.workspace-header { height: 67px; position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: 190px minmax(170px, 1fr) auto minmax(300px, 1fr); align-items: center; gap: 18px; padding: 0 22px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(18px); }
+.workspace-header { height: 67px; position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: 190px minmax(0, 1fr) auto minmax(max-content, 1fr); align-items: center; gap: 18px; padding: 0 22px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(18px); }
 .workspace-brand { border-right: 1px solid var(--line); }
 .project-identity { min-width: 0; display: flex; flex-direction: column; }
 .project-identity span { color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.12em; }
@@ -310,15 +310,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 @media (max-width: 1240px) {
   .landing-hero { grid-template-columns: minmax(0, .9fr) minmax(450px, 1.1fr); gap: 45px; }
-  .workspace-header { grid-template-columns: 150px minmax(120px,1fr) auto auto; }
+  .workspace-header { grid-template-columns: 150px minmax(0, 1fr) auto max-content; }
   .workspace-actions button span { display: none; }
   .lab-layout { grid-template-columns: 170px minmax(450px,1fr) 300px; }
   .editor-layout { grid-template-columns: 200px minmax(380px,1fr) minmax(330px,.75fr); }
 }
 
+/* Başlık eylemleri kendi genişliğinde kalıyor; yer daraldıkça önce makale adı, sonra sekme etiketleri çekiliyor. */
+@media (max-width: 1200px) {
+  .workspace-header { grid-template-columns: 150px minmax(0, 1fr) max-content; }
+  .project-identity { display: none; }
+  .mode-tabs { grid-column: 2; justify-self: center; }
+  .workspace-actions { grid-column: 3; }
+}
+@media (max-width: 1040px) {
+  .mode-tabs button { gap: 0; padding: 0 11px; font-size: 0; }
+}
+
 @media (max-width: 980px) {
   .onboarding-page { overflow: visible; }.landing-hero{grid-template-columns:1fr;padding:8vh 0}.landing-copy{max-width:760px}.landing-copy h1{font-size:clamp(58px,12vw,100px)}.ingest-panel{max-width:none;justify-self:stretch}
-  .workspace-header { height:auto; min-height:67px; grid-template-columns:130px 1fr auto; padding:10px 14px; }.project-identity{display:none}.mode-tabs{grid-column:2}.workspace-actions{grid-column:3}.workspace-content{min-height:calc(100vh - 67px)}
+  .workspace-header { height:auto; min-height:67px; grid-template-columns:auto minmax(0,1fr) max-content; gap:10px; padding:10px 14px; }.workspace-brand>span:last-child{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.workspace-brand{padding-right:6px}.workspace-actions{gap:5px}.workspace-actions>button{padding:0 8px}.project-identity{display:none}.mode-tabs{grid-column:2}.workspace-actions{grid-column:3}.workspace-content{min-height:calc(100vh - 67px)}
   .lab-layout { grid-template-columns: 58px minmax(0,1fr) 280px; }.lab-nav{padding:22px 9px}.lab-nav-label,.lab-nav button:not(.active){font-size:0}.lab-nav button{justify-content:center;padding:0}.lab-nav button.active{font-size:0}.source-count{display:none}.lab-main{padding:38px 30px}.two-column-block{grid-template-columns:1fr}.two-column-block>div,.two-column-block>div+div{padding:15px 0;border-left:0;border-top:1px solid var(--line)}
   .editor-layout { grid-template-columns: 180px minmax(0,1fr); }.editor-preview{position:relative;top:auto;height:auto;grid-column:2;padding:35px;border-left:0;border-top:1px solid var(--line)}
   .story-body{grid-template-columns:minmax(320px,.75fr) minmax(420px,1.25fr)}.story-sticky-visual{padding:30px}.visual-canvas{padding:30px}.story-hero h1{font-size:11vw}
@@ -334,6 +345,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .story-progress{top:116px}.story-hero{min-height:calc(100vh - 116px);padding:25px 20px 35px}.story-hero h1{font-size:17vw}.story-body{display:block}.story-copy-column{padding:0 20px}.story-section{min-height:auto;padding:19vh 0;opacity:1}.story-section h2{font-size:2.625rem}.story-sticky-visual{display:none}.story-mobile-visual{display:block;margin-top:38px}.story-closing{padding:15vh 20px}.story-closing>h2{font-size:3.25rem}.visual-canvas{min-height:340px;padding:22px}.metric-grid{grid-template-columns:1fr}.metric-item{border-left:0;border-top:1px solid var(--line)}.metric-item:first-child{border-top:0}.flow-row{display:grid;grid-template-columns:1fr 1fr}.layer-card{grid-template-columns:35px 1fr}.layer-card small{display:none}.concept-map{min-height:300px}.quote-visual blockquote{font-size:2.25rem}
   .drawer-overlay{padding:0;align-items:end}.evidence-drawer{width:100vw;height:min(78vh,700px);border-radius:17px 17px 0 0}.generation-stages{grid-template-columns:1fr}.generation-card h2{font-size:2.1875rem}
   .landing-header-actions{gap:10px}.landing-header-actions > .text-button:first-of-type{font-size:0}.landing-header-actions > .text-button:first-of-type svg,.landing-header-actions .nav-count{font-size:var(--text-2xs)}.library-header{height:72px}.library-header-actions{gap:7px}.library-header-actions .text-button{display:none}.library-import-button{width:36px;height:36px;justify-content:center;padding:0;font-size:0}.library-hero{align-items:flex-start;flex-direction:column}.library-card-main{grid-template-columns:90px 1fr}.library-cover{min-height:230px}.library-card-copy{padding:18px}.library-card-copy h2{font-size:1.4375rem}.library-card>footer>span{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.architecture-nodes,.infographic-visual{grid-template-columns:1fr}.timeline-visual{display:grid;grid-template-columns:1fr 1fr}.report-section{padding:30px 0}.report-intro{padding:25px}.matrix-visual{overflow-x:auto}
+  .workspace-brand>span:last-child{position:static;width:auto;height:auto;overflow:visible;clip:auto}.mode-tabs button{gap:7px;font-size:var(--text-sm)}
   .single-model-row{grid-template-columns:minmax(0,1fr)}.task-assignment-grid,.credential-grid{grid-template-columns:1fr}.team-preset-row{align-items:flex-start;flex-direction:column}.orchestration-heading{align-items:flex-start;flex-direction:column}.orchestration-toggle{width:100%}.orchestration-toggle button{flex:1;justify-content:center}
 }
 
@@ -819,6 +831,8 @@ span.library-tag { cursor: default; }
    bağlantısı yan yana sığmıyordu. */
 @media (max-width: 480px) {
   .landing-header .brand small, .library-header .brand small, .workspace-brand small { display: none; }
+  /* Sayaç çalışırken saat düğmesi genişliyor: makale başlığında yalnızca marka işareti kalıyor. */
+  .workspace-brand > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .landing-header .text-button { white-space: normal; line-height: 1.25; text-align: right; }
   /* Kütüphane başlığındaki düğmeler (ilerleme, kavramlar, model kaydı…) en büyük yazıda
      tek satıra sığmıyor: ikinci satıra geçiyorlar, sayfa yana kaymıyor. */

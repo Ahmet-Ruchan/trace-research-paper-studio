@@ -21736,6 +21736,8 @@ const preferencesSchema = object({
 	/** Geri sayım ve kronometre çalışma süresi sayılsın mı. */
 	timerCountsAsWork: boolean().default(true),
 	stopwatchCountsAsWork: boolean().default(true),
+	/** Tekrar ekranında geçen süre çalışma sayılsın mı. */
+	reviewCountsAsWork: boolean().default(true),
 	/** Günlük hedef, dakika; takvimin en koyu tonu hedefe ulaşılan gün. */
 	dailyGoalMinutes: number().int().min(15).max(1440).default(240),
 	/** Haftanın ilk günü: 1 pazartesi, 0 pazar. */
@@ -21812,7 +21814,8 @@ const SESSION_KINDS = [
 	"focus",
 	"timer",
 	"stopwatch",
-	"manual"
+	"manual",
+	"review"
 ];
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const instant = string().max(40).refine((value) => Number.isFinite(Date.parse(value)), "Not a date.");

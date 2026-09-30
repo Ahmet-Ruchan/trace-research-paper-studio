@@ -679,9 +679,9 @@ function Studio() {
         <button className="workspace-brand" onClick={() => setScreen("home")}><span className="brand-glyph">t</span><span><strong>trace</strong><small>research studio</small></span></button>
         <div className="project-identity"><span>Current paper</span><strong>{project.evidence.paper.title}</strong></div>
         <nav className="mode-tabs" aria-label="Workspace mode">
-          <button className={mode === "lab" ? "active" : ""} onClick={() => setMode("lab")}><FlaskConical size={15} /> Lab</button>
-          <button className={mode === "story" ? "active" : ""} onClick={() => setMode("story")}><LayoutTemplate size={15} /> Story</button>
-          <button className={mode === "preview" ? "active" : ""} onClick={() => setMode("preview")}><Share2 size={15} /> Preview</button>
+          <button className={mode === "lab" ? "active" : ""} title="Lab" onClick={() => setMode("lab")}><FlaskConical size={15} /> Lab</button>
+          <button className={mode === "story" ? "active" : ""} title="Story" onClick={() => setMode("story")}><LayoutTemplate size={15} /> Story</button>
+          <button className={mode === "preview" ? "active" : ""} title="Preview" onClick={() => setMode("preview")}><Share2 size={15} /> Preview</button>
         </nav>
         <div className="workspace-actions">
           <button title={t.home} aria-label={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>

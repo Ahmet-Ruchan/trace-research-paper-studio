@@ -926,6 +926,35 @@ test.describe("reading comfort", () => {
     }
   });
 
+  test("keeps the paper header's buttons clear of the mode tabs at every width, with a timer running too", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-header-fit"));
+    const measure = () =>
+      page.evaluate(() => {
+        const box = (element: Element) => element.getBoundingClientRect();
+        const tabs = box(document.querySelector(".mode-tabs")!);
+        const buttons = [...document.querySelectorAll(".workspace-actions > *, .workspace-actions .studio-nav > *")].map(box).filter((item) => item.width > 0);
+        // Aynı satırdaki düğmeler sekmelerin sağında başlıyor; hiçbiri ekrandan taşmıyor.
+        const beside = buttons.filter((item) => Math.abs(item.top - tabs.top) < 30);
+        return { overlap: beside.some((item) => item.left < tabs.right - 1 && item.right > tabs.left + 1), overflow: document.documentElement.scrollWidth - window.innerWidth };
+      });
+    for (const running of [false, true]) {
+      if (running) {
+        await page.goto("/?focus=1");
+        await page.getByRole("button", { name: "Start focus" }).click();
+      }
+      for (const [width, size] of [[390, "larger"], [761, "normal"], [900, "larger"], [1000, "normal"], [1100, "larger"], [1300, "normal"], [1480, "normal"], [1480, "larger"], [1700, "normal"], [1920, "larger"]] as const) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(`/?project=${project.id}`);
+        await page.evaluate((value) => window.localStorage.setItem("trace-text-size", value), size);
+        await page.reload();
+        await expect(page.locator(".workspace-actions")).toBeVisible();
+        expect(await measure(), `${width}px, ${size} text${running ? ", timer running" : ""}`).toEqual({ overlap: false, overflow: 0 });
+        // Profil resmi, etiketleri gizleyen kurala takılmıyor (telefonda profil kütüphaneden açılıyor).
+        if (width > 600) await expect(page.locator(".workspace-actions .focus-avatar")).toBeVisible();
+      }
+    }
+  });
+
   test("lets the reader choose a larger text size and remembers it", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-text-size"));
     await page.goto(`/?project=${project.id}`);
@@ -1989,6 +2018,41 @@ test.describe("review", () => {
       return progress && { done: progress.done, answers: progress.answers.length, reviews: progress.reviews?.length };
     }).toEqual({ done: [], answers: 0, reviews: 2 });
   });
+
+  test("starts a focus round from Study and from Review, and counts the time on the cards as work for the paper", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-review-time"));
+    await studied(request, project, true);
+    await page.clock.install();
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Study" }).click();
+    const bar = page.getByRole("group", { name: "Focus round" });
+    await expect(bar).toContainText("Work through the path in a focus round");
+    await bar.getByRole("button", { name: "Start a focus round" }).click();
+    await expect(bar.getByRole("status")).toHaveText("Focus round · 25 min left · counted for this paper");
+    await bar.getByRole("button", { name: "Open the timer" }).click();
+    await expect(page.locator(".focus-task input")).toHaveValue(project.evidence.paper.title);
+    await page.getByRole("button", { name: "Stop" }).click();
+
+    // Tekrar: tur buradan da başlıyor; kartlarda geçen süre çalışma sayılıyor.
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".study-offer").getByRole("button", { name: "Review 2 cards" }).click();
+    await expect(bar).toContainText("Review in a focus round: the time is counted for this paper.");
+    await page.clock.runFor(40_000);
+    await page.locator(".review-card").getByRole("button", { name: "Skip for now" }).click();
+    await page.clock.runFor(20_000);
+    await page.locator(".review-card").getByRole("button", { name: "Skip for now" }).click();
+    await expect(page.locator(".review-empty")).toContainText("You skipped every card");
+    const reviewed = async () => ((await (await request.get("/api/profile/sessions")).json()) as { log: WorkLog }).log.sessions.filter((session) => session.kind === "review");
+    await expect.poll(async () => (await reviewed()).map((session) => [session.projectId, session.label])).toEqual([[project.id, project.evidence.paper.title]]);
+    const [time] = await reviewed();
+    expect(Date.parse(time.end) - Date.parse(time.start)).toBeGreaterThanOrEqual(60_000);
+    expect(Date.parse(time.end) - Date.parse(time.start)).toBeLessThan(75_000);
+
+    // Profilde "Review" olarak görünüyor ve makaleye yazılıyor.
+    await page.getByRole("button", { name: "Profile" }).click();
+    await expect(page.getByRole("region", { name: "Time by paper" }).locator("li", { hasText: project.evidence.paper.title }).locator("strong")).toHaveText("1m");
+    await expect(page.getByRole("switch", { name: "Count review time as work" })).toHaveAttribute("aria-checked", "true");
+  });
 });
 
 test.describe("learning health", () => {
@@ -2352,7 +2416,8 @@ test.describe("focus timer and profile", () => {
   });
 
   test("counts down, says when time is up, and rings an alarm on its minute", async ({ page, request }) => {
-    const at = new Date(Date.now() + 60_000);
+    // Alarm 30–90 saniye sonraki dakika başında: test dakikanın hangi saniyesinde başlarsa başlasın çalarken yakalanıyor.
+    const at = new Date(Math.ceil((Date.now() + 30_000) / 60_000) * 60_000);
     const time = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
     await setProfile(request, (profile) => ({
       ...profile,
@@ -2370,7 +2435,7 @@ test.describe("focus timer and profile", () => {
     await done.getByRole("button", { name: "One more minute" }).click();
     await expect(page.locator(".focus-time")).toHaveText(/01:00|00:59/);
 
-    await page.clock.runFor(65_000);
+    await page.clock.runFor(at.getTime() - (await page.evaluate(() => Date.now())) + 5_000);
     const alarm = page.locator(".focus-alert", { hasText: "Stand up" });
     await expect(alarm).toHaveAttribute("role", "alert");
     await alarm.getByRole("button", { name: "Stop" }).click();
