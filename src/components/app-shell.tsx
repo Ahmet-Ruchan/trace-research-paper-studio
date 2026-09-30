@@ -590,6 +590,7 @@ function Studio() {
         onFocus={() => setScreen("focus")}
         onProgress={() => setScreen("progress")}
         onOpen={openProject}
+        onLibraryChanged={() => void listLibraryProjects().then(setProjects).catch(() => undefined)}
       />,
     );
   }

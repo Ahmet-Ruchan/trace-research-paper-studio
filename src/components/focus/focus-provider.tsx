@@ -34,6 +34,7 @@ import {
   type TimerEvent,
 } from "@/lib/focus-timer";
 import { emptyProfile, WORK_DATA_KIND, type Alarm, type Profile } from "@/lib/profile";
+import { describeBackupImport, type BackupSummary } from "@/lib/full-backup";
 import { addSessions, emptyWorkLog, formatClock, formatDuration, removeSession, sessionPieces, type ReviewBlock, type WorkLog, type WorkSession } from "@/lib/work-log";
 import { playSound, setAmbient, stopAmbient, unlockAudio } from "./focus-sound";
 
@@ -671,7 +672,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     }
     if ((body as { kind?: string })?.kind !== WORK_DATA_KIND) throw new Error("This is not a Trace work data file.");
     const response = await fetch("/api/profile/data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = (await response.json().catch(() => undefined)) as { added?: number; profileAdopted?: boolean; error?: string } | undefined;
+    const data = (await response.json().catch(() => undefined)) as { added?: number; profileAdopted?: boolean; library?: BackupSummary; error?: string } | undefined;
     if (!response.ok || data?.added === undefined) throw new Error(data?.error ?? "Your data could not be imported.");
     const [profileResponse, logResponse] = await Promise.all([fetch("/api/profile", { cache: "no-store" }), fetch("/api/profile/sessions", { cache: "no-store" })]);
     const fresh = (await profileResponse.json()) as { profile?: Profile };
@@ -681,7 +682,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       profileRef.current = fresh.profile;
     }
     if (freshLog.log) setLog(freshLog.log);
-    return `${data.added === 1 ? "1 session was" : `${data.added} sessions were`} added${data.profileAdopted ? ", and the profile in the file was taken over" : ""}.`;
+    return describeBackupImport(data.added, Boolean(data.profileAdopted), data.library);
   }, []);
 
   const previewSound = useCallback(() => {

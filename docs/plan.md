@@ -18,10 +18,18 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Veri güvenliği
 
-- [ ] **1. Tam yedek.** "Download my data" profil ve çalışma saatlerinin yanında çalışma
+- [x] **1. Tam yedek.** "Download my data" profil ve çalışma saatlerinin yanında çalışma
   ilerlemesini, tekrar kartlarını, notları ve vurguları, okuma listesini, etiketleri ve kavram
   eşlerini de tek dosyada indirir. Başka bilgisayarda içe aktarınca her şey mevcut veriyle
   birleşir, hiçbir şey silinmez.
+  - *Yapıldı:* Dosya biçimi 2 (`src/lib/full-backup.ts`); makaleler de dahil (kutu işaretliyse).
+    İçe aktarma: var olan makalenin üzerine yazmıyor, aynı notta yenisi kalıyor, çalışma
+    ilerlemesi iki cihaz gibi birleşiyor, buradaki kavram kararı değişmiyor; makalesi olmayan
+    kayıt yazılmıyor. Sürüm 1 dosyaları okunmaya devam ediyor. İçe aktarımdan sonra kütüphane
+    ve okuma listesi sayfa yenilenmeden tazeleniyor.
+  - *Test:* birleştirme kuralları ve iki bilgisayar arasında gidiş-dönüş (aynı dosya ikinci kez
+    yüklenince hiçbir şey çoğalmıyor) birim testlerde; boş bir kütüphaneye arayüzden yükleme
+    e2e'de.
 - [ ] **24. Otomatik tam yedek.** Aynı tam yedek haftada bir kendiliğinden
   `~/.trace/backups` içine alınır.
 

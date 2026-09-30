@@ -2561,10 +2561,41 @@ test.describe("focus timer and profile", () => {
 
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download my data" }).click();
-    const file = JSON.parse(readFileSync(await (await download).path(), "utf8")) as { kind: string; profile: Profile; log: WorkLog };
+    const file = JSON.parse(readFileSync(await (await download).path(), "utf8")) as { kind: string; version: number; profile: Profile; log: WorkLog; library: { papers?: unknown[]; study: unknown; notes: unknown; readingList: unknown } };
     expect(file.kind).toBe("trace-work-data");
+    expect(file.version).toBe(2);
     expect(file.profile.firstName).toBe("Grace");
     expect(file.log.sessions).toHaveLength(4);
+    expect(file.library).toMatchObject({ papers: [], study: { version: 1 }, notes: { version: 1 }, readingList: { version: 1 } });
+  });
+
+  test("restores everything from one file on an empty computer: papers, notes, reading list and study progress", async ({ page, request }) => {
+    const paper = projectNamed("e2e-backup");
+    const at = new Date(Date.now() - 86_400_000).toISOString();
+    const file = {
+      kind: "trace-work-data",
+      version: 2,
+      log: { version: 1, sessions: [{ id: "moved", kind: "focus", start: at, end: new Date(Date.parse(at) + 25 * 60_000).toISOString(), projectId: paper.id }], archive: {} },
+      library: {
+        papers: [paper],
+        study: { version: 1, projects: [{ id: paper.id, progress: completeStep(undefined, "start", "finish", at) }] },
+        notes: { version: 1, projects: [{ id: paper.id, notes: [{ id: "n1", target: { kind: "claim", claimId: paper.evidence.claims[0].id }, text: "Brought from the old laptop.", color: "yellow", createdAt: at, updatedAt: at }] }] },
+        readingList: { version: 1, items: [{ id: "arxiv:1607.06450", title: "Layer Normalization", identifier: "arxiv:1607.06450", from: [{ projectId: paper.id, relation: "reference" }], authors: [], addedAt: at }] },
+        tags: { version: 1, projects: [{ id: paper.id, tags: ["Moved"] }] },
+      },
+    };
+    await page.goto("/?profile=1");
+    const data = page.getByRole("region", { name: "Your data" });
+    await expect(data.getByRole("checkbox", { name: /Include the papers themselves/ })).toBeChecked();
+    await data.locator("input[type=file]").setInputFiles({ name: "trace-data.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(file)) });
+    await expect(data.getByRole("status")).toHaveText("1 session added, 1 paper added to your library, study progress merged for 1 paper, 1 note added, 1 work added to your reading list, tags merged for 1 paper. Nothing was removed.");
+
+    // Kütüphane, okuma listesi ve not yerinde; sayfa yenilenmeden.
+    await page.getByRole("button", { name: "Library" }).first().click();
+    await expect(page.locator(".library-card, .library-row").filter({ hasText: paper.evidence.paper.title })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Reading list (1)" })).toBeVisible();
+    const notes = await (await request.get(`/api/library/notes?id=${paper.id}`)).json();
+    expect(notes.notes.map((item: { text: string }) => item.text)).toEqual(["Brought from the old laptop."]);
   });
 });
 

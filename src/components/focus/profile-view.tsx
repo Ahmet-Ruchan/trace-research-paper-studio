@@ -12,6 +12,7 @@ import { useLibraryStudyState } from "../study-progress";
 import { useFocus, useFocusClock } from "./focus-provider";
 import { Avatar, ColorPicker, NumberField, Toggle } from "./focus-parts";
 import { StudioNav } from "./studio-nav";
+import { useReadingList } from "../reading-list";
 import { PaperTimeCard } from "./paper-time";
 import { WeeklyReport } from "./weekly-report";
 import { WorkCalendar, type CalendarRange } from "./work-calendar";
@@ -302,28 +303,44 @@ function SessionsCard({ selected }: { selected?: string }) {
   );
 }
 
-function DataCard() {
+/**
+ * Okuyucunun bütün verisi (`full-backup.ts`): profil, çalışma kaydı ve
+ * kütüphanenin yanındaki kayıtları; istenirse makalelerle birlikte. İçe
+ * aktarma birleştiriyor, hiçbir şey silmiyor.
+ */
+function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChanged?: () => void }) {
   const { importData } = useFocus();
+  const reading = useReadingList();
   const input = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
+  const [withPapers, setWithPapers] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   return (
     <section className="stats-block profile-data" aria-label="Your data">
       <h2>Your data</h2>
       <p>
-        Your profile and every minute you worked are kept on this computer, in <code>~/.trace/profile.json</code> and <code>~/.trace/focus-log.json</code>, with a
-        daily copy of the last seven days in <code>~/.trace/backups</code>. Nothing is sent anywhere. Download it all to move to another computer; importing adds
-        sessions to yours and never removes any.
+        Everything you keep in Trace is on this computer, with a daily copy of the last seven days in <code>~/.trace/backups</code>: your profile and every
+        minute you worked, and next to your library your study progress and review cards, your notes and highlights, your reading list, tags and concept
+        links. Nothing is sent anywhere. Download it all in one file to move to another computer or keep a backup; importing a file adds what it holds to
+        what is here and never removes anything, and a paper you already have is kept as it is.
       </p>
+      <label className="profile-data-papers">
+        <input type="checkbox" checked={withPapers} onChange={(event) => setWithPapers(event.target.checked)} />
+        <span>Include the papers themselves ({papers === 1 ? "1 paper" : `${papers} papers`})</span>
+      </label>
       <div className="profile-form-actions">
         <button
           type="button"
           className="focus-secondary"
-          onClick={() =>
-            void fetch("/api/profile/data", { cache: "no-store" })
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void fetch(`/api/profile/data${withPapers ? "" : "?papers=0"}`, { cache: "no-store" })
               .then((response) => response.text())
-              .then((text) => download(`trace-work-data-${dayKey(new Date())}.json`, text))
-          }
+              .then((text) => download(`trace-data-${dayKey(new Date())}.json`, text))
+              .finally(() => setBusy(false));
+          }}
         >
           <Download size={14} /> Download my data
         </button>
@@ -336,12 +353,18 @@ function DataCard() {
             const file = event.target.files?.[0];
             event.target.value = "";
             if (!file) return;
+            setBusy(true);
             void importData(file)
-              .then((text) => setMessage({ ok: true, text }))
-              .catch((error: unknown) => setMessage({ ok: false, text: error instanceof Error ? error.message : "The file could not be imported." }));
+              .then((text) => {
+                setMessage({ ok: true, text });
+                onLibraryChanged?.();
+                void reading?.reload();
+              })
+              .catch((error: unknown) => setMessage({ ok: false, text: error instanceof Error ? error.message : "The file could not be imported." }))
+              .finally(() => setBusy(false));
           }}
         />
-        <button type="button" className="focus-secondary" onClick={() => input.current?.click()}><Upload size={14} /> Import a file</button>
+        <button type="button" className="focus-secondary" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} /> Import a file</button>
       </div>
       {message ? <p className={message.ok ? "" : "regen-error"} role={message.ok ? "status" : "alert"}>{message.text}</p> : null}
     </section>
@@ -359,6 +382,7 @@ export function ProfileView({
   onFocus,
   onProgress,
   onOpen,
+  onLibraryChanged,
 }: {
   projects: ResearchProject[];
   backLabel: string;
@@ -366,6 +390,8 @@ export function ProfileView({
   onFocus: () => void;
   onProgress: () => void;
   onOpen: (project: ResearchProject) => void;
+  /** Yedek içe aktarılınca kütüphane yeniden okunuyor. */
+  onLibraryChanged?: () => void;
 }) {
   const { profile, saveProfile, log, logReady, liveIntervals, profileReady } = useFocus();
   const now = useFocusClock();
@@ -457,7 +483,7 @@ export function ProfileView({
           <PaperTimeCard projects={projects} onOpen={onOpen} range={paperRange} />
           <PreferencesCard />
           <StudyingCard projects={projects} onProgress={onProgress} />
-          <DataCard />
+          <DataCard papers={projects.length} onLibraryChanged={onLibraryChanged} />
         </div>
       </div>
     </main>

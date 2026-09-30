@@ -346,8 +346,14 @@ How much did I work this week compared with last week, on which papers, and when
 
 Every minute is kept on your computer, in `~/.trace/profile.json` and `~/.trace/focus-log.json`, never
 in a paper and never sent anywhere. Writes are atomic, a damaged file is set aside rather than
-overwritten, and a copy of the last seven days is kept in `~/.trace/backups`. **Download my data**
-puts everything in one file; importing it on another computer adds its sessions and removes none.
+overwritten, and a copy of the last seven days is kept in `~/.trace/backups`.
+
+**Download my data** puts everything you keep in Trace in one file: your profile and worked time,
+your study progress and review cards, notes and highlights, reading list, tags and concept links,
+and, unless you untick it, the papers themselves. Importing it on another computer merges it with
+what is there and removes nothing: a paper you already have is kept as it is, the same note keeps
+its newer copy, study progress merges as it does between two devices, and a concept decision you made
+there is not overridden. The message after the import says what came in.
 
 ![Your profile and work calendar](docs/images/profile.jpg)
 

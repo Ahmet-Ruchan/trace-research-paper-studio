@@ -1,19 +1,38 @@
-import { z } from "zod";
+import { parseAliasFile } from "@/lib/concept-aliases";
+import { backupFileSchema, BACKUP_VERSION, emptyBackupSummary, mergeAliasFiles, mergeNotes, mergeTags, type BackupSummary } from "@/lib/full-backup";
+import { libraryTagsToJson, parseLibraryTags } from "@/lib/library-tags";
 import { isProfile, profileSchema, WORK_DATA_KIND } from "@/lib/profile";
-import { mergeWorkLogs, workLogSchema } from "@/lib/work-log";
-import { readProfile, readWorkLog, updateProfile, updateWorkLog } from "@/lib/trace-storage";
+import { notesFileToJson, parseNotesFile } from "@/lib/reader-notes";
+import { addToReadingList, parseReadingList, readingListToJson } from "@/lib/reading-list";
+import { researchProjectSchema } from "@/lib/schema";
+import { studyFileToJson, parseStudyFile } from "@/lib/study-path";
+import { mergeStudyProgress } from "@/lib/study-transfer";
+import { mergeWorkLogs } from "@/lib/work-log";
+import {
+  listStoredProjects,
+  readAllReaderNotes,
+  readAllStudyProgress,
+  readConceptAliases,
+  readLibraryTags,
+  readProfile,
+  readReadingList,
+  readStoredProject,
+  readWorkLog,
+  saveReaderNotes,
+  saveStoredProject,
+  saveStoredProjectTags,
+  saveStudyProgress,
+  updateConceptAliases,
+  updateProfile,
+  updateReadingList,
+  updateWorkLog,
+} from "@/lib/trace-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 20 * 1024 * 1024;
-
-const importSchema = z.object({
-  kind: z.literal(WORK_DATA_KIND),
-  version: z.literal(1),
-  profile: z.unknown().optional(),
-  log: workLogSchema,
-});
+/** Makaleler de dosyada olabildiği için sınır geniş; yüz makalelik bir kütüphane kırk megabayt civarı. */
+const MAX_BODY_BYTES = 300 * 1024 * 1024;
 
 function noStore(body: unknown, init?: ResponseInit) {
   const headers = new Headers(init?.headers);
@@ -21,11 +40,38 @@ function noStore(body: unknown, init?: ResponseInit) {
   return Response.json(body, { ...init, headers });
 }
 
-/** Okuyucunun bütün verisi tek dosyada: profil, ayarlar ve çalışma kaydı. */
-export async function GET() {
+/**
+ * Okuyucunun bütün verisi tek dosyada (`full-backup.ts`). `?papers=0` ile
+ * makaleler dışarıda kalıyor; dosya küçülüyor, okuyucunun kayıtları yine tam.
+ */
+export async function GET(request?: Request) {
   try {
-    const [profile, log] = await Promise.all([readProfile(), readWorkLog()]);
-    return noStore({ kind: WORK_DATA_KIND, version: 1, exportedAt: new Date().toISOString(), profile, log });
+    const withPapers = request ? new URL(request.url).searchParams.get("papers") !== "0" : true;
+    const [profile, log, study, notes, readingList, tags, aliases, papers] = await Promise.all([
+      readProfile(),
+      readWorkLog(),
+      readAllStudyProgress(),
+      readAllReaderNotes(),
+      readReadingList(),
+      readLibraryTags(),
+      readConceptAliases(),
+      withPapers ? listStoredProjects() : Promise.resolve(undefined),
+    ]);
+    return noStore({
+      kind: WORK_DATA_KIND,
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      profile,
+      log,
+      library: {
+        study: studyFileToJson(study),
+        notes: notesFileToJson(notes),
+        readingList: readingListToJson(readingList),
+        tags: libraryTagsToJson(tags),
+        aliases,
+        ...(papers ? { papers } : {}),
+      },
+    });
   } catch (error) {
     return noStore({ error: error instanceof Error ? error.message : "Your data could not be read." }, { status: 500 });
   }
@@ -33,15 +79,16 @@ export async function GET() {
 
 /**
  * İçe aktarma BİRLEŞTİRİYOR: oturumlar kimliğe göre, eski günler büyük olanla.
- * Profil yalnızca buradaki hiç doldurulmamışsa alınıyor; doldurulmuş bir
- * profilin üzerine başka bir makinenin profili yazılmıyor.
+ * Profil yalnızca buradaki hiç doldurulmamışsa alınıyor. Kütüphane kayıtları
+ * için kurallar `full-backup.ts`'te: hiçbir şey silinmiyor, buradaki bir
+ * makalenin üzerine yazılmıyor.
  */
 export async function POST(request: Request) {
   try {
     const text = await request.text();
-    if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: "The file is larger than 20 MB." }, { status: 413 });
-    const parsed = importSchema.safeParse(JSON.parse(text));
-    if (!parsed.success) return noStore({ error: "This is not a Trace work data file." }, { status: 400 });
+    if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: "The file is larger than 300 MB." }, { status: 413 });
+    const parsed = backupFileSchema.safeParse(JSON.parse(text));
+    if (!parsed.success) return noStore({ error: "This is not a Trace data file." }, { status: 400 });
     const before = (await readWorkLog()).sessions.length;
     const log = await updateWorkLog((current) => mergeWorkLogs(current, parsed.data.log));
     let profileAdopted = false;
@@ -54,9 +101,109 @@ export async function POST(request: Request) {
         return { ...incoming, updatedAt: new Date().toISOString() };
       });
     }
-    return noStore({ ok: true, added: log.sessions.length - before, sessions: log.sessions.length, profileAdopted });
+    const library = parsed.data.library ? await importLibrary(parsed.data.library) : undefined;
+    return noStore({ ok: true, added: log.sessions.length - before, sessions: log.sessions.length, profileAdopted, ...(library ? { library } : {}) });
   } catch (error) {
     if (error instanceof SyntaxError) return noStore({ error: "The file is not valid JSON." }, { status: 400 });
     return noStore({ error: error instanceof Error ? error.message : "Your data could not be imported." }, { status: 500 });
   }
+}
+
+async function importLibrary(library: NonNullable<ReturnType<typeof backupFileSchema.parse>["library"]>): Promise<BackupSummary> {
+  const summary = emptyBackupSummary();
+  const now = new Date().toISOString();
+
+  // Önce makaleler: kayıtlar ancak makalesi kütüphanedeyse yazılıyor.
+  for (const raw of library.papers ?? []) {
+    const paper = researchProjectSchema.safeParse(raw);
+    if (!paper.success) {
+      summary.papersUnreadable += 1;
+      continue;
+    }
+    if (await readStoredProject(paper.data.id)) summary.papersKept += 1;
+    else {
+      await saveStoredProject(paper.data, { reason: "import" });
+      summary.papersAdded += 1;
+    }
+  }
+  const here = new Set((await listStoredProjects()).map((project) => project.id));
+
+  const study = parseStudyFile(library.study);
+  if (study.size) {
+    const current = await readAllStudyProgress();
+    for (const [id, progress] of study) {
+      if (!here.has(id)) {
+        summary.withoutPaper += 1;
+        continue;
+      }
+      const mine = current.get(id);
+      const merged = mergeStudyProgress(mine, progress, now);
+      // Birleşince yalnızca güncelleme zamanı değişiyorsa yazılmıyor: aynı dosya iki kez yüklenebilir.
+      if (mine && JSON.stringify({ ...merged, updatedAt: "" }) === JSON.stringify({ ...mine, updatedAt: "" })) continue;
+      await saveStudyProgress(id, merged);
+      summary.studyMerged += 1;
+    }
+  }
+
+  const notes = parseNotesFile(library.notes);
+  if (notes.size) {
+    const current = await readAllReaderNotes();
+    for (const [id, incoming] of notes) {
+      if (!here.has(id)) {
+        summary.withoutPaper += 1;
+        continue;
+      }
+      const mine = current.get(id) ?? [];
+      const merged = mergeNotes(mine, incoming);
+      if (JSON.stringify(merged) === JSON.stringify(mine)) continue;
+      await saveReaderNotes(id, merged);
+      summary.notesAdded += merged.length - mine.length;
+    }
+  }
+
+  const reading = parseReadingList(library.readingList);
+  if (reading.length) {
+    await updateReadingList((items) => {
+      let next = items;
+      for (const item of reading) {
+        try {
+          const grown = addToReadingList(next, item);
+          if (grown.length > next.length) summary.readingAdded += 1;
+          next = grown;
+        } catch {
+          // Liste dolu: kalanlar eklenmiyor, var olanlar kalıyor.
+          break;
+        }
+      }
+      return next;
+    });
+  }
+
+  const tags = parseLibraryTags(library.tags);
+  if (tags.size) {
+    const current = await readLibraryTags();
+    for (const [id, incoming] of tags) {
+      if (!here.has(id)) {
+        summary.withoutPaper += 1;
+        continue;
+      }
+      const mine = current.get(id) ?? [];
+      const merged = mergeTags(mine, incoming);
+      if (merged.length === mine.length) continue;
+      await saveStoredProjectTags(id, merged);
+      summary.tagsMerged += 1;
+    }
+  }
+
+  if (library.aliases !== undefined) {
+    const incoming = parseAliasFile(library.aliases);
+    if (incoming.decisions.length) {
+      await updateConceptAliases((file) => {
+        const merged = mergeAliasFiles(file, incoming);
+        summary.aliasesAdded = merged.added;
+        return merged.file;
+      });
+    }
+  }
+  return summary;
 }
