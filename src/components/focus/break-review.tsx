@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Layers, X } from "lucide-react";
 import { LanguageProvider } from "@/visuals";
-import { BREAK_REVIEW_SIZE, dueCards, recordReview, reviewCards, type ReviewCard } from "@/lib/review-queue";
+import { BREAK_REVIEW_SIZE, CARD_KIND_LABELS, dueCards, recordReview, reviewCards, type ReviewCard } from "@/lib/review-queue";
 import { describeDue } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyProgress } from "@/lib/study-path";
@@ -136,7 +136,7 @@ export function BreakReviewCard({ review, projects }: { review: BreakReview; pro
     <LanguageProvider language={card.language}>
       <section className="break-review is-open" aria-label="Review in the break" style={{ "--accent": project.story.accent } as React.CSSProperties}>
         <header className="break-review-head">
-          <span className="review-kind">{card.kind === "question" ? "Question" : "Concept"}</span>
+          <span className="review-kind">{CARD_KIND_LABELS[card.kind]}</span>
           <span className="break-review-paper" lang={card.language}>{card.paperTitle}</span>
           <span className="review-count">{session.index + 1} / {count}</span>
           <button type="button" className="break-review-close" onClick={review.close} aria-label="Stop reviewing" title="Stop reviewing"><X size={15} /></button>

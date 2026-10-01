@@ -16,8 +16,25 @@ import { z } from "zod";
 export const REVIEW_INTERVALS_DAYS = [1, 3, 7, 16, 35, 90] as const;
 export const MAX_REVIEW_BOX = REVIEW_INTERVALS_DAYS.length - 1;
 
+/**
+ * Vurgudan kart (`highlight-cards.ts`): okuyucunun vurguladığı metin ve
+ * içinden gizlenen kelime. Kartın içeriği projede değil okuyucunun notunda;
+ * not silinince kart da gidiyor, bu yüzden metin kartın yanında tutuluyor.
+ */
+export const clozeSchema = z
+  .object({
+    text: z.string().min(1).max(1200),
+    answer: z.string().min(1).max(120),
+    /** Gizlenen kelimenin metindeki yeri. */
+    at: z.number().int().min(0).max(1200),
+    /** Vurgunun bulunduğu bölüm. */
+    where: z.string().max(300).default(""),
+  })
+  .refine((cloze) => cloze.text.slice(cloze.at, cloze.at + cloze.answer.length) === cloze.answer, "The hidden word is not where the card says.");
+export type Cloze = z.infer<typeof clozeSchema>;
+
 export const studyReviewSchema = z.object({
-  /** `q:<soru kimliği>` ya da `c:<kavram kimliği>`. */
+  /** `q:<soru kimliği>`, `c:<kavram kimliği>` ya da `h:<not kimliği>`. */
   id: z.string().min(3).max(300),
   box: z.number().int().min(0).max(MAX_REVIEW_BOX),
   due: z.string().max(40),
@@ -26,11 +43,14 @@ export const studyReviewSchema = z.object({
   last: z.string().max(40).optional(),
   /** Sorunun mührü: soru yeniden yazılırsa kart baştan başlıyor. */
   sig: z.string().max(40).optional(),
+  /** Vurgu kartının metni. */
+  cloze: clozeSchema.optional(),
 });
 export type StudyReview = z.infer<typeof studyReviewSchema>;
 
 export const questionCardId = (questionId: string) => `q:${questionId}`;
 export const conceptCardId = (conceptId: string) => `c:${conceptId}`;
+export const highlightCardId = (noteId: string) => `h:${noteId}`;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -1,5 +1,5 @@
 import { readingDrillFor } from "./reading-drill";
-import { applyReview, isDue, type StudyReview } from "./review-schedule";
+import { applyReview, isDue, type Cloze, type StudyReview } from "./review-schedule";
 import type { PrimerConcept, QuizQuestion, ResearchProject } from "./schema";
 import { emptyStudyProgress, MAX_REVIEW_DAYS, questionSignature, type ReviewDay, type StudyProgress } from "./study-path";
 import { dayKey } from "./work-log";
@@ -20,7 +20,18 @@ import { dayKey } from "./work-log";
 type CardBase = { key: string; projectId: string; paperTitle: string; language: string; review: StudyReview };
 export type ReviewCard =
   | (CardBase & { kind: "question"; question: QuizQuestion })
-  | (CardBase & { kind: "concept"; concept: PrimerConcept });
+  | (CardBase & { kind: "concept"; concept: PrimerConcept })
+  | (CardBase & { kind: "highlight"; cloze: Cloze });
+
+/** Kartın türü ve okuyucuya tek satırlık hâli: istatistiklerde ve ajan çıktısında. */
+export const CARD_KIND_LABELS: Record<ReviewCard["kind"], string> = { question: "Question", concept: "Concept", highlight: "Highlight" };
+
+export function cardText(card: ReviewCard) {
+  if (card.kind === "question") return card.question.prompt;
+  if (card.kind === "concept") return card.concept.term;
+  const { text, at, answer } = card.cloze;
+  return `${text.slice(0, at)}_____${text.slice(at + answer.length)}`;
+}
 
 export const REVIEW_SESSION_SIZE = 20;
 /** Kısa molada önerilen en fazla kart: birkaç dakikalık molaya sığacak kadar. */
@@ -42,6 +53,8 @@ export function reviewCards(projects: readonly ResearchProject[], progress: Read
       } else if (review.id.startsWith("c:")) {
         const concept = concepts.get(review.id.slice(2));
         if (concept) cards.push({ ...base, key, kind: "concept", concept, review });
+      } else if (review.id.startsWith("h:") && review.cloze) {
+        cards.push({ ...base, key, kind: "highlight", cloze: review.cloze, review });
       }
     }
   }

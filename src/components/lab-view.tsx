@@ -509,6 +509,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             <div className="block-title"><NotebookPen size={16} /> Your notes and highlights</div>
             <NotesPanel
               project={project}
+              study={study.state.status === "ready" ? { progress: study.state.progress, save: study.save } : undefined}
               onClaimSelect={(claimId) => {
                 setSection("claims");
                 onClaimSelect(claimId);

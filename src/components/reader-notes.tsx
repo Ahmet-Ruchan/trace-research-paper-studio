@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Download, Highlighter, NotebookPen, Pencil, Star, Trash2, X } from "lucide-react";
+import { Download, Highlighter, Layers, NotebookPen, Pencil, Star, Trash2, X } from "lucide-react";
+import { addHighlightCard, clozeCandidates, highlightCardOf, removeHighlightCard } from "@/lib/highlight-cards";
 import {
   cleanQuote,
   groupNotes,
@@ -15,7 +16,9 @@ import {
   type NoteTarget,
   type ReaderNote,
 } from "@/lib/reader-notes";
+import { describeDue } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
+import type { StudyProgress } from "@/lib/study-path";
 
 /**
  * Okuyucunun notları ve vurguları (`reader-notes.ts`), stüdyoda.
@@ -348,11 +351,79 @@ export function ClaimNotes({ claimId }: { claimId: string }) {
   );
 }
 
-/** Bir not: vurgu, metin; düzenle, renk, sil. */
-function NoteItem({ note }: { note: ReaderNote }) {
+/** Lab'in çalışma kaydı: vurgudan kart yapmak ve silinen vurgunun kartını kaldırmak için. */
+export type NoteStudy = { progress?: StudyProgress; save: (progress: StudyProgress | undefined) => void };
+type CardSource = { project: ResearchProject; study: NoteStudy; where: string };
+
+/**
+ * Vurgudan tekrar kartı (`highlight-cards.ts`): gizlenecek kelime seçiliyor,
+ * kart Review'a giriyor. Kart varsa ne gizlediği ve ne zaman döneceği.
+ */
+function HighlightCard({ note, source, choosing, onChoosing }: { note: ReaderNote; source: CardSource; choosing: boolean; onChoosing: (open: boolean) => void }) {
+  const quote = note.quote ?? "";
+  const candidates = useMemo(() => clozeCandidates(quote, source.project), [quote, source.project]);
+  const card = highlightCardOf(source.study.progress, note.id);
+  const [now] = useState(() => new Date().toISOString());
+  const current = card?.cloze ? candidates.findIndex((item) => item.at === card.cloze!.at && item.answer === card.cloze!.answer) : -1;
+  const [pick, setPick] = useState(Math.max(0, current));
+  if (!choosing) {
+    if (!card?.cloze) return null;
+    return (
+      <p className="note-card-status" role="status">
+        <Layers size={13} aria-hidden="true" /> In review, hiding “{card.cloze.answer}”: it comes back {describeDue(card.due, now)}.
+      </p>
+    );
+  }
+  const chosen = candidates[pick];
+  if (!chosen) return null;
+  return (
+    <div className="note-card-maker" role="group" aria-label="A review card from this highlight">
+      <p className="note-card-preview">
+        {quote.slice(0, chosen.at)}
+        <span className="cloze-blank"><span aria-label="blank">_____</span></span>
+        {quote.slice(chosen.at + chosen.answer.length)}
+      </p>
+      <div className="note-card-words" role="radiogroup" aria-label="The word to hide">
+        {candidates.map((item, index) => (
+          <button key={`${item.at}-${item.answer}`} type="button" role="radio" aria-checked={index === pick} onClick={() => setPick(index)}>{item.answer}</button>
+        ))}
+      </div>
+      <div className="note-bar-actions">
+        <button
+          type="button"
+          className="note-save"
+          onClick={() => {
+            source.study.save(addHighlightCard(source.study.progress, note, chosen, source.where, new Date().toISOString()));
+            onChoosing(false);
+          }}
+        >
+          {card ? "Save the card" : "Add to review"}
+        </button>
+        {card ? (
+          <button
+            type="button"
+            onClick={() => {
+              source.study.save(removeHighlightCard(source.study.progress, note.id, new Date().toISOString()));
+              onChoosing(false);
+            }}
+          >
+            Stop reviewing it
+          </button>
+        ) : null}
+        <button type="button" onClick={() => onChoosing(false)}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/** Bir not: vurgu, metin; düzenle, renk, sil; vurgudan tekrar kartı. */
+function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
   const context = useReaderNotes()!;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.text);
+  const [choosing, setChoosing] = useState(false);
+  const canCard = Boolean(source && note.quote && clozeCandidates(note.quote, source.project).length);
+  const hasCard = Boolean(source && highlightCardOf(source.study.progress, note.id));
   return (
     <article className={`note-item is-${note.color}`}>
       {note.quote ? <blockquote>{note.quote}</blockquote> : null}
@@ -385,9 +456,23 @@ function NoteItem({ note }: { note: ReaderNote }) {
             </span>
           ) : null}
           <button type="button" onClick={() => setEditing(true)}><Pencil size={13} /> {note.text ? "Edit" : "Add a note"}</button>
-          <button type="button" onClick={() => context.remove(note.id)} aria-label="Delete this note"><Trash2 size={13} /> Delete</button>
+          {canCard && !choosing ? (
+            <button type="button" onClick={() => setChoosing(true)}><Layers size={13} /> {hasCard ? "Change the card" : "Make a review card"}</button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              // Silinen vurgunun kartı da gidiyor: artık olmayan bir vurguyu sormak anlamsız.
+              if (source && hasCard) source.study.save(removeHighlightCard(source.study.progress, note.id, new Date().toISOString()));
+              context.remove(note.id);
+            }}
+            aria-label="Delete this note"
+          >
+            <Trash2 size={13} /> Delete
+          </button>
         </div>
       ) : null}
+      {source && note.quote ? <HighlightCard key={String(choosing)} note={note} source={source} choosing={choosing} onChoosing={setChoosing} /> : null}
     </article>
   );
 }
@@ -404,7 +489,18 @@ function download(name: string, content: string) {
 }
 
 /** Lab'de "Notes": makaledeki bütün notlar sırasıyla, dışa aktarma ve yeni not. */
-export function NotesPanel({ project, onClaimSelect, onShowSection }: { project: ResearchProject; onClaimSelect: (claimId: string) => void; onShowSection: (place: "story" | "report", sectionId: string) => void }) {
+export function NotesPanel({
+  project,
+  study,
+  onClaimSelect,
+  onShowSection,
+}: {
+  project: ResearchProject;
+  /** Okunabildiyse çalışma kaydı: vurgular tekrar kartına dönüşebiliyor. */
+  study?: NoteStudy;
+  onClaimSelect: (claimId: string) => void;
+  onShowSection: (place: "story" | "report", sectionId: string) => void;
+}) {
   const context = useReaderNotes();
   const [targetKey, setTargetKey] = useState("");
   const [draft, setDraft] = useState("");
@@ -463,7 +559,7 @@ export function NotesPanel({ project, onClaimSelect, onShowSection }: { project:
               )
             ) : null}
           </header>
-          {group.notes.map((note) => (note.text || note.quote ? <NoteItem key={note.id} note={note} /> : (
+          {group.notes.map((note) => (note.text || note.quote ? <NoteItem key={note.id} note={note} source={study ? { project, study, where: group.heading === "No longer in the paper" ? "" : group.heading } : undefined} /> : (
             <p key={note.id} className="notes-marked"><Star size={13} /> Marked as important <button type="button" onClick={() => context.remove(note.id)} aria-label="Remove the mark"><X size={13} /></button></p>
           )))}
         </section>

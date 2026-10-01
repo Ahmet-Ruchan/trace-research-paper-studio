@@ -2803,6 +2803,71 @@ test.describe("reader notes", () => {
   });
 });
 
+test.describe("cards from highlights", () => {
+  const progressOf = async (request: APIRequestContext, id: string) => ((await (await request.get(`/api/library/study?id=${id}`)).json()) as { progress?: StudyProgress }).progress;
+
+  test("turns a highlight into a fill-in-the-blank card that comes back in Review, and drops it with the highlight", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-highlight-cards"));
+    const at = new Date().toISOString();
+    const first = "Positional encoding gives the model the order of the tokens.";
+    const second = "The model reaches 28.4 BLEU on the English-to-German task.";
+    const highlight = (id: string, quote: string) => ({ id, target: { kind: "section", place: "report", sectionId: project.deepReport!.sections[0].id }, quote, text: "", color: "yellow", createdAt: at, updatedAt: at });
+    expect((await request.put(`/api/library/notes?id=${project.id}`, { data: { notes: [highlight("note-a", first), highlight("note-b", second)] } })).ok()).toBe(true);
+
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Notes (2)" }).click();
+    const items = page.locator(".note-item");
+    await items.nth(0).getByRole("button", { name: "Make a review card" }).click();
+    const maker = items.nth(0).getByRole("group", { name: "A review card from this highlight" });
+    const words = maker.getByRole("radiogroup", { name: "The word to hide" });
+    await expect(words.getByRole("radio", { name: "Positional encoding" })).toHaveAttribute("aria-checked", "true");
+    await words.getByRole("radio", { name: "tokens" }).click();
+    await expect(maker.locator(".note-card-preview")).toHaveText("Positional encoding gives the model the order of the _____.");
+    await words.getByRole("radio", { name: "Positional encoding" }).click();
+    await maker.getByRole("button", { name: "Add to review" }).click();
+    await expect(items.nth(0).locator(".note-card-status")).toHaveText("In review, hiding “Positional encoding”: it comes back tomorrow.");
+
+    await items.nth(1).getByRole("button", { name: "Make a review card" }).click();
+    await expect(items.nth(1).getByRole("radio", { name: "28.4" })).toBeVisible();
+    await items.nth(1).getByRole("radio", { name: "28.4" }).click();
+    await items.nth(1).getByRole("button", { name: "Add to review" }).click();
+    await expect.poll(async () => (await progressOf(request, project.id))?.reviews?.map((review) => [review.id, review.cloze?.answer])).toEqual([["h:note-a", "Positional encoding"], ["h:note-b", "28.4"]]);
+
+    // Kartları bugüne çekip tekrar: biri yazarak bilindi, öteki yanlış yazıldı.
+    const progress = (await progressOf(request, project.id))!;
+    const past = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
+    const due = { ...progress, reviews: progress.reviews!.map((review) => ({ ...review, due: past(review.id === "h:note-a" ? 2 : 1) })) };
+    expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress: due } })).ok()).toBe(true);
+    await page.goto("/?library=1");
+    await page.locator(".library-review").click();
+    const card = page.locator(".review-card");
+    await expect(card.locator(".review-kind")).toHaveText("Highlight");
+    await expect(card.locator(".review-prompt")).toHaveText(`Fill in the blank in your highlight from “${project.deepReport!.sections[0].title}”.`);
+    await expect(card.locator("blockquote")).toHaveText("_____ gives the model the order of the tokens.");
+    await card.getByLabel("The missing word").fill("positional  encoding");
+    await card.getByRole("button", { name: "Check" }).click();
+    await expect(card.locator(".review-card-foot")).toContainText("Remembered. This card comes back in 3 days.");
+    await expect(card.locator(".cloze-blank")).toHaveText("Positional encoding");
+    await card.getByRole("button", { name: "Next card" }).click();
+
+    await expect(card.locator("blockquote")).toHaveText("The model reaches _____ BLEU on the English-to-German task.");
+    await card.getByLabel("The missing word").fill("41.8");
+    await card.getByRole("button", { name: "Check" }).click();
+    await expect(card.locator(".cloze-said")).toHaveText("You wrote “41.8”.");
+    await card.getByRole("group", { name: "Did you remember it?" }).getByRole("button", { name: "Not yet" }).click();
+    await expect(card.locator(".review-card-foot")).toContainText("Not yet. This card comes back tomorrow.");
+    await card.getByRole("button", { name: "Finish" }).click();
+    await expect(page.locator(".review-empty")).toContainText("You remembered 1 of 2 cards.");
+
+    // Vurgu silinince kartı da gidiyor.
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Notes (2)" }).click();
+    await expect(items.nth(1).locator(".note-card-status")).toHaveText("In review, hiding “28.4”: it comes back tomorrow.");
+    await items.nth(1).getByRole("button", { name: "Delete this note" }).click();
+    await expect.poll(async () => (await progressOf(request, project.id))?.reviews?.map((review) => review.id)).toEqual(["h:note-a"]);
+  });
+});
+
 test.describe("weekly report", () => {
   test.use({ timezoneId: "Europe/Istanbul" });
 

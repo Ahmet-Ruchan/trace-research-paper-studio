@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Layers } from "lucide-react";
 import { LanguageProvider } from "@/visuals";
-import { dueCards, recordReview, reviewCards, reviewForecast, type ReviewCard } from "@/lib/review-queue";
+import { CARD_KIND_LABELS, dueCards, recordReview, reviewCards, reviewForecast, type ReviewCard } from "@/lib/review-queue";
 import { REVIEW_INTERVALS_DAYS, describeDue } from "@/lib/review-schedule";
 import { extendReviewBlock, type ReviewBlock } from "@/lib/work-log";
 import type { ResearchProject } from "@/lib/schema";
@@ -203,7 +203,7 @@ export function ReviewView({
             style={{ "--accent": project.story.accent } as React.CSSProperties}
           >
             <header className="review-card-head">
-              <span className="review-kind">{card.kind === "question" ? "Question" : "Concept"}</span>
+              <span className="review-kind">{CARD_KIND_LABELS[card.kind]}</span>
               <button className="review-paper" onClick={() => onOpen(project)} title="Open this paper" lang={card.language}>{card.paperTitle}</button>
               <span className="review-count">{index + 1} / {session.length}</span>
             </header>

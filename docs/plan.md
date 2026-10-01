@@ -66,8 +66,20 @@ yapıldığı ve nasıl test edildiği yazıyor.
 - [ ] **4. Klavyeyle vurgu.** Metin seçiliyken H vurgular, N not kutusunu açar.
 - [ ] **5. Study ve Primer'de vurgu ve not.** Vurgu yalnızca Deep report ve Story
   önizlemesinde değil, Study yolunda ve kavram açıklamalarında da yapılabilir.
-- [ ] **6. Vurgudan tekrar kartı.** Vurgulanan cümle boşluk doldurmalı bir karta dönüşür;
+- [x] **6. Vurgudan tekrar kartı.** Vurgulanan cümle boşluk doldurmalı bir karta dönüşür;
   Review'a ve moladaki tekrara girer.
+  - *Yapıldı:* Lab'in Notes bölümünde her vurgunun altında **Make a review card**: gizlenecek
+    kelime öneriliyor (önce makalenin sözlüğündeki ya da Primer'deki terim, sonra sayı, sonra en
+    uzun kelimeler; `src/lib/highlight-cards.ts`), okuyucu başkasını seçebiliyor. Kart çalışma
+    kaydında `h:<not kimliği>` olarak, metniyle duruyor ve Review'a, Lab'deki tekrara, moladaki
+    tekrara, istatistiklere ve `progress`/`today` komutlarına giriyor. Tekrarda kelime yazılıyor
+    (büyük-küçük harf, aksan, noktalama önemsiz); tutmazsa yanıt açılıyor ve okuyucu "I had it" /
+    "Not yet" diyor. Kelime değişince kart baştan başlıyor; vurgu silinince kart da gidiyor.
+    Eklenti 0.30.0.
+  - *Test:* öneri sırası, kısaltmalı terim, küçük kelimelerden kart çıkmaması, yazılan yanıtın
+    eşleşmesi, kuyruk ve sonraki tekrar, kelime değişince baştan başlama, silme, bozuk kart,
+    iki cihazın birleşmesi birim testlerde; vurgudan kart yapıp tekrar ekranında biri doğru biri
+    yanlış yanıtlamak ve vurguyu silince kartın gitmesi e2e'de; telefon genişliği elle kontrol.
 - [ ] **7. Notlarda arama.** Kütüphane araması iddiaların yanında notlarda ve vurgularda da
   arar.
 - [ ] **8. Bütün kütüphaneyi Obsidian'a aktarmak.** Her makale bir not; notlar ve vurgular

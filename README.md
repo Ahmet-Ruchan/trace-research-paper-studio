@@ -258,6 +258,12 @@ claim and write a note on it, or mark it as important; the claim list shows a st
 **Notes** in the Lab gathers everything for the paper in reading order (story, report, then claims
 with their page) to edit, recolour or delete, and to add a note to any section or claim.
 
+A highlight worth remembering becomes a review card: **Make a review card** under it hides one word
+of the passage, a term of the paper first, then a number, then its longest words, and you can pick
+another. The card comes back in Review, in the Lab's review and in short breaks like any other: type
+the missing word (case, accents and punctuation do not matter), or show the answer and mark it
+yourself. Deleting the highlight deletes its card.
+
 Notes are yours, not the paper's: they are kept in your library, never in the project file, so an
 export, a shared JSON or a published page never carries them. **Markdown** downloads them as a
 plain file; **For Obsidian** adds front matter (title, authors, year, venue, DOI, tags) and

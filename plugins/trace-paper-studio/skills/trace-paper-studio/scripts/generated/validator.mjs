@@ -20563,8 +20563,21 @@ const REVIEW_INTERVALS_DAYS = [
 	90
 ];
 const MAX_REVIEW_BOX = REVIEW_INTERVALS_DAYS.length - 1;
+/**
+* Vurgudan kart (`highlight-cards.ts`): okuyucunun vurguladığı metin ve
+* içinden gizlenen kelime. Kartın içeriği projede değil okuyucunun notunda;
+* not silinince kart da gidiyor, bu yüzden metin kartın yanında tutuluyor.
+*/
+const clozeSchema = object({
+	text: string().min(1).max(1200),
+	answer: string().min(1).max(120),
+	/** Gizlenen kelimenin metindeki yeri. */
+	at: number().int().min(0).max(1200),
+	/** Vurgunun bulunduğu bölüm. */
+	where: string().max(300).default("")
+}).refine((cloze) => cloze.text.slice(cloze.at, cloze.at + cloze.answer.length) === cloze.answer, "The hidden word is not where the card says.");
 const studyReviewSchema = object({
-	/** `q:<soru kimliği>` ya da `c:<kavram kimliği>`. */
+	/** `q:<soru kimliği>`, `c:<kavram kimliği>` ya da `h:<not kimliği>`. */
 	id: string().min(3).max(300),
 	box: number().int().min(0).max(MAX_REVIEW_BOX),
 	due: string().max(40),
@@ -20572,7 +20585,9 @@ const studyReviewSchema = object({
 	reviews: number().int().min(0).max(9999),
 	last: string().max(40).optional(),
 	/** Sorunun mührü: soru yeniden yazılırsa kart baştan başlıyor. */
-	sig: string().max(40).optional()
+	sig: string().max(40).optional(),
+	/** Vurgu kartının metni. */
+	cloze: clozeSchema.optional()
 });
 function isDue(review, now) {
 	return Date.parse(review.due) <= Date.parse(now);
@@ -21687,6 +21702,12 @@ function formatDuration(seconds) {
 
 //#endregion
 //#region src/lib/review-queue.ts
+function cardText(card) {
+	if (card.kind === "question") return card.question.prompt;
+	if (card.kind === "concept") return card.concept.term;
+	const { text, at, answer } = card.cloze;
+	return `${text.slice(0, at)}_____${text.slice(at + answer.length)}`;
+}
 const REVIEW_SESSION_SIZE = 20;
 function reviewCards(projects, progress) {
 	const cards = [];
@@ -21720,7 +21741,13 @@ function reviewCards(projects, progress) {
 					concept,
 					review
 				});
-			}
+			} else if (review.id.startsWith("h:") && review.cloze) cards.push({
+				...base,
+				key,
+				kind: "highlight",
+				cloze: review.cloze,
+				review
+			});
 		}
 	}
 	return cards;
@@ -23903,4 +23930,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };

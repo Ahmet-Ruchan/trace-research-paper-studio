@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, BarChart3 } from "lucide-react";
 import { learningStats, LONG_TERM_BOX, type LearningStats } from "@/lib/learning-stats";
+import { CARD_KIND_LABELS, cardText } from "@/lib/review-queue";
 import { REVIEW_INTERVALS_DAYS } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
 import { studyStatusLabel } from "./concepts-view";
@@ -173,9 +174,9 @@ export function LearningStatsView({
                   const project = projects.find((item) => item.id === card.projectId);
                   return (
                     <li key={card.key}>
-                      <span lang={card.language}>{card.kind === "concept" ? card.concept.term : card.question.prompt}</span>
+                      <span lang={card.language}>{cardText(card)}</span>
                       <small>
-                        {card.kind === "concept" ? "concept" : "question"} ·{" "}
+                        {CARD_KIND_LABELS[card.kind].toLowerCase()} ·{" "}
                         {project ? <button type="button" className="text-link" onClick={() => onOpen(project)}>{card.paperTitle}</button> : card.paperTitle}{" "}
                         · forgotten {card.review.lapses} of {count(card.review.reviews, "review")}
                       </small>

@@ -110,3 +110,20 @@ a.reading-title svg { display: inline-block; vertical-align: -1px; color: var(--
 .resume-go { min-height: 34px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 999px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); }
 .resume-close { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink-soft); cursor: pointer; }
 .library-continue { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--ink); white-space: nowrap; }
+
+/* Vurgudan tekrar kartı: notta kartı kurmak, tekrarda boşluğu doldurmak. */
+.note-item .note-card-status { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-family: var(--font-geist-sans), Arial, sans-serif; font-size: var(--text-sm); }
+.note-card-maker { display: grid; gap: 10px; padding: 12px; border-radius: 8px; background: var(--surface-2); }
+.note-item .note-card-preview { color: var(--ink); font: var(--text-md)/1.6 Georgia, serif; }
+.cloze-blank { display: inline-block; min-width: 3.5em; margin: 0 2px; padding: 0 4px; border-bottom: 2px solid var(--ink); color: var(--ink-soft); font-style: normal; text-align: center; }
+.cloze-blank.is-open { border-bottom-color: var(--accent, var(--ink)); background: var(--note-yellow); color: var(--ink); font-weight: 600; }
+.note-card-words { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-card-words button { min-height: 30px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.note-card-words button[aria-checked="true"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.note-card-maker .note-bar-actions { flex-wrap: wrap; }
+.review-cloze blockquote { margin: 12px 0 0; padding: 0 0 0 14px; border-left: 3px solid var(--accent, var(--line)); color: var(--ink); font: var(--text-lg)/1.65 Georgia, serif; overflow-wrap: anywhere; }
+.cloze-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.cloze-answer input { flex: 1 1 200px; min-width: 0; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); font-size: var(--text-md); }
+.cloze-answer .quiz-check { margin-top: 0; }
+.cloze-show { padding: 0; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--ink-soft); cursor: pointer; font-size: var(--text-sm); }
+.cloze-said { margin: 12px 0 0; color: var(--ink-soft); font-size: var(--text-sm); }

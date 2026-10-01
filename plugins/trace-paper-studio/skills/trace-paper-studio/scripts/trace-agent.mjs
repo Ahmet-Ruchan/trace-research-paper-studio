@@ -15,6 +15,7 @@ import {
   isStudyFile,
   learningStats,
   REVIEW_INTERVALS_DAYS,
+  cardText,
   addDaysLocal,
   dailyTotals,
   dayKey,
@@ -2081,7 +2082,7 @@ function printProgress() {
     week: stats.week.map(({ day, due }) => ({ day, due })),
     hardest: stats.hardest.map((card) => ({
       kind: card.kind,
-      text: card.kind === "concept" ? card.concept.term : card.question.prompt,
+      text: cardText(card),
       paper: card.paperTitle,
       projectId: card.projectId,
       forgotten: card.review.lapses,
