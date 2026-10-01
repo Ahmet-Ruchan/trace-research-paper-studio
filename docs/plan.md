@@ -208,8 +208,16 @@ yapıldığı ve nasıl test edildiği yazıyor.
     seçenekli soru, puanlama ve makale dökümü, kaçırılanın tekrara girmesi birim testlerde; 10
     soruluk süreli sınav, boş bırakılan, sonuç, kaçırılanları tekrara almak ve süre dolunca
     bitmesi e2e'de (5 tekrar).
-- [ ] **15. Makaleler arası sorular.** İki makalenin kanıtından otomatik karşılaştırma
+- [x] **15. Makaleler arası sorular.** İki makalenin kanıtından otomatik karşılaştırma
   soruları; model gerekmez.
+  - *Yapıldı:* Karşılaştırma ekranında **Test yourself on the two**: iki projenin kaydından
+    (`src/lib/cross-questions.ts`) bu iddiayı hangi makale söylüyor (sayfa ve alıntıyla), hangisi
+    önce yayımlandı, ortak bir ölçütte hangisi yüksek (daha iyi demeden), bu terimi hangisi
+    tanımlıyor ve aynı terimin iki tanımından hangisi kimin. Önce her türden bir soru, en çok 8;
+    iddia kimlikleri iki projede çakışmasın diye önekli; tanımların sırası yanıtı ele vermiyor;
+    aynı makalenin iki analizinde soru yok.
+  - *Test:* bütün soru türleri, her sorunun tek doğrusu, önekli kaynak iddialar, aynı makalede soru
+    olmaması birim testlerde; iki makaleyi karşılaştırıp yıl ve iddia sorusunu yanıtlamak e2e'de.
 
 ## Ajanlar
 

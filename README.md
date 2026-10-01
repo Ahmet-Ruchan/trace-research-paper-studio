@@ -656,6 +656,12 @@ unit, the same term defined twice, each side's limitations. It never says which 
 that would be interpretation. Every number carries the page it came from and both sources stay
 visible.
 
+**Test yourself on the two** below asks questions that tell them apart, made from what the two
+projects record and not by a model: which paper says a given claim, which came out first, which
+reports the higher value of a measurement they share (without saying whether higher is better), which
+defines a term in its glossary, and which of two definitions of the same term is whose. Each answer
+says where it comes from: the page and quote, the year, the value.
+
 ### Line up more than two papers
 
 Pick three to six projects and the comparison becomes a literature map. The papers are put in year

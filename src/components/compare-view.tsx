@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowLeft, BookMarked, Gauge, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowLeft, BookMarked, Gauge, ListChecks, ShieldCheck, TriangleAlert } from "lucide-react";
+import { QuizView } from "@/visuals";
 import { compareProjects, formatDifference, type SharedMetric } from "@/lib/compare-projects";
+import { crossClaims, crossPaperQuestions } from "@/lib/cross-questions";
 import type { Claim, ResearchProject } from "@/lib/schema";
 import { StudioNav } from "./focus/studio-nav";
 
@@ -35,6 +37,8 @@ export function CompareView({
   onOpen: (project: ResearchProject) => void;
 }) {
   const comparison = useMemo(() => compareProjects(left, right), [left, right]);
+  const questions = useMemo(() => crossPaperQuestions(left, right), [left, right]);
+  const claims = useMemo(() => crossClaims(left, right), [left, right]);
   const { left: a, right: b } = comparison;
   const differing = comparison.sharedTerms.filter((term) => !term.identical);
   /**
@@ -135,6 +139,17 @@ export function CompareView({
               </article>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {questions.length ? (
+        <section className="compare-block compare-quiz" aria-label="Test yourself on the two">
+          <div className="block-title"><ListChecks size={16} /> Test yourself on the two</div>
+          <p className="compare-note">
+            Knowing each paper is not the same as telling them apart. These questions come from what the two projects record (their
+            claims, years, metrics and glossaries), and each answer says where it comes from.
+          </p>
+          <QuizView quiz={{ title: "", intro: "", questions }} claims={claims} />
         </section>
       ) : null}
 

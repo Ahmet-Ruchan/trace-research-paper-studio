@@ -536,6 +536,30 @@ test.describe("wider coverage", () => {
     await expect(page.locator(".map-values").first().locator("tr")).toHaveCount(3);
   });
 
+  test("asks questions that tell two papers apart, from what their projects record", async ({ page, request }) => {
+    const earlier = projectNamed("e2e-cross-early");
+    earlier.evidence.paper = { ...earlier.evidence.paper, title: "Cross paper early", year: "2014" };
+    const later = projectNamed("e2e-cross-late");
+    later.evidence.paper = { ...later.evidence.paper, title: "Cross paper late", year: "2019" };
+    later.evidence.claims = later.evidence.claims.map((claim, index) => ({ ...claim, statement: `Late claim ${index}: ${claim.statement}` }));
+    await seed(request, earlier);
+    await seed(request, later);
+
+    await page.goto("/?library=1");
+    for (const year of ["2014", "2019"]) await page.locator(".library-card", { hasText: `Cross paper ${year === "2014" ? "early" : "late"}` }).locator(".library-select").click();
+    await page.getByRole("button", { name: "Compare" }).click();
+    const quiz = page.getByRole("region", { name: "Test yourself on the two" });
+    const year = quiz.locator(".quiz-question").filter({ hasText: "Which of the two papers came out first?" }).first();
+    await expect(year).toBeVisible();
+    await year.getByText("Cross paper early", { exact: true }).click();
+    await year.getByRole("button", { name: "Check answer" }).click();
+    await expect(year).toContainText("Cross paper early is from 2014.");
+    const said = quiz.locator(".quiz-question").filter({ hasText: "Which paper says this? “Late claim" }).first();
+    await said.getByText("Cross paper late", { exact: true }).click();
+    await said.getByRole("button", { name: "Check answer" }).click();
+    await expect(said).toContainText("Yes: p.");
+  });
+
   test("opens the citation graph and hands a cited work to the paper search", async ({ page, request }) => {
     await seed(request, projectNamed("e2e-citations"));
     const node = (openAlexId: string, title: string, year: number, extra = {}) => ({
