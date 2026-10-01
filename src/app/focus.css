@@ -30,6 +30,12 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .studio-nav-focus > i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--focus-line); }
 .studio-nav-focus.is-running > i { animation: studio-pulse 1.6s ease-in-out infinite; }
 .studio-nav-focus[aria-current="page"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.studio-nav-palette { width: 34px; height: 34px; display: grid; place-items: center; flex: none; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
+.studio-nav-palette:hover { border-color: var(--line-dark); }
+/* Makale başlığında eylemler sekmelere ancak geniş ekranda yer bırakıyor; dar ekranda Ctrl+K yetiyor. */
+@media (max-width: 1240px) {
+  .workspace-actions .studio-nav-palette { display: none; }
+}
 .studio-nav-profile { width: 36px; height: 36px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
 .studio-nav-profile[aria-current="page"] .focus-avatar { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .workspace-actions .studio-nav-focus.has-timer span { display: inline; }

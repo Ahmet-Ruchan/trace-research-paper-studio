@@ -96,7 +96,8 @@ type LabViewProps = {
   /** Notlardan hikâyedeki bir bölüme gitmek (önizleme). */
   onShowStorySection?: (sectionId: string) => void;
   /** Dışarıdan bir bölüme gitmek (kütüphanede "Continue reading"); `nonce` her istekte değişiyor. */
-  jump?: { section: string; reportSectionId?: string; nonce: number };
+  /** Başka bir yerden bir bölüme gitmek (kaldığın yer, not araması, komut paleti). */
+  jump?: { section: string; reportSectionId?: string; conceptId?: string; term?: string; query?: string; nonce: number };
 };
 
 const kindLabels: Record<Claim["kind"], string> = {
@@ -133,6 +134,12 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
       </button>
     </span>
   ) : null;
+  // Makale içi arama (`paper-search.ts`); "/" arama kutusunu açıyor.
+  const [paperQuery, setPaperQuery] = useState("");
+  const paperSearch = useMemo(() => searchPaper(project, notes?.notes ?? [], paperQuery), [project, notes?.notes, paperQuery]);
+  const searchInput = useRef<HTMLInputElement>(null);
+  // Notlardan "Show it" ya da komut paletiyle Primer'de açılacak kavram.
+  const [primerOpen, setPrimerOpen] = useState<string>();
   // Kalıcı bir bağlantıyla gelindiyse doğrudan kanıt defteri açılıyor: iddia
   // sağdaki çekmecede zaten görünür, ama bağlantıyı gönderen kişi listedeki
   // yerini de göstermek istemiştir.
@@ -143,15 +150,20 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     const open = setTimeout(() => {
       setSection(jump.section);
       if (jump.reportSectionId) setTimeout(() => scrollToSection("report", jump.reportSectionId!), 80);
+      if (jump.conceptId) {
+        setPrimerOpen(jump.conceptId);
+        setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(sectionMark("concept", jump.conceptId!))}"]`)?.scrollIntoView({ block: "start" }), 80);
+      }
+      if (jump.term) setTimeout(() => document.querySelector(`[data-glossary-term="${CSS.escape(jump.term!)}"]`)?.scrollIntoView({ block: "center" }), 80);
+      if (jump.query !== undefined) {
+        setPaperQuery(jump.query);
+        setTimeout(() => searchInput.current?.focus(), 0);
+      }
     }, 0);
     return () => clearTimeout(open);
     // Yalnızca yeni bir istekte; `jump` nesnesi her çizimde aynı kalmayabilir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpNonce]);
-  // Makale içi arama (`paper-search.ts`); "/" arama kutusunu açıyor.
-  const [paperQuery, setPaperQuery] = useState("");
-  const paperSearch = useMemo(() => searchPaper(project, notes?.notes ?? [], paperQuery), [project, notes?.notes, paperQuery]);
-  const searchInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -282,8 +294,6 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   const drill = useMemo(() => readingDrillFor(project), [project]);
   const terms = useMemo(() => termIndex(project), [project]);
   const study = useStudyProgress(project.id);
-  // Notlardan "Show it" ile Primer'de açılacak kavram.
-  const [primerOpen, setPrimerOpen] = useState<string>();
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
   // Study yolunda geçen süre çalışma takvimine ve makaleye: adımlar arka arkaya geldikçe aynı oturum uzuyor.
   const { logStudyTime } = useFocus();
@@ -792,7 +802,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             </label>
             <p className="section-intro" role="status">
               {!paperSearch.terms.length
-                ? "Type a word or two. Press / anywhere in the Lab to come back here."
+                ? "Type a word or two. Press / anywhere in the Lab to come back here, or Ctrl+K to go anywhere in the studio."
                 : paperSearch.total
                   ? `${paperSearch.total} ${paperSearch.total === 1 ? "match" : "matches"}: ${PAPER_SEARCH_KINDS.filter((kind) => paperSearch.counts[kind]).map((kind) => `${paperSearch.counts[kind]} ${PAPER_HIT_LABELS[kind].toLowerCase()}`).join(", ")}.`
                   : "Nothing in this paper mentions every word you typed."}

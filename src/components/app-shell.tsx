@@ -45,8 +45,11 @@ import { FocusProvider } from "./focus/focus-provider";
 import { FocusView } from "./focus/focus-view";
 import { ProfileView } from "./focus/profile-view";
 import { StudioNav, StudioNavProvider, type StudioNavTarget } from "./focus/studio-nav";
+import { CommandPalette } from "./command-palette";
+import { buildPaletteCommands, type PaletteTarget } from "@/lib/command-palette";
 
 type WorkspaceMode = "lab" | "story" | "preview";
+type LabJump = { section: string; reportSectionId?: string; conceptId?: string; term?: string; query?: string; nonce: number };
 type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "exam" | "concepts" | "progress" | "focus" | "profile";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
@@ -59,6 +62,11 @@ function checkpointPartCount(raw: string | null) {
   } catch {
     return 0;
   }
+}
+
+/** İndirilen dosyaların adı: makale başlığından. */
+function projectSlug(project: ResearchProject) {
+  return project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trace-story";
 }
 
 function download(name: string, content: string, type: string) {
@@ -100,7 +108,7 @@ function Studio() {
   const [paperLookup, setPaperLookup] = useState<{ query: string; expectTitle?: string }>();
   // Kütüphaneden "Reading list": kavram haritası okuma sırasına kaydırılarak açılıyor.
   const [conceptsFocus, setConceptsFocus] = useState<"reading">();
-  const [labJump, setLabJump] = useState<{ section: string; reportSectionId?: string; nonce: number }>();
+  const [labJump, setLabJump] = useState<LabJump>();
   const [initialTeam, setInitialTeam] = useState(false);
   const [mode, setMode] = useState<WorkspaceMode>("lab");
   const [fileUrl, setFileUrl] = useState<string>();
@@ -592,11 +600,58 @@ function Studio() {
     setScreen(target);
   }
   const backFromWork = returnTo === "workspace" && !project ? "library" : returnTo;
-  /** Her ekran üst menüyü ve zamanlayıcının bildirimlerini taşıyor. */
+
+  /** Komut paletinin listesi: açık makalenin bölümleri ve eylemleri yalnızca makaledeyken. */
+  const paletteCommands = () =>
+    buildPaletteCommands({
+      projects,
+      current: screen === "workspace" ? project : undefined,
+      screen,
+      exports: project ? exportDefinitions.map((definition) => ({ format: definition.format, label: definition.label, description: definition.description, unavailable: definition.unavailable?.(project) })) : [],
+    });
+
+  function runCommand(target: PaletteTarget) {
+    if (target.type === "paper") {
+      const next = projects.find((item) => item.id === target.projectId);
+      if (next) openProject(next);
+      return;
+    }
+    if (target.type === "screen") {
+      if (target.screen === "focus" || target.screen === "profile") return openWork(target.screen);
+      if (target.screen === "review" || target.screen === "exam") setReviewScope(undefined);
+      if (target.screen === "concepts" || target.screen === "reading-order") {
+        setConceptsFocus(target.screen === "reading-order" ? "reading" : undefined);
+        return setScreen("concepts");
+      }
+      return setScreen(target.screen);
+    }
+    if (!project) return;
+    setScreen("workspace");
+    if (target.type === "mode") setMode(target.mode);
+    else if (target.type === "lab") {
+      setMode("lab");
+      setLabJump({ section: target.section, reportSectionId: target.reportSectionId, conceptId: target.conceptId, term: target.term, query: target.query, nonce: Date.now() });
+    } else if (target.type === "story") {
+      setMode("preview");
+      window.setTimeout(() => scrollToSection("story", target.sectionId), 150);
+    } else if (target.type === "action") {
+      if (target.action === "publish") setPublishOpen(true);
+      else if (target.action === "citations") setCitationsOpen(true);
+      else if (target.action === "history") setHistoryOpen(true);
+      else if (target.action === "json") download(`${projectSlug(project)}.trace.json`, JSON.stringify(project, null, 2), "application/json");
+      else download(`${projectSlug(project)}.html`, buildStandaloneStory(project), "text/html");
+    } else {
+      const definition = exportDefinitions.find((item) => item.format === target.format);
+      if (definition && !definition.unavailable?.(project)) download(`${projectSlug(project)}.${definition.extension}`, definition.build(project), definition.mime);
+    }
+  }
+
+  /** Her ekran üst menüyü, zamanlayıcının bildirimlerini ve komut paletini taşıyor. */
   const withWork = (content: React.ReactNode) => (
     <StudioNavProvider value={{ open: openWork, current: screen === "focus" || screen === "profile" ? screen : undefined }}>
       {content}
       <FocusAlerts onOpen={() => openWork("focus")} onReport={() => openWork("profile")} />
+      <CommandPalette build={paletteCommands} onRun={runCommand} />
     </StudioNavProvider>
   );
 
@@ -731,7 +786,7 @@ function Studio() {
     setMode("preview");
     window.setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ block: "start" }), 80);
   };
-  const slug = project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trace-story";
+  const slug = projectSlug(project);
 
   return withWork(
     <ReaderNotesProvider key={project.id} projectId={project.id}>

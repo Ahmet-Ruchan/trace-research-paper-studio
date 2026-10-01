@@ -705,6 +705,17 @@ goes where it is: the claim, the section, the concept, the term or the passage y
 
 ![Search the claims of every paper](docs/images/library.jpg)
 
+### Go anywhere from the keyboard
+
+<kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>⌘</kbd>+<kbd>K</kbd> on a Mac), or the search button in the header
+(the paper's own header shows it on wide screens), opens one box for the whole studio. Type part of a paper's title or an author's name to
+open it, a screen (Review, Practice exam, Progress, Focus timer, Profile) to go there, or, inside a
+paper, a Lab tab, a story or report section, a Primer concept or a glossary term to land on it.
+Actions are there too: publish, the citation graph, version history and every export. Case and
+accents do not matter, the start of a title counts most, and letters in order find their target
+("dprt" finds Deep report). When nothing fits, the last line searches the open paper for what you
+typed. Arrows choose, <kbd>Enter</kbd> opens, <kbd>Esc</kbd> closes.
+
 ### Group papers with tags
 
 Give a paper a tag from its library card and the tag becomes a collection. Pick it to see only those

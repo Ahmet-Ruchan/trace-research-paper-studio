@@ -1190,3 +1190,24 @@ html[data-text-size="larger"] { font-size: 125%; }
 .exam-answer-line, .exam-why { margin: 0; font-size: var(--text-sm); line-height: 1.55; }
 .exam-why { color: var(--ink-soft); }
 .exam-answers small { color: var(--muted); font-size: var(--text-xs); }
+
+/* ---------- Komut paleti (command-palette.tsx) ---------- */
+.palette-overlay { position: fixed; inset: 0; z-index: 120; display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; background: rgba(25,27,24,.38); backdrop-filter: blur(3px); }
+.palette { width: min(620px, 100%); max-height: min(560px, 76vh); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.palette-field { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.palette-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: var(--text-base); }
+.palette kbd { padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--muted); font: 500 var(--text-2xs)/1.5 ui-monospace, monospace; }
+.palette-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 6px; list-style: none; }
+.palette-group { display: block; padding: 10px 10px 4px; color: var(--muted); font-size: var(--text-2xs); letter-spacing: .1em; text-transform: uppercase; }
+.palette-option { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.palette-option.is-active { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent-ink, var(--ink)); }
+.palette-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-md); }
+.palette-option small { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--text-xs); }
+.palette-option svg { flex: none; align-self: center; color: var(--muted); }
+.palette-empty { margin: 0; padding: 18px 16px; color: var(--muted); font-size: var(--text-sm); }
+.palette-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 8px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--text-xs); }
+@media (max-width: 600px) {
+  .palette-overlay { padding-top: 8vh; }
+  .palette-option { flex-direction: column; align-items: stretch; gap: 2px; }
+  .palette-option svg, .palette-hint { display: none; }
+}

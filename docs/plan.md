@@ -200,7 +200,21 @@ yapıldığı ve nasıl test edildiği yazıyor.
   - *Test:* bütün türlerde bulma, sıralama, notun hedefi, metinsiz işaretin aranmaması, her
     kelimenin gerekmesi, sınır birim testlerde; "/" ile açılış, kavrama, notun rapor bölümüne,
     sözlük terimine ve iddiaya gitmek e2e'de; telefon genişliği elle kontrol.
-- [ ] **20. Komut paleti (Ctrl+K).** Makaleye, bölüme ya da eyleme yazarak gitmek.
+- [x] **20. Komut paleti (Ctrl+K).** Makaleye, bölüme ya da eyleme yazarak gitmek.
+  - *Yapıldı:* Ctrl+K / ⌘K ya da her ekranın üstündeki arama düğmesi paleti açıyor
+    (`src/components/command-palette.tsx`). Komutlar veri (`src/lib/command-palette.ts`):
+    makaleler (başlık, yazar, dergi, DOI), ekranlar (Review, Practice exam, Progress, Concepts,
+    Reading order, Model record, Focus, Profile, Analyse a paper), açık makalede Lab sekmeleri,
+    hikâye ve rapor bölümleri, Primer kavramları, sözlük terimleri ve eylemler (Lab/Story/Preview,
+    yayın, atıf grafiği, sürüm geçmişi, JSON, site ve her dışa aktarım). Sıralama modelsiz:
+    başlığın başı, kelime başı, başlığın içi, açıklama, harflerin sırayla geçmesi; büyük harf ve
+    aksan fark etmiyor. Makale açıkken son satır "Search this paper for …" ve aramayı o sözle
+    açıyor. Oklar, Enter, Esc; odak kapanınca geri dönüyor.
+  - *Test:* `command-palette.test.ts` (6 test: gruplar, yalnızca var olan Lab bölümleri,
+    kullanılamayan dışa aktarımın yokluğu, sıralama, Türkçe aksanlar, boş sorgunun kısa listesi,
+    arama satırı); e2e "goes to a paper, a section, a concept or a screen by typing" (kısayol,
+    düğme, Esc, makale, oklarla rapor bölümü ve kaydırma, Primer kavramı, makalede arama, Focus,
+    eşleşme yok) üç kez üst üste; kontrast testi iki temada açık paleti ölçüyor.
 - [x] **26. Okuma listesini paylaşmak.** Okuma listesi bir bağlantıyla paylaşılır.
   - *Yapıldı:* Okuma sırasının altında **Share the list**: listenin o anki kopyası `/r/<kimlik>`
     adresinde, okuma sırasındaki yerleri ve nedenleri, arXiv/DOI bağlantılarıyla; istenirse

@@ -1512,6 +1512,16 @@ test.describe("colour themes", () => {
           },
         },
         {
+          name: "command palette",
+          url: `/?project=${project.id}`,
+          ready: ".palette-option.is-active",
+          open: async () => {
+            await expect(page.locator(".lab-nav")).toBeVisible();
+            await page.keyboard.press("ControlOrMeta+k");
+            await page.getByRole("combobox", { name: "Go to" }).fill("re");
+          },
+        },
+        {
           name: "profile",
           url: "/?profile=1",
           ready: ".work-calendar-grid",
@@ -3280,6 +3290,79 @@ test.describe("search in a paper", () => {
     await page.getByRole("textbox", { name: "Search this paper" }).fill(claim.statement.split(" ").slice(0, 6).join(" "));
     await page.locator(".paper-search-results li", { hasText: "Claim" }).first().getByRole("button").click();
     await expect(page.locator(".claim-row.selected")).toBeVisible();
+  });
+});
+
+test.describe("command palette", () => {
+  test("goes to a paper, a section, a concept or a screen by typing, from anywhere", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-palette-a"));
+    await seed(request, { ...projectNamed("e2e-palette-b"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Çayır Ölçümleri Üzerine", authors: ["Ayşe Yılmaz"] } } });
+    await page.goto("/?library=1");
+    await expect(page.locator(".library-card", { hasText: "Çayır" })).toBeVisible();
+    const palette = page.getByRole("dialog", { name: "Go to a paper, section or action" });
+    const box = palette.getByRole("combobox", { name: "Go to" });
+
+    // Kısayol açıyor, Escape kapatıyor; aynı kısayol ikinci kez de kapatıyor.
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(box).toBeFocused();
+    await expect(palette.getByRole("option", { name: /^Review/ })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toHaveCount(0);
+    await page.getByRole("button", { name: "Go to a paper, section or action" }).click();
+    await expect(box).toBeFocused();
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(palette).toHaveCount(0);
+
+    // Aksansız ve küçük harfle bir makale; Enter açıyor.
+    await page.keyboard.press("ControlOrMeta+k");
+    await box.fill("cayir olcum");
+    await expect(palette.getByRole("option").first()).toContainText("Çayır Ölçümleri Üzerine");
+    await expect(palette.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".project-identity strong")).toHaveText("Çayır Ölçümleri Üzerine");
+
+    // Makaledeyken bölümleri de: oklarla seçip bir rapor bölümüne.
+    const section = project.deepReport!.sections[1];
+    await page.keyboard.press("ControlOrMeta+k");
+    await box.fill(section.title);
+    const target = palette.getByRole("option").filter({ hasText: section.title }).filter({ hasText: "Deep report" });
+    await expect(target).toBeVisible();
+    const position = await palette.getByRole("option").evaluateAll((items, text) => items.findIndex((item) => item.textContent?.includes(text) && item.textContent.includes("Deep report")), section.title);
+    for (let index = 0; index < position; index += 1) await page.keyboard.press("ArrowDown");
+    await expect(target).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Deep report");
+    await expect.poll(() => page.evaluate((id) => {
+      const element = document.querySelector(`[data-note-section="report:${id}"]`);
+      if (!element) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.top < window.innerHeight && rect.bottom > 0;
+    }, section.id)).toBe(true);
+
+    // Bir Primer kavramı.
+    const concept = project.primer!.concepts[2];
+    await page.keyboard.press("ControlOrMeta+k");
+    await box.fill(concept.term);
+    await palette.getByRole("option").filter({ hasText: "Primer concept" }).first().click();
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Primer");
+    await expect(page.locator(`[data-note-section="concept:${concept.id}"]`)).toBeVisible();
+
+    // Başlıklarda olmayan bir söz: bu makalede arıyor.
+    await page.keyboard.press("ControlOrMeta+k");
+    await box.fill("encoder stack");
+    await palette.getByRole("option", { name: /^Search this paper for “encoder stack”/ }).click();
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Search");
+    await expect(page.getByRole("textbox", { name: "Search this paper" })).toHaveValue("encoder stack");
+    await expect(page.getByRole("textbox", { name: "Search this paper" })).toBeFocused();
+
+    // Açıklamadaki bir sözcükle bir ekran; makale dışında eşleşme yoksa söylüyor.
+    await page.keyboard.press("ControlOrMeta+k");
+    await box.fill("pomodoro");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".focus-page")).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+k");
+    await box.fill("qqqzzz");
+    await expect(palette.getByRole("status")).toHaveText("Nothing matches “qqqzzz”.");
   });
 });
 

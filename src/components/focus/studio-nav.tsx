@@ -1,13 +1,14 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { Pause, Timer } from "lucide-react";
+import { Pause, Search, Timer } from "lucide-react";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { countdownRemaining, elapsedOf } from "@/lib/focus-timer";
 import { displayName } from "@/lib/profile";
 import { formatClock } from "@/lib/work-log";
 import { focusDisplay, useFocus, useFocusClock } from "./focus-provider";
 import { Avatar } from "./focus-parts";
+import { openCommandPalette } from "../command-palette";
 
 /**
  * Üst menüdeki iki düğme: çalışma saati ve profil. Her ekranın başlığında
@@ -54,6 +55,16 @@ export function StudioNav() {
 
   return (
     <nav className="studio-nav" aria-label="Your work">
+      <button
+        type="button"
+        className="studio-nav-palette"
+        aria-label="Go to a paper, section or action"
+        aria-keyshortcuts="Control+K Meta+K"
+        title="Go to a paper, section or action (Ctrl+K)"
+        onClick={openCommandPalette}
+      >
+        <Search size={15} aria-hidden="true" />
+      </button>
       <button
         type="button"
         className={`studio-nav-focus${status ? " has-timer" : ""}${status?.running ? " is-running" : ""}`}
