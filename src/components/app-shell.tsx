@@ -25,6 +25,7 @@ import { LearningStatsView } from "./learning-stats-view";
 import { LibraryView } from "./library-view";
 import { LiteratureMapView } from "./literature-map-view";
 import { ModelRecordView } from "./model-record-view";
+import { OfflineNotice } from "./offline";
 import { Onboarding } from "./onboarding";
 import { ReadingListProvider } from "./reading-list";
 import { scrollToSection } from "./reading-position";
@@ -346,6 +347,7 @@ function Studio() {
       {content}
       <FocusAlerts onOpen={() => openWork("focus")} onReport={() => openWork("profile")} />
       <CommandPalette build={paletteCommands} onRun={runCommand} />
+      <OfflineNotice />
     </StudioNavProvider>
   );
 

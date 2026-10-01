@@ -12,13 +12,22 @@ import { createHash, timingSafeEqual } from "node:crypto";
  *   - `/p/<id>`  yayımlanmış hikâyeler; bağlantıyı paylaşmanın bütün amacı bu.
  *   - `/r/<id>`  paylaşılan okuma listeleri; aynı neden.
  *   - `/api/health`  barındırma platformunun sağlık denetimi; hiçbir şey sızdırmaz.
+ *   - `/manifest.webmanifest`, `/sw.js`, `/icons/…`  kurulabilir uygulamanın
+ *     kabuğu. Tarayıcı manifesti kimlik bilgisi göndermeden istiyor; kapalı
+ *     olsaydı uygulama kurulamazdı. Kütüphaneden hiçbir şey içermiyorlar.
  *
  * Bu bir hesap sistemi DEĞİL: tek parola, kullanıcı adı önemsiz, HTTPS şart.
  */
 export const ACCESS_REALM = "Trace studio";
 
 export function isPublicPath(pathname: string) {
-  return pathname === "/api/health" || /^\/[pr]\/[^/]+\/?$/.test(pathname);
+  return (
+    pathname === "/api/health" ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/sw.js" ||
+    /^\/icons\/[\w.-]+\.(?:png|svg)$/.test(pathname) ||
+    /^\/[pr]\/[^/]+\/?$/.test(pathname)
+  );
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();

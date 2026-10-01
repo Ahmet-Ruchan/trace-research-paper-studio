@@ -55,6 +55,9 @@ export default defineConfig({
     // İşçiye göre `e2e/fixtures.ts` değiştiriyor; bu ilk işçinin adresi.
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: "retain-on-failure",
+    // Servis çalışanı (`public/sw.js`) isteklere araya girince `page.route` sahteleri onları görmüyor;
+    // yalnızca kurulabilir uygulama testi açıyor.
+    serviceWorkers: "block",
     ...devices["Desktop Chrome"],
     viewport: { width: 1480, height: 860 },
   },

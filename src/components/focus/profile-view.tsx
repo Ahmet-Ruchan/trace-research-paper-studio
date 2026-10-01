@@ -17,6 +17,7 @@ import { useReadingList } from "../reading-list";
 import { PaperTimeCard } from "./paper-time";
 import { WeeklyReport } from "./weekly-report";
 import { WorkCalendar, type CalendarRange } from "./work-calendar";
+import { ThisDeviceCard } from "../offline";
 
 const longDate = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short" });
@@ -542,6 +543,7 @@ export function ProfileView({
           <PreferencesCard />
           <StudyingCard projects={projects} state={studyState} onProgress={onProgress} />
           <DataCard papers={projects.length} onLibraryChanged={onLibraryChanged} />
+          <ThisDeviceCard />
         </div>
       </div>
     </main>

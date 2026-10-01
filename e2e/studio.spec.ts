@@ -2887,6 +2887,59 @@ test.describe("importing from Zotero", () => {
   });
 });
 
+test.describe("installable app", () => {
+  test.use({ serviceWorkers: "allow" });
+
+  test("has a manifest and icons, and opens the library and a paper without a connection", async ({ page, context, request }) => {
+    const project = await seed(request, { ...projectNamed("e2e-offline"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Offline paper" } } });
+    const manifest = (await (await request.get("/manifest.webmanifest")).json()) as { name: string; start_url: string; display: string; icons: Array<{ src: string; purpose?: string }> };
+    expect(manifest).toMatchObject({ name: "Trace research studio", short_name: "Trace", start_url: "/?library=1", display: "standalone" });
+    expect(manifest.icons.some((icon) => icon.purpose === "maskable")).toBe(true);
+    for (const icon of manifest.icons) expect((await request.get(icon.src)).ok(), icon.src).toBe(true);
+    const worker = await request.get("/sw.js");
+    expect(worker.headers()["cache-control"]).toContain("no-cache");
+
+    // Çevrimiçi bir kez: servis çalışanı kuruluyor, sayfa onun denetiminde yeniden açılıyor ve kütüphane ile makale okunuyor.
+    await page.goto("/?library=1");
+    const card = page.locator(".library-card", { hasText: "Offline paper" });
+    await expect(card).toBeVisible();
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await page.goto("/?library=1");
+    await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await card.locator(".library-open").click();
+    await expect(page.locator(".project-identity strong")).toHaveText("Offline paper");
+    await page.goto("/?library=1");
+    await expect(card).toBeVisible();
+
+    // Çevrimdışıyken sunucuya yeni bir makale ekleniyor: sayfa onu değil, saklanan kütüphaneyi gösteriyor.
+    // `setOffline` servis çalışanının kendi isteklerini kesmiyor; bağlam düzeyinde onlar da kesiliyor.
+    await context.setOffline(true);
+    await context.route("**/*", (route) => route.abort("internetdisconnected"));
+    await seed(request, { ...projectNamed("e2e-offline-later"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Added while offline" } } });
+    await page.goto("/?library=1");
+    await expect(card).toBeVisible();
+    await expect(page.locator(".library-card", { hasText: "Added while offline" })).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: "You are offline" })).toBeVisible();
+    await card.locator(".library-open").click();
+    await expect(page.locator(".project-identity strong")).toHaveText("Offline paper");
+    await expect(page.locator(".lab-nav")).toBeVisible();
+
+    // Bağlantı gelince yeni makale de görünüyor; Profil'de çevrimdışı kopya silinebiliyor.
+    await context.unrouteAll();
+    await context.setOffline(false);
+    await page.goto("/?library=1");
+    await expect(page.locator(".library-card", { hasText: "Added while offline" })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "You are offline" })).toHaveCount(0);
+    await page.goto("/?profile=1");
+    const device = page.getByRole("region", { name: "This device" });
+    await expect(device).toContainText("keeps a copy of your library");
+    await device.getByRole("button", { name: "Delete the offline copy" }).click();
+    await expect(device.getByRole("status")).toContainText("The offline copy was deleted");
+    expect(await page.evaluate(async () => (await caches.keys()).filter((name) => name.startsWith("trace-data-")))).toEqual([]);
+    void project;
+  });
+});
+
 test.describe("practice exam", () => {
   test("asks questions from every paper against the clock, grades them at the end, and can bring the missed ones back", async ({ page, request }) => {
     const first = await seed(request, projectNamed("e2e-exam-a"));

@@ -869,6 +869,21 @@ visible text on eight screens in both themes. Both choices are kept in this brow
 
 ![The dark theme](docs/images/dark.jpg)
 
+### Install it as an app, and read offline
+
+The studio installs like an app, on a computer (the install icon in Chrome or Edge's address bar) or
+a phone (Add to Home Screen; on Android the browser offers it, on an iPhone it is under Share). It
+opens in its own window on your library. **This device** on the profile has the install button
+where the browser offers one.
+
+Once installed, or after a reload, the browser keeps a copy of your library as it was last opened
+here. Without a connection the library opens from that copy, and so does every paper you opened
+before, with your notes and study progress; a line at the bottom says you are offline. Everything is
+still asked from the server first, so online you never see an old copy. Changes need the connection:
+they are not queued for later. **Delete the offline copy** on the profile removes it from that
+browser. A phone reaches the studio only where it is on a server you can reach, and installing needs
+HTTPS there (localhost is fine on the computer itself).
+
 ---
 
 ## Install in under a minute
@@ -1409,6 +1424,12 @@ the server.
 - Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,
   timeout and payload size.
 - PDF and web content are treated as source material, never as instructions.
+- The installed app's offline copy (`public/sw.js`) keeps only what the studio already showed in that
+  browser, and only successful answers: a password prompt or an error is never stored, and online
+  the server is always asked first. It touches only the studio's page and the API reads of the library;
+  published links, uploads and every change go straight to the server. The web app manifest, the
+  service worker and the icons stay reachable behind `TRACE_ACCESS_PASSWORD`, since browsers fetch
+  the manifest without credentials; none of them holds anything from the library.
 - The plugin's MCP server talks only over stdio to the agent that started it, opens no port and
   makes no network request. Its tools read the library, and the only ones that write change the
   reading list, under the same lock as the studio. Arguments are checked against each tool's

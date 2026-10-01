@@ -365,8 +365,25 @@ yapıldığı ve nasıl test edildiği yazıyor.
     hatalar, içe aktarma planı, sınır, köprü), `reading-list.test.ts` toplu API (hepsi ya da
     hiçbiri, gövde sınırı); e2e "importing from Zotero" (önizleme, ekleme, ikinci kez hiçbir şey,
     okunamayan dosya); eklenti duman testinde `reading --import`.
-- [ ] **11. Kurulabilir uygulama (PWA).** Masaüstüne ve telefona kurulur, kütüphane
+- [x] **11. Kurulabilir uygulama (PWA).** Masaüstüne ve telefona kurulur, kütüphane
   çevrimdışı açılır.
+  - *Yapıldı:* `src/app/manifest.ts` (ad, kütüphaneyle açılış, bağımsız pencere, renkler,
+    simgeler: yazı tipinden bağımsız çizilmiş "t", maskelenebilir ve iOS simgesi;
+    `scripts/build-icons.mjs` SVG'den PNG üretiyor), `public/sw.js`: stüdyonun sayfası ve
+    kütüphanenin okunduğu API'ler ağ önce, ağ yoksa son başarılı yanıt; `_next/static` ve
+    simgeler önce saklanan. 401 ve hatalar saklanmıyor; yayınlanmış sayfalara ve yazmalara
+    dokunulmuyor. Servis çalışanı yalnızca derlenmiş uygulamada kayıtlı; `sw.js` her açılışta
+    yeniden denetleniyor. Çevrimdışıyken her ekranda bir satır; Profil'de **This device**:
+    kurma düğmesi (tarayıcı sunuyorsa), iPhone için yol, **Delete the offline copy**.
+    Manifest, servis çalışanı ve simgeler parola kapısının dışında (tarayıcı manifesti kimlik
+    bilgisi olmadan istiyor). Testlerde servis çalışanları kapalı (sahte yanıtlar onları
+    görmüyor), yalnızca bu test açıyor.
+  - *Test:* e2e "installable app": manifest ve simgeler, `sw.js` başlıkları, servis çalışanının
+    denetimi, çevrimdışıyken (servis çalışanının istekleri de kesilerek) kütüphane ve önceden
+    açılmış makale saklanan kopyadan açılıyor, sonradan eklenen makale görünmüyor, uyarı
+    satırı; bağlantı gelince yeni makale; çevrimdışı kopyanın silinmesi. Üç kez üst üste geçti.
+    `access-gate.test.ts` açık yollar; bütün e2e (101) ve `npm run check` (749) geçti.
+    Gerçek bir telefona kurulum bu ortamda denenemedi.
 - [ ] **12. Hesaplar ve ekip incelemesi.** Birlikte onay, paylaşılan notlar.
 - [ ] **13. Arayüz dili.** Arayüz şu an bilinçli olarak İngilizce; başlamadan önce karar
   gerekiyor.

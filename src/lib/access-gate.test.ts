@@ -29,6 +29,14 @@ describe("access gate", () => {
     expect(isPublicPath("/p")).toBe(false);
     expect(isPublicPath("/api/health/extra")).toBe(false);
     expect(isPublicPath("/api/publications")).toBe(false);
+    // Kurulabilir uygulamanın kabuğu açık; kütüphaneden bir şey içermiyor.
+    expect(isPublicPath("/manifest.webmanifest")).toBe(true);
+    expect(isPublicPath("/sw.js")).toBe(true);
+    expect(isPublicPath("/icons/icon-192.png")).toBe(true);
+    expect(isPublicPath("/icons/icon.svg")).toBe(true);
+    expect(isPublicPath("/icons/../api/library")).toBe(false);
+    expect(isPublicPath("/icons/x.json")).toBe(false);
+    expect(isPublicPath("/sw.js/extra")).toBe(false);
     expect(accessAllowed("/p/AbC123", null, "s3cret")).toBe(true);
   });
 });

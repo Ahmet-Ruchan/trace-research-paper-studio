@@ -1211,3 +1211,7 @@ html[data-text-size="larger"] { font-size: 125%; }
   .palette-option { flex-direction: column; align-items: stretch; gap: 2px; }
   .palette-option svg, .palette-hint { display: none; }
 }
+
+/* ---------- Çevrimdışı (offline.tsx) ---------- */
+.offline-notice { position: fixed; left: 16px; bottom: 16px; z-index: 110; max-width: min(520px, calc(100vw - 32px)); display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 14px; border: 1px solid var(--line-dark); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink); font-size: var(--text-sm); line-height: 1.45; }
+.offline-notice svg { flex: none; margin-top: 3px; }

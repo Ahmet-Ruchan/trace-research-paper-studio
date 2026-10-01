@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { textSizeBootScript } from "@/lib/text-size";
 import { themeBootScript } from "@/lib/theme";
+import { ServiceWorkerRegistration } from "@/components/offline";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,6 +18,17 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Trace — Evidence-first research studio",
   description: "Turn research papers into verifiable, interactive web narratives.",
+  applicationName: "Trace",
+  // Kurulan uygulama (manifest `app/manifest.ts`); iOS ana ekran simgesi ve adı ayrıca.
+  appleWebApp: { capable: true, title: "Trace", statusBarStyle: "default" },
+  icons: { icon: [{ url: "/favicon.ico" }, { url: "/icons/icon.svg", type: "image/svg+xml" }], apple: "/icons/apple-touch-icon.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2efe7" },
+    { media: "(prefers-color-scheme: dark)", color: "#161714" },
+  ],
 };
 
 /*
@@ -38,6 +50,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         {children}
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );
