@@ -272,7 +272,9 @@ and a small bar offers five highlight colours and **Note**: the passage is highl
 stands, and the note sits beside it. A story section highlighted in Study shows in the Story preview
 too, and a concept highlighted in Study shows in the Primer. From the keyboard, with text selected,
 <kbd>H</kbd> highlights it in the colour you last picked on the bar (yellow to begin with) and
-<kbd>N</kbd> opens the note. Open a
+<kbd>N</kbd> opens the note. On a phone or tablet the bar sits at the bottom edge of the screen (the top
+edge when the passage is down there), clear of the phone's own Copy menu above the selection and of
+the handles below it, with buttons sized for a finger. Open a
 claim and write a note on it, or mark it as important; the claim list shows a star next to it.
 **Notes** in the Lab gathers everything for the paper in reading order (story, report, Primer, then
 claims with their page) to edit, recolour or delete, and to add a note to any section or claim.

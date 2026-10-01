@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { devices, expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { evidenceFingerprint } from "../src/lib/section-regeneration";
 import type { ResearchProject } from "../src/lib/schema";
 import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
@@ -3119,6 +3119,93 @@ test.describe("reader notes", () => {
 
     await page.getByRole("button", { name: "Preview", exact: true }).click();
     await expect.poll(() => painted(page, "blue")).toBe(1);
+  });
+
+  test.describe("on a phone", () => {
+    // Tarayıcı türü dışında telefonun her şeyi: ekran, dokunma, mobil görünüm alanı.
+    const { defaultBrowserType: _browser, ...pixel } = devices["Pixel 7"];
+    void _browser;
+    test.use(pixel);
+
+    /** Seçimin ve çubuğun ekrandaki yeri. */
+    async function boxes(page: Page) {
+      const selection = await page.evaluate(() => {
+        const rect = window.getSelection()!.getRangeAt(0).getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom, height: window.visualViewport?.height ?? window.innerHeight, width: window.innerWidth };
+      });
+      const bar = (await page.locator(".note-bar").boundingBox())!;
+      return { selection, bar };
+    }
+    /** Telefonun menüsü seçimin üstünde (~64 px), tutamaçlar altında (~48 px): çubuk o şeride girmiyor. */
+    const clear = ({ selection, bar }: Awaited<ReturnType<typeof boxes>>) =>
+      bar.y >= selection.bottom + 48 || bar.y + bar.height <= selection.top - 64;
+
+    test("keeps the highlight bar off the phone's own selection menu and handles, and highlights and notes by touch", async ({ page, request }) => {
+      const project = await seed(request, projectNamed("e2e-touch-notes"));
+      const report = project.deepReport!.sections;
+      await page.goto(`/?project=${project.id}`);
+      expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
+      await page.getByRole("combobox", { name: "Section" }).selectOption({ label: "Deep report" });
+      const bar = page.getByRole("toolbar", { name: "Highlight the selected text" });
+
+      // Ekranın ortasında bir seçim: çubuk alta yaslı, seçimin şeridinin dışında ve ekranın içinde.
+      const middle = `[data-note-section="report:${report[0].id}"] .report-analysis`;
+      await page.locator(middle).evaluate((element) => element.scrollIntoView({ block: "center" }));
+      const first = await selectIn(page, middle);
+      await expect(bar).toBeVisible();
+      await expect(bar).toHaveClass(/is-docked-bottom/);
+      let seen = await boxes(page);
+      expect(clear(seen), JSON.stringify(seen)).toBe(true);
+      expect(seen.bar.x).toBeGreaterThanOrEqual(0);
+      expect(seen.bar.x + seen.bar.width).toBeLessThanOrEqual(seen.selection.width);
+      expect(seen.bar.y + seen.bar.height).toBeLessThanOrEqual(seen.selection.height);
+      // Alt kenara oturuyor, ortada asılı kalmıyor.
+      expect(seen.selection.height - (seen.bar.y + seen.bar.height)).toBeLessThan(30);
+      // Parmak için yeterli hedef.
+      expect((await bar.getByRole("button", { name: "Highlight in green" }).boundingBox())!.height).toBeGreaterThanOrEqual(32);
+      await bar.getByRole("button", { name: "Highlight in green" }).tap();
+      await expect(bar).toHaveCount(0);
+      await expect.poll(() => stored(request, project.id)).toEqual([expect.objectContaining({ quote: first, color: "green" })]);
+
+      // Ekranın altına yakın bir seçim: çubuk üste geçiyor.
+      const low = `[data-note-section="report:${report[1].id}"] .report-analysis`;
+      await page.locator(low).evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await selectIn(page, low, 20);
+      await page.evaluate(() => {
+        const rect = window.getSelection()!.getRangeAt(0).getBoundingClientRect();
+        window.scrollBy(0, rect.bottom - ((window.visualViewport?.height ?? window.innerHeight) - 70));
+      });
+      await expect(bar).toHaveClass(/is-docked-top/);
+      seen = await boxes(page);
+      expect(seen.selection.bottom).toBeGreaterThan(seen.selection.height - 120);
+      expect(clear(seen), JSON.stringify(seen)).toBe(true);
+
+      // Not: form da yaslı ve ekranın içinde; parmakla kaydediliyor.
+      await bar.getByRole("button", { name: "Note" }).tap();
+      const form = page.getByRole("form", { name: "Note on the highlight" });
+      await expect(form).toHaveClass(/is-docked/);
+      const box = (await form.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(seen.selection.width);
+      // Seçim altta olduğu için form da üstte, ekranın kenarında.
+      await expect(form).toHaveClass(/is-docked-top/);
+      expect(box.y).toBeLessThan(40);
+      await form.getByLabel("Your note").fill("Read this on the train.");
+      await form.getByRole("button", { name: "Save" }).tap();
+      await expect.poll(async () => (await stored(request, project.id)).map((note) => note.text)).toEqual(["", "Read this on the train."]);
+
+      // Ortadaki bir seçimde not formu da alt kenarda.
+      const third = `[data-note-section="report:${report[2].id}"] .report-analysis`;
+      await page.locator(third).evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await selectIn(page, third, 16);
+      await bar.getByRole("button", { name: "Note" }).tap();
+      await expect(form).toHaveClass(/is-docked-bottom/);
+      const lower = (await form.boundingBox())!;
+      expect(seen.selection.height - (lower.y + lower.height)).toBeLessThan(30);
+      await form.getByRole("button", { name: "Cancel" }).tap();
+      await expect(form).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
+    });
   });
 });
 

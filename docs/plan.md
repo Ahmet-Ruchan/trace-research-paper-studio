@@ -298,8 +298,19 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Bakım ve kontrol
 
-- [ ] **27. Telefonda vurgu denemesi.** Gerçek dokunmatik seçimde telefonun kendi menüsüyle
+- [x] **27. Telefonda vurgu denemesi.** Gerçek dokunmatik seçimde telefonun kendi menüsüyle
   çakışma olup olmadığı.
+  - *Yapıldı:* Çakışma vardı: çubuk seçimin 10 px altına konuyordu; Android'de seçimi
+    büyütüp küçülten tutamaçlar tam orada sarkıyor, telefonun kendi menüsü (Kopyala, Paylaş)
+    seçimin üstünde açılıyor. Parmakla kullanılan ekranda (`pointer: coarse`) çubuk ve not
+    formu artık ekranın alt kenarına yaslı, seçim alttaki yere iniyorsa üst kenara; konum görünür
+    alana göre (açılan klavye ve yakınlaştırma dahil, `visualViewport`) ve çentik/ev çubuğu
+    payıyla. Renk düğmeleri 32 px, Not ve form düğmeleri 40 px. Farede davranış aynı.
+  - *Test:* e2e "on a phone" (Pixel 7 öykünmesi, dokunma): ortadaki seçimde çubuk alt kenarda,
+    seçimin üstündeki 64 px ve altındaki 48 px şeridin dışında, ekranın içinde; parmakla
+    vurgulama; alttaki seçimde çubuk ve form üstte; ortadaki seçimde form alt kenarda; yatay
+    taşma yok. Eski yerleşimde bu denetim düşüyordu. Gerçek bir telefonda elle deneme bu
+    ortamda yapılamadı.
 - [ ] **28. Testleri hızlandırmak.** Her test işçisine ayrı veri klasörü; e2e paralel koşar.
 - [ ] **29. Kod düzeni.** Ekran geçişlerini yöneten ana dosya bölünür.
 - [ ] **30. Gerçek oturum testi.** Hangi ajanın gerçek bir model oturumuyla sınandığının

@@ -25,6 +25,15 @@
 .note-bar { position: fixed; z-index: 120; box-sizing: border-box; display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid var(--line-dark); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink-soft); transform: translateX(-50%); }
 .note-bar-write, .note-bar-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
 .note-bar.is-writing { width: min(360px, calc(100vw - 24px)); max-height: 250px; display: grid; gap: 8px; padding: 12px; overflow: auto; }
+/* Dokunmatik: ekranın kenarına yaslı, çentik ve ev çubuğu payıyla; parmak için büyük hedefler (reader-notes.tsx, dockAt). */
+.note-bar.is-docked { max-width: calc(100vw - 24px); }
+.note-bar.is-docked-bottom { margin-top: calc(-1 * env(safe-area-inset-bottom, 0px)); }
+.note-bar.is-docked-top { margin-top: env(safe-area-inset-top, 0px); }
+@media (pointer: coarse) {
+  .note-bar:not(.is-writing) { gap: 8px; padding: 8px 12px; }
+  .note-bar .note-swatch { width: 32px; height: 32px; }
+  .note-bar-write, .note-bar-actions button { min-height: 40px; padding: 0 14px; }
+}
 .note-bar blockquote, .note-item blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--note-yellow); color: var(--ink-soft); font: italic var(--text-sm)/1.5 Georgia, serif; }
 .note-bar textarea, .claim-note-form textarea, .note-edit textarea, .notes-add textarea { width: 100%; min-height: 64px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); color: var(--ink); font: inherit; font-size: var(--text-sm); resize: vertical; }
 .note-bar-actions { display: flex; gap: 8px; }

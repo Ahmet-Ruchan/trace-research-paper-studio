@@ -211,14 +211,49 @@ export function NoteHighlights() {
 type Picked = { target: NoteTarget; quote: string; above: number; below: number; left: number };
 
 /**
- * Araç çubuğunun yeri: seçimin altında (telefonların kendi seçim menüsü
- * üstte açılıyor); sığmıyorsa üstünde; ne olursa olsun ekranın içinde.
+ * Araç çubuğunun yeri, fareyle: seçimin altında; sığmıyorsa üstünde; ne
+ * olursa olsun ekranın içinde.
  */
 function placeAt(picked: Picked, height: number, width: number) {
   const room = window.innerHeight - 12;
   const top = picked.below + height <= room ? picked.below : picked.above - height;
   const half = Math.min(width, window.innerWidth - 24) / 2;
   return { top: Math.max(12, Math.min(top, room - height)), left: Math.max(12 + half, Math.min(picked.left, window.innerWidth - 12 - half)) };
+}
+
+/**
+ * Dokunmatik ekranda seçimin hemen üstünde telefonun kendi menüsü (Kopyala,
+ * Paylaş), hemen altında seçimi büyütüp küçülten tutamaçlar duruyor. Çubuk
+ * seçimin yanına konunca ikisinden birini örtüyordu; burada ekranın altına
+ * yaslanıyor, görünür alana göre (açılan klavye de sayılıyor). Seçim alttaki
+ * yere kadar iniyorsa çubuk ekranın üstüne geçiyor.
+ */
+const HANDLE_ROOM = 48;
+
+function dockAt(picked: Picked, height: number) {
+  const view = window.visualViewport;
+  const top = view?.offsetTop ?? 0;
+  const bottom = top + (view?.height ?? window.innerHeight);
+  const left = (view?.offsetLeft ?? 0) + (view?.width ?? window.innerWidth) / 2;
+  // Altta `bottom` ile: çubuğun gerçek yüksekliği ne olursa olsun kenara oturuyor; `height` yalnızca yer hesabı için.
+  if (picked.below + HANDLE_ROOM > bottom - height - 12) return { style: { top: top + 12, left }, edge: "top" as const };
+  return { style: { bottom: window.innerHeight - bottom + 12, left }, edge: "bottom" as const };
+}
+
+/** Parmakla mı kullanılıyor: telefon ve tablet. Fare bağlı bir tablette `false`. */
+function useCoarsePointer() {
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarse(query.matches);
+    const first = setTimeout(update, 0);
+    query.addEventListener("change", update);
+    return () => {
+      clearTimeout(first);
+      query.removeEventListener("change", update);
+    };
+  }, []);
+  return coarse;
 }
 
 function pickedSelection(): Picked | undefined {
@@ -270,6 +305,9 @@ export function SelectionNoteBar() {
   const [writing, setWriting] = useState<Picked>();
   const [draft, setDraft] = useState("");
   const [shortcutColor, setShortcutColor] = useState<NoteColor>("yellow");
+  const coarse = useCoarsePointer();
+  // Dokunmatikte görünür alan değişince (klavye açılınca, yakınlaştırınca) çubuk yeniden yaslanıyor.
+  const [, setViewport] = useState(0);
 
   useEffect(() => {
     if (!context || context.state.status !== "ready") return;
@@ -310,6 +348,18 @@ export function SelectionNoteBar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [context, writing]);
 
+  useEffect(() => {
+    const view = window.visualViewport;
+    if (!coarse || !view || !(picked || writing)) return;
+    const update = () => setViewport((tick) => tick + 1);
+    view.addEventListener("resize", update);
+    view.addEventListener("scroll", update);
+    return () => {
+      view.removeEventListener("resize", update);
+      view.removeEventListener("scroll", update);
+    };
+  }, [coarse, picked, writing]);
+
   // Araç çubuğu açılınca H'nin rengi gösteriliyor.
   useEffect(() => {
     if (!picked) return;
@@ -320,7 +370,9 @@ export function SelectionNoteBar() {
   if (!context || context.state.status !== "ready") return null;
   const place = writing ?? picked;
   if (!place) return null;
-  const style = placeAt(place, writing ? 250 : 44, writing ? 360 : 250);
+  const dock = coarse ? dockAt(place, writing ? 250 : 56) : undefined;
+  const style = dock ? dock.style : placeAt(place, writing ? 250 : 44, writing ? 360 : 250);
+  const docked = dock ? ` is-docked is-docked-${dock.edge}` : "";
   const done = () => {
     window.getSelection()?.removeAllRanges();
     setPicked(undefined);
@@ -331,7 +383,7 @@ export function SelectionNoteBar() {
   if (writing) {
     return (
       <form
-        className="note-bar is-writing"
+        className={`note-bar is-writing${docked}`}
         style={style}
         aria-label="Note on the highlight"
         onSubmit={(event) => {
@@ -351,7 +403,7 @@ export function SelectionNoteBar() {
   }
 
   return (
-    <div className="note-bar" style={style} role="toolbar" aria-label="Highlight the selected text" onMouseDown={(event) => event.preventDefault()}>
+    <div className={`note-bar${docked}`} style={style} role="toolbar" aria-label="Highlight the selected text" onMouseDown={(event) => event.preventDefault()}>
       <Highlighter size={14} aria-hidden="true" />
       {NOTE_COLORS.map((color) => (
         <button
