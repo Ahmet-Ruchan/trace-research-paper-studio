@@ -278,8 +278,23 @@ yapıldığı ve nasıl test edildiği yazıyor.
     reddi, yanlış yazılan kelime, kavramın yalnızca okuyucunun kararıyla yazılması birim
     testlerde; köprü gerçek bir `~/.trace` üzerinde listeleyip yazıyor; eklenti smoke testi
     Codex, Claude Code ve Antigravity'de `bridge review`.
-- [ ] **23. MCP sunucusu.** Kütüphane, iddia araması, notlar ve okuma listesi MCP araçları
+- [x] **23. MCP sunucusu.** Kütüphane, iddia araması, notlar ve okuma listesi MCP araçları
   olarak sunulur.
+  - *Yapıldı:* Eklentide bağımlılıksız bir stdio MCP sunucusu (`scripts/trace-mcp.mjs`, JSON-RPC
+    2.0): `library`, `paper`, `search_claims`, `notes` (saf mantık `src/lib/mcp-tools.ts`, girdi
+    şemaları Zod'dan), köprüden `reading_list`, `save_to_reading_list`,
+    `remove_from_reading_list` ve `today` (köprünün `today` ve `reading` komutları nesne döndüren
+    işlevlere ayrıldı; yazma stüdyonun kilidiyle). Araç hataları sonuçta (`isError`), protokol
+    hataları JSON-RPC hatası; bilinmeyen argüman reddediliyor. Üç ajan sunucuyu kendisi
+    başlatıyor: Claude Code `.mcp.json` (`${CLAUDE_PLUGIN_ROOT}`), Codex manifestte
+    `mcpServers: ./codex-mcp.json` (Codex Claude'un değişkenini genişletmediği için `cwd` ile),
+    Antigravity `mcp_config.json` (`${PLUGIN_ROOT}`). Sunucu sürümü `set-version` ile yazılıyor.
+    Eklenti 0.38.0.
+  - *Test:* `mcp-tools.test.ts` (6) ve `mcp-server.test.ts` (7: el sıkışma ve sürüm pazarlığı,
+    araç listesi, kütüphane/makale/iddia/not, okuma listesine ekleme-çıkarma ve gün, hata
+    türleri, üç ajanın kaydı); eklenti duman testi her ajanda: Codex'in app-server'ı sunucuyu
+    başlatıp sekiz aracı görüyor, `claude mcp list` "Connected", Antigravity kurulumu
+    `mcpServers: 1 processed`; kurulan kopyadan el sıkışma ve iki araç çağrısı üçünde de.
 
 ## Bakım ve kontrol
 

@@ -32,10 +32,13 @@ const targets = [
   },
   { path: `plugins/${PLUGIN_NAME}/.claude-plugin/plugin.json`, read: (json) => [json.version] },
   { path: `plugins/${PLUGIN_NAME}/.codex-plugin/plugin.json`, read: (json) => [json.version] },
+  // MCP sunucusunun kendini tanıttığı sürüm: Antigravity'nin kopyasında sürümlü bir manifest yok.
+  { path: `plugins/${PLUGIN_NAME}/skills/${PLUGIN_NAME}/scripts/trace-mcp.mjs`, pattern: /^const SERVER_VERSION = "([^"]*)";$/m },
 ];
 
 function versionsOf(target) {
   const text = readFileSync(join(root, target.path), "utf8");
+  if (target.pattern) return { text, versions: [text.match(target.pattern)?.[1]] };
   return { text, versions: target.read(JSON.parse(text)) };
 }
 
@@ -46,6 +49,11 @@ function versionsOf(target) {
  */
 function writeVersion(target, version) {
   const { text, versions } = versionsOf(target);
+  if (target.pattern) {
+    const next = text.replace(target.pattern, (line, current) => line.replace(`"${current}"`, `"${version}"`));
+    if (next.match(target.pattern)?.[1] !== version) throw new Error(`${target.path}: the version could not be written safely; nothing was changed.`);
+    return next;
+  }
   let remaining = versions.length;
   let next = text;
   if (target.path === ".claude-plugin/marketplace.json") {

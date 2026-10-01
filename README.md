@@ -973,6 +973,30 @@ When it finishes, the browser is already open — both the self-contained site a
 application, with the project sitting in your Library. Nothing to export, nothing to import,
 no server to start. The same folder keeps a portable `.trace.json` you can archive or share.
 
+### Your library as MCP tools
+
+The plugin also starts a small MCP server named `trace` in all three agents, so they can look
+things up in your library directly instead of running a command:
+
+| Tool | What it gives the agent |
+| --- | --- |
+| `library` | Your papers, with tags, how far you studied each, and their claim and note counts |
+| `paper` | One paper: thesis, summary, findings, limits, sections, Primer, glossary, results with pages; its claims on request |
+| `search_claims` | What your papers claim, each with its paper, page, quote and quote check |
+| `notes` | Your own notes and highlights, newest first or by words |
+| `reading_list` | Your reading order, with the works you saved to read later |
+| `save_to_reading_list`, `remove_from_reading_list` | Change the list, only when you ask |
+| `today` | Your day: cards due, what to continue and read next, time against your goal |
+
+It reads the same `~/.trace` folder as the studio, uses no model and no network, and changes
+nothing but the reading list. Check it with `claude mcp list` (it shows as
+`plugin:trace-paper-studio:trace`) or `codex mcp list`. Any other MCP client can run it too:
+`node <plugin>/skills/trace-paper-studio/scripts/trace-mcp.mjs` over stdio.
+
+```text
+Which of my papers say anything about layer normalization, and on which page?
+```
+
 ---
 
 ## Why it is different
@@ -1223,7 +1247,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.37.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.38.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 
@@ -1303,7 +1327,7 @@ src/
 viewer/                         # Standalone viewer app (preact build target)
 scripts/                        # build-viewer · build-plugin-validator · drift check
 public/examples/                # Flagship project: built-in demo, download, test fixture
-plugins/trace-paper-studio/     # Plugin for all three agents: skill, contract, bridge
+plugins/trace-paper-studio/     # Plugin for all three agents: skill, contract, bridge, MCP server
 ```
 
 Keep local PDFs under `ML Research Papers/`; that directory is git-ignored.
@@ -1358,6 +1382,10 @@ the server.
 - Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,
   timeout and payload size.
 - PDF and web content are treated as source material, never as instructions.
+- The plugin's MCP server talks only over stdio to the agent that started it, opens no port and
+  makes no network request. Its tools read the library, and the only ones that write change the
+  reading list, under the same lock as the studio. Arguments are checked against each tool's
+  schema; unknown ones are refused.
 - Provider keys are used only for the active request. They never appear in exports or in the
   browser's storage: the remembered analysis setup has no field for a key.
 - Your notes and your reading list are kept next to the library (`notes.json`,

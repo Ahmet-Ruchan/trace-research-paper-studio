@@ -3320,10 +3320,33 @@ const numberProcessor = (schema, ctx, _json, _params) => {
 const booleanProcessor = (_schema, _ctx, json, _params) => {
 	json.type = "boolean";
 };
+const bigintProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("BigInt cannot be represented in JSON Schema");
+};
+const symbolProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("Symbols cannot be represented in JSON Schema");
+};
+const nullProcessor = (_schema, ctx, json, _params) => {
+	if (ctx.target === "openapi-3.0") {
+		json.type = "string";
+		json.nullable = true;
+		json.enum = [null];
+	} else json.type = "null";
+};
+const undefinedProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("Undefined cannot be represented in JSON Schema");
+};
+const voidProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("Void cannot be represented in JSON Schema");
+};
 const neverProcessor = (_schema, _ctx, json, _params) => {
 	json.not = {};
 };
+const anyProcessor = (_schema, _ctx, _json, _params) => {};
 const unknownProcessor = (_schema, _ctx, _json, _params) => {};
+const dateProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("Date cannot be represented in JSON Schema");
+};
 const enumProcessor = (schema, _ctx, json, _params) => {
 	const def = schema._zod.def;
 	const values = getEnumValues(def.entries);
@@ -3353,11 +3376,53 @@ const literalProcessor = (schema, ctx, json, _params) => {
 		json.enum = vals;
 	}
 };
+const nanProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("NaN cannot be represented in JSON Schema");
+};
+const templateLiteralProcessor = (schema, _ctx, json, _params) => {
+	const _json = json;
+	const pattern = schema._zod.pattern;
+	if (!pattern) throw new Error("Pattern not found in template literal");
+	_json.type = "string";
+	_json.pattern = pattern.source;
+};
+const fileProcessor = (schema, _ctx, json, _params) => {
+	const _json = json;
+	const file = {
+		type: "string",
+		format: "binary",
+		contentEncoding: "binary"
+	};
+	const { minimum, maximum, mime } = schema._zod.bag;
+	if (minimum !== void 0) file.minLength = minimum;
+	if (maximum !== void 0) file.maxLength = maximum;
+	if (mime) {
+		if (mime.length === 1) {
+			file.contentMediaType = mime[0];
+			Object.assign(_json, file);
+		} else {
+			Object.assign(_json, file);
+			_json.anyOf = mime.map((m) => ({ contentMediaType: m }));
+		}
+	} else Object.assign(_json, file);
+};
+const successProcessor = (_schema, _ctx, json, _params) => {
+	json.type = "boolean";
+};
 const customProcessor = (_schema, ctx, _json, _params) => {
 	if (ctx.unrepresentable === "throw") throw new Error("Custom types cannot be represented in JSON Schema");
 };
+const functionProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("Function types cannot be represented in JSON Schema");
+};
 const transformProcessor = (_schema, ctx, _json, _params) => {
 	if (ctx.unrepresentable === "throw") throw new Error("Transforms cannot be represented in JSON Schema");
+};
+const mapProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("Map cannot be represented in JSON Schema");
+};
+const setProcessor = (_schema, ctx, _json, _params) => {
+	if (ctx.unrepresentable === "throw") throw new Error("Set cannot be represented in JSON Schema");
 };
 const arrayProcessor = (schema, ctx, _json, params) => {
 	const json = _json;
@@ -3563,6 +3628,12 @@ const readonlyProcessor = (schema, ctx, json, params) => {
 	seen.ref = def.innerType;
 	json.readOnly = true;
 };
+const promiseProcessor = (schema, ctx, _json, params) => {
+	const def = schema._zod.def;
+	process$1(def.innerType, ctx, params);
+	const seen = ctx.seen.get(schema);
+	seen.ref = def.innerType;
+};
 const optionalProcessor = (schema, ctx, _json, params) => {
 	const def = schema._zod.def;
 	process$1(def.innerType, ctx, params);
@@ -3575,6 +3646,81 @@ const lazyProcessor = (schema, ctx, _json, params) => {
 	const seen = ctx.seen.get(schema);
 	seen.ref = innerType;
 };
+const allProcessors = {
+	string: stringProcessor,
+	number: numberProcessor,
+	boolean: booleanProcessor,
+	bigint: bigintProcessor,
+	symbol: symbolProcessor,
+	null: nullProcessor,
+	undefined: undefinedProcessor,
+	void: voidProcessor,
+	never: neverProcessor,
+	any: anyProcessor,
+	unknown: unknownProcessor,
+	date: dateProcessor,
+	enum: enumProcessor,
+	literal: literalProcessor,
+	nan: nanProcessor,
+	template_literal: templateLiteralProcessor,
+	file: fileProcessor,
+	success: successProcessor,
+	custom: customProcessor,
+	function: functionProcessor,
+	transform: transformProcessor,
+	map: mapProcessor,
+	set: setProcessor,
+	array: arrayProcessor,
+	object: objectProcessor,
+	union: unionProcessor,
+	intersection: intersectionProcessor,
+	tuple: tupleProcessor,
+	record: recordProcessor,
+	nullable: nullableProcessor,
+	nonoptional: nonoptionalProcessor,
+	default: defaultProcessor,
+	prefault: prefaultProcessor,
+	catch: catchProcessor,
+	pipe: pipeProcessor,
+	readonly: readonlyProcessor,
+	promise: promiseProcessor,
+	optional: optionalProcessor,
+	lazy: lazyProcessor
+};
+function toJSONSchema(input, params) {
+	if ("_idmap" in input) {
+		const registry = input;
+		const ctx = initializeContext({
+			...params,
+			processors: allProcessors
+		});
+		const defs = {};
+		for (const entry of registry._idmap.entries()) {
+			const [_, schema] = entry;
+			process$1(schema, ctx);
+		}
+		const schemas = {};
+		ctx.external = {
+			registry,
+			uri: params?.uri,
+			defs
+		};
+		for (const entry of registry._idmap.entries()) {
+			const [key, schema] = entry;
+			extractDefs(ctx, schema);
+			schemas[key] = finalize(ctx, schema);
+		}
+		if (Object.keys(defs).length > 0) schemas.__shared = { [ctx.target === "draft-2020-12" ? "$defs" : "definitions"]: defs };
+		return { schemas };
+	}
+	const ctx = initializeContext({
+		...params,
+		processors: allProcessors
+	});
+	process$1(input, ctx);
+	extractDefs(ctx, input);
+	return finalize(ctx, input);
+}
 
 //#endregion
 //#region node_modules/zod/v4/classic/iso.js
@@ -22639,7 +22785,7 @@ const stamp = (iso) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 /** Metin değerinde ters bölü, virgül, noktalı virgül ve satır sonu kaçıyor. */
 const escapeText = (text) => text.replace(/\\/g, "\\\\").replace(/;/g, ";").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 /** Satırlar 75 baytta katlanıyor; çok baytlı bir karakter ortadan bölünmüyor. */
-function fold(line) {
+function fold$1(line) {
 	const encoder = new TextEncoder();
 	const parts = [];
 	let current = "";
@@ -22671,7 +22817,7 @@ function sessionsIcs(sessions, options) {
 		lines.push("BEGIN:VEVENT", `UID:${session.id}@trace`, `DTSTAMP:${created}`, `DTSTART:${stamp((/* @__PURE__ */ new Date(Math.floor(Date.parse(session.start) / 1e3) * 1e3)).toISOString())}`, `DTEND:${stamp((/* @__PURE__ */ new Date(Math.floor(Date.parse(session.end) / 1e3) * 1e3)).toISOString())}`, `SUMMARY:${escapeText(summary)}`, ...details ? [`DESCRIPTION:${escapeText(details)}`] : [], `CATEGORIES:${escapeText(kind)}`, "TRANSP:OPAQUE", "END:VEVENT");
 	}
 	lines.push("END:VCALENDAR");
-	return `${lines.map(fold).join("\r\n")}\r\n`;
+	return `${lines.map(fold$1).join("\r\n")}\r\n`;
 }
 
 //#endregion
@@ -22899,7 +23045,7 @@ function noteName(title) {
 }
 const link = (title) => `[[${noteName(title)}]]`;
 const yaml = (value) => JSON.stringify(value);
-const statusLabel = {
+const statusLabel$1 = {
 	new: "not started",
 	started: "in progress",
 	finished: "finished"
@@ -22941,7 +23087,7 @@ function libraryVault(input) {
 			...paper.year ? [`year: ${yaml(paper.year)}`] : [],
 			...paper.venue ? [`venue: ${yaml(paper.venue)}`] : [],
 			...paper.doi ? [`doi: ${yaml(paper.doi)}`] : [],
-			`study: ${yaml(statusLabel[status])}`,
+			`study: ${yaml(statusLabel$1[status])}`,
 			"tags: [trace, paper]",
 			"---",
 			"",
@@ -23011,7 +23157,7 @@ function libraryVault(input) {
 		let step = 0;
 		for (const entry of merged.entries) if (entry.kind === "paper") {
 			step += 1;
-			index.push(`${step}. ${paperLink(entry.step.project)} (${statusLabel[entry.step.status]})`);
+			index.push(`${step}. ${paperLink(entry.step.project)} (${statusLabel$1[entry.step.status]})`);
 		} else {
 			const href = workLink(entry.place.item);
 			index.push(`   - To read: ${href ? `[${entry.place.item.title}](${href})` : entry.place.item.title}${entry.place.why ? `. ${savedReason(entry.place.why)}` : ""}`);
@@ -23233,6 +23379,502 @@ function showChatCard(projects, study, projectId, cardId) {
 		ok: true,
 		card: chatCard(card),
 		answer: chatCardAnswer(card)
+	};
+}
+
+//#endregion
+//#region src/lib/library-search.ts
+/**
+* Kütüphane genelinde iddia araması.
+*
+* "LayerNorm hakkında hangi makalem ne diyor?" sorusunun cevabı zaten
+* kütüphanede duruyor: her iddia sayfası ve alıntısıyla kayıtlı. Arama yalnızca
+* o kaydı okuyor. Model çağrılmıyor ve sonuç bir özet değil, iddianın kendisi.
+*
+* Her sonuç iddianın üç güven işaretini ayrı ayrı taşıyor: modelin beyanı
+* (`confidence`), alıntının sayfasında bulunup bulunmadığı (`excerptCheck`) ve
+* bir kişinin kararı (`claimReviews`). Reddedilmiş iddialar gizlenmiyor, çünkü
+* gizlemek neyin reddedildiğini de saklardı; ama listenin sonuna konuyor.
+*/
+const MIN_TERM_LENGTH = 2;
+const DEFAULT_CLAIM_LIMIT = 60;
+/** Katlama bir kez yapılıyor; her tuş vuruşunda bütün kütüphaneyi yeniden katlamak gereksiz. */
+function buildClaimIndex(projects) {
+	return projects.flatMap((project) => {
+		const unlocated = new Set((project.excerptCheck?.unlocated ?? []).filter((item) => item.owner === "claim").map((item) => item.id));
+		const reviews = project.claimReviews ?? {};
+		return project.evidence.claims.map((claim) => ({
+			project,
+			claim,
+			statement: foldForSearch(claim.statement),
+			excerpts: claim.sourceRefs.map((reference) => foldForSearch(reference.excerpt)),
+			quoteMissing: unlocated.has(claim.id),
+			review: Object.hasOwn(reviews, claim.id) ? reviews[claim.id] : void 0
+		}));
+	});
+}
+/**
+* Sorgunun kelimeleri. Baştaki ve sondaki noktalama atılıyor: "(BLEU)" yazan
+* kullanıcı "BLEU score" geçen iddiayı bulmalı. İçteki noktalama kalıyor, yani
+* "d_k", "28.4" ve "self-attention" tek kelime. Tek harfli kelimeler yok
+* sayılıyor; "a" ya da "k" neredeyse her iddiada geçer ve vurguyu anlamsız kılar.
+*/
+function searchTerms(query) {
+	const terms = foldForSearch(query).split(/\s+/).map((token) => token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")).filter((token) => token.length >= 2);
+	return [...new Set(terms)];
+}
+/**
+* Her kelime iddianın cümlesinde ya da alıntılarından birinde geçmeli.
+* Cümlede geçen kelime alıntıda geçenden ağır basıyor: iddia o konuyu
+* söylüyor, alıntı ise yalnızca yanında anıyor olabilir. Eşit puanlı
+* sonuçlar kütüphane ve kanıt defteri sırasını koruyor.
+*/
+function searchClaims(index, query, limit = 60) {
+	const terms = searchTerms(query);
+	if (!terms.length) return {
+		terms,
+		hits: [],
+		total: 0,
+		papers: 0
+	};
+	const phrase = terms.join(" ");
+	const scored = index.flatMap((entry, order) => {
+		let score = 0;
+		for (const term of terms) if (entry.statement.includes(term)) score += 2;
+		else if (entry.excerpts.some((excerpt) => excerpt.includes(term))) score += 1;
+		else return [];
+		if (terms.length > 1 && entry.statement.includes(phrase)) score += 3;
+		return [{
+			entry,
+			order,
+			score
+		}];
+	});
+	const rejected = (entry) => Number(entry.review?.status === "rejected");
+	scored.sort((left, right) => rejected(left.entry) - rejected(right.entry) || right.score - left.score || left.order - right.order);
+	return {
+		terms,
+		total: scored.length,
+		papers: new Set(scored.map(({ entry }) => entry.project.id)).size,
+		hits: scored.slice(0, limit).map(({ entry }) => ({
+			project: entry.project,
+			claim: entry.claim,
+			reference: bestReference(entry, terms),
+			quoteMissing: entry.quoteMissing,
+			review: entry.review
+		}))
+	};
+}
+function bestReference(entry, terms) {
+	let best = 0;
+	let bestCount = -1;
+	entry.excerpts.forEach((excerpt, index) => {
+		const count = terms.filter((term) => excerpt.includes(term)).length;
+		if (count > bestCount) {
+			best = index;
+			bestCount = count;
+		}
+	});
+	return entry.claim.sourceRefs[best];
+}
+
+//#endregion
+//#region src/lib/library-tags.ts
+/**
+* Kütüphane etiketleri.
+*
+* Etiket makalenin değil, kütüphanenin bilgisi. Bu yüzden `.trace.json`
+* içinde değil, kütüphanenin yanında ayrı bir dosyada (`tags.json`) duruyor:
+*
+* - Proje içinde olsaydı etiket eklemek bir düzenleme sayılır, geçmiş panelinde
+*   içeriği değişmemiş bir sürüm bırakır ve projeyi kütüphanede en üste taşırdı.
+* - Eski bir sürümü geri yüklemek o günün etiketlerini de geri getirirdi.
+* - Ajan `deliver` ve `splice` ile kütüphanedeki kopyanın üzerine yazıyor;
+*   stüdyoda verilen etiketler her teslimde silinirdi.
+* - Yayımlanan bir bağlantı ya da paylaşılan bir JSON, kişinin kendi düzenini
+*   ("okunacak", "zayıf") dışarı taşırdı.
+*
+* Bir etiket aynı zamanda bir koleksiyon: aynı etiketi taşıyan makaleler tek
+* tıkla süzülüyor, karşılaştırılıyor ya da literatür haritasına gönderiliyor.
+*/
+const MAX_TAG_LENGTH = 40;
+const MAX_TAGS_PER_PROJECT = 12;
+/** Boşlukları ve kontrol karakterlerini tek boşluğa indirir, baştaki `#` işaretini atar. */
+function cleanTag(raw) {
+	return raw.replace(/[\p{Cc}\s]+/gu, " ").trim().replace(/^#+\s*/, "");
+}
+/**
+* Etiketin kimliği. "NLP" ile "nlp" aynı etiket; arama katlaması kullanılıyor,
+* böylece Türkçe yazılmış "İlk okuma" ile "ilk okuma" da eşleşiyor.
+*/
+function tagKey(tag) {
+	return foldForSearch(cleanTag(tag));
+}
+function dedupeTags(tags) {
+	const seen = /* @__PURE__ */ new Set();
+	return tags.filter((tag) => {
+		const key = tagKey(tag);
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
+}
+const tagSchema = string().transform(cleanTag).pipe(string().min(1, "A tag cannot be empty.").max(40, `A tag can be at most ${40} characters.`));
+const tagListSchema = array(tagSchema).transform(dedupeTags).pipe(array(string()).max(12, `A paper can carry at most ${12} tags.`));
+const libraryTagsFileSchema = object({
+	version: literal(1),
+	projects: array(unknown())
+});
+const libraryTagsEntrySchema = object({
+	id: string().min(1),
+	tags: tagListSchema
+});
+/**
+* Hoşgörülü okuma: bozuk bir girdi yalnızca kendisini düşürür. Elle
+* düzenlenmiş tek bir satır, kütüphanenin bütün etiketlerini silmemeli.
+*/
+function parseLibraryTags(raw) {
+	const tags = /* @__PURE__ */ new Map();
+	const file = libraryTagsFileSchema.safeParse(raw);
+	if (!file.success) return tags;
+	for (const item of file.data.projects) {
+		const entry = libraryTagsEntrySchema.safeParse(item);
+		if (entry.success && entry.data.tags.length) tags.set(entry.data.id, entry.data.tags);
+	}
+	return tags;
+}
+const collator = new Intl.Collator("en", {
+	sensitivity: "base",
+	numeric: true
+});
+
+//#endregion
+//#region src/lib/note-search.ts
+/**
+* Kütüphane aramasında okuyucunun notları ve vurguları.
+*
+* İddia araması makalelerin ne dediğini buluyor; bu arama okuyucunun ne
+* düşündüğünü ve neyi işaretlediğini. Her not yeriyle (hikâye, rapor,
+* Primer ya da iddia ve başlığı) geliyor. Yalnızca "önemli" işareti olan,
+* metni olmayan kayıtlar aranmıyor: aranacak bir şey yok.
+*/
+const DEFAULT_NOTE_LIMIT = 60;
+function buildNoteIndex(projects, notes) {
+	return projects.flatMap((project) => groupNotes(project, notes.get(project.id) ?? []).flatMap((group) => group.notes.filter((note) => note.text || note.quote).map((note) => ({
+		project,
+		note,
+		place: group.place,
+		heading: group.heading,
+		text: foldForSearch(note.text),
+		quote: foldForSearch(note.quote ?? ""),
+		title: foldForSearch(group.heading)
+	}))));
+}
+/**
+* Her kelime notun metninde, vurgusunda ya da yerinin başlığında geçmeli.
+* Okuyucunun kendi yazdığı ve vurguladığı başlıktan ağır basıyor; en yeni
+* notlar eşit puanda önce.
+*/
+function searchNotes(index, query, limit = 60) {
+	const terms = searchTerms(query);
+	if (!terms.length) return {
+		terms,
+		hits: [],
+		total: 0,
+		papers: 0
+	};
+	const scored = index.flatMap((entry) => {
+		let score = 0;
+		for (const term of terms) if (entry.text.includes(term) || entry.quote.includes(term)) score += 2;
+		else if (entry.title.includes(term)) score += 1;
+		else return [];
+		return [{
+			entry,
+			score
+		}];
+	});
+	scored.sort((left, right) => right.score - left.score || right.entry.note.updatedAt.localeCompare(left.entry.note.updatedAt));
+	return {
+		terms,
+		total: scored.length,
+		papers: new Set(scored.map(({ entry }) => entry.project.id)).size,
+		hits: scored.slice(0, limit).map(({ entry }) => ({
+			project: entry.project,
+			note: entry.note,
+			place: entry.place,
+			heading: entry.heading
+		}))
+	};
+}
+
+//#endregion
+//#region src/lib/mcp-tools.ts
+const statusLabel = {
+	new: "not started",
+	started: "in progress",
+	finished: "finished"
+};
+const limit = (max, fallback) => number().int().min(1).max(max).default(fallback).describe(`How many to return, at most ${max}.`);
+const libraryArgs = object({
+	query: string().max(200).optional().describe("Words that must all appear in the title, authors, venue or tags."),
+	tag: string().max(40).optional().describe("Only papers with this tag."),
+	limit: limit(200, 50)
+}).strict();
+const paperArgs = object({
+	id: string().max(200).optional().describe("The paper's library id, from the library tool."),
+	title: string().max(300).optional().describe("Part of the title, when the id is not known."),
+	include_claims: boolean().default(false).describe("Also list the claims, each with its page and quote."),
+	claim_limit: limit(200, 40)
+}).strict();
+const claimSearchArgs = object({
+	query: string().min(2).max(200).describe("Words that must all appear in a claim or its quote."),
+	paper_id: string().max(200).optional().describe("Search only this paper."),
+	tag: string().max(40).optional().describe("Search only the papers with this tag."),
+	limit: limit(60, 20)
+}).strict();
+const notesArgs = object({
+	query: string().max(200).optional().describe("Words that must all appear in the note, the highlighted text or where it is. Without it, the newest notes."),
+	paper_id: string().max(200).optional().describe("Only the notes on this paper."),
+	limit: limit(200, 30)
+}).strict();
+function inputSchema(schema) {
+	const { $schema: _ignored, ...rest } = toJSONSchema(schema, { io: "input" });
+	return rest;
+}
+const readOnly = {
+	readOnlyHint: true,
+	destructiveHint: false,
+	idempotentHint: true,
+	openWorldHint: false
+};
+/** Bu dosyanın araçları; okuma listesi ve gün özeti `trace-mcp.mjs` içinde ekleniyor. */
+const LIBRARY_MCP_TOOLS = [
+	{
+		name: "library",
+		title: "Papers in the Trace library",
+		description: "List the papers in the reader's Trace library: id, title, authors, year, venue, tags, how far the reader has studied it, and how many claims and notes it has. Filter by words or a tag.",
+		inputSchema: inputSchema(libraryArgs),
+		annotations: readOnly
+	},
+	{
+		name: "paper",
+		title: "One paper in the library",
+		description: "One paper of the Trace library by id (or part of its title): its thesis, summary, research question, methods, findings and limitations, its story and report sections, Primer concepts, glossary and measured results with pages, and the reader's study status and tags. Ask for the claims to get each with its page and quote.",
+		inputSchema: inputSchema(paperArgs),
+		annotations: readOnly
+	},
+	{
+		name: "search_claims",
+		title: "Search the claims of every paper",
+		description: "Search what the papers in the Trace library claim. Every word must appear in the claim or its quote. Each hit is the claim itself with its paper, page and quote, the model's confidence, whether the quote was found on its page, and a reviewer's decision if any. Rejected claims come last.",
+		inputSchema: inputSchema(claimSearchArgs),
+		annotations: readOnly
+	},
+	{
+		name: "notes",
+		title: "The reader's notes and highlights",
+		description: "The reader's own notes and highlights in Trace, with the paper and the place each belongs to (a story or report section, a Primer concept or a claim). Search them by words, or list the newest. These are the reader's, not the paper's: quote them as theirs.",
+		inputSchema: inputSchema(notesArgs),
+		annotations: readOnly
+	}
+];
+const fold = (value) => foldForSearch(value).normalize("NFD").replace(/\p{M}/gu, "");
+const words = (query) => fold(query ?? "").split(/\s+/).filter(Boolean);
+function paperLine(project, data) {
+	const { paper } = project.evidence;
+	return {
+		id: project.id,
+		title: paper.title,
+		authors: paper.authors.slice(0, 8),
+		...paper.authors.length > 8 ? { moreAuthors: paper.authors.length - 8 } : {},
+		year: paper.year || null,
+		venue: paper.venue || null,
+		...paper.doi ? { doi: paper.doi } : {},
+		language: project.language,
+		tags: [...data.tags.get(project.id) ?? []],
+		study: statusLabel[studyStatus(data.study.get(project.id))],
+		claims: project.evidence.claims.length,
+		notes: (data.notes.get(project.id) ?? []).length,
+		updatedAt: project.updatedAt
+	};
+}
+function withTag(data, tag) {
+	if (!tag?.trim()) return [...data.projects];
+	const key = tagKey(tag);
+	return data.projects.filter((project) => (data.tags.get(project.id) ?? []).some((item) => tagKey(item) === key));
+}
+function libraryTool(data, raw) {
+	const args = libraryArgs.parse(raw ?? {});
+	const terms = words(args.query);
+	const matching = withTag(data, args.tag).filter((project) => {
+		if (!terms.length) return true;
+		const { paper } = project.evidence;
+		const haystack = fold([
+			paper.title,
+			paper.authors.join(" "),
+			paper.venue,
+			paper.year,
+			...data.tags.get(project.id) ?? []
+		].join(" "));
+		return terms.every((term) => haystack.includes(term));
+	});
+	const tagCounts = /* @__PURE__ */ new Map();
+	for (const project of data.projects) for (const tag of data.tags.get(project.id) ?? []) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+	return {
+		papers: data.projects.length,
+		matching: matching.length,
+		shown: Math.min(matching.length, args.limit),
+		tags: [...tagCounts].map(([tag, papers]) => ({
+			tag,
+			papers
+		})).sort((left, right) => right.papers - left.papers || left.tag.localeCompare(right.tag)),
+		results: matching.slice(0, args.limit).map((project) => paperLine(project, data)),
+		note: data.projects.length ? "The reader's library. Use the paper tool with an id for one paper, search_claims for what the papers say." : "The library is empty. A paper analysed in the studio or with the Trace skill appears here."
+	};
+}
+var TraceToolError = class extends Error {};
+function findPaper(data, id, title) {
+	if (id) {
+		const found = data.projects.find((project) => project.id === id);
+		if (!found) throw new TraceToolError(`No paper with the id "${id}" in the library. The library tool lists the ids.`);
+		return found;
+	}
+	const terms = words(title);
+	if (!terms.length) throw new TraceToolError("Give the paper's id or part of its title.");
+	const matches = data.projects.filter((project) => terms.every((term) => fold(project.evidence.paper.title).includes(term)));
+	if (!matches.length) throw new TraceToolError(`No paper in the library has "${title}" in its title.`);
+	if (matches.length > 1) {
+		const exact = matches.find((project) => fold(project.evidence.paper.title) === terms.join(" "));
+		if (exact) return exact;
+		throw new TraceToolError(`More than one paper matches "${title}": ${matches.slice(0, 8).map((project) => `${project.evidence.paper.title} (id ${project.id})`).join("; ")}. Ask again with the id.`);
+	}
+	return matches[0];
+}
+const page = (reference) => reference?.page ?? null;
+function paperTool(data, raw) {
+	const args = paperArgs.parse(raw ?? {});
+	const project = findPaper(data, args.id, args.title);
+	const { evidence } = project;
+	const unlocated = new Set((project.excerptCheck?.unlocated ?? []).filter((item) => item.owner === "claim").map((item) => item.id));
+	const kinds = /* @__PURE__ */ new Map();
+	for (const claim of evidence.claims) kinds.set(claim.kind, (kinds.get(claim.kind) ?? 0) + 1);
+	return {
+		...paperLine(project, data),
+		thesis: evidence.thesis,
+		plainSummary: evidence.plainSummary,
+		researchQuestion: evidence.researchQuestion,
+		methods: evidence.methods,
+		findings: evidence.findings,
+		limitations: evidence.limitations,
+		story: project.story.sections.map((section) => ({
+			id: section.id,
+			title: section.title
+		})),
+		deepReport: project.deepReport?.sections.map((section) => ({
+			id: section.id,
+			title: section.title
+		})) ?? [],
+		primer: project.primer?.concepts.map((concept) => ({
+			id: concept.id,
+			term: concept.term,
+			intuition: concept.intuition
+		})) ?? [],
+		glossary: evidence.glossary.map((item) => ({
+			term: item.term,
+			definition: item.definition
+		})),
+		metrics: evidence.metrics.slice(0, 30).map((metric) => ({
+			label: metric.label,
+			value: metric.displayValue,
+			unit: metric.unit || null,
+			context: metric.context,
+			page: page(metric.sourceRef)
+		})),
+		claimsByKind: Object.fromEntries(kinds),
+		...args.include_claims ? { claimList: evidence.claims.slice(0, args.claim_limit).map((claim) => ({
+			id: claim.id,
+			kind: claim.kind,
+			statement: claim.statement,
+			confidence: claim.confidence,
+			page: page(claim.sourceRefs[0]),
+			quote: claim.sourceRefs[0]?.excerpt ?? null,
+			quoteCheck: project.excerptCheck ? unlocated.has(claim.id) ? "not found on its page" : "found on its page" : "not checked",
+			review: project.claimReviews?.[claim.id]?.status ?? null
+		})) } : {},
+		note: "From the paper's Trace analysis: every claim carries a page and a quote. Cite the page when you repeat a claim."
+	};
+}
+function claimSearchTool(data, raw) {
+	const args = claimSearchArgs.parse(raw ?? {});
+	let projects = withTag(data, args.tag);
+	if (args.paper_id) {
+		projects = projects.filter((project) => project.id === args.paper_id);
+		if (!projects.length) throw new TraceToolError(`No paper with the id "${args.paper_id}"${args.tag ? ` and the tag "${args.tag}"` : ""} in the library.`);
+	}
+	const result = searchClaims(buildClaimIndex(projects), args.query, args.limit);
+	return {
+		terms: result.terms,
+		total: result.total,
+		papers: result.papers,
+		shown: result.hits.length,
+		hits: result.hits.map((hit) => ({
+			paperId: hit.project.id,
+			paper: hit.project.evidence.paper.title,
+			claimId: hit.claim.id,
+			kind: hit.claim.kind,
+			statement: hit.claim.statement,
+			confidence: hit.claim.confidence,
+			page: hit.reference?.page ?? null,
+			quote: hit.reference?.excerpt ?? null,
+			quoteCheck: hit.project.excerptCheck ? hit.quoteMissing ? "not found on its page" : "found on its page" : "not checked",
+			review: hit.review?.status ?? null
+		})),
+		note: result.total ? "The claims as the papers' Trace analyses record them, with page and quote. A claim marked rejected was turned down by a reviewer; say so if you use it." : result.terms.length ? "No claim in the library contains every one of these words. Try fewer or other words." : "Type at least one word of two letters or more."
+	};
+}
+function notesTool(data, raw) {
+	const args = notesArgs.parse(raw ?? {});
+	let projects = [...data.projects];
+	if (args.paper_id) {
+		projects = projects.filter((project) => project.id === args.paper_id);
+		if (!projects.length) throw new TraceToolError(`No paper with the id "${args.paper_id}" in the library.`);
+	}
+	let entries;
+	let total;
+	if (words(args.query).length) {
+		const result = searchNotes(buildNoteIndex(projects, data.notes), args.query ?? "", args.limit);
+		entries = result.hits;
+		total = result.total;
+	} else {
+		const all = projects.flatMap((project) => groupNotes(project, data.notes.get(project.id) ?? []).flatMap((group) => group.notes.map((note) => ({
+			project,
+			note,
+			place: group.place,
+			heading: group.heading,
+			page: group.page
+		}))));
+		all.sort((left, right) => right.note.updatedAt.localeCompare(left.note.updatedAt));
+		total = all.length;
+		entries = all.slice(0, args.limit);
+	}
+	return {
+		total,
+		shown: entries.length,
+		notes: entries.map((entry) => ({
+			paperId: entry.project.id,
+			paper: entry.project.evidence.paper.title,
+			place: entry.place,
+			heading: entry.heading,
+			...entry.page ? { page: entry.page } : {},
+			...entry.note.quote ? {
+				highlighted: entry.note.quote,
+				color: entry.note.color
+			} : {},
+			...entry.note.text ? { note: entry.note.text } : {},
+			...!entry.note.quote && !entry.note.text ? { marked: true } : {},
+			updatedAt: entry.note.updatedAt
+		})),
+		note: total ? "The reader's own notes and highlights, kept in their library and never in a paper's file. Quote them as the reader's words." : "No notes found. In the studio, select text in a paper to highlight it or write a note."
 	};
 }
 
@@ -24524,4 +25166,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, answerChatCard, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, chatReviewQueue, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, libraryVault, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sessionsIcs, sharedConcepts, shouldSnapshot, showChatCard, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };
+export { LIBRARY_MCP_TOOLS, PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, TraceToolError, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, answerChatCard, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, chatReviewQueue, checkExplanationFeedback, claimSearchTool, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, libraryTool, libraryVault, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, notesTool, paperKey, paperTool, parseAliasFile, parseLibraryTags, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sessionsIcs, sharedConcepts, shouldSnapshot, showChatCard, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };

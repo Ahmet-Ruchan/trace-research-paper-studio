@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "trace": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/skills/trace-paper-studio/scripts/trace-mcp.mjs"]
+    }
+  }
+}

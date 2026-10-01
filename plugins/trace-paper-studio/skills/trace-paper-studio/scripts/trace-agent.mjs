@@ -2226,6 +2226,11 @@ function printWork(args) {
 
 /** Günün özeti (`today.ts`): kartlar, yarım kalanlar, sıradaki okuma, çalışma süresi. */
 function printToday() {
+  console.log(JSON.stringify(todayReport(), null, 2));
+}
+
+/** Günün özeti nesne olarak: `today` komutu yazdırıyor, MCP sunucusu (`trace-mcp.mjs`) araç sonucu olarak veriyor. */
+function todayReport() {
   const { library, projects, study, aliases } = readLibrary();
   const readJson = (path) => {
     try {
@@ -2240,7 +2245,7 @@ function printToday() {
   const readingList = parseReadingList(readJson(join(library, "reading-list.json")));
   const brief = todayBrief({ projects, study, readingList, aliases, log, goalMinutes: profile.preferences.dailyGoalMinutes, weeklyGoals: profile.preferences.weeklyGoals, weekStart: profile.preferences.weekStart, now });
   const time = (seconds) => ({ seconds, time: formatDuration(seconds) });
-  console.log(JSON.stringify({
+  return {
     ok: true,
     library,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -2259,7 +2264,7 @@ function printToday() {
     },
     suggestions: brief.suggestions,
     note: "The reader's day, from their own record in the studio. Give the suggestions in this order, briefly; offer to start with the first. Review cards are answered in the studio (Review) or with the review commands if available. Never write any of this into a project.",
-  }, null, 2));
+  };
 }
 
 /**
@@ -2367,6 +2372,14 @@ function chatReview(args) {
  * yerleştirilmiş. --add ve --remove stüdyonun kilidiyle yazıyor.
  */
 function readingList(args) {
+  console.log(JSON.stringify(readingListReport(args), null, 2));
+}
+
+/**
+ * Okuma listesi nesne olarak; `add` ya da `remove` verilirse önce listeyi
+ * stüdyonun kilidiyle değiştiriyor. `reading` komutu ve MCP sunucusu kullanıyor.
+ */
+function readingListReport(args) {
   const { library, projects, study, aliases } = readLibrary();
   const path = join(library, "reading-list.json");
   const readRaw = () => {
@@ -2424,7 +2437,7 @@ function readingList(args) {
     ...(place.owned ? { inLibrary: place.owned.id } : {}),
     why: place.owned ? "Now in the library." : place.why ? (inOrder ? savedReason(place.why) : savedFrom(place.why)) : place.item.from.length ? "Saved from a paper no longer in the library." : "Saved on its own.",
   });
-  console.log(JSON.stringify({
+  return {
     ok: true,
     library,
     ...(changed ?? {}),
@@ -2436,7 +2449,7 @@ function readingList(args) {
     note: items.length
       ? "The reader's own list. Suggest the next unread item in order; a saved work is analysed with prepare --source <identifier>. Never write the list into a project."
       : "Nothing saved yet. In the studio, Read later in a paper's citation graph or its concept suggestions saves a work; --add does the same from here.",
-  }, null, 2));
+  };
 }
 
 /**
@@ -2524,4 +2537,4 @@ try {
 
 if (resolve(process.argv[1] ?? "") === SCRIPT_PATH) await main();
 
-export { TRACE_ACCENT_PALETTE, assignPaperAccent, persistLibraryProject };
+export { TRACE_ACCENT_PALETTE, assignPaperAccent, persistLibraryProject, readLibrary, readingListReport, todayReport, traceDataDirectory };

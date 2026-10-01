@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "trace": {
+      "command": "node",
+      "args": ["trace-mcp.mjs"],
+      "cwd": "./skills/trace-paper-studio/scripts"
+    }
+  }
+}

@@ -34,6 +34,8 @@ export { sessionsIcs } from "./work-export";
 export { libraryVault } from "./obsidian-vault";
 export { answerChatCard, chatReviewQueue, showChatCard } from "./chat-review";
 export { notesFileName, notesMarkdown, parseNotesFile } from "./reader-notes";
+export { claimSearchTool, LIBRARY_MCP_TOOLS, libraryTool, notesTool, paperTool, TraceToolError } from "./mcp-tools";
+export { parseLibraryTags } from "./library-tags";
 export { addToReadingList, isReadingListFile, mergeReadingOrder, parseReadingList, readingItemSchema, readingListToJson, removeFromReadingList, savedFrom, savedReason, workKey } from "./reading-list";
 export {
   defaultPublicationInclude,

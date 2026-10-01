@@ -275,6 +275,17 @@ node scripts/trace-agent.mjs reading --remove "<id>"
 
 It prints the works the user saved with Read later in the studio (a paper's citation graph or its concept suggestions) placed in the library's reading order: a work a paper builds on, or that explains a concept it assumes, comes before that paper; a work that cites it comes after. `alsoSaved` holds the rest, and works already analysed (`inLibrary`). Save works found with `graph` or `concepts --suggest` with `--add`; analyse one with `prepare --source <identifier>`. The list is the user's own: never write it into a project.
 
+## Library tools (MCP)
+
+The plugin also starts an MCP server named `trace`. When its tools are available, use them for questions about the user's library instead of the commands above; they read the same files:
+
+- `library` lists the papers with their ids, tags, study status and claim and note counts; `paper` gives one paper (by `id`, or part of its `title`) and, with `include_claims`, its claims with page and quote.
+- `search_claims` answers "which of my papers says … ?": each hit is a claim with its paper, page, quote and whether the quote was found on its page. Cite the page; say so when a reviewer rejected the claim.
+- `notes` returns the user's own notes and highlights, by words or newest first; quote them as theirs.
+- `reading_list`, `save_to_reading_list` and `remove_from_reading_list` work like `reading`; change the list only when the user asks. `today` is the same as the `today` command.
+
+Analysing, revising, exporting and publishing still go through `scripts/trace-agent.mjs`.
+
 ## Model record
 
 When the user asks which model to trust, how reliable the quotes of the models they used have been, or whether a model makes up quotes, run:

@@ -190,7 +190,8 @@ function liveSmoke(agent, bridge, ask) {
 }
 
 /** Codex app-server'a stdio üzerinden `plugin/read` soruyor; stderr uyarılarıyla birlikte döner. */
-function codexPluginRead(codex, env) {
+/** Codex'in app-server'ına sırayla istekler; her birinin sonucu ya da hatası. */
+function codexAppServer(codex, env, requests) {
   return new Promise((resolvePromise) => {
     const child = spawn(codex, ["app-server"], { env: { ...env, RUST_LOG: "warn" }, stdio: ["pipe", "pipe", "pipe"] });
     let buffer = "";
@@ -229,10 +230,56 @@ function codexPluginRead(codex, env) {
       const init = await call("initialize", { clientInfo: { name: "trace-plugin-smoke", version: "1.0.0" } });
       if (init.error) return finish({ error: JSON.stringify(init.error) });
       child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "initialized" })}\n`);
-      const read = await call("plugin/read", { pluginName: PLUGIN, marketplacePath: join(root, ".agents", "plugins", "marketplace.json") });
-      finish(read.error ? { error: JSON.stringify(read.error) } : { plugin: read.result.plugin });
+      const answers = [];
+      for (const [method, params] of requests) answers.push(await call(method, params));
+      finish({ answers });
     })();
   });
+}
+
+async function codexPluginRead(codex, env) {
+  const result = await codexAppServer(codex, env, [["plugin/read", { pluginName: PLUGIN, marketplacePath: join(root, ".agents", "plugins", "marketplace.json") }]]);
+  if (result.error) return result;
+  const [read] = result.answers;
+  return read.error ? { error: JSON.stringify(read.error), stderr: result.stderr } : { plugin: read.result.plugin, stderr: result.stderr };
+}
+
+/** Codex'in eklentinin MCP sunucusunu başlatıp araçlarını görüp görmediği. */
+async function codexMcpStatus(codex, env) {
+  const result = await codexAppServer(codex, env, [["mcpServerStatus/list", {}]]);
+  if (result.error) return result;
+  const [status] = result.answers;
+  return status.error ? { error: JSON.stringify(status.error) } : { servers: status.result.data ?? [] };
+}
+
+const MCP_TOOLS = ["library", "paper", "search_claims", "notes", "reading_list", "save_to_reading_list", "remove_from_reading_list", "today"];
+
+/**
+ * Eklentinin MCP sunucusu kurulan kopyadan, ajanın başlatacağı gibi: el
+ * sıkışma, araç listesi ve örnek makaleyle bir kütüphanede iki araç çağrısı.
+ */
+function mcpSmoke(agent, server) {
+  const workspace = mkdtempSync(join(tmpdir(), `trace-smoke-mcp-${agent}-`));
+  try {
+    mkdirSync(join(workspace, "library"), { recursive: true });
+    cpSync(EXAMPLE, join(workspace, "library", "paper.trace.json"));
+    const lines = [
+      { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "trace-plugin-smoke", version: "1.0.0" } } },
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      { jsonrpc: "2.0", id: 2, method: "tools/list" },
+      { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "library", arguments: {} } },
+      { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "search_claims", arguments: { query: "BLEU", limit: 2 } } },
+    ];
+    const result = run(server.command, server.args, { cwd: server.cwd ?? workspace, env: { ...process.env, TRACE_DATA_DIR: workspace, TRACE_LIBRARY_DIR: "" }, input: `${lines.map((line) => JSON.stringify(line)).join("\n")}\n` });
+    const replies = new Map((result.stdout ?? "").split("\n").filter(Boolean).flatMap((line) => { try { const message = JSON.parse(line); return [[message.id, message]]; } catch { return []; } }));
+    const want = expected().version;
+    check(`${agent}: MCP server from the installed copy says hello as ${want}`, replies.get(1)?.result?.serverInfo?.version === want, output(result));
+    check(`${agent}: MCP server lists its ${MCP_TOOLS.length} tools`, JSON.stringify(replies.get(2)?.result?.tools?.map((tool) => tool.name)) === JSON.stringify(MCP_TOOLS), JSON.stringify(replies.get(2)));
+    check(`${agent}: MCP library tool reads the library`, replies.get(3)?.result?.structuredContent?.papers === 1, JSON.stringify(replies.get(3)));
+    check(`${agent}: MCP search_claims finds claims with pages`, (replies.get(4)?.result?.structuredContent?.hits ?? []).some((hit) => typeof hit.page === "number"), JSON.stringify(replies.get(4)));
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
 }
 
 async function smokeCodex(codex, want, live) {
@@ -276,6 +323,14 @@ async function smokeCodex(codex, want, live) {
 
     const bridge = findFile(join(home, "plugins", "cache"), "trace-agent.mjs");
     if (check("codex: the installed copy has the bridge", Boolean(bridge))) bridgeSmoke("codex", bridge);
+
+    // MCP: Codex sunucuyu kendisi başlatıp araçlarını görüyor mu, ve kurulan kopyadan elle.
+    const status = await codexMcpStatus(codex, env);
+    const trace = status.servers?.find((server) => server.name === "trace");
+    check("codex: starts the plugin's MCP server and sees its tools", Boolean(trace) && !trace.toolsError && MCP_TOOLS.every((name) => Object.values(trace.tools ?? {}).some((tool) => tool.name === name || tool.name?.endsWith(name))), status.error ?? JSON.stringify(trace ?? status.servers));
+    const pluginRoot = bridge ? resolve(dirname(bridge), "..", "..", "..") : undefined;
+    const config = pluginRoot && existsSync(join(pluginRoot, "codex-mcp.json")) ? readJson(join(pluginRoot, "codex-mcp.json")).mcpServers?.trace : undefined;
+    if (check("codex: the installed copy has its MCP config", Boolean(config))) mcpSmoke("codex", { command: process.execPath, args: config.args, cwd: join(pluginRoot, config.cwd) });
 
     const key = process.env.OPENAI_API_KEY;
     if (!live) skip("codex: real model session", "run with --live");
@@ -326,6 +381,15 @@ function smokeClaude(claude, want, live) {
     const bridge = entry?.installPath ? findFile(entry.installPath, "trace-agent.mjs") : undefined;
     if (check("claude: the installed copy has the bridge", Boolean(bridge))) bridgeSmoke("claude", bridge);
 
+    // MCP: Claude Code'un kendi sağlık denetimi ve kurulan kopyadan elle bir oturum.
+    check("claude: details list the MCP server", /MCP servers \(1\)\s+trace/.test(details.stdout), output(details));
+    const empty = mkdtempSync(join(tmpdir(), "trace-smoke-empty-"));
+    const mcp = run(claude, ["mcp", "list"], { env, cwd: empty, timeout: 120_000 });
+    rmSync(empty, { recursive: true, force: true });
+    check("claude: mcp list connects to the plugin's server", new RegExp(`plugin:${PLUGIN}:trace: .*Connected`).test(stripAnsi(mcp.stdout)), output(mcp));
+    const config = entry?.installPath && existsSync(join(entry.installPath, ".mcp.json")) ? readJson(join(entry.installPath, ".mcp.json")).mcpServers?.trace : undefined;
+    if (check("claude: the installed copy has its MCP config", Boolean(config))) mcpSmoke("claude", { command: process.execPath, args: config.args.map((arg) => arg.replaceAll("${CLAUDE_PLUGIN_ROOT}", entry.installPath)) });
+
     if (!live) skip("claude: real model session", "run with --live");
     else if (!process.env.ANTHROPIC_API_KEY) {
       skip("claude: real model session", "no ANTHROPIC_API_KEY");
@@ -365,6 +429,11 @@ function smokeAntigravity(agy, want) {
     check("agy: installed manifest as written", manifest.description === want.pluginDescription);
     const bridge = findFile(copy, "trace-agent.mjs");
     if (check("agy: the installed copy has the bridge", Boolean(bridge))) bridgeSmoke("agy", bridge);
+
+    // MCP: Antigravity sunucuyu eklentinin kökünden, ${PLUGIN_ROOT} genişletilerek başlatıyor.
+    check("agy: install takes in the MCP server", /mcpServers\s*:\s*1 processed/.test(installed), installed);
+    const config = existsSync(join(copy, "mcp_config.json")) ? readJson(join(copy, "mcp_config.json")).mcpServers?.trace : undefined;
+    if (check("agy: the installed copy has its MCP config", Boolean(config))) mcpSmoke("agy", { command: process.execPath, args: config.args.map((arg) => arg.replaceAll("${PLUGIN_ROOT}", copy)), cwd: copy });
     skip("agy: real model session", "agy -p needs a Google sign-in, not an API key");
   } finally {
     rmSync(home, { recursive: true, force: true });
