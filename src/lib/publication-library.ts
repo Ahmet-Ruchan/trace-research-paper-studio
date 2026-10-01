@@ -1,4 +1,4 @@
-import type { PublicationSettings, PublicationSummary } from "./publications";
+import type { PublicationSettingsInput as PublicationSettings, PublicationSummary } from "./publications";
 
 const ENDPOINT = "/api/publications";
 

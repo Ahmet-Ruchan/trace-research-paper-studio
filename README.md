@@ -284,7 +284,8 @@ the missing word (case, accents and punctuation do not matter), or show the answ
 yourself. Deleting the highlight deletes its card.
 
 Notes are yours, not the paper's: they are kept in your library, never in the project file, so an
-export, a shared JSON or a published page never carries them. **Markdown** downloads them as a
+export or a shared JSON never carries them, and a published page carries only the ones you pick
+when you publish (see below). **Markdown** downloads them as a
 plain file; **For Obsidian** adds front matter (title, authors, year, venue, DOI, tags) and
 callouts, ready to drop into a vault. Your agent can write the same file into your vault:
 
@@ -807,6 +808,9 @@ Explain Denoising Diffusion Probabilistic Models as a results briefing using the
 serves at `/p/<id>`. Later edits stay private until you update the link. You choose whether the
 deep report, the technical appendix, the learning layer and the paper's own figures go out. The
 evidence quotes always do, because a claim without its page is not something a reader can check.
+Your notes stay out unless you ask: tick **Notes I choose**, then the notes themselves, and they
+appear at the end of the page under "Notes from the author", apart from the analysis. Only the
+ticked notes go out, as they read then; **Update** takes their latest wording.
 You can unpublish a link, publish it again, let it expire after 7, 30 or 90 days, or delete it.
 Removing the project closes its links too. An unpublished, expired and never-existing link all
 return the same page, and the page asks search engines not to index it.
@@ -1208,7 +1212,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.36.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.37.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 
@@ -1346,8 +1350,9 @@ the server.
 - Provider keys are used only for the active request. They never appear in exports or in the
   browser's storage: the remembered analysis setup has no field for a key.
 - Your notes and your reading list are kept next to the library (`notes.json`,
-  `reading-list.json`), never in a project, its exports or a published page. A saved work's link is
-  accepted only as an `http(s)` address, and a note is plain text, never rendered as HTML.
+  `reading-list.json`), never in a project or its exports. A published page carries only the notes
+  you tick for it, and nothing of them by default. A saved work's link is accepted only as an
+  `http(s)` address, and a note is plain text, never rendered as HTML.
 - The profile and the work log live in `~/.trace`, behind the same password as the rest of the API.
   A photo is accepted only as a small JPEG, PNG or WebP image (the browser crops it to 192 pixels),
   a session cannot end in the future, and an import adds sessions without removing any; a profile

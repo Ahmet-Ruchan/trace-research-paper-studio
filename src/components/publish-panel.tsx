@@ -17,6 +17,7 @@ import {
   type PublicationInclude,
   type PublicationSummary,
 } from "@/lib/publications";
+import { groupNotes, type ReaderNote } from "@/lib/reader-notes";
 import type { ResearchProject } from "@/lib/schema";
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
@@ -48,6 +49,13 @@ function availableBlocks(project: ResearchProject) {
 export function PublishPanel({ project, onClose }: PublishPanelProps) {
   const [publications, setPublications] = useState<PublicationSummary[]>();
   const [include, setInclude] = useState<PublicationInclude>(defaultPublicationInclude);
+  // Okuyucunun notları: yalnızca seçtikleri, yalnızca istenirse (varsayılan kapalı).
+  const [notes, setNotes] = useState<ReaderNote[]>([]);
+  const [noteIds, setNoteIds] = useState<string[]>([]);
+  const noteGroups = useMemo(
+    () => groupNotes(project, notes).filter((group) => group.heading !== "No longer in the paper").map((group) => ({ ...group, notes: group.notes.filter((note) => note.text || note.quote) })).filter((group) => group.notes.length),
+    [notes, project],
+  );
   const [expiryDays, setExpiryDays] = useState<(typeof EXPIRY_CHOICES)[number]>(null);
   const [busy, setBusy] = useState<string>();
   const [copied, setCopied] = useState<string>();
@@ -64,6 +72,15 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
         setPublications([]);
         setError(caught instanceof Error ? caught.message : "The publications could not be loaded.");
       });
+    return () => { active = false; };
+  }, [project.id]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/library/notes?id=${encodeURIComponent(project.id)}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { notes: [] }))
+      .then((data: { notes?: ReaderNote[] }) => { if (active) setNotes(data.notes ?? []); })
+      .catch(() => undefined);
     return () => { active = false; };
   }, [project.id]);
 
@@ -119,6 +136,34 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                   {block.label}{block.present ? "" : " · not in this project"}
                 </label>
               ))}
+              {noteGroups.length ? (
+                <>
+                  <label>
+                    <input type="checkbox" checked={include.notes} onChange={(event) => setInclude((current) => ({ ...current, notes: event.target.checked }))} />
+                    Notes I choose, as the author&rsquo;s notes at the end
+                  </label>
+                  {include.notes ? (
+                    <div className="publish-notes" role="group" aria-label="Notes to publish">
+                      {noteGroups.map((group) => (
+                        <div key={`${group.place}-${group.heading}`}>
+                          <span>{group.place} · {group.heading}</span>
+                          {group.notes.map((note) => (
+                            <label key={note.id}>
+                              <input
+                                type="checkbox"
+                                checked={noteIds.includes(note.id)}
+                                onChange={(event) => setNoteIds((current) => (event.target.checked ? [...current, note.id] : current.filter((id) => id !== note.id)))}
+                              />
+                              <span>{note.quote ? `“${note.quote.length > 90 ? `${note.quote.slice(0, 90)}…` : note.quote}” ` : ""}{note.text.length > 120 ? `${note.text.slice(0, 120)}…` : note.text}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                      <small>Only the notes ticked here go out, as they are now; Update takes their latest wording. Nothing else from your notes is published.</small>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </fieldset>
             <div className="publish-actions">
               <label className="publish-expiry">
@@ -136,6 +181,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                     await saveLibraryProject(project);
                     const created = await publishProject(project.id, {
                       include,
+                      noteIds: include.notes ? noteIds : [],
                       expiresAt: expiryFromDays(expiryDays, new Date().toISOString()),
                     });
                     setPublications((current) => [created, ...(current ?? [])]);
@@ -167,6 +213,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                     Published {dateFormat.format(new Date(publication.createdAt))}
                     {publication.settings.expiresAt ? ` · ${publication.state === "expired" ? "expired" : "expires"} ${dateFormat.format(new Date(publication.settings.expiresAt))}` : ""}
                     {excluded.length ? ` · without ${excluded.join(", ").toLowerCase()}` : ""}
+                    {publication.noteCount ? ` · with ${publication.noteCount} of your notes` : ""}
                   </small>
                   {stale && publication.state !== "expired" && <small className="publish-stale">The project has changed since this copy was taken.</small>}
                   <div className="publish-item-actions">

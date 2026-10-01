@@ -13,7 +13,7 @@ import {
   publicationState,
 } from "./publications";
 import type { ResearchProject } from "./schema";
-import { deleteStoredProject, saveStoredProject } from "./trace-storage";
+import { deleteStoredProject, saveReaderNotes, saveStoredProject } from "./trace-storage";
 
 const fresh = (): ResearchProject => ({ ...structuredClone(loadExampleProject()), id: "publish-test" });
 
@@ -99,6 +99,39 @@ describe("publishing through the studio", () => {
 
     await patch(publication.id, { status: "live" });
     expect((await page(publication.id)).status).toBe(200);
+  });
+
+  it("adds only the notes the author ticks, off unless asked, and takes their latest wording on update", async () => {
+    const project = fresh();
+    await saveStoredProject(project);
+    const at = "2026-09-30T10:00:00.000Z";
+    const section = project.deepReport!.sections[0];
+    await saveReaderNotes("publish-test", [
+      { id: "keep", target: { kind: "section", place: "report", sectionId: section.id }, quote: "a line <worth> keeping", text: "Compare with <script>alert(1)</script> the baseline.", color: "yellow", createdAt: at, updatedAt: at },
+      { id: "private", target: { kind: "claim", claimId: project.evidence.claims[0].id }, text: "Private thought.", color: "yellow", createdAt: at, updatedAt: at },
+    ]);
+    // Varsayılan: not yok.
+    const plain = (await (await publish()).json()).publication;
+    expect(plain.noteCount).toBe(0);
+    expect(await (await page(plain.id)).text()).not.toContain("Notes from the author");
+
+    const { publication } = await (await publish({ include: { ...defaultPublicationInclude, notes: true }, noteIds: ["keep"], expiresAt: null } as never)).json();
+    expect(publication.noteCount).toBe(1);
+    const html = await (await page(publication.id)).text();
+    expect(html).toContain("Notes from the author");
+    expect(html).toContain(`Deep report · ${section.title}`);
+    expect(html).toContain("a line &lt;worth&gt; keeping");
+    expect(html).toContain("Compare with &lt;script&gt;alert(1)&lt;/script&gt; the baseline.");
+    expect(html).not.toContain("Private thought.");
+
+    // Not değişti: yayın ancak güncellenince yeni hâlini alıyor.
+    await saveReaderNotes("publish-test", [{ id: "keep", target: { kind: "section", place: "report", sectionId: section.id }, quote: "a line <worth> keeping", text: "Revised.", color: "yellow", createdAt: at, updatedAt: at }]);
+    expect(await (await page(publication.id)).text()).not.toContain("Revised.");
+    await patch(publication.id, { refresh: true });
+    expect(await (await page(publication.id)).text()).toContain("Revised.");
+    // Notları kapatmak onları yayından çıkarıyor.
+    await patch(publication.id, { settings: { include: defaultPublicationInclude, noteIds: ["keep"], expiresAt: null } });
+    expect(await (await page(publication.id)).text()).not.toContain("Notes from the author");
   });
 
   it("stops serving an expired link", async () => {

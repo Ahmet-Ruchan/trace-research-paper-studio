@@ -39,9 +39,12 @@ import {
   projectForPublication,
   publicationIdPattern,
   publicationRecordSchema,
+  publicationSettingsSchema,
+  publishedNotes,
   summarizePublication,
   type PublicationRecord,
   type PublicationSettings,
+  type PublicationSettingsInput,
 } from "./publications";
 import { narrativeTemplateSchema, researchProjectSchema, type NarrativeTemplate, type ResearchProject } from "./schema";
 
@@ -817,9 +820,18 @@ export async function listPublications(projectId?: string) {
   return summaries.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
-export async function createPublication(projectId: string, settings: PublicationSettings) {
+/** Seçilen notların şu anki hâli; not seçimi kapalıysa yok. */
+async function notesForPublication(project: ResearchProject, settings: PublicationSettings) {
+  if (!settings.include.notes || !settings.noteIds.length) return undefined;
+  const notes = publishedNotes(project, await readReaderNotes(project.id), settings.noteIds);
+  return notes.length ? notes : undefined;
+}
+
+export async function createPublication(projectId: string, input: PublicationSettingsInput) {
+  const settings = publicationSettingsSchema.parse(input);
   const project = await readStoredProject(projectId);
   if (!project) return undefined;
+  const notes = await notesForPublication(project, settings);
   const now = new Date().toISOString();
   const record: PublicationRecord = {
     version: 1,
@@ -834,6 +846,7 @@ export async function createPublication(projectId: string, settings: Publication
     status: "live",
     settings,
     project: projectForPublication(project, settings.include),
+    ...(notes ? { notes } : {}),
   };
   await writePublication(record);
   return summarizePublication(record, now);
@@ -841,7 +854,7 @@ export async function createPublication(projectId: string, settings: Publication
 
 export type PublicationPatch = {
   status?: PublicationRecord["status"];
-  settings?: PublicationSettings;
+  settings?: PublicationSettingsInput;
   /** Kopyayı kütüphanedeki güncel sürümle yenile. */
   refresh?: boolean;
 };
@@ -850,7 +863,7 @@ export async function updatePublication(id: string, patch: PublicationPatch) {
   const record = await readPublication(id);
   if (!record) return undefined;
   const now = new Date().toISOString();
-  const settings = patch.settings ?? record.settings;
+  const settings = patch.settings ? publicationSettingsSchema.parse(patch.settings) : record.settings;
   let source: ResearchProject | undefined;
   if (patch.refresh) {
     source = await readStoredProject(record.projectId);
@@ -875,6 +888,13 @@ export async function updatePublication(id: string, patch: PublicationPatch) {
         }
       : {}),
   };
+  // Notlar: güncellemede ya da not seçimi değişince seçilen notların güncel hâli; kapatılınca hiç.
+  if (patch.refresh || patch.settings) {
+    const project = source ?? researchProjectSchema.parse(record.project);
+    const notes = await notesForPublication({ ...project, id: record.projectId }, settings);
+    if (notes) next.notes = notes;
+    else delete next.notes;
+  }
   await writePublication(next);
   return summarizePublication(next, now);
 }

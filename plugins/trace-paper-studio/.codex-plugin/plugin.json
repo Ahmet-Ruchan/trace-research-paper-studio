@@ -1,6 +1,6 @@
 {
   "name": "trace-paper-studio",
-  "version": "0.36.0",
+  "version": "0.37.0",
   "description": "Name a paper or hand over a PDF: Trace finds it on arXiv or by DOI (bioRxiv, medRxiv, PubMed Central, ACL Anthology), grounds every claim in a page and quote, checks each quote against the text of its page, and builds a local interactive site that teaches it: primers, step-by-step derivations, playgrounds that ask for your prediction first, common misreadings and an evidence-linked quiz. Check your own explanation of a section against the evidence, see which concepts you already studied in your other papers, get a reading order for your library with the papers you saved to read later, your study progress, your work time against last week and your notes as Markdown or for Obsidian, rewrite one section with the evidence locked, publish a shareable link, and export a report, slides, a Jupyter notebook, a citation or Anki flashcards.",
   "author": {
     "name": "Ahmet Ruchan",

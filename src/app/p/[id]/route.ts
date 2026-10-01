@@ -1,5 +1,5 @@
 import { buildStandaloneStory } from "@/lib/export-story";
-import { PUBLICATION_HEADERS, publicationState } from "@/lib/publications";
+import { PUBLICATION_HEADERS, publicationState, withPublishedNotes } from "@/lib/publications";
 import { researchProjectSchema } from "@/lib/schema";
 import { readPublication } from "@/lib/trace-storage";
 
@@ -24,5 +24,5 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (!record || publicationState(record, new Date().toISOString()) !== "live") return notAvailable();
   const project = researchProjectSchema.safeParse(record.project);
   if (!project.success) return notAvailable();
-  return new Response(buildStandaloneStory(project.data, { surface: "published" }), { status: 200, headers: PUBLICATION_HEADERS });
+  return new Response(withPublishedNotes(buildStandaloneStory(project.data, { surface: "published" }), record.notes), { status: 200, headers: PUBLICATION_HEADERS });
 }

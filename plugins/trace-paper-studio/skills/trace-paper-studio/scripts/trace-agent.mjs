@@ -1353,7 +1353,8 @@ async function publishProjectLink(args) {
     path,
     url: studioUrl ? `${studioUrl}${path}` : undefined,
     expiresAt: record.settings.expiresAt,
-    excluded: Object.entries(include).filter(([, on]) => !on).map(([key]) => key),
+    // Okuyucunun notları köprüden hiç yayınlanmıyor (yalnızca stüdyonun panelinden, tek tek seçilerek); "çıkarılanlar" arasında sayılmıyor.
+    excluded: Object.entries(include).filter(([key, on]) => !on && key !== "notes").map(([key]) => key),
     note: studioUrl
       ? "The link works for anyone who can reach this studio. On localhost that is only this machine."
       : "No studio is running. The link starts working at <studio address>/p/<id> once the studio runs; deliver starts it.",

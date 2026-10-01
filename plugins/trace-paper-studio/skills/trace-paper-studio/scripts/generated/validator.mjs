@@ -2373,6 +2373,21 @@ function handleReadonlyResult(payload) {
 	payload.value = Object.freeze(payload.value);
 	return payload;
 }
+const $ZodLazy = /*@__PURE__*/ $constructor("$ZodLazy", (inst, def) => {
+	$ZodType.init(inst, def);
+	defineLazy(inst._zod, "innerType", () => {
+		const d = def;
+		if (!d._cachedInner) d._cachedInner = def.getter();
+		return d._cachedInner;
+	});
+	defineLazy(inst._zod, "pattern", () => inst._zod.innerType?._zod?.pattern);
+	defineLazy(inst._zod, "propValues", () => inst._zod.innerType?._zod?.propValues);
+	defineLazy(inst._zod, "optin", () => inst._zod.innerType?._zod?.optin ?? void 0);
+	defineLazy(inst._zod, "optout", () => inst._zod.innerType?._zod?.optout ?? void 0);
+	inst._zod.parse = (payload, ctx) => {
+		return inst._zod.innerType._zod.run(payload, ctx);
+	};
+});
 const $ZodCustom = /*@__PURE__*/ $constructor("$ZodCustom", (inst, def) => {
 	$ZodCheck.init(inst, def);
 	$ZodType.init(inst, def);
@@ -3554,6 +3569,12 @@ const optionalProcessor = (schema, ctx, _json, params) => {
 	const seen = ctx.seen.get(schema);
 	seen.ref = def.innerType;
 };
+const lazyProcessor = (schema, ctx, _json, params) => {
+	const innerType = schema._zod.innerType;
+	process$1(innerType, ctx, params);
+	const seen = ctx.seen.get(schema);
+	seen.ref = innerType;
+};
 
 //#endregion
 //#region node_modules/zod/v4/classic/iso.js
@@ -4441,6 +4462,18 @@ function readonly(innerType) {
 	return new ZodReadonly({
 		type: "readonly",
 		innerType
+	});
+}
+const ZodLazy = /*@__PURE__*/ $constructor("ZodLazy", (inst, def) => {
+	$ZodLazy.init(inst, def);
+	ZodType.init(inst, def);
+	inst._zod.processJSONSchema = (ctx, json, params) => lazyProcessor(inst, ctx, json, params);
+	inst.unwrap = () => inst._zod.def.getter();
+});
+function lazy(getter) {
+	return new ZodLazy({
+		type: "lazy",
+		getter
 	});
 }
 const ZodCustom = /*@__PURE__*/ $constructor("ZodCustom", (inst, def) => {
@@ -23231,17 +23264,22 @@ const publicationIncludeSchema = object({
 	deepReport: boolean(),
 	technicalAppendix: boolean(),
 	learning: boolean(),
-	figures: boolean()
+	figures: boolean(),
+	/** Okuyucunun seçtiği notlar; varsayılan kapalı (eski kayıtlarda yok). */
+	notes: boolean().default(false)
 });
 const defaultPublicationInclude = {
 	deepReport: true,
 	technicalAppendix: true,
 	learning: true,
-	figures: true
+	figures: true,
+	notes: false
 };
 const publicationStatusSchema = _enum(["live", "unpublished"]);
 const publicationSettingsSchema = object({
 	include: publicationIncludeSchema,
+	/** Yayına girecek notların kimlikleri; `include.notes` açıksa. */
+	noteIds: array(string().min(1).max(80)).max(1e3).default([]),
 	/** ISO tarih ya da null: süresiz. */
 	expiresAt: datetime().nullable()
 });
@@ -23262,7 +23300,16 @@ const publicationRecordSchema = object({
 	contentFingerprint: string().optional(),
 	status: publicationStatusSchema,
 	settings: publicationSettingsSchema,
-	project: unknown()
+	project: unknown(),
+	/** Seçilen notların yayın anındaki kopyası; projeye değil kayda ait. */
+	notes: array(lazy(() => publishedNoteSchema)).max(1e3).optional()
+});
+const publishedNoteSchema = object({
+	place: string().max(40),
+	heading: string().max(600),
+	quote: string().max(1200).optional(),
+	text: string().max(4e3),
+	page: number().int().positive().optional()
 });
 function expiryFromDays(days, now) {
 	if (days === null) return null;

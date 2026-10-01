@@ -152,8 +152,18 @@ yapıldığı ve nasıl test edildiği yazıyor.
   - *Test:* makale ve kavram notları, okuma sırası bağlantıları, notların gelmesi, dizin, aynı
     başlık, CRC ve zip'in `unzip` ile açılması, köprünün kasaya yazması birim testlerde; profilden
     zip indirip içinde notu görmek e2e'de; eklenti smoke testi üç CLI'da `bridge obsidian`.
-- [ ] **25. Notları isteğe bağlı paylaşmak.** Yayın panelinde "seçtiğim notları dahil et";
+- [x] **25. Notları isteğe bağlı paylaşmak.** Yayın panelinde "seçtiğim notları dahil et";
   varsayılan kapalı.
+  - *Yapıldı:* Yayın panelinde **Notes I choose** kutusu (varsayılan kapalı); işaretlenince
+    notlar yerlerine göre gruplu listeleniyor ve yalnızca tek tek seçilenler gidiyor. Yayın
+    kaydı seçilen kimlikleri (`settings.noteIds`) ve notların o anki metnini saklıyor; sayfanın
+    sonunda, analizden ayrı "Notes from the author" bölümü (metin kaçışlı, HTML işlenmiyor).
+    **Update** notların son hâlini alıyor, kutu kapatılınca bölüm kalkıyor; makalede artık
+    yeri olmayan notlar seçilemiyor. Ajan köprüsü notları hiç yayınlamıyor. Eklenti 0.37.0.
+  - *Test:* `publications.test.ts` (yalnızca seçilen not, kaçış, varsayılan kapalı, güncellemede
+    yeni metin, kapatınca kalkması; köprünün "çıkarılanlar" listesi), e2e "publishes only the
+    notes the author ticks" (panelden seçip yayınlamak, sayfada yalnızca seçilen not); `npm run
+    check` (716 birim), bütün e2e (97) ve eklenti duman testi geçti.
 
 ## Okuma
 

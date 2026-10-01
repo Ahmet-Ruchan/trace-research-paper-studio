@@ -388,6 +388,30 @@ test.describe("publishing", () => {
     expect(download.suggestedFilename()).toBe(`${project.id}.trace.json`);
   });
 
+  test("publishes only the notes the author ticks, at the end of the page", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-publish-notes"));
+    const at = new Date().toISOString();
+    expect((await request.put(`/api/library/notes?id=${project.id}`, { data: { notes: [
+      { id: "shown", target: { kind: "claim", claimId: project.evidence.claims[0].id }, text: "A note worth sharing.", createdAt: at, updatedAt: at },
+      { id: "hidden", target: { kind: "claim", claimId: project.evidence.claims[1].id }, text: "A private thought.", createdAt: at, updatedAt: at },
+    ] } })).ok()).toBe(true);
+    await openStory(page, project.id);
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    // Varsayılan kapalı: not listesi kutu işaretlenene kadar görünmüyor.
+    await expect(dialog.getByRole("group", { name: "Notes to publish" })).toHaveCount(0);
+    await dialog.getByRole("checkbox", { name: /Notes I choose/ }).check();
+    await dialog.getByRole("group", { name: "Notes to publish" }).getByRole("checkbox", { name: "A note worth sharing." }).check();
+    await dialog.getByRole("button", { name: "Publish a new link" }).click();
+    await expect(dialog.locator(".publish-item")).toContainText("with 1 of your notes");
+
+    const { publications } = (await (await request.get(`/api/publications?projectId=${project.id}`)).json()) as { publications: Array<{ path: string }> };
+    await page.goto(publications[0].path);
+    await expect(page.getByRole("heading", { name: "Notes from the author" })).toBeVisible();
+    await expect(page.getByText("A note worth sharing.")).toBeVisible();
+    await expect(page.getByText("A private thought.")).toHaveCount(0);
+  });
+
   test("serves the same page for a link that was unpublished", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-unpublish"));
     const created = await request.post("/api/publications", {

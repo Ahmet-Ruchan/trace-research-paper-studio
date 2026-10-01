@@ -149,6 +149,7 @@ node scripts/trace-agent.mjs publish --project "<project.trace.json>"
 - Leave blocks out only when the user asks: `--no-report`, `--no-appendix`, `--no-learning`, `--no-figures`. Evidence quotes always stay.
 - Add `--expires-days 7|30|90` when the user wants the link to stop working.
 - Report `url` when it is present, and pass on `note` in the user's language. A studio on `localhost` means the link only works on this machine. Do not describe it as public unless the studio is deployed somewhere others can reach.
+- The reader's own notes never go out from here. If the user wants some of them on the page, they tick them one by one in the studio's **Publish** panel.
 - The user manages, updates or unpublishes the link from the studio's **Publish** panel. Publishing is an outward-facing action, so do it only when the user asked for a shareable link.
 
 ## Revising one section
