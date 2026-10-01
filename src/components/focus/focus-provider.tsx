@@ -448,7 +448,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     tabId.current = Math.random().toString(36).slice(2);
     let cancelled = false;
-    // Durum bir sonraki turda okunuyor: stüdyonun açılışı gibi (`app-shell.tsx`), etkinin gövdesinde değil.
+    // Durum bir sonraki turda okunuyor: stüdyonun açılışı gibi (`studio/use-studio-url.ts`), etkinin gövdesinde değil.
     const opening = window.setTimeout(() => {
       const opened = Date.now();
       const read = readStore(opened);

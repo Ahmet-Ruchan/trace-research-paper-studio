@@ -1317,7 +1317,9 @@ Never edit them by hand. `npm run check` rebuilds both and fails if the committe
 ```text
 src/
 ├── app/                        # Next.js app router, generation API, design system
-├── components/                 # Workspace shell, Lab, Story editor, Preview, Library
+├── components/                 # Lab, Story editor, Preview, Library and the other screens
+│   ├── app-shell.tsx           #   which screen is open, and moving between them
+│   ├── studio/                 #   the paper screen, analysis run, deletion, address bar
 ├── visuals/                    # SHARED render layer — compiled for both hosts
 │   ├── tokens.css              #   type scale, colours and the dark theme
 │   ├── visual-renderer.tsx     #   eleven visual grammars

@@ -1,84 +1,49 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BookOpen, Download, FileJson, FlaskConical, Globe, History, Home, LayoutTemplate, Network, Plus, Share2 } from "lucide-react";
-import { exportDefinitions } from "@/lib/exports";
+import { buildPaletteCommands, type PaletteTarget } from "@/lib/command-palette";
 import { buildStandaloneStory } from "@/lib/export-story";
-import { claimHash, parseDeepLink, sectionHash } from "@/lib/deep-link";
-import {
-  generationStages,
-  initialGenerationProgress,
-  readGenerationStream,
-  type GenerationProgress,
-} from "@/lib/generation-events";
-import { stringsFor } from "@/visuals";
+import { exportDefinitions } from "@/lib/exports";
+import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
+import { parseTraceProject, PROJECT_TOO_LARGE, MAX_PROJECT_BYTES } from "@/lib/project-import";
 import type { RevisionReason } from "@/lib/project-revisions";
-import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
+import type { ReadingPosition } from "@/lib/reading-position";
 import { loadSampleProject } from "@/lib/sample-project";
-import { PendingDeletion } from "@/lib/pending-deletion";
+import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
 import { restoreTextSize } from "@/lib/text-size";
 import { restoreTheme } from "@/lib/theme";
-import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
-import { EvidenceDrawer } from "./evidence-drawer";
-import { NoteHighlights, ReaderNotesProvider, SelectionNoteBar } from "./reader-notes";
-import { ReadingListProvider } from "./reading-list";
-import { scrollToSection } from "./reading-position";
-import type { ReadingPosition } from "@/lib/reading-position";
-import { HistoryPanel } from "./history-panel";
-import { PublishPanel } from "./publish-panel";
-import { LabView } from "./lab-view";
-import { CitationPanel } from "./citation-panel";
+import { CommandPalette } from "./command-palette";
 import { CompareView } from "./compare-view";
-import { LiteratureMapView } from "./literature-map-view";
-import { LibraryView } from "./library-view";
-import { ReviewView } from "./review-view";
-import { ExamView } from "./exam-view";
-import { LearningStatsView } from "./learning-stats-view";
 import { ConceptMapView } from "./concept-map-view";
-import { ModelRecordView } from "./model-record-view";
-import { Onboarding, type GenerationOptions } from "./onboarding";
-import { StoryEditor } from "./story-editor";
-import { StoryView } from "./story-view";
-import { DisplayControl } from "./display-control";
+import { ExamView } from "./exam-view";
 import { FocusAlerts } from "./focus/focus-alerts";
 import { FocusProvider } from "./focus/focus-provider";
 import { FocusView } from "./focus/focus-view";
 import { ProfileView } from "./focus/profile-view";
-import { StudioNav, StudioNavProvider, type StudioNavTarget } from "./focus/studio-nav";
-import { CommandPalette } from "./command-palette";
-import { buildPaletteCommands, type PaletteTarget } from "@/lib/command-palette";
-
-type WorkspaceMode = "lab" | "story" | "preview";
-type LabJump = { section: string; reportSectionId?: string; conceptId?: string; term?: string; query?: string; nonce: number };
-type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "exam" | "concepts" | "progress" | "focus" | "profile";
-const STORAGE_KEY = "trace-research-project-v1";
-const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
-
-function checkpointPartCount(raw: string | null) {
-  if (!raw) return 0;
-  try {
-    const value = JSON.parse(raw) as { parts?: Record<string, unknown> };
-    return value.parts ? Object.values(value.parts).filter(Boolean).length : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** İndirilen dosyaların adı: makale başlığından. */
-function projectSlug(project: ResearchProject) {
-  return project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "trace-story";
-}
-
-function download(name: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1_000);
-}
+import { StudioNavProvider, type StudioNavTarget } from "./focus/studio-nav";
+import { LearningStatsView } from "./learning-stats-view";
+import { LibraryView } from "./library-view";
+import { LiteratureMapView } from "./literature-map-view";
+import { ModelRecordView } from "./model-record-view";
+import { Onboarding } from "./onboarding";
+import { ReadingListProvider } from "./reading-list";
+import { scrollToSection } from "./reading-position";
+import { ReviewView } from "./review-view";
+import { download, projectSlug } from "./studio/download";
+import { GenerationOverlay } from "./studio/generation-overlay";
+import { returnLabels, STORAGE_KEY, type AppScreen, type LabJump, type WorkspaceMode, type WorkspacePanel } from "./studio/screens";
+import { CHECKPOINT_KEY, useGeneration } from "./studio/use-generation";
+import { useProjectDeletion } from "./studio/use-project-deletion";
+import { useStudioStartup, useStudioUrl } from "./studio/use-studio-url";
+import { WorkspaceView } from "./studio/workspace-view";
 
 /**
+ * Stüdyonun ekran geçişleri: hangi ekranın açık olduğu, açık makale ve
+ * ekranlar arası gezinme. Makale ekranı (`studio/workspace-view.tsx`),
+ * analiz akışı (`studio/use-generation.ts`), silme kuyruğu
+ * (`studio/use-project-deletion.ts`) ve adres çubuğu (`studio/use-studio-url.ts`)
+ * kendi dosyalarında.
+ *
  * Çalışma saati bütün ekranların üstünde: sağlayıcı kökte, sayaç okuyucu
  * ekran değiştirse de sürüyor (`focus/focus-provider.tsx`).
  */
@@ -92,8 +57,6 @@ export function AppShell() {
   );
 }
 
-const returnLabels: Partial<Record<AppScreen, string>> = { home: "Home", library: "Library", workspace: "Back to the paper", progress: "Progress", concepts: "Concepts", models: "Model record", review: "Review", focus: "Focus", profile: "Profile" };
-
 function Studio() {
   const [project, setProject] = useState<ResearchProject>();
   const [projects, setProjects] = useState<ResearchProject[]>([]);
@@ -103,8 +66,7 @@ function Studio() {
   /** Tekrar ekranı tek bir makaleyle sınırlıysa onun kimliği (Lab'den gelindi). */
   const [reviewScope, setReviewScope] = useState<string>();
   const [comparison, setComparison] = useState<ResearchProject[]>();
-  const [citationsOpen, setCitationsOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
+  const [panel, setPanel] = useState<WorkspacePanel>();
   const [paperLookup, setPaperLookup] = useState<{ query: string; expectTitle?: string }>();
   // Kütüphaneden "Reading list": kavram haritası okuma sırasına kaydırılarak açılıyor.
   const [conceptsFocus, setConceptsFocus] = useState<"reading">();
@@ -113,19 +75,11 @@ function Studio() {
   const [mode, setMode] = useState<WorkspaceMode>("lab");
   const [fileUrl, setFileUrl] = useState<string>();
   const [selectedClaimId, setSelectedClaimId] = useState<string>();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [errorTitle, setErrorTitle] = useState("Generation failed");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState<GenerationProgress>(initialGenerationProgress);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [pendingDeletion, setPendingDeletion] = useState<ResearchProject>();
-  const [deleteError, setDeleteError] = useState<string>();
-  const deletions = useRef<PendingDeletion<ResearchProject> | undefined>(undefined);
-  const [publishOpen, setPublishOpen] = useState(false);
-  const generationController = useRef<AbortController | undefined>(undefined);
   /**
    * Bir sonraki otomatik kaydın nedeni. Kayıt yarım saniye gecikmeli çalıştığı
    * için neden değişiklikle birlikte bir kenara yazılıyor; yeniden üretim ya da
@@ -133,44 +87,28 @@ function Studio() {
    * hâl geçmişte hiç görünmeyebilirdi.
    */
   const saveReason = useRef<RevisionReason>("edit");
-  const checkpointCount = useRef(0);
 
-  /**
-   * Plugin devir teslimi: `deliver` tarayıcıyı `?import=<url>` ile açar ve proje
-   * kullanıcı hiçbir şey yapmadan kütüphaneye düşer.
-   *
-   * Adres YALNIZCA loopback olabilir. Aksi halde herhangi bir sayfadaki bir
-   * bağlantı ("trace.app/?import=https://saldirgan/x.json") kullanıcının
-   * kütüphanesine yabancı içerik yazdırabilirdi. Şema doğrulaması bu kontrolün
-   * yerine geçmez: geçerli bir Trace projesi de kötü niyetli olabilir.
-   */
-  async function adoptHandoff(rawUrl: string) {
-    window.history.replaceState(null, "", window.location.pathname);
-    let url: URL;
-    try {
-      url = new URL(rawUrl, window.location.origin);
-    } catch {
-      throw new Error("The import address is not valid.");
-    }
-    const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-    if (!loopback || !/^https?:$/.test(url.protocol)) {
-      throw new Error("Imports are only accepted from an address on this machine.");
-    }
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error(`The project could not be downloaded (HTTP ${response.status}).`);
-    const text = await response.text();
-    if (text.length > 5 * 1024 * 1024) throw new Error("The Trace JSON exceeds the 5 MB limit.");
-    const parsed = researchProjectSchema.safeParse(JSON.parse(text));
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      throw new Error(`Invalid Trace project schema: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`);
-    }
-    await saveLibraryProject(parsed.data, { reason: "agent" });
-    setProjects((current) => [parsed.data, ...current.filter((item) => item.id !== parsed.data.id)]);
-    setProject(parsed.data);
-    setMode("lab");
-    setScreen("workspace");
-  }
+  const generation = useGeneration({
+    onStart: () => {
+      setError(undefined);
+      setErrorTitle("Generation failed");
+      setWarnings([]);
+    },
+    onResult: async (nextProject, responseWarnings, file) => {
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      setFileUrl(URL.createObjectURL(file));
+      setProject(nextProject);
+      setProjects((current) => [nextProject, ...current.filter((item) => item.id !== nextProject.id)]);
+      await saveLibraryProject(nextProject);
+      setWarnings(responseWarnings);
+      setPaperLookup(undefined);
+      setMode("lab");
+      setScreen("workspace");
+    },
+    onFailure: setError,
+  });
+
+  const deletion = useProjectDeletion({ projects, setProjects, inLibrary: screen === "library", remove: removeProject });
 
   // Yazı boyutu ve tema kök öğeye HTML okunurken yazılıyor (layout.tsx).
   // Geliştirmede Strict Mode `<html>`'i yeniden kurarken onları siliyor;
@@ -180,85 +118,33 @@ function Studio() {
     restoreTheme();
   }, []);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        const search = new URLSearchParams(window.location.search);
-        const requestedMode = search.get("mode");
-        if (requestedMode === "story" || requestedMode === "preview" || requestedMode === "lab") {
-          setMode(requestedMode);
-        }
-        if (search.get("new") === "1") window.localStorage.removeItem(CHECKPOINT_KEY);
-        if (search.get("sample") === "1") {
-          const sample = await loadSampleProject().catch(() => undefined);
-          if (sample) {
-            setProject(sample);
-            setScreen("workspace");
-          }
-        }
-        const handoff = search.get("import");
-        if (handoff) {
-          await adoptHandoff(handoff).catch((caught: unknown) => {
-            setErrorTitle("Import failed");
-            setError(caught instanceof Error ? caught.message : "The project could not be imported.");
-          });
-        }
-        if (search.get("library") === "1") setScreen("library");
-        if (search.get("review") === "1") setScreen("review");
-        if (search.get("exam") === "1") setScreen("exam");
-        if (search.get("progress") === "1") setScreen("progress");
-        if (search.get("focus") === "1") setScreen("focus");
-        if (search.get("profile") === "1") setScreen("profile");
-        if (search.get("team") === "1") setInitialTeam(true);
+  useStudioStartup({
+    setMode,
+    setScreen,
+    show: (opened) => {
+      setProject(opened);
+      setScreen("workspace");
+    },
+    adopted: (adopted) => {
+      setProjects((current) => [adopted, ...current.filter((item) => item.id !== adopted.id)]);
+      setProject(adopted);
+      setMode("lab");
+      setScreen("workspace");
+    },
+    importFailed: (message) => {
+      setErrorTitle("Import failed");
+      setError(message);
+    },
+    setInitialTeam,
+    selectClaim: setSelectedClaimId,
+    hydrated: () => setHydrated(true),
+    setProjects,
+  });
 
-        /**
-         * Kalıcı bağlantı. `?project=` hangi projenin açılacağını, hash ise
-         * onun neresine gidileceğini söylüyor. İkisi ayrı: hash tek başına
-         * hangi projeye ait olduğunu bilemez, sorgu dizesi ise `#` sonrasını
-         * sunucuya hiç göndermeyen tarayıcı davranışına takılmaz.
-         *
-         * Bu iş `hydrated` bayrağından ÖNCE bitmeli: adresi yazan efekt
-         * bayrağa bakıyor ve proje henüz yüklenmemişken çalışırsa
-         * `?project=` parametresini kendi eliyle silerdi.
-         */
-        const wantedProject = search.get("project");
-        if (wantedProject) {
-          const saved = (await listLibraryProjects().catch(() => [])).find((item) => item.id === wantedProject);
-          if (saved) {
-            setProject(saved);
-            setScreen("workspace");
-          }
-        }
-        const link = parseDeepLink(window.location.hash);
-        if (link?.kind === "claim") setSelectedClaimId(link.id);
-        if (link?.kind === "section") setMode("preview");
-
-        setHydrated(true);
-        // Eski tek-proje localStorage kaydını kütüphaneye taşı.
-        // Taşıma BİR KEZ olmalı: anahtar silinmezse her açılışta tekrar
-        // yazılıyor ve kullanıcının daha yeni içe aktardığı sürümü sessizce
-        // eskisiyle değiştiriyordu. Ayrıca kütüphanedeki kayıt daha yeniyse
-        // hiç dokunmuyoruz.
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          try {
-            const legacy = researchProjectSchema.parse(JSON.parse(stored));
-            const existing = (await listLibraryProjects().catch(() => [])).find(
-              (item) => item.id === legacy.id,
-            );
-            if (!existing || existing.updatedAt < legacy.updatedAt) {
-              await saveLibraryProject(legacy, { reason: "import" });
-            }
-          } catch {
-            // yoksayılır; anahtar aşağıda zaten temizleniyor
-          }
-          window.localStorage.removeItem(STORAGE_KEY);
-        }
-        setProjects(await listLibraryProjects().catch(() => []));
-      })();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
+  useStudioUrl(
+    { hydrated, screen, project, mode, selectedClaimId, reviewScope },
+    { selectClaim: setSelectedClaimId, showPreview: () => setMode("preview") },
+  );
 
   /**
    * Kaydın sebebi (sürüm geçmişindeki etiket) kayıt zamanlandığında bu
@@ -287,165 +173,7 @@ function Studio() {
     };
   }, [project, hydrated, screen]);
 
-  /**
-   * Adres çubuğu her zaman açık olan şeyi göstersin — kullanıcı bağlantıyı
-   * kopyalamak için hiçbir düğmeye basmak zorunda kalmasın.
-   *
-   * `replaceState` kullanılıyor, `pushState` değil: bir iddiaya tıklamak
-   * gezinme değil seçim. `pushState` olsaydı geri tuşu kullanıcıyı önceki
-   * iddiaya götürürdü ve projeden çıkmak için onlarca kez basmak gerekirdi.
-   */
-  useEffect(() => {
-    if (!hydrated) return;
-    const url = new URL(window.location.href);
-    for (const key of ["sample", "new", "library", "team", "mode", "import", "review", "exam", "progress", "focus", "profile"]) url.searchParams.delete(key);
-    if (screen === "review" && !reviewScope) url.searchParams.set("review", "1");
-    if (screen === "exam" && !reviewScope) url.searchParams.set("exam", "1");
-    if (screen === "progress") url.searchParams.set("progress", "1");
-    if (screen === "focus") url.searchParams.set("focus", "1");
-    if (screen === "profile") url.searchParams.set("profile", "1");
-    if (screen === "workspace" && project) {
-      url.searchParams.set("project", project.id);
-      if (mode !== "lab") url.searchParams.set("mode", mode);
-      /**
-       * Seçili iddia varsa çapa odur. Yoksa adreste zaten duran bir bölüm
-       * çapası KORUNUR: onu silmek, bağlantıyı açan kişinin adres çubuğundan
-       * aynı bağlantıyı bir daha kopyalayamaması demek olurdu.
-       */
-      const existing = parseDeepLink(url.hash);
-      url.hash = selectedClaimId
-        ? claimHash(selectedClaimId)
-        : existing?.kind === "section"
-          ? sectionHash(existing.id)
-          : "";
-    } else {
-      url.searchParams.delete("project");
-      url.hash = "";
-    }
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [hydrated, screen, project, mode, selectedClaimId, reviewScope]);
-
-  /**
-   * Sayfa içindeki bir kalıcı bağlantıya tıklamak belgeyi yeniden yüklemez;
-   * hash değişir ve durum olduğu yerde kalırdı. Yapıştırılan bir bağlantı da
-   * aynı sayfada açıksa aynı sorunu yaşar.
-   */
-  useEffect(() => {
-    const onHashChange = () => {
-      const link = parseDeepLink(window.location.hash);
-      if (link?.kind === "claim") setSelectedClaimId(link.id);
-      if (link?.kind === "section") setMode("preview");
-    };
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, []);
-
   useEffect(() => () => { if (fileUrl) URL.revokeObjectURL(fileUrl); }, [fileUrl]);
-
-  /**
-   * Geri alma yalnızca kütüphanedeyken sunuluyor. Başka bir ekrana geçmek ya
-   * da sayfayı kapatmak bekleyen silmeyi hemen tamamlıyor: kullanıcı silmek
-   * istedi, bildirimi göremediği bir yerde sessizce vazgeçilmemeli.
-   */
-  useEffect(() => {
-    if (screen !== "library") deletions.current?.flush("left");
-  }, [screen]);
-
-  useEffect(() => {
-    const onPageHide = () => deletions.current?.flush("pagehide");
-    window.addEventListener("pagehide", onPageHide);
-    return () => window.removeEventListener("pagehide", onPageHide);
-  }, []);
-
-  async function generate(options: GenerationOptions) {
-    const controller = new AbortController();
-    generationController.current = controller;
-    const savedCheckpoint = window.localStorage.getItem(CHECKPOINT_KEY);
-    checkpointCount.current = checkpointPartCount(savedCheckpoint);
-    setGenerationProgress(initialGenerationProgress);
-    setLoading(true); setError(undefined); setErrorTitle("Generation failed"); setWarnings([]);
-    try {
-      const form = new FormData();
-      form.set("paper", options.file);
-      form.set("sources", JSON.stringify(options.sources));
-      form.set("apiKeys", JSON.stringify(options.apiKeys));
-      form.set("assignments", JSON.stringify(options.assignments));
-      form.set("language", options.language);
-      form.set("audience", options.audience);
-      form.set("depth", options.depth);
-      if (options.template) form.set("template", JSON.stringify(options.template));
-      if (savedCheckpoint) form.set("checkpoint", savedCheckpoint);
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        body: form,
-        signal: controller.signal,
-        headers: { Accept: "application/x-ndjson, application/json" },
-      });
-
-      if (!response.ok) {
-        const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-        throw new Error(data?.error ?? "The paper could not be generated.");
-      }
-
-      let projectData: unknown;
-      let responseWarnings: string[] = [];
-      const contentType = response.headers.get("content-type") ?? "";
-
-      if (contentType.includes("application/x-ndjson")) {
-        if (!response.body) throw new Error("The generation stream could not be started.");
-        await readGenerationStream(response.body, (event) => {
-          if (event.type === "progress") setGenerationProgress(event);
-          if (event.type === "checkpoint") {
-            window.localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(event.checkpoint));
-            checkpointCount.current = event.completed.length;
-          }
-          if (event.type === "error") throw new Error(event.error);
-          if (event.type === "result") {
-            window.localStorage.removeItem(CHECKPOINT_KEY);
-            checkpointCount.current = 0;
-            projectData = event.project;
-            responseWarnings = event.warnings;
-            setGenerationProgress({
-              stage: "finalize",
-              progress: 100,
-              title: "Research workspace ready.",
-              detail: "Evidence map and StorySpec built successfully.",
-            });
-          }
-        });
-      } else {
-        const data = (await response.json()) as {
-          project?: unknown;
-          error?: string;
-          warnings?: string[];
-        };
-        if (!data.project) throw new Error(data.error ?? "The paper could not be generated.");
-        projectData = data.project;
-        responseWarnings = data.warnings ?? [];
-      }
-
-      if (!projectData) throw new Error("Generation finished but no project data came back.");
-      const nextProject = researchProjectSchema.parse(projectData);
-      if (fileUrl) URL.revokeObjectURL(fileUrl);
-      setFileUrl(URL.createObjectURL(options.file));
-      setProject(nextProject);
-      setProjects((current) => [nextProject, ...current.filter((item) => item.id !== nextProject.id)]);
-      await saveLibraryProject(nextProject);
-      setWarnings(responseWarnings);
-      setPaperLookup(undefined);
-      setMode("lab");
-      setScreen("workspace");
-    } catch (caught) {
-      const aborted = controller.signal.aborted || caught instanceof DOMException && caught.name === "AbortError";
-      const resumeNote = checkpointCount.current > 0
-        ? ` ${checkpointCount.current}/4 evidence stages were saved; press Analyse paper again to resume from here.`
-        : "";
-      setError(aborted ? "Generation cancelled; no API key or temporary file was kept." : `${caught instanceof Error ? caught.message : "Something unexpected went wrong."}${resumeNote}`);
-    } finally {
-      if (generationController.current === controller) generationController.current = undefined;
-      setLoading(false);
-    }
-  }
 
   async function openSample() {
     window.localStorage.removeItem(CHECKPOINT_KEY);
@@ -462,6 +190,7 @@ function Studio() {
       setLoadingSample(false);
     }
   }
+
   function changeProject(next: ResearchProject, reason?: RevisionReason) {
     if (reason) saveReason.current = reason;
     setProject(next);
@@ -479,7 +208,7 @@ function Studio() {
    */
   function analyseFromGraph(node: { identifier: string; title: string }) {
     window.localStorage.removeItem(CHECKPOINT_KEY);
-    setCitationsOpen(false);
+    setPanel(undefined);
     setPaperLookup({ query: node.identifier, expectTitle: node.title });
     setFileUrl(undefined); setSelectedClaimId(undefined); setWarnings([]);
     setScreen("home");
@@ -519,40 +248,6 @@ function Studio() {
     setSelectedClaimId(claimId);
   }
 
-  /** Silinen proje listedeki yerine, güncellenme sırasına göre geri konuyor. */
-  function restoreProject(restored: ResearchProject) {
-    setProjects((current) =>
-      [...current.filter((item) => item.id !== restored.id), restored].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
-    );
-  }
-
-  function deletionQueue() {
-    deletions.current ??= new PendingDeletion<ResearchProject>(
-      (target, reason) => {
-        void removeProject(target.id, reason === "pagehide").catch((error: unknown) => {
-          setDeleteError(error instanceof Error ? error.message : "Could not delete the Trace project.");
-          restoreProject(target);
-        });
-      },
-      setPendingDeletion,
-    );
-    return deletions.current;
-  }
-
-  /** Kart hemen kayboluyor; sunucudaki silme geri alma süresi dolunca (bkz. `pending-deletion.ts`). */
-  function requestDelete(projectId: string) {
-    const target = projects.find((item) => item.id === projectId);
-    if (!target) return;
-    setDeleteError(undefined);
-    deletionQueue().schedule(target);
-    setProjects((current) => current.filter((item) => item.id !== projectId));
-  }
-
-  function undoDelete() {
-    const restored = deletions.current?.undo();
-    if (restored) restoreProject(restored);
-  }
-
   async function removeProject(projectId: string, keepalive = false) {
     await deleteLibraryProject(projectId, { keepalive });
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -571,29 +266,30 @@ function Studio() {
   }
 
   async function importProject(file: File) {
-    if (file.size > 5 * 1024 * 1024) throw new Error("The Trace JSON exceeds the 5 MB limit.");
-    let raw: unknown;
-    try {
-      raw = JSON.parse(await file.text());
-    } catch {
-      throw new Error("The file is not valid JSON.");
-    }
-    const parsed = researchProjectSchema.safeParse(raw);
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      const path = issue?.path.join(".") || "root";
-      throw new Error(`Invalid Trace project schema: ${path} · ${issue?.message ?? "unknown error"}`);
-    }
-    await saveLibraryProject(parsed.data, { reason: "import" });
-    setProjects((current) => [parsed.data, ...current.filter((item) => item.id !== parsed.data.id)]);
-    setProject(parsed.data);
+    if (file.size > MAX_PROJECT_BYTES) throw new Error(PROJECT_TOO_LARGE);
+    const imported = parseTraceProject(await file.text());
+    await saveLibraryProject(imported, { reason: "import" });
+    setProjects((current) => [imported, ...current.filter((item) => item.id !== imported.id)]);
+    setProject(imported);
     setMode("lab");
     setSelectedClaimId(undefined);
     setWarnings([]);
     setScreen("workspace");
   }
 
-  const t = stringsFor(project?.language);
+  /**
+   * Geçmişten geri yükleme otomatik kayda bırakılmıyor: o yarım saniye
+   * gecikmeli ve geçmiş paneli hemen yeniden açılırsa "geri yüklemeden önce"
+   * kaydını henüz görmüyordu. Kayıt beklenip sonra ekrana yansıtılıyor;
+   * ardından gelen otomatik kayıt içerik aynı olduğu için iz bırakmaz.
+   */
+  async function restoreVersion(restored: ResearchProject) {
+    const stamped = { ...restored, updatedAt: new Date().toISOString() };
+    await saveLibraryProject(stamped, { reason: "restore" });
+    setProjects((current) => [stamped, ...current.filter((item) => item.id !== stamped.id)]);
+    setProject(stamped);
+    setSelectedClaimId(undefined);
+  }
 
   function openWork(target: StudioNavTarget) {
     if (screen !== "focus" && screen !== "profile") setReturnTo(screen === "compare" ? "library" : screen);
@@ -635,11 +331,9 @@ function Studio() {
       setMode("preview");
       window.setTimeout(() => scrollToSection("story", target.sectionId), 150);
     } else if (target.type === "action") {
-      if (target.action === "publish") setPublishOpen(true);
-      else if (target.action === "citations") setCitationsOpen(true);
-      else if (target.action === "history") setHistoryOpen(true);
-      else if (target.action === "json") download(`${projectSlug(project)}.trace.json`, JSON.stringify(project, null, 2), "application/json");
-      else download(`${projectSlug(project)}.html`, buildStandaloneStory(project), "text/html");
+      if (target.action === "json") download(`${projectSlug(project)}.trace.json`, JSON.stringify(project, null, 2), "application/json");
+      else if (target.action === "site") download(`${projectSlug(project)}.html`, buildStandaloneStory(project), "text/html");
+      else setPanel(target.action);
     } else {
       const definition = exportDefinitions.find((item) => item.format === target.format);
       if (definition && !definition.unavailable?.(project)) download(`${projectSlug(project)}.${definition.extension}`, definition.build(project), definition.mime);
@@ -760,12 +454,12 @@ function Studio() {
         onOpenClaim={openClaim}
         onOpenNotes={openNotes}
         onModelRecord={() => setScreen("models")}
-        onDelete={requestDelete}
-        pendingDeletion={pendingDeletion}
-        onUndoDelete={undoDelete}
-        onConfirmDelete={() => deletions.current?.flush("left")}
-        deleteError={deleteError}
-        onDismissDeleteError={() => setDeleteError(undefined)}
+        onDelete={deletion.request}
+        pendingDeletion={deletion.pending}
+        onUndoDelete={deletion.undo}
+        onConfirmDelete={deletion.confirm}
+        deleteError={deletion.error}
+        onDismissDeleteError={deletion.dismissError}
         onHome={() => setScreen("home")}
         onNew={newProject}
         onImport={importProject}
@@ -777,119 +471,34 @@ function Studio() {
     );
   }
   if (screen === "home" || !project) {
-    return withWork(<><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryProjects={projects} initialTeam={initialTeam} />{loading && <GenerationOverlay progress={generationProgress} onCancel={() => generationController.current?.abort()} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>);
+    return withWork(<><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generation.generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryProjects={projects} initialTeam={initialTeam} />{generation.loading && <GenerationOverlay progress={generation.progress} onCancel={generation.cancel} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>);
   }
 
-  const selectedClaim = project.evidence.claims.find((claim) => claim.id === selectedClaimId);
-  // Notlardan hikâyedeki bir bölüme: önizleme açılıp bölüme kaydırılıyor.
-  const showStorySection = (sectionId: string) => {
-    setMode("preview");
-    window.setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ block: "start" }), 80);
-  };
-  const slug = projectSlug(project);
-
   return withWork(
-    <ReaderNotesProvider key={project.id} projectId={project.id}>
-    <div className="workspace-shell" style={{ "--accent": project.story.accent } as React.CSSProperties}>
-      <NoteHighlights />
-      <SelectionNoteBar />
-      <header className="workspace-header">
-        <button className="workspace-brand" onClick={() => setScreen("home")}><span className="brand-glyph">t</span><span><strong>trace</strong><small>research studio</small></span></button>
-        <div className="project-identity"><span>Current paper</span><strong>{project.evidence.paper.title}</strong></div>
-        <nav className="mode-tabs" aria-label="Workspace mode">
-          <button className={mode === "lab" ? "active" : ""} title="Lab" onClick={() => setMode("lab")}><FlaskConical size={15} /> Lab</button>
-          <button className={mode === "story" ? "active" : ""} title="Story" onClick={() => setMode("story")}><LayoutTemplate size={15} /> Story</button>
-          <button className={mode === "preview" ? "active" : ""} title="Preview" onClick={() => setMode("preview")}><Share2 size={15} /> Preview</button>
-        </nav>
-        <div className="workspace-actions">
-          <button title={t.home} aria-label={t.home} onClick={() => setScreen("home")}><Home size={16} /><span>{t.home}</span></button>
-          <button title={t.library} aria-label={t.library} onClick={() => setScreen("library")}><BookOpen size={16} /><span>{t.library}</span></button>
-          <button title="Download the project JSON" aria-label="JSON" onClick={() => download(`${slug}.trace.json`, JSON.stringify(project, null, 2), "application/json")}><FileJson size={16} /><span>JSON</span></button>
-          <button title="Citation graph: what this paper builds on and what cites it" aria-label="Citations" onClick={() => setCitationsOpen(true)}><Network size={16} /><span>Citations</span></button>
-          <button title="Publish a shareable link" aria-label="Publish" onClick={() => setPublishOpen(true)}><Globe size={16} /><span>Publish</span></button>
-          <div className="export-menu">
-            <button className="export-button" aria-haspopup="menu" aria-expanded={exportOpen} onClick={() => setExportOpen((open) => !open)}><Download size={16} /> Export</button>
-            {exportOpen && (
-              <>
-                <button className="export-menu-backdrop" aria-label="Close the export menu" onClick={() => setExportOpen(false)} />
-                <div className="export-menu-list" role="menu">
-                  <button role="menuitem" onClick={() => { setExportOpen(false); download(`${slug}.html`, buildStandaloneStory(project), "text/html"); }}>
-                    <strong>Interactive site</strong><small>The whole story as one self-contained page.</small>
-                  </button>
-                  {exportDefinitions.map((definition) => {
-                    const reason = definition.unavailable?.(project);
-                    return (
-                      <button
-                        role="menuitem"
-                        key={definition.format}
-                        disabled={Boolean(reason)}
-                        onClick={() => { setExportOpen(false); download(`${slug}.${definition.extension}`, definition.build(project), definition.mime); }}
-                      >
-                        <strong>{definition.label}</strong><small>{reason ?? definition.description}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-          <DisplayControl />
-          <button className="icon-button" title="New paper" onClick={newProject}><Plus size={17} /></button>
-          <button className="icon-button" title="Version history" aria-label="Version history" onClick={() => setHistoryOpen(true)}><History size={17} /></button>
-          <StudioNav />
-        </div>
-      </header>
-      {warnings.length > 0 && <div className="warning-strip" title={warnings.join("\n")}>{warnings.length === 1 ? warnings[0] : `${warnings.length} notes from the analysis: ${warnings.join(" · ")}`}<button onClick={() => setWarnings([])}>Dismiss</button></div>}
-      <div className="workspace-content">
-        {mode === "lab" && <LabView project={project} library={projects} onAnalysePaper={analyseFromGraph} onReview={() => { setReviewScope(project.id); setScreen("review"); }} fileUrl={fileUrl} selectedClaimId={selectedClaimId} onClaimSelect={setSelectedClaimId} onProjectChange={changeProject} onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))} onShowStorySection={showStorySection} jump={labJump} />}
-        {mode === "story" && <StoryEditor project={project} fileUrl={fileUrl} onProjectChange={changeProject} onPreview={() => setMode("preview")} />}
-        {mode === "preview" && <div className="preview-shell"><StoryView project={project} embedded onClaimSelect={setSelectedClaimId} /></div>}
-      </div>
-      {publishOpen && <PublishPanel project={project} onClose={() => setPublishOpen(false)} />}
-      {citationsOpen && <CitationPanel project={project} onAnalyse={analyseFromGraph} onClose={() => setCitationsOpen(false)} />}
-      {historyOpen && (
-        <HistoryPanel
-          project={project}
-          onRestore={async (restored) => {
-            /**
-             * Geri yükleme otomatik kayda bırakılmıyor: o yarım saniye gecikmeli
-             * ve geçmiş paneli hemen yeniden açılırsa "geri yüklemeden önce"
-             * kaydını henüz görmüyordu. Kayıt beklenip sonra ekrana yansıtılıyor;
-             * ardından gelen otomatik kayıt içerik aynı olduğu için iz bırakmaz.
-             */
-            const stamped = { ...restored, updatedAt: new Date().toISOString() };
-            await saveLibraryProject(stamped, { reason: "restore" });
-            setProjects((current) => [stamped, ...current.filter((item) => item.id !== stamped.id)]);
-            setProject(stamped);
-            setSelectedClaimId(undefined);
-            setHistoryOpen(false);
-          }}
-          onClose={() => setHistoryOpen(false)}
-        />
-      )}
-      {mode === "preview" && selectedClaim && <div className="drawer-overlay" onClick={() => setSelectedClaimId(undefined)}><div onClick={(event) => event.stopPropagation()}><EvidenceDrawer claim={selectedClaim} review={project.claimReviews?.[selectedClaim.id]} evidence={project.evidence} fileUrl={fileUrl} onClose={() => setSelectedClaimId(undefined)} /></div></div>}
-    </div>
-    </ReaderNotesProvider>,
+    <WorkspaceView
+      project={project}
+      library={projects}
+      mode={mode}
+      onMode={setMode}
+      fileUrl={fileUrl}
+      onPaperFile={(file) => setFileUrl(URL.createObjectURL(file))}
+      selectedClaimId={selectedClaimId}
+      onClaimSelect={setSelectedClaimId}
+      warnings={warnings}
+      onDismissWarnings={() => setWarnings([])}
+      labJump={labJump}
+      panel={panel}
+      onPanel={setPanel}
+      onProjectChange={changeProject}
+      onRestore={restoreVersion}
+      onHome={() => setScreen("home")}
+      onLibrary={() => setScreen("library")}
+      onNew={newProject}
+      onReview={() => {
+        setReviewScope(project.id);
+        setScreen("review");
+      }}
+      onAnalysePaper={analyseFromGraph}
+    />,
   );
-}
-
-function GenerationOverlay({ progress, onCancel }: { progress: GenerationProgress; onCancel: () => void }) {
-  const [elapsed, setElapsed] = useState(0);
-  const [clock, setClock] = useState(0);
-  useEffect(() => {
-    const startedAt = Date.now();
-    const timer = window.setInterval(() => {
-      const now = Date.now();
-      setClock(now);
-      setElapsed(Math.floor((now - startedAt) / 1_000));
-    }, 1_000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const activeIndex = generationStages.findIndex((stage) => stage.id === progress.stage);
-  const activityAge = progress.activityAt && clock
-    ? Math.max(0, Math.floor((clock - new Date(progress.activityAt).getTime()) / 1_000))
-    : 0;
-  const activityLabel = activityAge < 3 ? "model active" : `last model activity ${activityAge}s ago`;
-  return <div className="generation-overlay" role="status" aria-live="polite"><div className="generation-card"><div className="generation-orbit"><span /><span /><span /></div><div className="generation-status-line"><p className="landing-eyebrow"><span /> Evidence pipeline running</p><small>{elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`}</small></div><h2>{progress.title}</h2><p>{progress.detail}</p><div className="generation-live"><i className={activityAge < 12 ? "active" : ""} /><span>{activityLabel}</span><small>10s heartbeat</small></div><div className="generation-stages">{generationStages.map((stage, index) => <span key={stage.id} className={index < activeIndex ? "done" : index === activeIndex ? "active" : ""}><i>{index < activeIndex ? "✓" : String(index + 1).padStart(2, "0")}</i><b>{stage.label}</b><small>{stage.description}</small></span>)}</div><div className="generation-meter"><i style={{ width: `${Math.max(2, Math.min(100, progress.progress))}%` }} /></div><div className="generation-footer"><span>{Math.round(progress.progress)}% complete{progress.attempt ? ` · attempt ${progress.attempt}` : ""}</span><button onClick={onCancel}>Cancel</button></div></div></div>;
 }

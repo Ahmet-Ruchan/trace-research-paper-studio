@@ -322,7 +322,17 @@ yapıldığı ve nasıl test edildiği yazıyor.
   - *Test:* bütün e2e (99) 2 işçiyle iki kez ve 3 işçiyle bir kez üst üste geçti; 4 işçide (4
     çekirdekte 4 sunucu ve 4 tarayıcı) aşırı yükten düşen testler varsayılanın neden yarı
     çekirdek olduğunu gösterdi.
-- [ ] **29. Kod düzeni.** Ekran geçişlerini yöneten ana dosya bölünür.
+- [x] **29. Kod düzeni.** Ekran geçişlerini yöneten ana dosya bölünür.
+  - *Yapıldı:* `app-shell.tsx` ~900 satırdan 504'e indi; yalnızca hangi ekranın açık olduğu ve
+    ekranlar arası geçiş kaldı. `studio/workspace-view.tsx` makale ekranı (başlık, kipler,
+    dışa aktarım, paneller, kanıt çekmecesi; açık panel artık tek bir durum),
+    `studio/use-generation.ts` analiz akışı ve kontrol noktası, `studio/use-project-deletion.ts`
+    geri alınabilir silme, `studio/use-studio-url.ts` açılışta adresi okuma ve adres çubuğunu
+    eşitleme, `studio/generation-overlay.tsx`, `studio/download.ts`, `studio/screens.ts`
+    (ortak türler). Dosyadan içe aktarma ile ajan devrinin doğrulaması saf bir modülde
+    (`src/lib/project-import.ts`). Davranış değişmedi.
+  - *Test:* `project-import.test.ts` (2: şema, JSON, boyut; yalnızca bu makineden devir, göreli
+    adres, başka köken/protokol reddi); `npm run check` (737 birim) ve bütün e2e (99) geçti.
 - [ ] **30. Gerçek oturum testi.** Hangi ajanın gerçek bir model oturumuyla sınandığının
   kontrolü.
 
