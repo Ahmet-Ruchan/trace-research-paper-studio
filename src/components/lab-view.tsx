@@ -74,6 +74,8 @@ import { useFocus } from "./focus/focus-provider";
 import { extendReviewBlock, type ReviewBlock } from "@/lib/work-log";
 import { NotesPanel, useReaderNotes } from "./reader-notes";
 import { ResumeBar, scrollToSection, useReadingTracker } from "./reading-position";
+import { ListenButton, ReadAloudProvider } from "./read-aloud";
+import { reportSpeech } from "@/lib/read-aloud";
 import { sectionMark } from "@/lib/reader-notes";
 
 type LabViewProps = {
@@ -192,6 +194,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   }
 
   const reportSections = useMemo(() => (project.deepReport?.sections ?? []).map((item) => ({ id: item.id, title: item.title })), [project.deepReport]);
+  const reportVoice = useMemo(() => reportSpeech(project), [project]);
   useReadingTracker(project.id, "report", reportSections, section === "report" && Boolean(onProjectChange));
   // Öğrenme katmanı eksikse (stüdyonun eski analizleri) Lab onu eklemeyi öneriyor.
   const missingLearning = onProjectChange ? missingLearningBlocks(project) : [];
@@ -503,6 +506,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
               <p>{project.deepReport.dek}</p>
             </header>
             {regeneration.undoBar}
+            <ReadAloudProvider place="report" language={project.language} sections={reportVoice}>
             <div className="report-sections">
               {project.deepReport.sections.map((item, index) => (
                 <article className={`report-section report-${item.kind}`} key={item.id} data-note-section={sectionMark("report", item.id)}>
@@ -520,6 +524,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                       )}
                     </span>
                     <h3>{item.title}</h3>
+                    {onProjectChange ? <ListenButton sectionId={item.id} title={item.title} /> : null}
                     <p>{item.summary}</p>
                   </header>
                   <div className="report-analysis">
@@ -531,6 +536,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 </article>
               ))}
             </div>
+            </ReadAloudProvider>
             <section className="report-questions">
               <span>Open questions</span>
               <h2>Questions the paper has not answered yet</h2>

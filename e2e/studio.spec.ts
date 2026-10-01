@@ -2949,6 +2949,124 @@ test.describe("reader notes", () => {
   });
 });
 
+test.describe("read aloud", () => {
+  /** Tarayıcının konuşma motoru yerine: okunanı kaydediyor; `__hold` doluyken parça bitmiyor. */
+  async function fakeSpeech(page: Page) {
+    await page.addInitScript(() => {
+      type Spoken = { text: string; lang: string; rate: number };
+      const state = window as unknown as { __spoken: Spoken[]; __hold: boolean; __paused: boolean; __cancels: number };
+      state.__spoken = [];
+      state.__hold = true;
+      state.__paused = false;
+      state.__cancels = 0;
+      class Utterance {
+        text: string;
+        lang = "";
+        rate = 1;
+        voice: unknown = null;
+        onend: (() => void) | null = null;
+        onerror: ((event: { error: string }) => void) | null = null;
+        constructor(text: string) {
+          this.text = text;
+        }
+      }
+      let current: Utterance | null = null;
+      const finish = (utterance: Utterance) => {
+        const tick = () => {
+          if (current !== utterance) return;
+          if (state.__hold || state.__paused) return void setTimeout(tick, 20);
+          current = null;
+          utterance.onend?.();
+        };
+        setTimeout(tick, 20);
+      };
+      Object.defineProperty(window, "SpeechSynthesisUtterance", { value: Utterance, configurable: true });
+      Object.defineProperty(window, "speechSynthesis", {
+        configurable: true,
+        value: {
+          speak(utterance: Utterance) {
+            state.__spoken.push({ text: utterance.text, lang: utterance.lang, rate: utterance.rate });
+            current = utterance;
+            finish(utterance);
+          },
+          cancel() {
+            state.__cancels += 1;
+            current = null;
+          },
+          pause() {
+            state.__paused = true;
+          },
+          resume() {
+            state.__paused = false;
+          },
+          getVoices: () => [],
+        },
+      });
+    });
+  }
+  const spoken = (page: Page) => page.evaluate(() => (window as unknown as { __spoken: Array<{ text: string; lang: string; rate: number }> }).__spoken);
+
+  test("reads the story aloud from a section, with pause, next, speed and stop", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-read-aloud"));
+    const sections = project.story.sections;
+    await fakeSpeech(page);
+    await page.goto(`/?project=${project.id}&mode=preview`);
+    await page.getByRole("button", { name: `Listen from “${sections[1].title}”` }).click();
+
+    const bar = page.getByRole("region", { name: "Read aloud" });
+    await expect(bar).toContainText(`Reading 2 of ${sections.length}`);
+    await expect(bar.locator("strong")).toHaveText(sections[1].title);
+    await expect.poll(async () => (await spoken(page))[0]).toMatchObject({ lang: project.language, rate: 1 });
+    expect((await spoken(page))[0].text.startsWith(sections[1].title)).toBe(true);
+    await expect(page.locator(`[data-note-section="story:${sections[1].id}"]`)).toHaveClass(/is-reading/);
+
+    await bar.getByRole("button", { name: "Pause" }).click();
+    await expect(bar.getByRole("button", { name: "Resume" })).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { __paused: boolean }).__paused)).toBe(true);
+    await bar.getByRole("button", { name: "Resume" }).click();
+
+    // Hız bir sonraki parçadan geçerli; bölüm atlanınca sonraki bölümün başı okunuyor.
+    await bar.getByLabel("Speed").selectOption("1.5");
+    await bar.getByRole("button", { name: "Next section" }).click();
+    await expect(bar.locator("strong")).toHaveText(sections[2].title);
+    await expect.poll(async () => (await spoken(page)).at(-1)).toMatchObject({ rate: 1.5 });
+    expect((await spoken(page)).at(-1)!.text.startsWith(sections[2].title)).toBe(true);
+
+    // Parçalar bitince sırayla ilerliyor; durdurunca çubuk kapanıyor.
+    const before = (await spoken(page)).length;
+    await page.evaluate(() => { (window as unknown as { __hold: boolean }).__hold = false; });
+    await expect.poll(async () => (await spoken(page)).length).toBeGreaterThan(before + 1);
+    await page.evaluate(() => { (window as unknown as { __hold: boolean }).__hold = true; });
+    await bar.getByRole("button", { name: "Stop reading" }).click();
+    await expect(bar).toHaveCount(0);
+    await expect(page.locator(".is-reading")).toHaveCount(0);
+  });
+
+  test("reads the deep report to the end, and offers nothing where the browser cannot speak", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-read-aloud-report"));
+    const report = project.deepReport!.sections;
+    await fakeSpeech(page);
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Deep report" }).click();
+    await page.getByRole("button", { name: `Listen from “${report.at(-1)!.title}”` }).click();
+    const bar = page.getByRole("region", { name: "Read aloud" });
+    await expect(bar).toContainText(`Reading ${report.length} of ${report.length}`);
+    await page.evaluate(() => { (window as unknown as { __hold: boolean }).__hold = false; });
+    // Son bölümün sonunda okuma kendiliğinden bitiyor.
+    await expect(bar).toHaveCount(0);
+    expect((await spoken(page)).map((item) => item.text).join(" ")).toContain(report.at(-1)!.analysis[0].slice(0, 40));
+
+    const plain = await page.context().newPage();
+    await plain.addInitScript(() => {
+      Object.defineProperty(window, "speechSynthesis", { value: undefined, configurable: true });
+    });
+    await plain.goto(`/?project=${project.id}&mode=preview`);
+    await expect(plain.locator(".story-section").first()).toBeVisible();
+    await expect(plain.locator(".listen-button")).toHaveCount(0);
+    await plain.close();
+  });
+});
+
 test.describe("search in a paper", () => {
   test("finds a word across one paper's concepts, claims, sections, glossary and notes, and goes where it is", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-paper-search"));

@@ -5,6 +5,8 @@ import { ArrowDown, BookOpen, ExternalLink } from "lucide-react";
 import { elementId, parseDeepLink, scrollToDeepLink, sectionHash } from "@/lib/deep-link";
 import { sectionMark } from "@/lib/reader-notes";
 import { ResumeBar, useReadingTracker } from "./reading-position";
+import { ListenButton, ReadAloudProvider } from "./read-aloud";
+import { storySpeech } from "@/lib/read-aloud";
 import type { ResearchProject } from "@/lib/schema";
 import {
   FiguresView,
@@ -27,6 +29,7 @@ type StoryViewProps = {
 
 export function StoryView({ project, embedded = false, onClaimSelect }: StoryViewProps) {
   const [activeId, setActiveId] = useState(project.story.sections[0]?.id ?? "");
+  const speech = useMemo(() => storySpeech(project), [project]);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const activeSection = useMemo(
     () => project.story.sections.find((section) => section.id === activeId) ?? project.story.sections[0],
@@ -118,6 +121,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
       </header>
 
       {embedded ? <ResumeBar projectId={project.id} place="story" /> : null}
+      <ReadAloudProvider place="story" language={project.language} sections={speech}>
       <div className="story-body">
         <div className="story-copy-column">
           {project.story.sections.map((section) => (
@@ -134,6 +138,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
                 {section.title}
                 <PermalinkButton hash={sectionHash(section.id)} />
               </h2>
+              {embedded ? <ListenButton sectionId={section.id} title={section.title} /> : null}
               <SectionPrerequisites concepts={sectionPrerequisites(section, terms, project.language)} />
               <TermParagraphs paragraphs={[section.body]} entries={terms} />
               <div className="story-claim-links">
@@ -179,6 +184,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
           </nav>
         </aside>
       </div>
+      </ReadAloudProvider>
 
       {project.interactives?.length ? (
         <section className="story-practice">

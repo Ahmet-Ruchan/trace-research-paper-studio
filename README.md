@@ -480,6 +480,11 @@ with *You stopped at 4 of 8: …* and **Continue reading**, and the paper's card
 **Continue 4/8**, which opens it at that section. The place is kept in this browser only, one per
 paper; another device keeps its own.
 
+**Listen** at the top of a story or deep report section reads it aloud with your browser's own voice,
+then carries on through the sections that follow: the section being read is outlined and kept in
+view, and a small bar pauses, skips to the next section, stops and sets the speed. Nothing is sent
+anywhere, and where the browser has no voice the button does not show.
+
 ![Visual story](docs/images/story.jpg)
 
 ### See where the evidence is thin

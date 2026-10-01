@@ -135,7 +135,18 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Okuma
 
-- [ ] **17. Sesli okuma.** Hikâye ve rapor bölümleri tarayıcının kendi sesiyle okunur.
+- [x] **17. Sesli okuma.** Hikâye ve rapor bölümleri tarayıcının kendi sesiyle okunur.
+  - *Yapıldı:* Story önizlemesinde ve Lab'in derin raporunda her bölümün başında **Listen**:
+    o bölümden başlayıp sona kadar tarayıcının konuşma sentezi (Web Speech API) ile, makalenin
+    diliyle okuyor. Metin cümle sınırında kısa parçalara bölünüyor (Chrome uzun konuşmayı kesiyor),
+    LaTeX ve işaretler okunmuyor (`src/lib/read-aloud.ts`). Okunan bölüm çerçeveleniyor ve ekrana
+    getiriliyor; alttaki çubuk duraklatıyor, sonraki bölüme geçiyor, durduruyor ve hızı (0.8–1.5×,
+    bu cihazda hatırlanıyor) değiştiriyor. Sentez olmayan tarayıcıda düğme hiç çıkmıyor; ekrandan
+    çıkınca okuma duruyor.
+  - *Test:* bölüm metni, LaTeX'in temizlenmesi, parçaların sınırı ve sırası birim testlerde;
+    sahte bir konuşma motoruyla bölümden başlama, dil, duraklat/sürdür, hız, bölüm atlama,
+    kendiliğinden ilerleme, durdurma, raporun sonunda bitme ve sentez yokken düğmenin çıkmaması
+    e2e'de.
 - [x] **18. Kaldığın yeri hatırlama.** Story ve raporda en son okunan yer saklanır;
   kütüphane kartında "Continue reading".
   - *Yapıldı:* Ekranın üst yarısındaki bölüm, bir buçuk saniye kalınca "okunan" sayılıp bu

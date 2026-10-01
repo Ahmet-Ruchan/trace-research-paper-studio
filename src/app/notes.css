@@ -139,3 +139,14 @@ a.reading-title svg { display: inline-block; vertical-align: -1px; color: var(--
 .paper-hit-kind { justify-self: start; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-soft); font-size: var(--text-2xs); letter-spacing: .08em; text-transform: uppercase; }
 .paper-hit-text { color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; }
 .paper-search-results mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--accent, var(--note-yellow)) 26%, transparent); color: inherit; }
+
+/* Sesli okuma: bölüm düğmesi, okunan bölüm ve alttaki çubuk. */
+.listen-button { display: inline-flex; align-items: center; gap: 5px; margin: 0 0 10px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-soft); cursor: pointer; font-size: var(--text-xs); }
+.listen-button:hover, .listen-button.is-on { border-color: var(--ink); color: var(--ink); }
+.is-reading { outline: 2px solid color-mix(in srgb, var(--accent, var(--ink)) 45%, transparent); outline-offset: 8px; border-radius: 6px; }
+.read-aloud-bar { position: fixed; z-index: 110; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; width: min(560px, calc(100vw - 24px)); padding: 10px 12px 10px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink); }
+.read-aloud-bar p { flex: 1; min-width: 0; display: grid; margin: 0; }
+.read-aloud-bar p span { color: var(--ink-soft); font-size: var(--text-xs); }
+.read-aloud-bar p strong { overflow: hidden; font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.read-aloud-bar button { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
+.read-aloud-bar select { flex: none; min-height: 34px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); font-size: var(--text-sm); }
