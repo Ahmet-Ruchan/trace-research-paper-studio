@@ -1490,8 +1490,11 @@ progress, explanations in the reader's own words checked against the evidence, s
 the library, concepts linked across papers with reading suggestions from the references and a reading order for
 the library, learning statistics, a work timer (focus rounds with breaks, countdown, stopwatch,
 alarms, due review cards offered in short breaks) with a profile, a calendar of the days worked, a
-weekly report and a weekly learning goal, your own notes and highlights with Markdown and Obsidian export, a reading list placed in
-the reading order, a learning
+weekly report and a weekly learning goal, your own notes and highlights with Markdown and Obsidian export (the whole
+library as a vault too), a reading list placed in the reading order, shared by a link and filled from Zotero or a .bib
+file, a timed practice exam, questions that tell two papers apart, search inside a paper, reading aloud, a command
+palette (Ctrl+K), full and weekly backups of your data, an installable app that opens the library offline, team
+review with accounts, claims approved together and notes shared by choice, a learning
 health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a
 mechanical check of every quote against its page with the quote marked on the page image, a claim
@@ -1505,8 +1508,8 @@ per-claim and per-section permalinks, resolution from a paper's name, DOI or rep
 (arXiv, bioRxiv, medRxiv, PubMed Central, ACL Anthology), literature maps of up to six projects,
 citation graphs, a local library with claim search across papers, tags, sorting, a list view and
 undoable deletion, a per-model record of how quotes held up, a dark theme and an adjustable text
-size, the native plugin for Codex / Claude Code / Antigravity CLI, and generation through Gemini, OpenAI, Claude, OpenRouter and a local model
-server (Ollama, LM Studio, llama.cpp).
+size, the native plugin for Codex / Claude Code / Antigravity CLI with the library as MCP tools, and generation through Gemini,
+OpenAI, Claude, OpenRouter and a local model server (Ollama, LM Studio, llama.cpp).
 
 A local model can run every stage, so an analysis can stay on your machine from start to finish.
 Local servers have no file-upload endpoint and most open-weight models cannot see a document, so in
@@ -1520,7 +1523,8 @@ is refused. A cloud provider still gets the PDF itself. Give the model a 32K con
 Only a loopback address is accepted — the request leaves the Trace server, and "local model" means
 this machine.
 
-Not there yet: accounts, access control beyond an unguessable link, or cloud-synced persistence.
+Not there yet: each team member's own study progress, work timer and profile (in team mode they are
+still one for the studio), or cloud-synced persistence.
 
 *Attention Is All You Need* ships fully enriched in `public/examples/`, in English and Turkish,
 serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
@@ -1553,7 +1557,10 @@ the two from mixing.
 - [x] Study across the library: reading order, confirmed concept aliases, learning statistics, progress carried between devices
 - [x] A work timer and a profile: focus rounds with breaks, countdown, stopwatch, alarms, and a calendar of the days worked
 - [x] Study habits: review cards in short breaks, focus rounds from Study and Review, a weekly report, notes and highlights with Obsidian export, and a reading list in the reading order
-- [ ] Team review with accounts and shared annotations
+- [x] Getting around and testing yourself: a command palette, search inside a paper, reading aloud, a practice exam, questions across two papers
+- [x] Beyond the studio: the library as MCP tools in all three agents, a Zotero or BibTeX import, an installable app that reads offline
+- [x] Team review with accounts and shared annotations
+- [ ] The interface in more than one language (a decision first)
 
 The work planned next, in order and ticked off as each item is tested and merged, is kept in
 [docs/plan.md](docs/plan.md).
