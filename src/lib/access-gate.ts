@@ -8,8 +8,9 @@ import { createHash, timingSafeEqual } from "node:crypto";
  * anahtarlarınla olmasa da sunucunu kullanabilir. `TRACE_ACCESS_PASSWORD`
  * tanımlıysa stüdyonun tamamı HTTP Basic kimlik doğrulamasının arkasına girer.
  *
- * İki yol açık kalır, bilerek:
+ * Üç yol açık kalır, bilerek:
  *   - `/p/<id>`  yayımlanmış hikâyeler; bağlantıyı paylaşmanın bütün amacı bu.
+ *   - `/r/<id>`  paylaşılan okuma listeleri; aynı neden.
  *   - `/api/health`  barındırma platformunun sağlık denetimi; hiçbir şey sızdırmaz.
  *
  * Bu bir hesap sistemi DEĞİL: tek parola, kullanıcı adı önemsiz, HTTPS şart.
@@ -17,7 +18,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 export const ACCESS_REALM = "Trace studio";
 
 export function isPublicPath(pathname: string) {
-  return pathname === "/api/health" || /^\/p\/[^/]+\/?$/.test(pathname);
+  return pathname === "/api/health" || /^\/[pr]\/[^/]+\/?$/.test(pathname);
 }
 
 const digest = (value: string) => createHash("sha256").update(value).digest();

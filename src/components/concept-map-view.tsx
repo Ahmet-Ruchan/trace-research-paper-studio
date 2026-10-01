@@ -11,6 +11,7 @@ import { ConceptAliasesPanel } from "./concept-aliases-panel";
 import { useConceptAliases, useLibraryStudy } from "./study-progress";
 import { StudioNav } from "./focus/studio-nav";
 import { SavedWork, useReadingList } from "./reading-list";
+import { ReadingSharePanel } from "./reading-share-panel";
 
 /**
  * Kütüphanenin kavram haritası: birden çok makalenin anlattığı kavramlar ve
@@ -132,6 +133,7 @@ export function ConceptMapView({
             </>
           ) : null}
           {reading?.error ? <p className="regen-error" role="status">{reading.error}</p> : null}
+          {reading?.ready && reading.items.length ? <ReadingSharePanel saved={reading.items.length} /> : null}
         </section>
       ) : null}
 

@@ -150,3 +150,25 @@ a.reading-title svg { display: inline-block; vertical-align: -1px; color: var(--
 .read-aloud-bar p strong { overflow: hidden; font-size: var(--text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .read-aloud-bar button { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
 .read-aloud-bar select { flex: none; min-height: 34px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); font-size: var(--text-sm); }
+
+/* Okuma listesini paylaşmak. */
+.reading-share { display: grid; gap: 12px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); }
+.reading-share h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-md); }
+.reading-share > p { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; }
+.reading-share-item { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.reading-share-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.reading-share-head strong { overflow-wrap: anywhere; }
+.reading-share-state { padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-soft); font-size: var(--text-xs); }
+.reading-share-item.is-live .reading-share-state { color: var(--green); }
+.reading-share-item small { color: var(--ink-soft); font-size: var(--text-xs); }
+.reading-share-link { display: flex; gap: 6px; }
+.reading-share-link input { flex: 1; min-width: 0; min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); font: var(--text-sm) ui-monospace, monospace; }
+.reading-share-link button, .reading-share-actions button, .reading-share-form button { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.reading-share-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.reading-share-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.reading-share-form label { display: grid; gap: 4px; color: var(--ink-soft); font-size: var(--text-xs); }
+.reading-share-form input:not([type="checkbox"]), .reading-share-form select { min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); font-size: var(--text-sm); }
+.reading-share-form .reading-share-check { display: flex; align-items: center; gap: 8px; flex-basis: 100%; font-size: var(--text-sm); }
+.reading-share-form button[type="submit"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.reading-share-form button:disabled, .reading-share-actions button:disabled { opacity: .45; cursor: default; }
+.reading-share-message { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); }

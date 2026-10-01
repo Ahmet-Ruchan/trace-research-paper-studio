@@ -444,6 +444,13 @@ removed. **Reading list** in the library header opens it; the list is kept in
 What should I read next, and save the works this paper builds on for later. Use the Trace plugin.
 ```
 
+**Share the list** under it gives the list a link: a page with the works in the reading order, why
+each one is there and a link to it on arXiv or doi.org, and, if you tick it, the papers in your library
+in their place. Only the list goes out, never your notes or how far you have read. The page is a copy
+of the list as it was; **Update to the current list** refreshes it, **Take down** closes the link at
+once, and a link can expire after 7, 30 or 90 days. Like a published story, it opens wherever this
+studio runs, and `/r/<id>` stays open when the studio is behind a password.
+
 ![A reading order for the library](docs/images/reading-order.jpg)
 
 **One idea, two names.** Matching by name keeps "scalar product" and "dot product" apart. **Names for
@@ -1278,7 +1285,8 @@ host that runs a Dockerfile works the same way.
 
 Trace has no accounts. On your own machine that is fine. On a server anyone can reach, set
 `TRACE_ACCESS_PASSWORD`: the studio and its API then ask for that password (HTTP Basic, any user
-name), while `/p/<id>` published links and the health check stay open. Use HTTPS in front of it.
+name), while `/p/<id>` published stories, `/r/<id>` shared reading lists and the health check stay
+open. Use HTTPS in front of it.
 Provider keys are still typed into the browser by whoever uses the studio and are never stored on
 the server.
 
@@ -1303,7 +1311,8 @@ the server.
   can produce an "approved" claim. The question in **Ask** is passed to the model as data, and an
   answer that cites an unknown or rejected claim is refused.
 - `TRACE_ACCESS_PASSWORD` puts the studio and its API behind one shared password, compared in
-  constant time. It is not an account system: published links and the health check stay open.
+  constant time. It is not an account system: published stories, shared reading lists and the health
+  check stay open.
 - A context source that returns an unreliable record is dropped rather than trusted.
 - LaTeX is rendered to MathML and passed through a tag and attribute allowlist.
 - Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,

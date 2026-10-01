@@ -180,7 +180,18 @@ yapıldığı ve nasıl test edildiği yazıyor.
     kelimenin gerekmesi, sınır birim testlerde; "/" ile açılış, kavrama, notun rapor bölümüne,
     sözlük terimine ve iddiaya gitmek e2e'de; telefon genişliği elle kontrol.
 - [ ] **20. Komut paleti (Ctrl+K).** Makaleye, bölüme ya da eyleme yazarak gitmek.
-- [ ] **26. Okuma listesini paylaşmak.** Okuma listesi bir bağlantıyla paylaşılır.
+- [x] **26. Okuma listesini paylaşmak.** Okuma listesi bir bağlantıyla paylaşılır.
+  - *Yapıldı:* Okuma sırasının altında **Share the list**: listenin o anki kopyası `/r/<kimlik>`
+    adresinde, okuma sırasındaki yerleri ve nedenleri, arXiv/DOI bağlantılarıyla; istenirse
+    kütüphanedeki makaleler de yerlerinde (`src/lib/reading-share.ts`). Notlar ve ilerleme
+    girmiyor. Sayfa betiksiz, kaçışlı HTML ve yayınlarla aynı güvenlik başlıklarıyla; kimlik
+    80 bit rastgele, liste ucu yok. **Update to the current list** kopyayı yeniliyor, **Take
+    down** bağlantıyı hemen kapatıyor (bulunamayan, kaldırılan ve süresi dolan aynı 404), 7/30/90
+    günlük süre seçilebiliyor. Parola korumalı sunucuda `/r/<kimlik>` açık kalıyor.
+  - *Test:* bağlantılar, makalelerle ve makalesiz liste, HTML kaçışı ve betik olmaması, durumlar,
+    boş listenin reddi, kopyanın güncellenene kadar değişmemesi, kaldırma ve silme birim
+    testlerde; açık yollar parola testinde; paylaşmak, okuyucunun sayfayı görmesi, güncelleme ve
+    kaldırınca 404 e2e'de.
 
 ## Öğrenme
 

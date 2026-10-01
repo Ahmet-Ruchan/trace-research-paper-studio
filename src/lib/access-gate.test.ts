@@ -21,6 +21,9 @@ describe("access gate", () => {
 
   it("yayımlanmış hikâyeleri ve sağlık ucunu açık bırakır, benzerlerini bırakmaz", () => {
     expect(isPublicPath("/p/AbC123")).toBe(true);
+    expect(isPublicPath("/r/0123456789abcdef0123")).toBe(true);
+    expect(isPublicPath("/r/x/../../api/library")).toBe(false);
+    expect(isPublicPath("/api/reading-list/share")).toBe(false);
     expect(isPublicPath("/api/health")).toBe(true);
     expect(isPublicPath("/p/AbC123/../../api/library")).toBe(false);
     expect(isPublicPath("/p")).toBe(false);

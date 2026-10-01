@@ -2782,6 +2782,46 @@ test.describe("reading list", () => {
   });
 });
 
+test.describe("sharing the reading list", () => {
+  test("shares the list as it is now with a link, updates it, and takes it down", async ({ page, request, context }) => {
+    const project = await seed(request, projectNamed("e2e-share-list"));
+    const add = (title: string, identifier: string) => request.post("/api/library/reading-list", { data: { item: { id: identifier, title, identifier, authors: ["A. Author"], year: 2014, from: [{ projectId: project.id, relation: "reference" }], addedAt: new Date().toISOString() } } });
+    expect((await add("Neural Machine Translation by Jointly Learning to Align and Translate", "arxiv:1409.0473")).ok()).toBe(true);
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Reading list (1)" }).click();
+    const panel = page.getByRole("region", { name: "Share the reading list" });
+    await panel.getByLabel("Title").fill("Seminar reading");
+    await panel.getByRole("button", { name: "Share a link" }).click();
+    await expect(panel.locator(".reading-share-message")).toHaveText("The link is ready.");
+    const link = panel.getByLabel("Link to Seminar reading");
+    const url = await link.inputValue();
+    expect(url).toMatch(/\/r\/[a-f0-9]{20}$/);
+    await expect(panel.locator(".reading-share-state")).toHaveText("Live");
+
+    const reader = await context.newPage();
+    await reader.goto(url);
+    await expect(reader.locator("h1")).toHaveText("Seminar reading");
+    await expect(reader.locator("li h2 a")).toHaveAttribute("href", "https://arxiv.org/abs/1409.0473");
+    await expect(reader.locator("li .why")).toHaveText(`${project.evidence.paper.title} builds on it.`);
+
+    // Eklenen çalışma güncelleyince görünüyor.
+    expect((await add("Long Short-Term Memory", "10.1162/neco.1997.9.8.1735")).ok()).toBe(true);
+    await reader.reload();
+    await expect(reader.locator("li")).toHaveCount(1);
+    await panel.getByRole("button", { name: "Update to the current list" }).click();
+    await expect(panel.locator(".reading-share-message")).toHaveText("The link shows the list as it is now.");
+    await reader.reload();
+    await expect(reader.locator("li")).toHaveCount(2);
+
+    await panel.getByRole("button", { name: "Take down" }).click();
+    await expect(panel.locator(".reading-share-state")).toHaveText("Taken down");
+    const gone = await reader.goto(url);
+    expect(gone?.status()).toBe(404);
+    await expect(reader.locator("h1")).toHaveText("This reading list is not available");
+    await reader.close();
+  });
+});
+
 test.describe("reader notes", () => {
   /** Bir bölümün ilk uzun metin düğümünden ilk `length` karakteri seçer, okuyucunun sürüklemesi gibi. */
   async function selectIn(page: Page, selector: string, length = 34) {
