@@ -333,8 +333,20 @@ yapıldığı ve nasıl test edildiği yazıyor.
     (`src/lib/project-import.ts`). Davranış değişmedi.
   - *Test:* `project-import.test.ts` (2: şema, JSON, boyut; yalnızca bu makineden devir, göreli
     adres, başka köken/protokol reddi); `npm run check` (737 birim) ve bütün e2e (99) geçti.
-- [ ] **30. Gerçek oturum testi.** Hangi ajanın gerçek bir model oturumuyla sınandığının
+- [x] **30. Gerçek oturum testi.** Hangi ajanın gerçek bir model oturumuyla sınandığının
   kontrolü.
+  - *Bulgu:* Tek haftalık çalıştırmanın (28 Eylül) günlüğünde Codex ve Claude Code'un gerçek
+    oturumu "no API key" ile atlanmış, iş yine yeşil: depoda anahtar sırrı yok ve eklenti hiçbir
+    ajanda gerçek bir modelle denenmemişken her şey "geçti" görünüyordu.
+  - *Yapıldı:* `scripts/live-sessions.mjs` kararı veriyor: duman testi sonunda kimin gerçekten
+    denendiğini yazıyor ("No agent was tried …"), `--live` ile anahtarı olmayan her ajan bir uyarı
+    (CI'da `::warning` notu ve iş özetinin başında), `--require-live codex,claude` denenmeyeni ya
+    da düşeni başarısızlık sayıyor, `--report` kaydı JSON yazıyor. İş akışı kaydı her çalıştırmada
+    `plugin-smoke-report` eseri olarak 90 gün saklıyor; elle başlatılan çalıştırma varsayılan
+    olarak iki ajanın gerçek oturumu geçmesini şart koşuyor (anahtar yoksa kırmızı). Bu ortamda
+    anahtar olmadığından gerçek oturum burada da denenemedi; Antigravity girişsiz denenemiyor.
+  - *Test:* `live-sessions.test.ts` (4); yerelde üç CLI ile `--live --report` (iki uyarı, rapor
+    dosyası, geçti), `--require-live claude` (başarısız, `::error` notu), hatalı seçenekler.
 
 ## Büyük işler
 

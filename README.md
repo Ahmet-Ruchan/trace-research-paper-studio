@@ -1250,7 +1250,7 @@ npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
 npm run version:set -- 0.38.0  # write one version into the package and every plugin manifest
-npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
+npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live [--require-live codex,claude]] [--report report.json]
 ```
 
 `test:e2e` runs in parallel: each Playwright worker starts its own production server on its own
@@ -1272,7 +1272,15 @@ by hand fails. It needs `OPENAI_API_KEY` for Codex and `ANTHROPIC_API_KEY` for C
 reports `skip` without them; the weekly and manual runs pass `--live` with the repository secrets of
 those names. Antigravity CLI is not tried live: `agy -p` needs a Google sign-in, not a key. There
 the check stops at what can be verified without one: the plugin installs, its skill is processed and
-the bridge runs from the installed copy. In all three it also checks the plugin's MCP server: Codex
+the bridge runs from the installed copy.
+
+A skipped session used to look like a pass. Now every run ends by saying which agents were really
+tried with a model ("No agent was tried with a real model session in this run" when none was), each
+agent skipped for want of a key is a warning on the run, and `--report` writes the same as JSON; the
+workflow keeps it as the `plugin-smoke-report` artifact for 90 days, so the record of which agent
+was last tried live, with which version, is there to look up. `--require-live codex,claude` turns a
+skipped or failed session into a failure; a manual run of the `plugins` workflow asks for it by
+default, so it goes red until the two keys are in the repository's secrets. In all three it also checks the plugin's MCP server: Codex
 starts it and lists its tools, `claude mcp list` connects to it, Antigravity takes it in on install,
 and the server answers from each installed copy.
 

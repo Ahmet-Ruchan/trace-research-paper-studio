@@ -15,8 +15,11 @@
 #
 # Gerçek model oturumu (`--live`) yalnızca haftalık ve elle başlatılan
 # çalıştırmada, depo sırlarında OPENAI_API_KEY / ANTHROPIC_API_KEY varsa
-# açılıyor; yoksa "skip". Antigravity'de denenmiyor: `agy -p` bir Google
-# girişi istiyor.
+# açılıyor; yoksa "skip" ve bir uyarı notu: hangi ajanın gerçekten denendiği
+# iş özetinin başında ve `plugin-smoke-report` eserinde. Elle başlatılan
+# çalıştırma varsayılan olarak Codex ve Claude Code'un gerçek oturumu
+# geçmesini şart koşuyor (`require_live`); anahtar yoksa kırmızı.
+# Antigravity'de denenmiyor: `agy -p` bir Google girişi istiyor.
 name: plugins
 
 on:
@@ -24,6 +27,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      require_live:
+        description: "Fail unless Codex and Claude Code pass a real model session"
+        type: boolean
+        default: true
   schedule:
     - cron: "17 6 * * 1"
 
@@ -79,4 +87,16 @@ jobs:
           --codex "$RUNNER_TEMP/agents/node_modules/.bin/codex"
           --claude "$RUNNER_TEMP/agents/node_modules/.bin/claude"
           --agy "$RUNNER_TEMP/agy/agy"
+          --report "$RUNNER_TEMP/plugin-smoke-report.json"
           ${{ env.LIVE == 'true' && '--live' || '' }}
+          ${{ github.event_name == 'workflow_dispatch' && inputs.require_live && '--require-live codex,claude' || '' }}
+
+      # Hangi ajanın nasıl sınandığının kaydı; başarısız çalıştırmada da.
+      - name: Keep the record of which agent was tried how
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-smoke-report
+          path: ${{ runner.temp }}/plugin-smoke-report.json
+          if-no-files-found: ignore
+          retention-days: 90

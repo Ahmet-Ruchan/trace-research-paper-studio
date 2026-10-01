@@ -25,6 +25,11 @@
  * doğrulanan, eklentinin kurulup becerisinin işlendiği ve köprünün kurulan
  * kopyadan çalıştığı. Anahtarsız koşuda gerçek oturum "skip" olarak yazılıyor.
  *
+ * Sonda hangi ajanın gerçek bir modelle sınandığı açıkça yazılıyor
+ * (`live-sessions.mjs`): `--live` ile anahtarı olmayan ajan bir uyarı
+ * (CI'da notu da düşüyor), `--require-live codex,claude` ile başarısızlık.
+ * `--report <dosya>` kaydı JSON olarak yazıyor.
+ *
  * Verilmeyen CLI atlanıyor; hiçbiri verilmezse betik hata veriyor. Yalnızca
  * Node'un kendi modüllerini kullanıyor, `npm ci` gerektirmiyor.
  */
@@ -33,6 +38,7 @@ import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { liveReport, liveVerdict, requiredAgents } from "./live-sessions.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN = "trace-paper-studio";
@@ -69,6 +75,8 @@ function parseArgs(values) {
       args.live = true;
       continue;
     }
+    // --require-live codex,claude: bu ajanlar gerçek oturumu geçmezse çalıştırma başarısız.
+    // --report <dosya.json>: hangi ajanın nasıl sınandığının kaydı (iş akışı eser olarak saklıyor).
     args[key] = values[index + 1];
     index += 1;
   }
@@ -286,7 +294,7 @@ async function smokeCodex(codex, want, live) {
   const version = run(codex, ["--version"]).stdout.trim();
   console.log(`\nCodex (${version})`);
   const before = failures;
-  const row = { agent: "Codex", version, live: "not asked" };
+  const row = { agent: "Codex", version, live: live ? "not reached" : "not asked" };
   const home = mkdtempSync(join(tmpdir(), "trace-smoke-codex-"));
   const env = { ...process.env, CODEX_HOME: home, RUST_LOG: "warn" };
   try {
@@ -344,7 +352,7 @@ async function smokeCodex(codex, want, live) {
           run(codex, ["exec", "--skip-git-repo-check", "--ephemeral", "-s", "workspace-write", "-C", workspace, LIVE_PROMPT], { env, input: "", timeout: 600_000 }),
         );
         row.live = passed ? "passed" : "failed";
-      }
+      } else row.live = "failed";
     }
   } finally {
     rmSync(home, { recursive: true, force: true });
@@ -356,7 +364,7 @@ function smokeClaude(claude, want, live) {
   const version = run(claude, ["--version"]).stdout.trim();
   console.log(`\nClaude Code (${version})`);
   const before = failures;
-  const row = { agent: "Claude Code", version, live: "not asked" };
+  const row = { agent: "Claude Code", version, live: live ? "not reached" : "not asked" };
   const home = mkdtempSync(join(tmpdir(), "trace-smoke-claude-"));
   const env = { ...process.env, HOME: home };
   delete env.CLAUDE_CONFIG_DIR;
@@ -443,7 +451,18 @@ function smokeAntigravity(agy, want) {
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.codex && !args.claude && !args.agy) {
-  console.error("Usage: node scripts/plugin-smoke.mjs [--codex <bin>] [--claude <bin>] [--agy <bin>] [--live] (at least one CLI)");
+  console.error("Usage: node scripts/plugin-smoke.mjs [--codex <bin>] [--claude <bin>] [--agy <bin>] [--live [--require-live codex,claude]] [--report <file.json>] (at least one CLI)");
+  process.exit(2);
+}
+let required;
+try {
+  required = requiredAgents(args["require-live"]);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(2);
+}
+if (required.length && !args.live) {
+  console.error("--require-live needs --live.");
   process.exit(2);
 }
 const want = expected();
@@ -451,10 +470,26 @@ console.log(`Trace plugin ${want.version}: installing it into each agent and run
 if (args.codex) await smokeCodex(args.codex, want, args.live);
 if (args.claude) smokeClaude(args.claude, want, args.live);
 if (args.agy) smokeAntigravity(args.agy, want);
+
+// Hangi ajan gerçek bir modelle sınandı: açıkça söyleniyor, istenirse zorunlu (`live-sessions.mjs`).
+const verdict = liveVerdict(summary, { live: Boolean(args.live), require: required });
+console.log(`\n${verdict.headline}`);
+for (const warning of verdict.warnings) {
+  console.log(`  warn  ${warning}`);
+  if (process.env.GITHUB_ACTIONS) console.log(`::warning title=No real model session::${warning}`);
+}
+for (const error of verdict.errors) {
+  failures += 1;
+  console.log(`  FAIL  ${error}`);
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=Real model session::${error}`);
+}
+if (args.report) {
+  writeFileSync(resolve(String(args.report)), `${JSON.stringify(liveReport(summary, { plugin: want.version, live: Boolean(args.live), at: new Date().toISOString() }), null, 2)}\n`);
+}
 console.log(failures ? `\n${failures} check(s) failed.` : "\nEvery check passed.");
 // CI'da hangi sürümlerin denendiği iş özetinde kalıyor; en son sürümle koşan haftalık çalıştırmada önemli.
 if (process.env.GITHUB_STEP_SUMMARY) {
   const rows = summary.map((row) => `| ${row.agent} | ${row.version || "?"} | ${row.failed ? `${row.failed} failed` : "passed"} | ${row.live} |`);
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, [`### Trace plugin ${want.version}`, "", "| Agent | Version | Checks | Real model session |", "| --- | --- | --- | --- |", ...rows, ""].join("\n"));
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, [`### Trace plugin ${want.version}`, "", `**${verdict.headline}**`, "", "| Agent | Version | Checks | Real model session |", "| --- | --- | --- | --- |", ...rows, "", ...verdict.warnings.map((warning) => `- ${warning}`), ""].join("\n"));
 }
 process.exit(failures ? 1 : 0);
