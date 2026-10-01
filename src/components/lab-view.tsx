@@ -18,6 +18,7 @@ import {
   Quote,
   RefreshCw,
   Route,
+  Search,
   ShieldCheck,
   Sigma,
   SlidersHorizontal,
@@ -31,6 +32,9 @@ import type { RevisionReason } from "@/lib/project-revisions";
 import type { Claim, ResearchProject } from "@/lib/schema";
 import { claimHash, elementId, parseDeepLink, scrollToDeepLink } from "@/lib/deep-link";
 import { foldForSearch } from "@/lib/search-text";
+import { excerptAround, highlightSegments } from "@/lib/library-search";
+import { PAPER_HIT_LABELS, PAPER_SEARCH_KINDS, searchPaper, type PaperHit } from "@/lib/paper-search";
+import type { NotePlace } from "@/lib/reader-notes";
 import {
   ApplicationGuideView,
   EvidenceHealthView,
@@ -142,6 +146,51 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
     // Yalnızca yeni bir istekte; `jump` nesnesi her çizimde aynı kalmayabilir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpNonce]);
+  // Makale içi arama (`paper-search.ts`); "/" arama kutusunu açıyor.
+  const [paperQuery, setPaperQuery] = useState("");
+  const paperSearch = useMemo(() => searchPaper(project, notes?.notes ?? [], paperQuery), [project, notes?.notes, paperQuery]);
+  const searchInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      event.preventDefault();
+      setSection("search");
+      setTimeout(() => searchInput.current?.focus(), 0);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /** Bir yere gitmek: notlardaki "Show it" ve arama sonuçları. */
+  function showPlace(place: NotePlace, sectionId: string) {
+    if (place === "story") {
+      if (onShowStorySection) return onShowStorySection(sectionId);
+      setSection("study");
+      return;
+    }
+    if (place === "concept") {
+      setPrimerOpen(sectionId);
+      setSection("primer");
+    } else setSection("report");
+    window.setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(sectionMark(place, sectionId))}"]`)?.scrollIntoView({ block: "start" }), 60);
+  }
+
+  function openHit(hit: PaperHit) {
+    if (hit.kind === "claim" || (hit.kind === "note" && hit.target?.kind === "claim")) {
+      setSection("claims");
+      onClaimSelect(hit.kind === "claim" ? hit.id : (hit.target as { claimId: string }).claimId);
+      return;
+    }
+    if (hit.kind === "note" && hit.target?.kind === "section") return showPlace(hit.target.place, hit.target.sectionId);
+    if (hit.kind === "story" || hit.kind === "report" || hit.kind === "concept") return showPlace(hit.kind, hit.id);
+    if (hit.kind === "term") {
+      setSection("glossary");
+      window.setTimeout(() => document.querySelector(`[data-glossary-term="${CSS.escape(hit.id)}"]`)?.scrollIntoView({ block: "center" }), 60);
+    }
+  }
+
   const reportSections = useMemo(() => (project.deepReport?.sections ?? []).map((item) => ({ id: item.id, title: item.title })), [project.deepReport]);
   useReadingTracker(project.id, "report", reportSections, section === "report" && Boolean(onProjectChange));
   // Öğrenme katmanı eksikse (stüdyonun eski analizleri) Lab onu eklemeyi öneriyor.
@@ -273,6 +322,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
   const nav = [
     { id: "overview", label: "Overview", icon: Lightbulb },
+    { id: "search", label: "Search", icon: Search },
     { id: "study", label: t.tabStudy, icon: Route },
     ...(project.primer ? [{ id: "primer", label: t.navPrimer, icon: GraduationCap }] : []),
     ...(library && project.primer ? [{ id: "concepts", label: "Concepts", icon: Waypoints }] : []),
@@ -529,14 +579,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 setSection("claims");
                 onClaimSelect(claimId);
               }}
-              onShowSection={(place, sectionId) => {
-                if (place === "story") return onShowStorySection?.(sectionId);
-                if (place === "concept") {
-                  setPrimerOpen(sectionId);
-                  setSection("primer");
-                } else setSection("report");
-                window.setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(sectionMark(place, sectionId))}"]`)?.scrollIntoView({ block: "start" }), 60);
-              }}
+              onShowSection={showPlace}
             />
           </section>
         )}
@@ -727,12 +770,54 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
           </section>
         )}
 
+        {section === "search" && (
+          <section className="lab-block paper-search" aria-label="Search this paper">
+            <div className="block-title"><Search size={16} /> Search this paper</div>
+            <label className="paper-search-field">
+              <Search size={16} aria-hidden="true" />
+              <input
+                ref={searchInput}
+                autoFocus
+                value={paperQuery}
+                onChange={(event) => setPaperQuery(event.target.value)}
+                aria-label="Search this paper"
+                placeholder="Claims, sections, concepts, terms and your notes"
+              />
+            </label>
+            <p className="section-intro" role="status">
+              {!paperSearch.terms.length
+                ? "Type a word or two. Press / anywhere in the Lab to come back here."
+                : paperSearch.total
+                  ? `${paperSearch.total} ${paperSearch.total === 1 ? "match" : "matches"}: ${PAPER_SEARCH_KINDS.filter((kind) => paperSearch.counts[kind]).map((kind) => `${paperSearch.counts[kind]} ${PAPER_HIT_LABELS[kind].toLowerCase()}`).join(", ")}.`
+                  : "Nothing in this paper mentions every word you typed."}
+            </p>
+            {paperSearch.hits.length ? (
+              <ol className="paper-search-results">
+                {paperSearch.hits.map((hit) => (
+                  <li key={`${hit.kind}-${hit.id}`}>
+                    <button type="button" onClick={() => openHit(hit)}>
+                      <span className={`paper-hit-kind is-${hit.kind}`}>{PAPER_HIT_LABELS[hit.kind]}</span>
+                      <strong>{highlightSegments(hit.title, paperSearch.terms).map((part, index) => (part.match ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>))}</strong>
+                      {hit.text ? (
+                        <span className="paper-hit-text">
+                          {highlightSegments(excerptAround(hit.text, paperSearch.terms, 220), paperSearch.terms).map((part, index) => (part.match ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>))}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+            {paperSearch.total > paperSearch.hits.length ? <p className="section-intro">Showing the first {paperSearch.hits.length}. Add a word to narrow the search.</p> : null}
+          </section>
+        )}
+
         {section === "glossary" && (
           <section className="lab-block">
             <div className="block-title"><BookMarked size={16} /> Glossary</div>
             <div className="glossary-grid">
               {project.evidence.glossary.map((item) => (
-                <article key={item.term}>
+                <article key={item.term} data-glossary-term={item.term}>
                   <h3>{item.term}</h3>
                   <p>{item.definition}</p>
                 </article>

@@ -656,6 +656,11 @@ library, each with its paper and where it is (a story or report section, a Prime
 claim). A note on a claim opens on that claim; the others open the paper's notes, where **Show it**
 goes to the passage.
 
+Inside one paper, **Search** in the Lab (or <kbd>/</kbd> anywhere in it) looks through its claims and
+their quotes, the story and the deep report, the Primer, the glossary and your notes on it at once.
+A word in a title counts more than one in the text, every word you type must appear, and each result
+goes where it is: the claim, the section, the concept, the term or the passage you noted.
+
 ![Search the claims of every paper](docs/images/library.jpg)
 
 ### Group papers with tags

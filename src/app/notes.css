@@ -127,3 +127,15 @@ a.reading-title svg { display: inline-block; vertical-align: -1px; color: var(--
 .cloze-answer .quiz-check { margin-top: 0; }
 .cloze-show { padding: 0; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--ink-soft); cursor: pointer; font-size: var(--text-sm); }
 .cloze-said { margin: 12px 0 0; color: var(--ink-soft); font-size: var(--text-sm); }
+
+/* Makale içi arama (Lab → Search). */
+.paper-search-field { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--ink-soft); }
+.paper-search-field input { flex: 1; min-width: 0; min-height: 44px; border: 0; background: transparent; color: var(--ink); font-size: var(--text-md); outline: none; }
+.paper-search-field:focus-within { border-color: var(--ink); }
+.paper-search-results { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
+.paper-search-results button { width: 100%; display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); cursor: pointer; text-align: left; }
+.paper-search-results button:hover { border-color: var(--ink-soft); }
+.paper-search-results strong { font: 400 var(--text-lg)/1.4 Georgia, serif; overflow-wrap: anywhere; }
+.paper-hit-kind { justify-self: start; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-soft); font-size: var(--text-2xs); letter-spacing: .08em; text-transform: uppercase; }
+.paper-hit-text { color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.paper-search-results mark { padding: 0 1px; border-radius: 2px; background: color-mix(in srgb, var(--accent, var(--note-yellow)) 26%, transparent); color: inherit; }

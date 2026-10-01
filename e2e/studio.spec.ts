@@ -2949,6 +2949,54 @@ test.describe("reader notes", () => {
   });
 });
 
+test.describe("search in a paper", () => {
+  test("finds a word across one paper's concepts, claims, sections, glossary and notes, and goes where it is", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-paper-search"));
+    const concept = project.primer!.concepts.find((item) => item.term === "Softmax")!;
+    const at = new Date().toISOString();
+    expect((await request.put(`/api/library/notes?id=${project.id}`, { data: { notes: [{ id: "n1", target: { kind: "section", place: "report", sectionId: project.deepReport!.sections[1].id }, text: "Softmax saturates: ask in the seminar.", color: "yellow", createdAt: at, updatedAt: at }] } })).ok()).toBe(true);
+    await page.goto(`/?project=${project.id}`);
+    await expect(page.locator(".lab-section-header h1")).toBeVisible();
+
+    // "/" aramayı açıyor ve kutuya odaklanıyor.
+    await page.keyboard.press("/");
+    const box = page.getByRole("textbox", { name: "Search this paper" });
+    await expect(box).toBeFocused();
+    await box.fill("softmax");
+    const results = page.locator(".paper-search-results li");
+    await expect(results.first()).toContainText("Primer");
+    await expect(results.first().locator("strong")).toHaveText("Softmax");
+    await expect(page.locator(".paper-search .section-intro").first()).toContainText(/\d+ matches: .*primer.*your note/);
+    await results.first().getByRole("button").click();
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Primer");
+    await expect(page.locator(`[data-note-section="concept:${concept.id}"]`)).toBeVisible();
+
+    // Not, bulunduğu rapor bölümüne götürüyor.
+    await page.locator(".lab-nav > button", { hasText: "Search" }).click();
+    await page.getByRole("textbox", { name: "Search this paper" }).fill("saturates seminar");
+    await expect(results).toHaveCount(1);
+    await expect(results.first()).toContainText("Your note");
+    await results.first().getByRole("button").click();
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Deep report");
+    await expect.poll(() => page.evaluate((id) => {
+      const box = document.querySelector(`[data-note-section="report:${id}"]`)!.getBoundingClientRect();
+      return box.top < window.innerHeight && box.bottom > 0;
+    }, project.deepReport!.sections[1].id)).toBe(true);
+
+    // Sözlük terimi ve iddia.
+    const term = project.evidence.glossary[0].term;
+    await page.locator(".lab-nav > button", { hasText: "Search" }).click();
+    await page.getByRole("textbox", { name: "Search this paper" }).fill(term);
+    await page.locator(".paper-search-results li", { hasText: "Glossary" }).first().getByRole("button").click();
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Glossary");
+    const claim = project.evidence.claims[0];
+    await page.locator(".lab-nav > button", { hasText: "Search" }).click();
+    await page.getByRole("textbox", { name: "Search this paper" }).fill(claim.statement.split(" ").slice(0, 6).join(" "));
+    await page.locator(".paper-search-results li", { hasText: "Claim" }).first().getByRole("button").click();
+    await expect(page.locator(".claim-row.selected")).toBeVisible();
+  });
+});
+
 test.describe("study time", () => {
   test.use({ timezoneId: "Europe/Istanbul" });
 

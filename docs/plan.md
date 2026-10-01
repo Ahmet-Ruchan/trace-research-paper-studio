@@ -146,8 +146,17 @@ yapıldığı ve nasıl test edildiği yazıyor.
     kalındıysa devam önerilmiyor.
   - *Test:* konum saklama, 200 sınırı, bozuk değer, kapalı depolama birim testlerde; rapor ve
     hikâyede ilerleyip kütüphaneden ve şeritten geri dönmek e2e'de.
-- [ ] **19. Makale içi arama.** Tek makalenin iddialarında, raporunda, kavramlarında ve
+- [x] **19. Makale içi arama.** Tek makalenin iddialarında, raporunda, kavramlarında ve
   notlarında birlikte arama.
+  - *Yapıldı:* Lab'de **Search** bölümü (Lab'in her yerinde <kbd>/</kbd> açıp kutuya odaklıyor):
+    iddialar ve alıntıları, hikâye ve derin rapor bölümleri, Primer kavramları, sözlük ve
+    okuyucunun notları birlikte (`src/lib/paper-search.ts`). Başlıkta geçen kelime metindekinden,
+    başlığı aranan şeyin kendisi olan sonuç hepsinden ağır basıyor; her kelime geçmeli. Sonuç
+    türüyle ve işaretli kelimelerle; tıklayınca iddiaya, bölüme, Primer'de kavrama, sözlükte
+    terime ya da notun olduğu yere gidiyor. Notlardaki "Show it" ile aynı yol.
+  - *Test:* bütün türlerde bulma, sıralama, notun hedefi, metinsiz işaretin aranmaması, her
+    kelimenin gerekmesi, sınır birim testlerde; "/" ile açılış, kavrama, notun rapor bölümüne,
+    sözlük terimine ve iddiaya gitmek e2e'de; telefon genişliği elle kontrol.
 - [ ] **20. Komut paleti (Ctrl+K).** Makaleye, bölüme ya da eyleme yazarak gitmek.
 - [ ] **26. Okuma listesini paylaşmak.** Okuma listesi bir bağlantıyla paylaşılır.
 
