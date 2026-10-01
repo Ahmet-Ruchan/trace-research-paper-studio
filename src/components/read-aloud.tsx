@@ -114,10 +114,11 @@ export function ReadAloudProvider({ place, language, sections, children }: { pla
     if (!sectionId) return;
     const element = document.querySelector<HTMLElement>(`[data-note-section="${CSS.escape(sectionMark(place, sectionId))}"]`);
     if (!element) return;
-    element.classList.add("is-reading");
+    // Sınıf değil öznitelik: React bölümün sınıfını (ör. "is-active") yeniden yazınca silinmesin.
+    element.setAttribute("data-reading", "true");
     element.style.scrollMarginTop = "90px";
     element.scrollIntoView({ block: "start", behavior: "smooth" });
-    return () => element.classList.remove("is-reading");
+    return () => element.removeAttribute("data-reading");
   }, [place, sectionId]);
 
   const current = sections.findIndex((section) => section.id === sectionId);

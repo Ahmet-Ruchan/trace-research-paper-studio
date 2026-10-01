@@ -3018,7 +3018,12 @@ test.describe("read aloud", () => {
     await expect(bar.locator("strong")).toHaveText(sections[1].title);
     await expect.poll(async () => (await spoken(page))[0]).toMatchObject({ lang: project.language, rate: 1 });
     expect((await spoken(page))[0].text.startsWith(sections[1].title)).toBe(true);
-    await expect(page.locator(`[data-note-section="story:${sections[1].id}"]`)).toHaveClass(/is-reading/);
+    const reading = page.locator(`[data-note-section="story:${sections[1].id}"]`);
+    await expect(reading).toHaveAttribute("data-reading", "true");
+    // Kaydırınca bölümün sınıfı değişiyor; işaret kalıyor.
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(300);
+    await expect(reading).toHaveAttribute("data-reading", "true");
 
     await bar.getByRole("button", { name: "Pause" }).click();
     await expect(bar.getByRole("button", { name: "Resume" })).toBeVisible();
@@ -3039,7 +3044,7 @@ test.describe("read aloud", () => {
     await page.evaluate(() => { (window as unknown as { __hold: boolean }).__hold = true; });
     await bar.getByRole("button", { name: "Stop reading" }).click();
     await expect(bar).toHaveCount(0);
-    await expect(page.locator(".is-reading")).toHaveCount(0);
+    await expect(page.locator("[data-reading]")).toHaveCount(0);
   });
 
   test("reads the deep report to the end, and offers nothing where the browser cannot speak", async ({ page, request }) => {
