@@ -26,6 +26,7 @@ import {
 import type { Quiz, QuizQuestion, ResearchProject } from "@/lib/schema";
 import { mergeStudyProgress, readStudyTransfer, studyTransferFile, studyTransferFileName } from "@/lib/study-transfer";
 import { STUDY_STEP_CAP_MS } from "@/lib/work-log";
+import { sectionMark } from "@/lib/reader-notes";
 
 /** Bölüm ekine verilen: ilerleme ve onu değiştirmenin tek yolu, çalışmanın kendi kaydıyla. */
 export type StudyHandle = {
@@ -358,7 +359,8 @@ function StepContent({ step, project, terms, figures, questions, progress, summa
         <span className={`primer-level level-${concept.level}`}>{t.levels[concept.level]}</span>
         <h2 className="study-title" lang={project.language}>{concept.term}</h2>
         {conceptExtra?.(concept.id)}
-        <div className="primer-body" lang={project.language}>
+        {/* Vurgu ve not için işaret: Primer'deki aynı kavramla aynı yer. */}
+        <div className="primer-body" lang={project.language} data-note-section={sectionMark("concept", concept.id)}>
           <ConceptBody concept={concept} prerequisites={prerequisiteTerms(project.primer, concept)} />
         </div>
       </article>
@@ -374,7 +376,8 @@ function StepContent({ step, project, terms, figures, questions, progress, summa
         <span className="study-kicker" lang={project.language}>{section.indexLabel} · {section.kicker}</span>
         <h2 className="study-title" lang={project.language}>{section.title}</h2>
         <SectionPrerequisites concepts={sectionPrerequisites(section, terms, project.language)} />
-        <div className="study-prose" lang={project.language}>
+        {/* Story önizlemesindeki bölümle aynı işaret: burada yapılan vurgu orada da görünüyor. */}
+        <div className="study-prose" lang={project.language} data-note-section={sectionMark("story", section.id)}>
           <TermParagraphs paragraphs={section.body.split("\n\n")} entries={terms} />
         </div>
         {figures.has(section.id) ? <FiguresView figures={figures.get(section.id)!} /> : null}

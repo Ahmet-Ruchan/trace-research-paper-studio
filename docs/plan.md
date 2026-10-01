@@ -74,8 +74,17 @@ yapıldığı ve nasıl test edildiği yazıyor.
 ## Notlar ve vurgular
 
 - [ ] **4. Klavyeyle vurgu.** Metin seçiliyken H vurgular, N not kutusunu açar.
-- [ ] **5. Study ve Primer'de vurgu ve not.** Vurgu yalnızca Deep report ve Story
+- [x] **5. Study ve Primer'de vurgu ve not.** Vurgu yalnızca Deep report ve Story
   önizlemesinde değil, Study yolunda ve kavram açıklamalarında da yapılabilir.
+  - *Yapıldı:* Study yolundaki bölüm metni hikâyenin aynı bölümüyle aynı işareti taşıyor:
+    orada yapılan vurgu Story önizlemesinde de görünüyor. Kavramlar için yeni yer `concept`
+    (Primer'de ve Study'nin kavram adımında aynı işaret). Notes'ta "Primer" başlığıyla, hikâye ve
+    rapordan sonra, iddialardan önce; "Show it" Primer'de o kavramı açıyor; elle not eklerken
+    kavramlar da seçilebiliyor; Markdown/Obsidian ve ajanın `notes` komutu da aynı sırayla.
+    Vurgudan tekrar kartı bu yerlerde de çalışıyor. Eklenti 0.33.0.
+  - *Test:* kavram notunun şeması, sırası ve Markdown'ı birim testlerde; Study'de bir bölümde ve
+    Primer'de bir kavramda vurgu, notlarda yer ve başlık, "Show it" ile kavrama dönüş, Story
+    önizlemesinde boyanması e2e'de.
 - [x] **6. Vurgudan tekrar kartı.** Vurgulanan cümle boşluk doldurmalı bir karta dönüşür;
   Review'a ve moladaki tekrara girer.
   - *Yapıldı:* Lab'in Notes bölümünde her vurgunun altında **Make a review card**: gizlenecek

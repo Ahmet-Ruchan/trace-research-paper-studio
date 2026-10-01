@@ -230,6 +230,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   const drill = useMemo(() => readingDrillFor(project), [project]);
   const terms = useMemo(() => termIndex(project), [project]);
   const study = useStudyProgress(project.id);
+  // Notlardan "Show it" ile Primer'de açılacak kavram.
+  const [primerOpen, setPrimerOpen] = useState<string>();
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
   // Study yolunda geçen süre çalışma takvimine ve makaleye: adımlar arka arkaya geldikçe aynı oturum uzuyor.
   const { logStudyTime } = useFocus();
@@ -529,8 +531,11 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
               }}
               onShowSection={(place, sectionId) => {
                 if (place === "story") return onShowStorySection?.(sectionId);
-                setSection("report");
-                window.setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(sectionMark("report", sectionId))}"]`)?.scrollIntoView({ block: "start" }), 60);
+                if (place === "concept") {
+                  setPrimerOpen(sectionId);
+                  setSection("primer");
+                } else setSection("report");
+                window.setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(sectionMark(place, sectionId))}"]`)?.scrollIntoView({ block: "start" }), 60);
               }}
             />
           </section>
@@ -740,7 +745,9 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
           <section className="lab-block">
             {regeneration.undoBar}
             <PrimerView
+              key={primerOpen ?? "first"}
               primer={project.primer}
+              initialOpenId={primerOpen}
               renderAction={(id) => regenerateButton("primer", id, "concept")}
               renderNote={library ? (id) => <ConceptNote link={linkFor(id)} /> : undefined}
             />

@@ -472,9 +472,10 @@ Usage:
             due card is written. No network, no model.
   notes     Prints the reader's own notes and highlights on a paper (kept in
             ~/.trace/library/notes.json, never in the project) as Markdown, in
-            the paper's order: story sections, report sections, claims with
-            their page. --obsidian adds YAML front matter and callouts; --out
-            writes the file instead. Reads only; no network, no model.
+            the paper's order: story sections, report sections, Primer
+            concepts, claims with their page. --obsidian adds YAML front matter
+            and callouts; --out writes the file instead. Reads only; no
+            network, no model.
   reading   Prints the reader's reading list (papers saved to read later in
             the studio, ~/.trace/library/reading-list.json) placed in the
             library's reading order: a work a paper builds on, or that explains

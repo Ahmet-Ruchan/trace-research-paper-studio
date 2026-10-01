@@ -22783,7 +22783,8 @@ function showChatCard(projects, study, projectId, cardId) {
 /**
 * Okuyucunun notları ve vurguları.
 *
-* Bir iddiaya ya da bir bölüme (hikâye ya da derin rapor) bağlı: bölümde
+* Bir iddiaya, bir bölüme (hikâye ya da derin rapor) ya da bir Primer
+* kavramına bağlı: bölümde
 * seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
 * iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
 *
@@ -22803,12 +22804,18 @@ const MAX_NOTES_PER_PAPER = 1e3;
 const MAX_NOTE_TEXT = 4e3;
 const MAX_NOTE_QUOTE = 1200;
 const MAX_ID = 300;
+/** Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor bölümü ya da Primer kavramı. */
+const NOTE_PLACES = [
+	"story",
+	"report",
+	"concept"
+];
 const noteTargetSchema = discriminatedUnion("kind", [object({
 	kind: literal("claim"),
 	claimId: string().min(1).max(160)
 }), object({
 	kind: literal("section"),
-	place: _enum(["story", "report"]),
+	place: _enum(NOTE_PLACES),
 	sectionId: string().min(1).max(160)
 })]);
 const readerNoteSchema = object({
@@ -22848,8 +22855,8 @@ function parseNotesFile(raw) {
 }
 const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
 /**
-* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, sonra
-* iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
+* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, Primer
+* kavramları, sonra iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
 * "no longer in the paper" başlığıyla kalıyor.
 */
 function groupNotes(project, notes) {
@@ -22877,6 +22884,11 @@ function groupNotes(project, notes) {
 		place: "report",
 		sectionId: section.id
 	}, section.title, "Deep report");
+	for (const concept of project.primer?.concepts ?? []) take({
+		kind: "section",
+		place: "concept",
+		sectionId: concept.id
+	}, concept.term, "Primer");
 	for (const claim of project.evidence.claims) {
 		const reference = claim.sourceRefs[0];
 		take({

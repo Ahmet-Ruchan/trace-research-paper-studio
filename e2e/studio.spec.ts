@@ -2801,6 +2801,47 @@ test.describe("reader notes", () => {
     expect(saved).not.toContain("Compare with Table 2.");
     expect(saved).not.toContain("short sequences too");
   });
+
+  test("highlights in a Study step and in a Primer concept too, and shows them in the Story preview and the notes", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-notes-study"));
+    const path = studyPath(project, readingDrillFor(project));
+    const section = path.steps.find((step) => step.kind === "section")!;
+    if (section.kind !== "section") throw new Error("no section step");
+    const concept = project.primer!.concepts[0];
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".study-offer").getByRole("button", { name: "Start studying" }).click();
+    const study = page.locator("section.study");
+    await study.locator(".study-outline summary").click();
+    await study.locator(".study-outline button", { hasText: section.title }).click();
+
+    // Study'deki bölüm hikâyenin aynı bölümü: vurgu orada da.
+    const fromStudy = await selectIn(page, `.study-prose[data-note-section="story:${section.sectionId}"]`, 28);
+    const bar = page.getByRole("toolbar", { name: "Highlight the selected text" });
+    await bar.getByRole("button", { name: "Highlight in blue" }).click();
+    await expect.poll(() => stored(request, project.id)).toEqual([expect.objectContaining({ quote: fromStudy, color: "blue", target: { kind: "section", place: "story", sectionId: section.sectionId } })]);
+    await expect.poll(() => painted(page, "blue")).toBe(1);
+
+    // Primer'de bir kavram.
+    await page.locator(".lab-nav > button", { hasText: "Primer" }).click();
+    const fromPrimer = await selectIn(page, `[data-note-section="concept:${concept.id}"]`, 22);
+    await bar.getByRole("button", { name: "Highlight in pink" }).click();
+    await expect.poll(async () => (await stored(request, project.id)).map((note) => [note.quote, note.target])).toEqual([
+      [fromStudy, { kind: "section", place: "story", sectionId: section.sectionId }],
+      [fromPrimer, { kind: "section", place: "concept", sectionId: concept.id }],
+    ]);
+    await expect.poll(() => painted(page, "pink")).toBe(1);
+
+    // Notlarda Primer kendi başlığıyla; "Show it" kavramı açıyor.
+    await page.locator(".lab-nav > button", { hasText: "Notes (2)" }).click();
+    await expect(page.locator(".notes-group .notes-place")).toHaveText(["Story", "Primer"]);
+    await expect(page.locator(".notes-group h3")).toHaveText([section.title, concept.term]);
+    await page.locator(".notes-group").nth(1).getByRole("button", { name: "Show it" }).click();
+    await expect(page.locator(`[data-note-section="concept:${concept.id}"]`)).toBeVisible();
+    await expect.poll(() => painted(page, "pink")).toBe(1);
+
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect.poll(() => painted(page, "blue")).toBe(1);
+  });
 });
 
 test.describe("study time", () => {

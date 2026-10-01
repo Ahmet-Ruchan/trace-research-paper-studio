@@ -4,7 +4,8 @@ import type { ResearchProject } from "./schema";
 /**
  * Okuyucunun notları ve vurguları.
  *
- * Bir iddiaya ya da bir bölüme (hikâye ya da derin rapor) bağlı: bölümde
+ * Bir iddiaya, bir bölüme (hikâye ya da derin rapor) ya da bir Primer
+ * kavramına bağlı: bölümde
  * seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
  * iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
  *
@@ -21,9 +22,13 @@ export const MAX_NOTE_TEXT = 4000;
 export const MAX_NOTE_QUOTE = 1200;
 const MAX_ID = 300;
 
+/** Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor bölümü ya da Primer kavramı. */
+export const NOTE_PLACES = ["story", "report", "concept"] as const;
+export type NotePlace = (typeof NOTE_PLACES)[number];
+
 export const noteTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("claim"), claimId: z.string().min(1).max(160) }),
-  z.object({ kind: z.literal("section"), place: z.enum(["story", "report"]), sectionId: z.string().min(1).max(160) }),
+  z.object({ kind: z.literal("section"), place: z.enum(NOTE_PLACES), sectionId: z.string().min(1).max(160) }),
 ]);
 export type NoteTarget = z.infer<typeof noteTargetSchema>;
 
@@ -76,18 +81,18 @@ export const sameTarget = (left: NoteTarget, right: NoteTarget) =>
   left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
 
 /** Bölümün sayfadaki işareti: vurgular bu öğenin içinde aranıyor. */
-export const sectionMark = (place: "story" | "report", sectionId: string) => `${place}:${sectionId}`;
+export const sectionMark = (place: NotePlace, sectionId: string) => `${place}:${sectionId}`;
 
 /** Seçimden gelen metin: satır sonları ve fazla boşluklar tek boşluk. */
 export function cleanQuote(text: string) {
   return text.replace(/\s+/g, " ").trim().slice(0, MAX_NOTE_QUOTE);
 }
 
-export type NoteGroup = { target: NoteTarget; heading: string; place: "Story" | "Deep report" | "Claim"; page?: number; excerpt?: string; notes: ReaderNote[] };
+export type NoteGroup = { target: NoteTarget; heading: string; place: "Story" | "Deep report" | "Primer" | "Claim"; page?: number; excerpt?: string; notes: ReaderNote[] };
 
 /**
- * Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, sonra
- * iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
+ * Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, Primer
+ * kavramları, sonra iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
  * "no longer in the paper" başlığıyla kalıyor.
  */
 export function groupNotes(project: ResearchProject, notes: readonly ReaderNote[]): NoteGroup[] {
@@ -101,6 +106,7 @@ export function groupNotes(project: ResearchProject, notes: readonly ReaderNote[
   };
   for (const section of project.story.sections) take({ kind: "section", place: "story", sectionId: section.id }, section.title, "Story");
   for (const section of project.deepReport?.sections ?? []) take({ kind: "section", place: "report", sectionId: section.id }, section.title, "Deep report");
+  for (const concept of project.primer?.concepts ?? []) take({ kind: "section", place: "concept", sectionId: concept.id }, concept.term, "Primer");
   for (const claim of project.evidence.claims) {
     const reference = claim.sourceRefs[0];
     take({ kind: "claim", claimId: claim.id }, claim.statement, "Claim", { ...(reference?.page ? { page: reference.page } : {}), ...(reference?.excerpt ? { excerpt: reference.excerpt } : {}) });

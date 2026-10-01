@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useStrings } from "../language-context";
 import type { Primer } from "@/lib/schema";
+import { sectionMark } from "@/lib/reader-notes";
 import { orderByPrerequisites } from "@/lib/study-path";
 import { MathText } from "../math";
 
@@ -18,13 +19,16 @@ export function PrimerView({
   primer,
   renderAction,
   renderNote,
+  initialOpenId,
 }: {
   primer: Primer;
   renderAction?: (conceptId: string) => ReactNode;
   renderNote?: (conceptId: string) => ReactNode;
+  /** Açık başlayacak kavram (notlardan "Show it"); verilmezse ilki. */
+  initialOpenId?: string;
 }) {
   const t = useStrings();
-  const [openId, setOpenId] = useState<string | null>(primer.concepts[0]?.id ?? null);
+  const [openId, setOpenId] = useState<string | null>(initialOpenId ?? primer.concepts[0]?.id ?? null);
   const ordered = orderByPrerequisites(primer.concepts);
 
   return (
@@ -47,7 +51,10 @@ export function PrimerView({
               </button>
               {open ? (
                 <div className="primer-body">
-                  <ConceptBody concept={concept} prerequisites={prerequisites} />
+                  {/* Vurgu ve not için işaret (`reader-notes.ts`); Study'deki aynı kavramla aynı yer. */}
+                  <div data-note-section={sectionMark("concept", concept.id)}>
+                    <ConceptBody concept={concept} prerequisites={prerequisites} />
+                  </div>
                   {renderNote?.(concept.id)}
                   {renderAction?.(concept.id)}
                 </div>

@@ -260,11 +260,13 @@ Quiz me on my due Trace review cards.
 
 ### Highlight what matters, and keep your own notes
 
-Select any text in the Deep report or the Story preview and a small bar offers five highlight
-colours and **Note**: the passage is highlighted where it stands, and the note sits beside it. Open a
+Select any text in the Deep report, the Story preview, a step of the Study path or a Primer concept,
+and a small bar offers five highlight colours and **Note**: the passage is highlighted where it
+stands, and the note sits beside it. A story section highlighted in Study shows in the Story preview
+too, and a concept highlighted in Study shows in the Primer. Open a
 claim and write a note on it, or mark it as important; the claim list shows a star next to it.
-**Notes** in the Lab gathers everything for the paper in reading order (story, report, then claims
-with their page) to edit, recolour or delete, and to add a note to any section or claim.
+**Notes** in the Lab gathers everything for the paper in reading order (story, report, Primer, then
+claims with their page) to edit, recolour or delete, and to add a note to any section or claim.
 
 A highlight worth remembering becomes a review card: **Make a review card** under it hides one word
 of the passage, a term of the paper first, then a number, then its longest words, and you can pick

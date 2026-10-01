@@ -8,11 +8,13 @@ import {
   groupNotes,
   MAX_NOTE_TEXT,
   NOTE_COLORS,
+  NOTE_PLACES,
   notesFileName,
   notesMarkdown,
   sameTarget,
   sectionMark,
   type NoteColor,
+  type NotePlace,
   type NoteTarget,
   type ReaderNote,
 } from "@/lib/reader-notes";
@@ -228,10 +230,10 @@ function pickedSelection(): Picked | undefined {
   const quote = cleanQuote(selection.toString());
   if (quote.length < 2) return undefined;
   const [place, ...rest] = (root.getAttribute("data-note-section") ?? "").split(":");
-  if ((place !== "story" && place !== "report") || !rest.length) return undefined;
+  if (!NOTE_PLACES.includes(place as NotePlace) || !rest.length) return undefined;
   const rect = selection.getRangeAt(0).getBoundingClientRect();
   const left = Math.min(window.innerWidth - 12, Math.max(12, rect.left + rect.width / 2));
-  return { target: { kind: "section", place, sectionId: rest.join(":") }, quote, above: rect.top - 10, below: rect.bottom + 10, left };
+  return { target: { kind: "section", place: place as NotePlace, sectionId: rest.join(":") }, quote, above: rect.top - 10, below: rect.bottom + 10, left };
 }
 
 /** Bir bölümde metin seçilince: renkle vurgula ya da vurgulayıp not yaz. */
@@ -499,7 +501,7 @@ export function NotesPanel({
   /** Okunabildiyse çalışma kaydı: vurgular tekrar kartına dönüşebiliyor. */
   study?: NoteStudy;
   onClaimSelect: (claimId: string) => void;
-  onShowSection: (place: "story" | "report", sectionId: string) => void;
+  onShowSection: (place: NotePlace, sectionId: string) => void;
 }) {
   const context = useReaderNotes();
   const [targetKey, setTargetKey] = useState("");
@@ -508,6 +510,7 @@ export function NotesPanel({
   const targets = useMemo(() => [
     ...project.story.sections.map((section) => ({ key: `story:${section.id}`, label: `Story · ${section.title}`, target: { kind: "section", place: "story", sectionId: section.id } as NoteTarget })),
     ...(project.deepReport?.sections ?? []).map((section) => ({ key: `report:${section.id}`, label: `Deep report · ${section.title}`, target: { kind: "section", place: "report", sectionId: section.id } as NoteTarget })),
+    ...(project.primer?.concepts ?? []).map((concept) => ({ key: `concept:${concept.id}`, label: `Primer · ${concept.term}`, target: { kind: "section", place: "concept", sectionId: concept.id } as NoteTarget })),
     ...project.evidence.claims.map((claim) => ({ key: `claim:${claim.id}`, label: `Claim · ${claim.statement.length > 90 ? `${claim.statement.slice(0, 90)}…` : claim.statement}`, target: { kind: "claim", claimId: claim.id } as NoteTarget })),
   ], [project]);
   if (!context) return null;
@@ -519,7 +522,7 @@ export function NotesPanel({
   return (
     <div className="notes-panel">
       <p className="section-intro">
-        Select any text in the Deep report or the Story preview to highlight it, or open a claim to write a note on it. Your notes are
+        Select any text in the Deep report, the Story preview, a Study step or a Primer concept to highlight it, or open a claim to write a note on it. Your notes are
         kept in your library, never in the project file, so exports and published pages do not carry them.
       </p>
       <div className="notes-export">
@@ -555,7 +558,7 @@ export function NotesPanel({
               group.target.kind === "claim" ? (
                 <button type="button" onClick={() => onClaimSelect((group.target as { claimId: string }).claimId)}>Open the claim</button>
               ) : (
-                <button type="button" onClick={() => onShowSection((group.target as { place: "story" | "report" }).place, (group.target as { sectionId: string }).sectionId)}>Show it</button>
+                <button type="button" onClick={() => onShowSection((group.target as { place: NotePlace }).place, (group.target as { sectionId: string }).sectionId)}>Show it</button>
               )
             ) : null}
           </header>

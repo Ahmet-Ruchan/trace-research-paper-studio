@@ -49,6 +49,16 @@ describe("reader notes", () => {
     expect(groups[2].notes.map((item) => item.id)).toEqual(["n1", "n4"]);
   });
 
+  it("keeps highlights on a Primer concept, after the report and before the claims", () => {
+    const concept = project.primer!.concepts[1];
+    const onConcept = note({ id: "n6", target: { kind: "section", place: "concept", sectionId: concept.id }, quote: "a line of the concept", text: "Revisit before the exam." });
+    const groups = groupNotes(project, [...notes, onConcept]);
+    expect(groups.map((group) => group.place)).toEqual(["Story", "Deep report", "Primer", "Claim", "Story"]);
+    expect(groups[2]).toMatchObject({ heading: concept.term, notes: [onConcept] });
+    expect(notesMarkdown(project, [onConcept], { exportedAt: at })).toContain(`## Primer: ${concept.term}\n\n> a line of the concept\n\nRevisit before the exam.`);
+    expect(readerNoteSchema.safeParse({ ...onConcept, target: { kind: "section", place: "glossary", sectionId: "x" } }).success).toBe(false);
+  });
+
   it("exports Markdown, and Obsidian with front matter and callouts", () => {
     const plain = notesMarkdown(project, notes, { exportedAt: at });
     expect(plain).toContain(`# ${project.evidence.paper.title}: notes`);
