@@ -265,7 +265,10 @@ function SessionsCard({ selected }: { selected?: string }) {
           {shown.map((session: WorkSession) => (
             <li key={session.id}>
               <span>{selected ? "" : `${shortDate.format(new Date(session.start))}, `}{time.format(new Date(session.start))}–{time.format(new Date(session.end))}</span>
-              <span>{session.label || SESSION_KIND_LABELS[session.kind]}</span>
+              <span>
+                {session.label || SESSION_KIND_LABELS[session.kind]}
+                {session.note ? <small className="focus-session-note">{session.note}</small> : null}
+              </span>
               <strong>{formatDuration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
               <button type="button" className="focus-icon-button" aria-label={`Delete the session at ${time.format(new Date(session.start))}`} onClick={() => void deleteSession(session.id)}><Trash2 size={14} /></button>
             </li>

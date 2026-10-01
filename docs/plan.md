@@ -55,8 +55,17 @@ yapıldığı ve nasıl test edildiği yazıyor.
   - *Test:* Study oturumu, bloğun uzaması, bozuk oturumun tek başına düşmesi, "Start over"ın
     sayıları koruması birim testlerde; Study'de saat ileri alınarak 3 + 20 (sınır) dakikanın
     makaleye iki oturum olarak yazılması ve profilde makale süresinde görünmesi e2e'de.
-- [ ] **3. Tur sonunda "ne yaptın?"** Odak turu bitince tek satırlık bir not istenir; not
+- [x] **3. Tur sonunda "ne yaptın?"** Odak turu bitince tek satırlık bir not istenir; not
   oturuma yazılır, takvimde ve haftalık raporda görünür.
+  - *Yapıldı:* Tur bitince çıkan bildirimde (her ekranda) isteğe bağlı "What did you do?"
+    kutusu; yazılan satır (en çok 200 karakter) o turun oturumuna `note` olarak gidiyor
+    (duraklatılıp sürdürülen turda son parçaya). Bugünün oturumlarında, profilde günün
+    oturumlarında ve haftalık raporda **What you did** altında görünüyor; ajanın `work`
+    komutu da veriyor. Aynı oturum notsuz yeniden gelince (iki sekme) not kalıyor, uzayan
+    oturum notu taşıyor, boş not siliyor. Eklenti 0.34.0.
+  - *Test:* notun oturumla birleşmesi, uzayan oturum, silme, sınır ve turun oturumunu bulma
+    birim testlerde; bir tur bitince bildirimden not yazıp Focus ekranında, profilde ve
+    haftalık raporda görmek e2e'de (boşluk tuşu zamanlayıcıyı durdurmuyor).
 - [ ] **9. Takvim dışa aktarımı ve haftalık özet.** Oturumlar takvim dosyası (.ics) olarak
   iner; hafta sonunda bir özet bildirimi gelir.
 - [x] **16. Haftalık öğrenme hedefi.** "Bu hafta 2 makale bitir, 40 kart tekrar et" gibi

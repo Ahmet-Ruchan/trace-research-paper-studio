@@ -2195,6 +2195,7 @@ function printWork(args) {
       start: session.start,
       end: session.end,
       minutes: Math.round((Date.parse(session.end) - Date.parse(session.start)) / 60_000),
+      note: session.note ?? null,
     })),
     note: log.sessions.length || Object.keys(log.archive).length
       ? "Worked time from the studio's Focus timer, counted once where timers overlapped. Give times as written (\"2h 15m\"), compare with the daily goal, and name the papers the time went to. The reader's own record: do not write it into any project."

@@ -34,6 +34,8 @@ export const SESSION_KIND_LABELS: Record<SessionKind, string> = { focus: "Focus"
 export const REVIEW_CARD_CAP_MS = 5 * 60_000;
 /** Study yolunda bir adımın en çok sayılan süresi: bir bölümü okumak kartı yanıtlamaktan uzun sürüyor. */
 export const STUDY_STEP_CAP_MS = 20 * 60_000;
+/** Tur sonunda yazılan tek satırlık not: "ne yaptın?". */
+export const MAX_SESSION_NOTE = 200;
 export type ReviewBlock = { id: string; start: number; end: number };
 
 /**
@@ -61,6 +63,8 @@ export const workSessionSchema = z
     /** Kütüphanedeki makale: süre ona yazılıyor. */
     projectId: z.string().trim().min(1).max(300).optional(),
     color: focusColorSchema.optional(),
+    /** Tur bitince okuyucunun yazdığı tek satır; boş yazmak notu siliyor. */
+    note: z.string().trim().max(MAX_SESSION_NOTE).optional(),
   })
   .refine((session) => Date.parse(session.end) > Date.parse(session.start), "A session ends after it starts.")
   .refine((session) => Date.parse(session.end) - Date.parse(session.start) <= MAX_SESSION_SECONDS * 1000, "A session is at most 12 hours.");
@@ -213,7 +217,14 @@ export function addSessions(log: WorkLog, incoming: readonly WorkSession[]): Wor
   const byId = new Map(log.sessions.map((session) => [session.id, session]));
   for (const session of incoming) {
     const existing = byId.get(session.id);
-    if (!existing || Date.parse(session.end) > Date.parse(existing.end)) byId.set(session.id, session);
+    if (!existing) {
+      byId.set(session.id, withNote(session, session.note));
+      continue;
+    }
+    // Uzayan oturum yenisiyle değişiyor; not ayrı: gelen notu varsa o, yoksa eskisi kalıyor.
+    const base = Date.parse(session.end) > Date.parse(existing.end) ? session : existing;
+    const note = session.note !== undefined ? session.note : existing.note;
+    if (base !== existing || note !== existing.note) byId.set(session.id, withNote(base, note));
   }
   let sessions = [...byId.values()].sort((left, right) => left.start.localeCompare(right.start) || left.id.localeCompare(right.id));
   const archive = { ...log.archive };
@@ -223,6 +234,21 @@ export function addSessions(log: WorkLog, incoming: readonly WorkSession[]): Wor
     for (const [day, seconds] of dailyTotals({ sessions: folded, archive: {} })) archive[day] = Math.min(86_400, (archive[day] ?? 0) + seconds);
   }
   return { version: WORK_LOG_VERSION, sessions, archive };
+}
+
+function withNote(session: WorkSession, note: string | undefined): WorkSession {
+  const rest: WorkSession = { ...session };
+  delete rest.note;
+  const text = note?.trim().slice(0, MAX_SESSION_NOTE);
+  return text ? { ...rest, note: text } : rest;
+}
+
+/**
+ * Bitmiş bir odak turunun oturumu: turun bittiği ana (bir saniye payla)
+ * denk gelen odak oturumu. Duraklatılıp sürdürülen turda son parça.
+ */
+export function roundSession(sessions: readonly WorkSession[], endAt: number) {
+  return [...sessions].reverse().find((session) => session.kind === "focus" && Math.abs(Date.parse(session.end) - endAt) <= 1500);
 }
 
 /** Dosya biçimi: her oturum kendi satırında; tek satırlık birkaç megabaytlık JSON elle açılınca okunmuyordu. */

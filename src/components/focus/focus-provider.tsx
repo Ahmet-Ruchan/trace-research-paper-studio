@@ -35,7 +35,7 @@ import {
 } from "@/lib/focus-timer";
 import { emptyProfile, WORK_DATA_KIND, type Alarm, type Profile } from "@/lib/profile";
 import { describeBackupImport, type BackupSummary } from "@/lib/full-backup";
-import { addSessions, emptyWorkLog, formatClock, formatDuration, removeSession, sessionPieces, type ReviewBlock, type WorkLog, type WorkSession } from "@/lib/work-log";
+import { addSessions, emptyWorkLog, formatClock, formatDuration, MAX_SESSION_NOTE, removeSession, roundSession, sessionPieces, type ReviewBlock, type WorkLog, type WorkSession } from "@/lib/work-log";
 import { playSound, setAmbient, stopAmbient, unlockAudio } from "./focus-sound";
 
 /**
@@ -78,6 +78,8 @@ export type FocusAlert = {
   actionLabel?: string;
   alarmId?: string;
   resume?: "focus" | "timer" | "stopwatch";
+  /** Biten odak turunun bitiş anı: bildirimde "ne yaptın?" notu o turun oturumuna yazılıyor. */
+  roundEnd?: number;
 };
 
 export type FocusStore = {
@@ -160,6 +162,8 @@ export type FocusContextValue = {
   logReviewTime: (block: ReviewBlock, subject?: Subject) => void;
   /** Study yolunda geçen süre; `ReviewBlock` gibi adım adım uzayan bir oturum. */
   logStudyTime: (block: ReviewBlock, subject?: Subject) => void;
+  /** Biten turun oturumuna "ne yaptın?" notu; tur bulunamazsa `false`. */
+  noteRound: (endAt: number, note: string) => boolean;
 };
 
 const FocusContext = createContext<FocusContextValue | undefined>(undefined);
@@ -192,13 +196,13 @@ function alertFor(event: TimerEvent, store: FocusStore, profile: Profile, now: n
     const minutes = (phase: "short" | "long") => (phase === "short" ? preferences.focus.shortBreak : preferences.focus.longBreak);
     if (event.to === "done") {
       const rounds = focus?.completed ?? 0;
-      return { ...base, kind: "done", title: "All rounds done", body: `${rounds} ${rounds === 1 ? "round" : "rounds"}, ${formatDuration(rounds * preferences.focus.work * 60)} of focus. Well done.`, color: preferences.colors.focus, ringUntil: ring, action: "restart" };
+      return { ...base, kind: "done", title: "All rounds done", body: `${rounds} ${rounds === 1 ? "round" : "rounds"}, ${formatDuration(rounds * preferences.focus.work * 60)} of focus. Well done.`, color: preferences.colors.focus, ringUntil: ring, action: "restart", roundEnd: event.at };
     }
     if (event.from === "work") {
       const to = event.to as "short" | "long";
       return event.autoStarted
-        ? { ...base, kind: "phase", title: "Time for a break", body: `Focus round ${focus?.completed ?? ""} done. Your ${minutes(to)}-minute ${phaseName[to]} has started.`, color: preferences.colors.focus, ringUntil: ring, action: "skip-break" }
-        : { ...base, kind: "phase", title: "Focus round done", body: `Start your ${minutes(to)}-minute ${phaseName[to]} when you are ready.`, color: preferences.colors.focus, ringUntil: ring, action: "start-next", actionLabel: "Start the break" };
+        ? { ...base, kind: "phase", title: "Time for a break", body: `Focus round ${focus?.completed ?? ""} done. Your ${minutes(to)}-minute ${phaseName[to]} has started.`, color: preferences.colors.focus, ringUntil: ring, action: "skip-break", roundEnd: event.at }
+        : { ...base, kind: "phase", title: "Focus round done", body: `Start your ${minutes(to)}-minute ${phaseName[to]} when you are ready.`, color: preferences.colors.focus, ringUntil: ring, action: "start-next", actionLabel: "Start the break", roundEnd: event.at };
     }
     const round = (focus?.completed ?? 0) + 1;
     return event.autoStarted
@@ -251,6 +255,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   const [profileReady, setProfileReady] = useState(false);
   const [profileError, setProfileError] = useState<string>();
   const [log, setLog] = useState<WorkLog>(emptyWorkLog);
+  const logRef = useRef(log);
+  useEffect(() => {
+    logRef.current = log;
+  }, [log]);
   const [logReady, setLogReady] = useState(false);
   const [logError, setLogError] = useState<string>();
   const [store, setStore] = useState<FocusStore>(() => freshStore(0));
@@ -662,6 +670,20 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   const logReviewTime = useCallback((block: ReviewBlock, subject?: Subject) => logBlock("review", block, subject), [logBlock]);
   const logStudyTime = useCallback((block: ReviewBlock, subject?: Subject) => logBlock("study", block, subject), [logBlock]);
 
+  const noteRound = useCallback(
+    (endAt: number, note: string) => {
+      const session = roundSession([...logRef.current.sessions, ...storeRef.current.pending], endAt);
+      if (!session) return false;
+      // Boş not, varsa eskisini siliyor (`addSessions`).
+      const noted: WorkSession = { ...session, note: note.trim().slice(0, MAX_SESSION_NOTE) };
+      setLog((existing) => addSessions(existing, [noted]));
+      commit({ ...storeRef.current, pending: [...storeRef.current.pending.filter((item) => item.id !== noted.id), noted] });
+      void flush();
+      return true;
+    },
+    [commit, flush],
+  );
+
   const deleteSession = useCallback(async (id: string) => {
     const response = await fetch(`/api/profile/sessions?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
     if (!response?.ok && response?.status !== 404) {
@@ -736,8 +758,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       previewAmbient,
       logReviewTime,
       logStudyTime,
+      noteRound,
     }),
-    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, logReviewTime, logStudyTime, previewAmbient, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
+    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, logReviewTime, logStudyTime, noteRound, previewAmbient, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
   );
 
   return (

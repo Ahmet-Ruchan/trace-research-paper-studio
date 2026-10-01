@@ -2446,6 +2446,36 @@ test.describe("focus timer and profile", () => {
     await expect(page.locator(".focus-today strong").first()).toHaveText("1m");
   });
 
+  test("asks what was done when a round ends, and keeps the note with the round in the calendar and the weekly report", async ({ page, request }) => {
+    await setProfile(request, (profile) => ({
+      ...profile,
+      preferences: { ...profile.preferences, sound: "none", focus: { ...profile.preferences.focus, work: 1, shortBreak: 1, autoStartBreaks: true } },
+    }));
+    await page.clock.install();
+    await page.goto("/?focus=1");
+    await page.getByLabel("What are you working on?").fill("Chapter 4");
+    await page.getByRole("button", { name: "Start focus" }).click();
+    await page.clock.runFor(61_000);
+    const alert = page.locator(".focus-alert", { hasText: "Time for a break" });
+    await expect(alert).toBeVisible();
+    const note = alert.getByLabel("What did you do in this round?");
+    await expect(alert.getByRole("button", { name: "Save" })).toBeDisabled();
+    await note.fill("Rewrote the related work paragraph.");
+    // Boşluk tuşu zamanlayıcıyı durdurmuyor, kutuya yazıyor.
+    await note.press("Space");
+    await alert.getByRole("button", { name: "Save" }).click();
+    await expect(alert.locator(".focus-alert-note-saved")).toHaveText("Noted: Rewrote the related work paragraph.");
+    await expect.poll(async () => (await sessions(request)).map((session) => [session.kind, session.label, session.note])).toEqual([["focus", "Chapter 4", "Rewrote the related work paragraph."]]);
+
+    // Bugünün oturumlarında, profilin takviminde ve haftalık raporda.
+    await expect(page.locator(".focus-sessions .focus-session-note")).toHaveText("Rewrote the related work paragraph.");
+    await page.goto("/?profile=1");
+    await expect(page.locator(".profile-sessions .focus-session-note")).toHaveText("Rewrote the related work paragraph.");
+    const notes = page.getByRole("list", { name: "Round notes this week" });
+    await expect(notes).toContainText("Chapter 4");
+    await expect(notes).toContainText("Rewrote the related work paragraph.");
+  });
+
   test("keeps counting in a background tab, and in one the browser froze, but not after the page was gone", async ({ page, request }) => {
     await setProfile(request, (profile) => ({
       ...profile,

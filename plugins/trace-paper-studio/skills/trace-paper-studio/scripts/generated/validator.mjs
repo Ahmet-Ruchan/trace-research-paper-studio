@@ -21570,6 +21570,8 @@ const SESSION_KINDS = [
 	"review",
 	"study"
 ];
+/** Tur sonunda yazılan tek satırlık not: "ne yaptın?". */
+const MAX_SESSION_NOTE = 200;
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const instant = string().max(40).refine((value) => Number.isFinite(Date.parse(value)), "Not a date.");
 const workSessionSchema = object({
@@ -21580,7 +21582,9 @@ const workSessionSchema = object({
 	label: string().trim().max(120).optional(),
 	/** Kütüphanedeki makale: süre ona yazılıyor. */
 	projectId: string().trim().min(1).max(300).optional(),
-	color: focusColorSchema.optional()
+	color: focusColorSchema.optional(),
+	/** Tur bitince okuyucunun yazdığı tek satır; boş yazmak notu siliyor. */
+	note: string().trim().max(200).optional()
 }).refine((session) => Date.parse(session.end) > Date.parse(session.start), "A session ends after it starts.").refine((session) => Date.parse(session.end) - Date.parse(session.start) <= MAX_SESSION_SECONDS * 1e3, "A session is at most 12 hours.");
 const workLogSchema = object({
 	version: literal(1),

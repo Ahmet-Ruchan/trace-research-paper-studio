@@ -467,7 +467,10 @@ function TodayCard({ onProfile }: { onProfile: () => void }) {
           {sessions.map((session) => (
             <li key={session.id}>
               <span>{time.format(new Date(session.start))}–{time.format(new Date(session.end))}</span>
-              <span>{session.label || SESSION_KIND_LABELS[session.kind]}</span>
+              <span>
+                {session.label || SESSION_KIND_LABELS[session.kind]}
+                {session.note ? <small className="focus-session-note">{session.note}</small> : null}
+              </span>
               <strong>{formatDuration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
             </li>
           ))}

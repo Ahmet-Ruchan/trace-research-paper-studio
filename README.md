@@ -314,7 +314,9 @@ yellow, blue, red, green, orange, purple, lilac, light blue, navy, burgundy and 
 
 The timer keeps running while you read a paper: the header shows the time left, the browser tab
 shows it too, and when a round ends a note says what comes next, with a chime (and a desktop
-notification if you allow it). Only focus time counts as work, never a break; a countdown or the
+notification if you allow it). The same note asks, if you like, what you did in that round: the line
+you write is kept with the round, in today's sessions, under that day in your calendar and in the
+weekly report. Only focus time counts as work, never a break; a countdown or the
 stopwatch count if you want them to. A tab in the background keeps counting and rings on time, even
 when the browser slows its timers or freezes the tab to save energy. Only when the tab is closed or
 the computer sleeps does the timer pause at that moment, and say so, instead of adding the night to
@@ -355,8 +357,9 @@ without the timer, or delete a session started by mistake.
 
 **This week against last** sets the week so far against last week *up to the same moment*, so a
 Tuesday afternoon is not measured against a whole week: day by day in paired bars, and paper by
-paper with both weeks' time. Below it, **When you work** shades each hour of each weekday over the
-last four weeks and says which three hours hold most of your work and which day is your busiest.
+paper with both weeks' time, with **What you did**: the notes you wrote at the end of this week's
+rounds. Below it, **When you work** shades each hour of each weekday over the last four weeks and
+says which three hours hold most of your work and which day is your busiest.
 
 Above them, **Learning this week** measures what you learned rather than the hours: the papers you
 finished and the cards you reviewed this week, against a weekly goal you set under **Goals and
@@ -1155,7 +1158,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.27.1  # write one version into the package and every plugin manifest
+npm run version:set -- 0.34.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 

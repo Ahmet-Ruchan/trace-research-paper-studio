@@ -233,6 +233,17 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .week-goal-bar i { display: block; height: 100%; border-radius: inherit; background: var(--focus-line); }
 .week-goal small { min-height: 1.2em; color: var(--ink-soft); font-size: var(--text-sm); }
 .profile-weekly-goals { margin-top: 10px; }
+.week-notes { margin-top: 22px; }
+.week-notes ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.week-notes li { display: grid; gap: 2px; padding-left: 10px; border-left: 3px solid var(--focus-line); }
+.week-notes small { color: var(--ink-soft); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.week-notes span { color: var(--ink); font-size: var(--text-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.focus-session-note { display: block; margin-top: 2px; color: var(--ink-soft); font-size: var(--text-xs); line-height: 1.45; overflow-wrap: anywhere; white-space: normal; }
+.focus-alert-note { display: flex; gap: 6px; margin: 0 0 10px; }
+.focus-alert-note input { flex: 1; min-width: 0; min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--ink); font-size: var(--text-sm); }
+.focus-alert-note button { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.focus-alert-note button:disabled { opacity: .45; cursor: default; }
+.focus-alert-note-saved { margin: 0 0 10px; color: var(--ink-soft); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .week-report { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
 .week-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .week-figures div { display: grid; gap: 3px; }

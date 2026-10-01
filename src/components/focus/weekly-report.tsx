@@ -19,6 +19,8 @@ import { liveSessions, useFocus, useFocusClock } from "./focus-provider";
 const weekday = new Intl.DateTimeFormat("en", { weekday: "short" });
 const longWeekday = new Intl.DateTimeFormat("en", { weekday: "long" });
 const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short" });
+/** Haftalık raporda gösterilen en fazla tur notu. */
+const MAX_WEEK_NOTES = 8;
 
 function hourName(hour: number, clock: "24h" | "12h") {
   if (clock === "24h") return `${hour}:00`;
@@ -80,6 +82,7 @@ export function WeeklyReport({ projects, study, onOpen }: { projects: ResearchPr
   const { log, profile, store, liveIntervals } = useFocus();
   const now = useFocusClock();
   const { weekStart, clock } = profile.preferences;
+  const clockFormat = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", hour12: clock === "12h" });
   const data = useMemo(() => {
     if (!now) return undefined;
     const sessions = [...log.sessions, ...liveSessions(store, profile, now)];
@@ -87,10 +90,13 @@ export function WeeklyReport({ projects, study, onOpen }: { projects: ResearchPr
     const report = weekReport(sessions, dailyTotals(log, liveIntervals(now)), today, weekStart);
     const to = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getTime();
     const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1 - PATTERN_WEEKS * 7).getTime();
-    return { report, pattern: hourPattern(sessions, { from, to, weekStart }), today };
+    // Bu haftanın tur notları, en yenisi önce.
+    const weekFrom = dayDate(report.thisWeek.from).getTime();
+    const notes = log.sessions.filter((session) => session.note && Date.parse(session.end) >= weekFrom).reverse().slice(0, MAX_WEEK_NOTES);
+    return { report, pattern: hourPattern(sessions, { from, to, weekStart }), today, notes };
   }, [log, liveIntervals, now, profile, store, weekStart]);
   if (!data) return null;
-  const { report, pattern, today } = data;
+  const { report, pattern, today, notes } = data;
   const byId = new Map(projects.map((project) => [project.id, project]));
   const todayKey = dayKey(today);
   const most = Math.max(3600, ...report.thisWeek.days.map((day) => day.seconds), ...report.lastWeek.days.map((day) => day.seconds));
@@ -171,6 +177,22 @@ export function WeeklyReport({ projects, study, onOpen }: { projects: ResearchPr
           ) : (
             <p className="focus-note">Name a paper on the timer, or start a round from its Lab, Study or Review, and its time shows here.</p>
           )}
+          {notes.length ? (
+            <div className="week-notes">
+              <h3>What you did</h3>
+              <ul aria-label="Round notes this week">
+                {notes.map((session) => {
+                  const paper = session.projectId ? byId.get(session.projectId)?.evidence.paper.title : undefined;
+                  return (
+                    <li key={session.id}>
+                      <small>{weekday.format(new Date(session.start))} {clockFormat.format(new Date(session.end))}{paper ? ` · ${paper}` : session.label ? ` · ${session.label}` : ""}</small>
+                      <span>{session.note}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </div>
 

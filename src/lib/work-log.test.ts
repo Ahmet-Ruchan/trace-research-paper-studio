@@ -16,16 +16,19 @@ import {
   formatDuration,
   heatLevel,
   heatmap,
+  MAX_SESSION_NOTE,
   MAX_SESSIONS,
   mergeWorkLogs,
   REVIEW_CARD_CAP_MS,
   parseWorkLog,
   removeSession,
+  roundSession,
   SESSION_KIND_LABELS,
   sessionPieces,
   STUDY_STEP_CAP_MS,
   timeByProject,
   workLogSchema,
+  workSessionSchema,
   workLogToJson,
   workSummary,
   type WorkSession,
@@ -207,6 +210,23 @@ describe("time in review", () => {
     expect(workLogSchema.safeParse({ ...emptyWorkLog(), sessions: study }).success).toBe(true);
     expect(SESSION_KIND_LABELS.study).toBe("Study");
     expect(timeByProject(study).get("attention")).toBe(23 * 60);
+  });
+
+  it("keeps a round's note with its session, as the session grows, until the reader clears it", () => {
+    const [round] = sessionPieces({ kind: "focus", label: "Chapter 4" }, T0, T0 + 25 * MIN);
+    let log = addSessions(emptyWorkLog(), [round]);
+    expect(roundSession(log.sessions, T0 + 25 * MIN + 400)).toEqual(round);
+    expect(roundSession(log.sessions, T0 + 27 * MIN)).toBeUndefined();
+    log = addSessions(log, [{ ...round, note: "  Rewrote the related work.  " }]);
+    expect(log.sessions[0].note).toBe("Rewrote the related work.");
+    // Aynı oturum notsuz yeniden gelince (iki sekme) not kalıyor; uzayan oturum notu taşıyor.
+    log = addSessions(log, [round]);
+    expect(log.sessions[0].note).toBe("Rewrote the related work.");
+    log = addSessions(log, [{ ...round, end: new Date(T0 + 26 * MIN).toISOString() }]);
+    expect(log.sessions[0]).toMatchObject({ end: new Date(T0 + 26 * MIN).toISOString(), note: "Rewrote the related work." });
+    log = addSessions(log, [{ ...round, note: "" }]);
+    expect("note" in log.sessions[0]).toBe(false);
+    expect(workSessionSchema.safeParse({ ...round, note: "x".repeat(MAX_SESSION_NOTE + 1) }).success).toBe(false);
   });
 
   it("drops only a damaged session, or one of a kind a newer version knows, and reads the rest", () => {

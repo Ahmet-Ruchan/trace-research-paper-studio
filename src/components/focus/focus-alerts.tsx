@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { AlarmClock, BellRing, Coffee, PartyPopper, PauseCircle } from "lucide-react";
 import { focusColorStyle } from "@/lib/focus-colors";
+import { MAX_SESSION_NOTE } from "@/lib/work-log";
 import { useFocus, useFocusClock, type FocusAlert } from "./focus-provider";
 
 const actionLabel: Record<NonNullable<FocusAlert["action"]>, string> = {
@@ -14,6 +16,29 @@ const actionLabel: Record<NonNullable<FocusAlert["action"]>, string> = {
 };
 
 const icons = { phase: Coffee, done: PartyPopper, timer: BellRing, alarm: AlarmClock, notice: PauseCircle } as const;
+
+/**
+ * Tur bitince tek satır: "ne yaptın?". İsteğe bağlı; yazılan, turun
+ * oturumuna gidiyor ve takvimde, haftalık raporda görünüyor.
+ */
+function RoundNote({ endAt }: { endAt: number }) {
+  const { noteRound } = useFocus();
+  const [draft, setDraft] = useState("");
+  const [saved, setSaved] = useState<string>();
+  if (saved) return <p className="focus-alert-note-saved" role="status">Noted: {saved}</p>;
+  return (
+    <form
+      className="focus-alert-note"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (noteRound(endAt, draft)) setSaved(draft.trim());
+      }}
+    >
+      <input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={MAX_SESSION_NOTE} placeholder="What did you do? (optional)" aria-label="What did you do in this round?" />
+      <button type="submit" disabled={!draft.trim()}>Save</button>
+    </form>
+  );
+}
 
 /**
  * Zamanlayıcının bildirimleri, her ekranda: tur bitti, mola başladı, süre
@@ -40,6 +65,7 @@ export function FocusAlerts({ onOpen }: { onOpen: () => void }) {
             <div className="focus-alert-copy">
               <strong>{alert.title}</strong>
               {alert.body ? <p>{alert.body}</p> : null}
+              {alert.roundEnd ? <RoundNote endAt={alert.roundEnd} /> : null}
               <div className="focus-alert-actions">
                 {alert.action ? (
                   <button type="button" className="focus-alert-primary" onClick={() => runAlert(alert)}>
