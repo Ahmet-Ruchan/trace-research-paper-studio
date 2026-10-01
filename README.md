@@ -465,6 +465,14 @@ removed. **Reading list** in the library header opens it; the list is kept in
 What should I read next, and save the works this paper builds on for later. Use the Trace plugin.
 ```
 
+**Import from Zotero or a .bib file** brings a whole bibliography in at once. In Zotero, right-click a
+collection and choose **Export Collection…** as BibTeX, RIS or CSL JSON (Mendeley, EndNote and a LaTeX
+project's `.bib` work too). Trace shows what it found before adding anything: how many works are new,
+already on the list, already analysed in your library, or listed twice. Each work keeps its authors,
+year and venue, and its arXiv number or DOI when the file has one, so **Analyze it** can fetch it later.
+Accents and LaTeX in titles come out as text ("Schr{\"o}dinger" reads Schrödinger). The file is read in
+the browser; nothing is sent anywhere. Your agent can do the same with `reading --import <file>`.
+
 **Share the list** under it gives the list a link: a page with the works in the reading order, why
 each one is there and a link to it on arXiv or doi.org, and, if you tick it, the papers in your library
 in their place. Only the list goes out, never your notes or how far you have read. The page is a copy
@@ -1190,6 +1198,7 @@ npm run trace:agent -- obsidian --out ~/Vault
 # The reading list placed in the library's reading order; save a work found with graph or concepts --suggest
 npm run trace:agent -- reading
 npm run trace:agent -- reading --add arxiv:1409.0473 --title "Neural Machine Translation by Jointly Learning to Align and Translate" --for <library id> --relation concept --concept "Attention"
+npm run trace:agent -- reading --import ~/Downloads/My\ Library.bib   # a Zotero export: BibTeX, RIS or CSL JSON
 
 # Concept names across the library (in parts for a large one: --part 2), and the reader's decision that two of them are one concept
 npm run trace:agent -- concepts --names
@@ -1249,7 +1258,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.38.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.39.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live [--require-live codex,claude]] [--report report.json]
 ```
 

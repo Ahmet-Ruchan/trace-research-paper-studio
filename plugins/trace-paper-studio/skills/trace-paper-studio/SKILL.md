@@ -271,9 +271,10 @@ When the user asks what to read next, or to save a paper for later, run:
 node scripts/trace-agent.mjs reading
 node scripts/trace-agent.mjs reading --add "<arxiv:id | DOI | title>" --title "<title>" --for <library id> --relation reference|cited-by|concept [--concept "<term>"]
 node scripts/trace-agent.mjs reading --remove "<id>"
+node scripts/trace-agent.mjs reading --import "<export.bib | .ris | .json>"
 ```
 
-It prints the works the user saved with Read later in the studio (a paper's citation graph or its concept suggestions) placed in the library's reading order: a work a paper builds on, or that explains a concept it assumes, comes before that paper; a work that cites it comes after. `alsoSaved` holds the rest, and works already analysed (`inLibrary`). Save works found with `graph` or `concepts --suggest` with `--add`; analyse one with `prepare --source <identifier>`. The list is the user's own: never write it into a project.
+It prints the works the user saved with Read later in the studio (a paper's citation graph or its concept suggestions) placed in the library's reading order: a work a paper builds on, or that explains a concept it assumes, comes before that paper; a work that cites it comes after. `alsoSaved` holds the rest, and works already analysed (`inLibrary`). Save works found with `graph` or `concepts --suggest` with `--add`; analyse one with `prepare --source <identifier>`. When the user hands over a Zotero, Mendeley or LaTeX bibliography (BibTeX, RIS or CSL JSON), `--import` adds its works at once; report `imported` (found, added, already on the list, already in the library, without a title) as it is. The list is the user's own: never write it into a project.
 
 ## Library tools (MCP)
 

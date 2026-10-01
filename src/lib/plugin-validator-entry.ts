@@ -36,7 +36,8 @@ export { answerChatCard, chatReviewQueue, showChatCard } from "./chat-review";
 export { notesFileName, notesMarkdown, parseNotesFile } from "./reader-notes";
 export { claimSearchTool, LIBRARY_MCP_TOOLS, libraryTool, notesTool, paperTool, TraceToolError } from "./mcp-tools";
 export { parseLibraryTags } from "./library-tags";
-export { addToReadingList, isReadingListFile, mergeReadingOrder, parseReadingList, readingItemSchema, readingListToJson, removeFromReadingList, savedFrom, savedReason, workKey } from "./reading-list";
+export { formatLabel, importPlan, parseReferenceFile } from "./reference-import";
+export { addAllToReadingList, addToReadingList, isReadingListFile, mergeReadingOrder, parseReadingList, readingItemSchema, readingListToJson, removeFromReadingList, savedFrom, savedReason, workKey } from "./reading-list";
 export {
   defaultPublicationInclude,
   expiryFromDays,

@@ -18,6 +18,8 @@ type ReadingValue = {
   error?: string;
   has: (id: string) => boolean;
   add: (item: ReadingItem) => Promise<void>;
+  /** Birçoğunu birden (Zotero ya da .bib); başarısızsa hata fırlatıyor. */
+  addAll: (items: ReadingItem[]) => Promise<void>;
   remove: (id: string) => Promise<void>;
   /** Liste başka bir yoldan değişti (yedeğin içe aktarılması): yeniden okunuyor. */
   reload: () => Promise<void>;
@@ -73,6 +75,10 @@ export function ReadingListProvider({ children }: { children: ReactNode }) {
     has: (id) => items.some((item) => item.id === id),
     add: (item) => run(fetch("/api/library/reading-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }) })),
     remove: (id) => run(fetch(`/api/library/reading-list?id=${encodeURIComponent(id)}`, { method: "DELETE" })),
+    addAll: async (incoming) => {
+      setItems(await send(fetch("/api/library/reading-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: incoming }) })));
+      setError(undefined);
+    },
     reload: () => run(fetch("/api/library/reading-list", { cache: "no-store" })),
   }), [error, items, ready, run]);
 

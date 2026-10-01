@@ -32,8 +32,12 @@ import {
   notesMarkdown,
   notesFileName,
   parseNotesFile,
+  addAllToReadingList,
   addToReadingList,
+  formatLabel,
+  importPlan,
   isReadingListFile,
+  parseReferenceFile,
   mergeReadingOrder,
   parseReadingList,
   readingItemSchema,
@@ -376,7 +380,7 @@ Usage:
   node trace-agent.mjs review [--limit <n>] | review --show --id <library id> --card <card id> | review --answer --id <library id> --card <card id> (--choice <letters> | --typed "<word>" | --remembered yes|no)
   node trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <notes.md>]
   node trace-agent.mjs obsidian --out <vault folder>
-  node trace-agent.mjs reading [--add <arxiv:id | DOI | title> --title "<title>" [--for <library id> --relation reference|cited-by|concept [--concept "<term>"]] [--year <n>] [--url <link>]] [--remove <id>]
+  node trace-agent.mjs reading [--add <arxiv:id | DOI | title> --title "<title>" [--for <library id> --relation reference|cited-by|concept [--concept "<term>"]] [--year <n>] [--url <link>]] [--remove <id>] [--import <file.bib | .ris | .json>]
   node trace-agent.mjs concepts --names [--part <n>]
   node trace-agent.mjs alias --a "<name>" --b "<name>" [--different | --forget] [--proposed-by model] [--reason "<why>"]
   node trace-agent.mjs validate --project <project.trace.json> [--strict]
@@ -2392,12 +2396,21 @@ function readingListReport(args) {
     }
   };
   let changed;
-  if (args.add || args.remove) {
+  if (args.add || args.remove || args.import) {
     const release = acquireDirectoryLock(library, "reading-list.lock", "The reading list is busy. Please retry in a moment.");
     try {
       const file = readRaw();
       let items = parseReadingList(file.raw);
-      if (args.remove) {
+      if (args.import) {
+        // Zotero, Mendeley ya da bir LaTeX projesinin dışa aktarımı (`reference-import.ts`).
+        const source = resolve(String(args.import));
+        const parsed = parseReferenceFile(basename(source), readFileSync(source, "utf8"));
+        const plan = importPlan(parsed.works, items, projects, new Date().toISOString());
+        items = addAllToReadingList(items, plan.fresh);
+        changed = {
+          imported: { file: source, format: formatLabel(parsed.format), found: parsed.works.length, added: plan.fresh.length, alreadyOnList: plan.onList, inLibrary: plan.inLibrary, repeated: plan.repeated, withoutTitle: parsed.skipped, overLimit: plan.overLimit },
+        };
+      } else if (args.remove) {
         if (!items.some((item) => item.id === args.remove)) throw new Error(`No work with the id "${args.remove}" on the reading list.`);
         items = removeFromReadingList(items, args.remove);
         changed = { removed: args.remove };

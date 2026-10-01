@@ -137,6 +137,7 @@ function bridgeSmoke(agent, bridge) {
   mkdirSync(join(workspace, "data", "library"), { recursive: true });
   cpSync(EXAMPLE, join(workspace, "paper.trace.json"));
   writeFileSync(join(workspace, "references.txt"), "Layer Normalization\nDeep Residual Learning for Image Recognition\n");
+  writeFileSync(join(workspace, "references.bib"), "@article{ba2016, title = {Layer {N}ormalization}, author = {Ba, Jimmy Lei}, eprint = {1607.06450}, archivePrefix = {arXiv}, year = 2016}\n");
   const project = readJson(EXAMPLE);
   const node = (...args) => run(process.execPath, [bridge, ...args], { cwd: workspace, env });
   const commands = [
@@ -151,6 +152,7 @@ function bridgeSmoke(agent, bridge) {
     ["work", ["work", "--days", "3"]],
     ["notes --obsidian", ["notes", "--project", "paper.trace.json", "--obsidian"]],
     ["reading", ["reading"]],
+    ["reading --import", ["reading", "--import", "references.bib"]],
     ["today", ["today"]],
     ["obsidian", ["obsidian", "--out", "vault"]],
     ["work --ics", ["work", "--ics", "work-sessions.ics"]],

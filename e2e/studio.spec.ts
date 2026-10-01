@@ -2846,6 +2846,47 @@ test.describe("reading list", () => {
   });
 });
 
+test.describe("importing from Zotero", () => {
+  test("adds the works of a BibTeX export to the reading list, none twice and none already in the library", async ({ page, request }) => {
+    await seed(request, projectNamed("e2e-zotero"));
+    const bib = [
+      "@article{vaswani, title = {Attention Is All You Need}, author = {Vaswani, Ashish}, year = {2017}}",
+      "@inproceedings{ba, title = {Layer {N}ormalization}, author = {Ba, Jimmy Lei and Hinton, Geoffrey}, eprint = {1607.06450}, archivePrefix = {arXiv}, year = 2016}",
+      "@article{dropout, title = {Dropout: A Simple Way to Prevent Neural Networks from Overfitting}, author = {Srivastava, Nitish}, journal = {JMLR}, doi = {10.5555/2627435.2670313}, year = 2014}",
+    ].join("\n\n");
+    await page.goto("/?library=1");
+    await page.getByRole("button", { name: "Reading list", exact: true }).click();
+    const order = page.getByRole("region", { name: "A reading order" });
+    await expect(order).toContainText("Nothing to put in order yet");
+    const panel = page.getByRole("region", { name: "Import from Zotero or BibTeX" });
+    const file = panel.getByLabel("Choose a BibTeX, RIS or CSL JSON file");
+
+    await file.setInputFiles({ name: "refs.bib", mimeType: "application/x-bibtex", buffer: Buffer.from(bib) });
+    const preview = panel.locator(".reading-import-preview");
+    await expect(preview.locator("p")).toHaveText("3 works in refs.bib (BibTeX): 2 new; 1 already in your library.");
+    await expect(preview.locator("li")).toHaveText(["Layer Normalization (2016)", "Dropout: A Simple Way to Prevent Neural Networks from Overfitting (2014)"]);
+    await panel.getByRole("button", { name: "Add 2 works to the reading list" }).click();
+    await expect(panel.getByRole("status")).toHaveText("2 works added to your reading list.");
+    await expect(order.locator(".reading-list li")).toHaveCount(2);
+    const saved = ((await (await request.get("/api/library/reading-list")).json()) as { items: Array<{ id: string; url?: string }> }).items;
+    expect(saved.map((item) => item.id)).toEqual(["arxiv:1607.06450", "doi:10.5555/2627435.2670313"]);
+    expect(saved[0].url).toBe("https://arxiv.org/abs/1607.06450");
+
+    // Aynı dosya ikinci kez: yeni bir şey yok, ekle düğmesi de yok.
+    await file.setInputFiles({ name: "refs.bib", mimeType: "application/x-bibtex", buffer: Buffer.from(bib) });
+    await expect(preview.locator("p")).toHaveText("3 works in refs.bib (BibTeX): nothing new; 2 works already on your list, 1 already in your library.");
+    await expect(panel.getByRole("button", { name: /^Add / })).toHaveCount(0);
+    await panel.getByRole("button", { name: "Cancel" }).click();
+
+    // Okunamayan bir dosya ne olduğunu söylüyor.
+    await file.setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("just some notes") });
+    await expect(panel.getByRole("alert")).toContainText("This is not a BibTeX, RIS or CSL JSON file.");
+
+    await page.getByRole("button", { name: "Library" }).first().click();
+    await expect(page.getByRole("button", { name: "Reading list (2)" })).toBeVisible();
+  });
+});
+
 test.describe("practice exam", () => {
   test("asks questions from every paper against the clock, grades them at the end, and can bring the missed ones back", async ({ page, request }) => {
     const first = await seed(request, projectNamed("e2e-exam-a"));

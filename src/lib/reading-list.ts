@@ -93,6 +93,18 @@ export function addToReadingList(list: readonly ReadingItem[], incoming: Reading
   return list.map((item) => (item.id === existing.id ? merged : item));
 }
 
+/**
+ * Birçok çalışmayı birden (Zotero ya da .bib içe aktarımı): ya hepsi sığıyor
+ * ya hiçbiri eklenmiyor; yarısı eklenmiş bir içe aktarma kafa karıştırırdı.
+ */
+export function addAllToReadingList(list: readonly ReadingItem[], incoming: readonly ReadingItem[]): ReadingItem[] {
+  const fresh = new Set(incoming.map((item) => item.id).filter((id) => !list.some((item) => item.id === id)));
+  if (list.length + fresh.size > MAX_READING_ITEMS) {
+    throw new Error(`The reading list holds at most ${MAX_READING_ITEMS} papers; ${MAX_READING_ITEMS - list.length} more fit.`);
+  }
+  return incoming.reduce<ReadingItem[]>((current, item) => addToReadingList(current, item), [...list]);
+}
+
 export function removeFromReadingList(list: readonly ReadingItem[], id: string) {
   return list.filter((item) => item.id !== id);
 }

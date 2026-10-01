@@ -251,8 +251,9 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
           <DisplayControl />
           <button className="library-import-button" title="What you studied, remembered and have to review" onClick={onProgress}><BarChart3 size={15} /> Progress</button>
           <button className="library-import-button" title="Concepts more than one paper explains" onClick={onConcepts}><Waypoints size={15} /> Concepts</button>
-          {onReadingList && reading?.items.length ? (
-            <button className="library-import-button" title="Papers you saved to read later, in your reading order" onClick={onReadingList}><BookmarkCheck size={15} /> Reading list ({reading.items.length})</button>
+          {/* Boşken de: Zotero'dan ya da bir .bib dosyasından içe aktarma oradan başlıyor. */}
+          {onReadingList && reading?.ready ? (
+            <button className="library-import-button" title="Papers you saved to read later, in your reading order, and an import from Zotero" onClick={onReadingList}><BookmarkCheck size={15} /> Reading list{reading.items.length ? ` (${reading.items.length})` : ""}</button>
           ) : null}
           <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>

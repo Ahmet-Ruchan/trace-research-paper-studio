@@ -181,3 +181,20 @@ a.reading-title svg { display: inline-block; vertical-align: -1px; color: var(--
 .reading-share-form button[type="submit"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
 .reading-share-form button:disabled, .reading-share-actions button:disabled { opacity: .45; cursor: default; }
 .reading-share-message { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); }
+
+/* ---------- Zotero ya da .bib içe aktarımı (reading-import-panel.tsx) ---------- */
+.reading-import { display: grid; gap: 12px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); }
+.reading-import h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-md); }
+.reading-import > p { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; }
+.reading-import code { font-size: .92em; }
+.reading-import-file { position: relative; justify-self: start; display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 999px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-sm); }
+.reading-import-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.reading-import-file:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+.reading-import-preview { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.reading-import-preview p { margin: 0; font-size: var(--text-sm); line-height: 1.5; }
+.reading-import-preview ul { margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: var(--text-sm); }
+.reading-import-more { list-style: none; margin-left: -18px; color: var(--muted); }
+.reading-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.reading-import-actions button { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.reading-import-actions .regen-primary { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.reading-import-actions button:disabled { opacity: .45; cursor: default; }

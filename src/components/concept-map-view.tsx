@@ -11,6 +11,7 @@ import { ConceptAliasesPanel } from "./concept-aliases-panel";
 import { useConceptAliases, useLibraryStudy } from "./study-progress";
 import { StudioNav } from "./focus/studio-nav";
 import { SavedWork, useReadingList } from "./reading-list";
+import { ReadingImportPanel } from "./reading-import-panel";
 import { ReadingSharePanel } from "./reading-share-panel";
 
 /**
@@ -72,9 +73,16 @@ export function ConceptMapView({
         </p>
       </section>
 
-      {order.steps.length || merged.others.length ? (
+      {/* Liste boşken de duruyor: Zotero'dan içe aktarma buradan başlıyor. */}
         <section ref={readingRef} className="reading-order" aria-label="A reading order">
           <div className="block-title"><ListOrdered size={16} /> A reading order</div>
+          {!order.steps.length && !merged.others.length ? (
+            <p>
+              Nothing to put in order yet. Papers in your library that define a concept another one assumes are ordered here,
+              and so are the works you save to read later: from a paper&rsquo;s citation graph, its concept suggestions, or all at
+              once from Zotero below.
+            </p>
+          ) : (
           <p>
             Each paper comes after the papers that define, in their glossary, a concept it assumes. Where nothing decides, the
             older paper comes first. Papers you saved to read later take their place: before the paper that builds on them or
@@ -83,6 +91,7 @@ export function ConceptMapView({
               ? `${order.unconnected === 1 ? "One paper is" : `${order.unconnected} papers are`} not connected to the others this way and ${order.unconnected === 1 ? "is" : "are"} left out.`
               : ""}
           </p>
+          )}
           {merged.entries.length ? (
             <ol>
               {merged.entries.map((entry) => {
@@ -134,8 +143,8 @@ export function ConceptMapView({
           ) : null}
           {reading?.error ? <p className="regen-error" role="status">{reading.error}</p> : null}
           {reading?.ready && reading.items.length ? <ReadingSharePanel saved={reading.items.length} /> : null}
+          <ReadingImportPanel projects={projects} />
         </section>
-      ) : null}
 
       <ConceptAliasesPanel aliases={aliases} />
 

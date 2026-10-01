@@ -350,7 +350,21 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Büyük işler
 
-- [ ] **10. Zotero veya BibTeX içe aktarımı.** Mevcut kütüphane okuma listesine gelir.
+- [x] **10. Zotero veya BibTeX içe aktarımı.** Mevcut kütüphane okuma listesine gelir.
+  - *Yapıldı:* `src/lib/reference-import.ts` Zotero'nun üç dışa aktarımını okuyor: BibTeX
+    (`@string` makroları, `#` birleştirme, `{…}`/`(…)`, LaTeX aksanları ve kaçışları düz metne),
+    RIS ve CSL JSON. Her kayıt okuma listesinin bir çalışması: başlık, yazarlar ("Soyad, Ad" →
+    "Ad Soyad"), yıl, dergi, arXiv kimliği (alan, arXiv DOI'si, bağlantı ya da "arXiv:…" yazısı)
+    ya da DOI, bağlantı. Okuma sırası bölümünde (liste boşken de duruyor; kütüphanedeki
+    **Reading list** düğmesi de artık her zaman) **Import from Zotero or a .bib file**: önce
+    önizleme (yeni, listede zaten olan, kütüphanede analiz edilmiş, dosyada iki kez geçen,
+    başlıksız, sığmayan), onayla hepsi birden; API `items` ile toplu ekliyor, ya hepsi sığıyor ya
+    hiçbiri. Dosya tarayıcıda okunuyor. Ajan `reading --import <dosya>` ile aynısını yapıyor.
+    Eklenti 0.39.0.
+  - *Test:* `reference-import.test.ts` (7: LaTeX, BibTeX, RIS, CSL JSON, biçim tanıma ve
+    hatalar, içe aktarma planı, sınır, köprü), `reading-list.test.ts` toplu API (hepsi ya da
+    hiçbiri, gövde sınırı); e2e "importing from Zotero" (önizleme, ekleme, ikinci kez hiçbir şey,
+    okunamayan dosya); eklenti duman testinde `reading --import`.
 - [ ] **11. Kurulabilir uygulama (PWA).** Masaüstüne ve telefona kurulur, kütüphane
   çevrimdışı açılır.
 - [ ] **12. Hesaplar ve ekip incelemesi.** Birlikte onay, paylaşılan notlar.

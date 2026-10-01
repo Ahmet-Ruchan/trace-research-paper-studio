@@ -1,12 +1,14 @@
 import { z } from "zod";
-import { addToReadingList, readingItemSchema, removeFromReadingList } from "@/lib/reading-list";
+import { addAllToReadingList, addToReadingList, MAX_READING_ITEMS, readingItemSchema, removeFromReadingList } from "@/lib/reading-list";
 import { readReadingList, updateReadingList } from "@/lib/trace-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 32 * 1024;
-const bodySchema = z.object({ item: readingItemSchema });
+// Zotero ya da .bib içe aktarımı birçok çalışmayı birden gönderiyor.
+const MAX_BULK_BYTES = 2 * 1024 * 1024;
+const bodySchema = z.union([z.object({ item: readingItemSchema }), z.object({ items: z.array(readingItemSchema).min(1).max(MAX_READING_ITEMS) })]);
 
 function noStore(body: unknown, init?: ResponseInit) {
   const headers = new Headers(init?.headers);
@@ -22,14 +24,19 @@ export async function GET() {
   }
 }
 
-/** Bir çalışma ekler; zaten listedeyse nereden geldiği birleşiyor. */
+/** Bir çalışma (`item`) ya da birçoğu (`items`) ekler; zaten listedeyse nereden geldiği birleşiyor. */
 export async function POST(request: Request) {
   try {
     const text = await request.text();
-    if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: "The paper's details are too large." }, { status: 413 });
-    const parsed = bodySchema.safeParse(JSON.parse(text));
+    const size = Buffer.byteLength(text, "utf8");
+    const tooLarge = () => noStore({ error: "The paper's details are too large." }, { status: 413 });
+    if (size > MAX_BULK_BYTES) return tooLarge();
+    const json = JSON.parse(text) as unknown;
+    if (size > MAX_BODY_BYTES && !(json && typeof json === "object" && "items" in json)) return tooLarge();
+    const parsed = bodySchema.safeParse(json);
     if (!parsed.success) return noStore({ error: parsed.error.issues[0]?.message ?? "The paper's details are not valid." }, { status: 400 });
-    return noStore({ ok: true, items: await updateReadingList((items) => addToReadingList(items, parsed.data.item)) });
+    const body = parsed.data;
+    return noStore({ ok: true, items: await updateReadingList((items) => ("items" in body ? addAllToReadingList(items, body.items) : addToReadingList(items, body.item))) });
   } catch (error) {
     if (error instanceof SyntaxError) return noStore({ error: "The request is not valid JSON." }, { status: 400 });
     const message = error instanceof Error ? error.message : "The reading list could not be saved.";

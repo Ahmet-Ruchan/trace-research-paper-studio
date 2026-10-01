@@ -117,6 +117,23 @@ describe("the reading list file and its API", () => {
     expect(readdirSync(join(workspace, "library"))).toContain("reading-list.json");
   });
 
+  it("adds many works at once from an import, all or none", async () => {
+    const many = Array.from({ length: 300 }, (_, index) => item(`Imported work number ${index} with a long enough title to fill the body`, []));
+    const response = await post({ items: many });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { items: ReadingItem[] }).items).toHaveLength(300);
+    // Bir kez daha: aynı çalışmalar birleşiyor, liste büyümüyor.
+    expect(((await (await post({ items: many.slice(0, 10) })).json()) as { items: ReadingItem[] }).items).toHaveLength(300);
+    // Sığmayan bir içe aktarma hiçbir şey eklemiyor.
+    const tooMany = Array.from({ length: MAX_READING_ITEMS - 299 }, (_, index) => item(`Another ${index}`, []));
+    const refused = await post({ items: tooMany });
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { error: string }).error).toBe(`The reading list holds at most ${MAX_READING_ITEMS} papers; ${MAX_READING_ITEMS - 300} more fit.`);
+    expect(await readReadingList()).toHaveLength(300);
+    // Tek bir çalışmanın sınırı büyük bir gövdeye izin vermiyor.
+    expect((await post({ item: { ...many[0], title: "x".repeat(40_000) } })).status).toBe(413);
+  });
+
   it("explains a bad request and sets a damaged file aside", async () => {
     expect((await post("{")).status).toBe(400);
     expect((await post({ item: { title: "No id" } })).status).toBe(400);
