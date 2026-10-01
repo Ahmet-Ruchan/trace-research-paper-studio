@@ -248,6 +248,13 @@ Nothing is generated: a card is the project's own question or concept, so a rewr
 deleted paper simply drops out of the queue. The schedule is kept next to your study progress, never
 in the project file.
 
+**Practice exam** on the Review screen is the other way to test yourself: 10, 20, 30 or all of the
+questions of every paper (or of one paper, from its Lab), whether you studied them or not and whether
+they are due or not, mixed across papers, with 10, 20 or 30 minutes or no limit. Nothing is shown
+until you finish or the time runs out; then you get your score, the papers you are weakest on, and
+every question with your answer, the right one, why, and its page. The exam leaves your review
+schedule alone unless you choose **Bring the missed questions back in Review tomorrow**.
+
 Your agent can ask the same cards in the chat, one at a time, without seeing the answers first: you
 pick a letter, type the missing word or explain the concept, and the result is written to the studio
 exactly as if you had answered it in Review.

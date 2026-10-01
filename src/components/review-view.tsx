@@ -35,8 +35,11 @@ export function ReviewView({
   onBack,
   backLabel,
   onOpen,
+  onExam,
 }: {
   projects: ResearchProject[];
+  /** Sınav modu: aynı kapsamın bütün sorularından süreli bir deneme. */
+  onExam?: () => void;
   /** Verilirse yalnızca bu makalenin kartları. */
   projectId?: string;
   onBack: () => void;
@@ -166,6 +169,7 @@ export function ReviewView({
           {REVIEW_INTERVALS_DAYS.slice(1).join(", ").replace(/, (\d+)$/, " and $1")} days while you keep remembering it. A card
           you miss starts again from tomorrow. Papers are mixed, so one answer does not give away the next.
         </p>
+        {onExam ? <button type="button" className="text-button review-exam-link" onClick={onExam}>Practice exam: every question, against the clock <ArrowRight size={14} /></button> : null}
       </section>
 
       {session.length > 0 && !finished ? (

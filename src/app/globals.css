@@ -1148,3 +1148,39 @@ html[data-text-size="larger"] { font-size: 125%; }
   .concept-rows li { grid-template-columns: 1fr; }
   .concept-status { white-space: normal; }
 }
+
+/* Sınav modu. */
+.review-exam-link { margin-top: 14px; }
+.exam-setup { max-width: 760px; margin: 0 auto 40px; display: grid; gap: 14px; padding: 22px 26px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.exam-setup [role="group"] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.exam-setup [role="group"] > span { min-width: 6rem; color: var(--ink-soft); font-size: var(--text-sm); }
+.exam-setup [role="group"] button { min-height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.exam-setup [role="group"] button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.exam-setup .review-next { justify-self: start; margin-left: 0; }
+.exam-question { margin: 0; padding: 0; border: 0; display: grid; gap: 10px; }
+.exam-question legend { margin-bottom: 12px; font: var(--text-lg)/1.5 Georgia, serif; }
+.exam-question label { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: var(--text-md); line-height: 1.5; }
+.exam-question label.is-chosen { border-color: var(--ink); background: var(--surface-2); }
+.exam-question input { margin-top: 4px; accent-color: var(--ink); }
+.exam-clock { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--ink-soft); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.exam-clock.is-low { color: var(--danger); font-weight: 600; }
+.exam-foot { flex-wrap: wrap; }
+.exam-foot .review-skip { margin-left: 0; }
+.exam-foot .review-skip:disabled { opacity: .4; cursor: default; }
+.exam-answered { color: var(--muted); font-size: var(--text-sm); }
+.exam-early { max-width: 760px; margin: -40px auto 40px; text-align: right; }
+.exam-result { max-width: 760px; margin: 0 auto 60px; display: grid; gap: 16px; }
+.exam-score { margin: 0; font: var(--text-lg)/1.5 Georgia, serif; }
+.exam-papers { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.exam-papers th, .exam-papers td { padding: 8px 0; border-bottom: 1px solid var(--line); text-align: left; font-weight: 400; }
+.exam-papers td { text-align: right; font-variant-numeric: tabular-nums; }
+.exam-saved { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); }
+.exam-answers { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.exam-answers li { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 10px; background: var(--surface); }
+.exam-answers li.is-wrong { border-left-color: var(--danger); }
+.exam-answer-head { display: flex; gap: 8px; margin: 0; }
+.exam-answer-head svg { flex: none; margin-top: 4px; }
+.exam-answer-head strong { font: 400 var(--text-md)/1.5 Georgia, serif; }
+.exam-answer-line, .exam-why { margin: 0; font-size: var(--text-sm); line-height: 1.55; }
+.exam-why { color: var(--ink-soft); }
+.exam-answers small { color: var(--muted); font-size: var(--text-xs); }

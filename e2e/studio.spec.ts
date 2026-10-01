@@ -6,6 +6,7 @@ import type { ResearchProject } from "../src/lib/schema";
 import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
 import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 import { readingDrillFor } from "../src/lib/reading-drill";
+import { examPool } from "../src/lib/exam";
 import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
 import { completeStep, questionSignature, recordAnswer, studyPath, visitStep, type StudyProgress } from "../src/lib/study-path";
 import { emptyTestLibrary } from "./fresh-library";
@@ -2779,6 +2780,62 @@ test.describe("reading list", () => {
     await expect(order.locator("li.is-saved")).toHaveCount(1);
     await order.locator("li.is-saved").getByRole("button", { name: "Analyze it" }).click();
     await expect.poll(() => lookedUp).toBe("arxiv:2001.00002");
+  });
+});
+
+test.describe("practice exam", () => {
+  test("asks questions from every paper against the clock, grades them at the end, and can bring the missed ones back", async ({ page, request }) => {
+    const first = await seed(request, projectNamed("e2e-exam-a"));
+    const second = await seed(request, { ...projectNamed("e2e-exam-b"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "A second exam paper" } } });
+    // Soru metni ve seçenekleriyle: okuma alıştırmasında aynı metinli farklı sorular olabiliyor.
+    const signature = (prompt: string, options: string[]) => `${prompt}\u0000${options.join("\u0001")}`;
+    const byPrompt = new Map(examPool([first, second]).map((item) => [signature(item.question.prompt, item.question.options.map((option) => option.label)), item.question]));
+    await page.clock.install();
+    await page.goto("/?review=1");
+    await page.getByRole("button", { name: /Practice exam/ }).click();
+    await expect(page.locator(".compare-hero h1")).toHaveText("Test yourself, against the clock.");
+    const setup = page.getByRole("region", { name: "Set up the exam" });
+    await setup.getByRole("group", { name: "Questions" }).getByRole("button", { name: "10", exact: true }).click();
+    await setup.getByRole("group", { name: "Time" }).getByRole("button", { name: "10 min" }).click();
+    await setup.getByRole("button", { name: "Start the exam" }).click();
+
+    const card = page.locator(".exam-card");
+    const papers: string[] = [];
+    for (let index = 0; index < 10; index += 1) {
+      await expect(page.locator(".compare-hero h1")).toHaveText(`Question ${index + 1} of 10.`);
+      papers.push((await card.locator(".review-paper").textContent()) ?? "");
+      const question = byPrompt.get(signature((await card.locator("legend").textContent()) ?? "", await card.locator(".exam-question label span").allTextContents()))!;
+      const picks = index === 0 ? [question.options.findIndex((option) => !option.correct)] : question.options.flatMap((option, at) => (option.correct ? [at] : []));
+      if (index !== 9) for (const at of picks) await card.locator(".exam-question label").nth(at).click();
+      if (index < 9) await card.getByRole("button", { name: "Next" }).click();
+    }
+    // Hiçbir şey sınav bitmeden gösterilmiyor; makaleler karışık.
+    await expect(card).not.toContainText("The answer");
+    expect(papers[0]).not.toBe(papers[1]);
+    await expect(card.locator(".exam-answered")).toHaveText("9 of 10 answered");
+    await card.getByRole("button", { name: "Finish the exam" }).click();
+
+    await expect(page.locator(".compare-hero h1")).toHaveText("8 of 10 right.");
+    const result = page.getByRole("region", { name: "Your result" });
+    await expect(result.locator(".exam-score")).toContainText("80% in");
+    await expect(result.locator(".exam-score")).toContainText("1 question left unanswered");
+    await expect(result.locator(".exam-answers li.is-wrong")).toHaveCount(2);
+    await expect(result.locator(".exam-answers li.is-wrong").first()).toContainText("The answer:");
+    await expect(result.locator(".exam-papers tbody tr")).toHaveCount(2);
+    await result.getByRole("button", { name: "Bring the 2 missed questions back in Review tomorrow" }).click();
+    await expect(result.locator(".exam-saved")).toHaveText("2 questions will come back in Review tomorrow.");
+    const cards = async () => {
+      const file = (await (await request.get("/api/library/study")).json()) as { projects: Array<{ progress: StudyProgress }> };
+      return file.projects.flatMap((entry) => entry.progress.reviews ?? []).length;
+    };
+    await expect.poll(cards).toBe(2);
+
+    // Süre dolunca sınav kendiliğinden bitiyor.
+    await result.getByRole("button", { name: "Take another" }).click();
+    await expect(page.locator(".exam-clock")).toHaveText(/10:00|09:5\d/);
+    await page.clock.runFor(10 * 60_000 + 2_000);
+    await expect(page.locator(".exam-score")).toContainText("when the time ran out");
+    await expect(page.locator(".exam-score")).toContainText("10 questions left unanswered");
   });
 });
 

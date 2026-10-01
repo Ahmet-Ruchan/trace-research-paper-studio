@@ -195,7 +195,19 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Öğrenme
 
-- [ ] **14. Sınav modu.** Kütüphaneden karışık, süreli deneme; vadesi gelmemiş kartlar da.
+- [x] **14. Sınav modu.** Kütüphaneden karışık, süreli deneme; vadesi gelmemiş kartlar da.
+  - *Yapıldı:* Review ekranında **Practice exam** (Lab'den açılan Review'da yalnızca o makale):
+    makalelerin bütün soruları (quiz ve okuma alıştırması; çalışılmış ya da değil, vadeli ya da
+    değil) arasından 10/20/30 ya da hepsi (en çok 50), makaleler sırayla karışık; 10/20/30 dakika
+    ya da süresiz (`src/lib/exam.ts`). Sınav sırasında geri bildirim yok, önceki/sonraki ile
+    dönülebiliyor; süre dolunca kendiliğinden bitiyor. Sonuçta puan ve süre, makale makale
+    (en zayıf önce) döküm, her soru için yanıtın, doğrusu, nedeni ve sayfası. Tekrar takvimi
+    değişmiyor; okuyucu isterse kaçırılanlar ertesi gün Review'a giriyor (kartı varsa "hatırlanmadı",
+    yoksa yeni kart).
+  - *Test:* havuz, karıştırma (aynı tohum aynı sınav, makaleler arka arkaya gelmiyor), çok
+    seçenekli soru, puanlama ve makale dökümü, kaçırılanın tekrara girmesi birim testlerde; 10
+    soruluk süreli sınav, boş bırakılan, sonuç, kaçırılanları tekrara almak ve süre dolunca
+    bitmesi e2e'de (5 tekrar).
 - [ ] **15. Makaleler arası sorular.** İki makalenin kanıtından otomatik karşılaştırma
   soruları; model gerekmez.
 

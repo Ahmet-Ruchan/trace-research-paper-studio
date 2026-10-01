@@ -32,6 +32,7 @@ import { CompareView } from "./compare-view";
 import { LiteratureMapView } from "./literature-map-view";
 import { LibraryView } from "./library-view";
 import { ReviewView } from "./review-view";
+import { ExamView } from "./exam-view";
 import { LearningStatsView } from "./learning-stats-view";
 import { ConceptMapView } from "./concept-map-view";
 import { ModelRecordView } from "./model-record-view";
@@ -46,7 +47,7 @@ import { ProfileView } from "./focus/profile-view";
 import { StudioNav, StudioNavProvider, type StudioNavTarget } from "./focus/studio-nav";
 
 type WorkspaceMode = "lab" | "story" | "preview";
-type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "concepts" | "progress" | "focus" | "profile";
+type AppScreen = "home" | "library" | "workspace" | "compare" | "models" | "review" | "exam" | "concepts" | "progress" | "focus" | "profile";
 const STORAGE_KEY = "trace-research-project-v1";
 const CHECKPOINT_KEY = "trace-evidence-checkpoint-v1";
 
@@ -196,6 +197,7 @@ function Studio() {
         }
         if (search.get("library") === "1") setScreen("library");
         if (search.get("review") === "1") setScreen("review");
+        if (search.get("exam") === "1") setScreen("exam");
         if (search.get("progress") === "1") setScreen("progress");
         if (search.get("focus") === "1") setScreen("focus");
         if (search.get("profile") === "1") setScreen("profile");
@@ -288,8 +290,9 @@ function Studio() {
   useEffect(() => {
     if (!hydrated) return;
     const url = new URL(window.location.href);
-    for (const key of ["sample", "new", "library", "team", "mode", "import", "review", "progress", "focus", "profile"]) url.searchParams.delete(key);
+    for (const key of ["sample", "new", "library", "team", "mode", "import", "review", "exam", "progress", "focus", "profile"]) url.searchParams.delete(key);
     if (screen === "review" && !reviewScope) url.searchParams.set("review", "1");
+    if (screen === "exam" && !reviewScope) url.searchParams.set("exam", "1");
     if (screen === "progress") url.searchParams.set("progress", "1");
     if (screen === "focus") url.searchParams.set("focus", "1");
     if (screen === "profile") url.searchParams.set("profile", "1");
@@ -646,12 +649,28 @@ function Studio() {
       />,
     );
   }
+  if (screen === "exam") {
+    const scoped = reviewScope && project?.id === reviewScope;
+    return withWork(
+      <ExamView
+        projects={projects}
+        projectId={scoped ? reviewScope : undefined}
+        backLabel="Review"
+        onBack={() => setScreen("review")}
+        onOpen={(target) => {
+          setReviewScope(undefined);
+          openProject(target);
+        }}
+      />,
+    );
+  }
   if (screen === "review") {
     const scoped = reviewScope && project?.id === reviewScope;
     return withWork(
       <ReviewView
         projects={projects}
         projectId={scoped ? reviewScope : undefined}
+        onExam={() => setScreen("exam")}
         backLabel={scoped ? "Back to the paper" : "Library"}
         onBack={() => {
           setReviewScope(undefined);
