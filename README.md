@@ -248,6 +248,14 @@ Nothing is generated: a card is the project's own question or concept, so a rewr
 deleted paper simply drops out of the queue. The schedule is kept next to your study progress, never
 in the project file.
 
+Your agent can ask the same cards in the chat, one at a time, without seeing the answers first: you
+pick a letter, type the missing word or explain the concept, and the result is written to the studio
+exactly as if you had answered it in Review.
+
+```text
+Quiz me on my due Trace review cards.
+```
+
 ![Review across the library](docs/images/review.jpg)
 
 ### Highlight what matters, and keep your own notes
@@ -1061,6 +1069,10 @@ npm run trace:agent -- concepts
 
 # The reader's day: cards due, a paper left half way, what to read next, time against the goal
 npm run trace:agent -- today
+
+# Review in the chat: the due cards without their answers, then the reader's answer written to the studio
+npm run trace:agent -- review
+npm run trace:agent -- review --answer --id <library id> --card <card id> --choice B
 
 # The reader's learning statistics: reviews remembered, cards kept, the week ahead
 npm run trace:agent -- progress

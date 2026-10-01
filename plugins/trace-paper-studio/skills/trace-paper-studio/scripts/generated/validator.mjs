@@ -8603,9 +8603,9 @@ for (let i = 0; i < 25; i++) {
 	const ch = textSymbols.charAt(i);
 	defineSymbol(text$1, textord, ch, ch);
 }
-const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const letters$1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 for (let i = 0; i < 52; i++) {
-	const ch = letters.charAt(i);
+	const ch = letters$1.charAt(i);
 	defineSymbol(math, mathord, ch, ch);
 	defineSymbol(text$1, textord, ch, ch);
 }
@@ -8644,7 +8644,7 @@ for (let i = 0; i < 52; i++) {
 	wideChar = String.fromCharCode(55349, 56632 + i);
 	defineSymbol(math, mathord, wideChar, wideChar);
 	defineSymbol(text$1, textord, wideChar, wideChar);
-	const ch = letters.charAt(i);
+	const ch = letters$1.charAt(i);
 	wideChar = String.fromCharCode(55349, 56476 + i);
 	defineSymbol(math, mathord, ch, wideChar);
 	defineSymbol(text$1, textord, ch, wideChar);
@@ -20589,8 +20589,34 @@ const studyReviewSchema = object({
 	/** Vurgu kartının metni. */
 	cloze: clozeSchema.optional()
 });
+const DAY_MS = 864e5;
+function addDays(now, days) {
+	return new Date(Date.parse(now) + days * DAY_MS).toISOString();
+}
+function applyReview(review, remembered, now) {
+	const box = remembered ? Math.min(MAX_REVIEW_BOX, review.box + 1) : 0;
+	return {
+		...review,
+		box,
+		due: addDays(now, REVIEW_INTERVALS_DAYS[box]),
+		lapses: remembered ? review.lapses : review.lapses + 1,
+		reviews: review.reviews + 1,
+		last: now
+	};
+}
 function isDue(review, now) {
 	return Date.parse(review.due) <= Date.parse(now);
+}
+/**
+* "tomorrow", "in 3 days": bir sonraki tekrarın okuyucuya söylenişi. Gün
+* yuvarlanıyor: ekranın açılışıyla yanıt arasında geçen birkaç dakika "3 gün"ü
+* "4 gün" yapmamalı.
+*/
+function describeDue(due, now) {
+	const difference = Date.parse(due) - Date.parse(now);
+	if (difference <= 0) return "now";
+	const days = Math.max(1, Math.round(difference / DAY_MS));
+	return days === 1 ? "tomorrow" : `in ${days} days`;
 }
 
 //#endregion
@@ -21774,6 +21800,32 @@ function reviewForecast(cards, now) {
 		nextDue: later[0]
 	};
 }
+/** Kartın tekrar sonucunu projenin ilerleme kaydına yazar. */
+function recordReview(progress, card, remembered, now) {
+	const base = progress ?? emptyStudyProgress(now);
+	const reviews = base.reviews ?? [];
+	const current = reviews.find((item) => item.id === card.review.id) ?? card.review;
+	return {
+		...base,
+		updatedAt: now,
+		reviews: [...reviews.filter((item) => item.id !== current.id), applyReview(current, remembered, now)],
+		reviewDays: countReviewDay(base.reviewDays ?? [], dayKey(new Date(now)), remembered)
+	};
+}
+/** Günün tekrar sayısına bir kart ekler; en eski günler sınırın dışında kalıyor. */
+function countReviewDay(days, day, remembered) {
+	const today = days.find((item) => item.day === day) ?? {
+		day,
+		reviewed: 0,
+		remembered: 0
+	};
+	const counted = {
+		day,
+		reviewed: today.reviewed + 1,
+		remembered: today.remembered + (remembered ? 1 : 0)
+	};
+	return [...days.filter((item) => item.day !== day), counted].sort((left, right) => left.day.localeCompare(right.day)).slice(-400);
+}
 
 //#endregion
 //#region src/lib/learning-stats.ts
@@ -22495,6 +22547,209 @@ function todayBrief(input) {
 		work,
 		learning,
 		suggestions
+	};
+}
+
+//#endregion
+//#region src/lib/highlight-cards.ts
+const STOPWORDS = new Set("about above after again against among because before being below between both cannot could doing during each either every further having however itself might other others ought rather shall should since still their theirs them themselves then there these they those through under until upon very were what when where whereas whether which while whose with within without would your yours also into only same such than that this from have more most much many some will been does using used uses based thus hence".split(" "));
+/** Yazılan yanıt gizlenen kelime mi: büyük-küçük harf, aksan ve noktalama önemsiz. */
+function clozeMatches(typed, answer) {
+	const plain = (text) => text.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+	return Boolean(plain(typed)) && plain(typed) === plain(answer);
+}
+
+//#endregion
+//#region src/lib/chat-review.ts
+/**
+* Sohbette tekrar: ajan vadesi gelen kartları sohbette soruyor ve sonucu
+* stüdyonun kaydına yazıyor (`trace-agent.mjs review`).
+*
+* Kartın yanıtı listede yok: ajan önce soruyor, okuyucunun yanıtını köprüye
+* veriyor; köprü stüdyonun kuralıyla denetleyip yazıyor. Soru seçenekle
+* yanıtlanıyor ve tek denemede doğruysa hatırlanmış sayılıyor (stüdyoda da
+* yalnızca ilk deneme sayılıyor). Kavramı okuyucu kendi kelimeleriyle
+* anlatıyor, ajan yanıtı gösteriyor ve okuyucu kendisi işaretliyor. Vurgu
+* kartında kelime yazılıyor; tutmazsa yanıt gösteriliyor ve karar okuyucunun.
+* Yalnızca vadesi gelmiş kart yazılıyor: sohbet kartları öne çekemez.
+*/
+const CHAT_REVIEW_LIMIT = 10;
+const LETTERS = "ABCDEFGH";
+function chatCard(card) {
+	const base = {
+		id: card.projectId,
+		card: card.review.id,
+		kind: card.kind,
+		paper: card.paperTitle,
+		language: card.language
+	};
+	if (card.kind === "question") return {
+		...base,
+		ask: card.question.prompt,
+		options: card.question.options.map((option, index) => ({
+			letter: LETTERS[index],
+			text: option.label
+		})),
+		answerWith: "choice",
+		...card.question.kind === "multi" ? { chooseAll: true } : {}
+	};
+	if (card.kind === "concept") return {
+		...base,
+		ask: `${card.concept.term}: what does it mean, and why does this paper need it?`,
+		answerWith: "remembered"
+	};
+	return {
+		...base,
+		ask: `Fill in the blank${card.cloze.where ? ` (from “${card.cloze.where}”)` : ""}: ${cardText(card)}`,
+		answerWith: "typed"
+	};
+}
+function chatReviewQueue(projects, study, now, limit = 10) {
+	const cards = reviewCards(projects, study);
+	const forecast = reviewForecast(cards, now);
+	return {
+		due: forecast.due,
+		cards: dueCards(cards, now, limit).map(chatCard),
+		...forecast.nextDue ? {
+			nextDue: forecast.nextDue,
+			nextDueIn: describeDue(forecast.nextDue, now)
+		} : {}
+	};
+}
+/** Kartın yanıtı: okuyucu yanıtladıktan (ya da kavramda denedikten) sonra gösterilecek. */
+function chatCardAnswer(card) {
+	if (card.kind === "question") return {
+		correct: card.question.options.flatMap((option, index) => option.correct ? [{
+			letter: LETTERS[index],
+			text: option.label,
+			why: option.explanation
+		}] : []),
+		...card.question.page ? { page: card.question.page } : {}
+	};
+	if (card.kind === "concept") return {
+		term: card.concept.term,
+		meaning: card.concept.intuition,
+		whyItMatters: card.concept.whyItMatters,
+		...card.concept.formal ? { formal: card.concept.formal } : {}
+	};
+	return {
+		missingWord: card.cloze.answer,
+		highlight: card.cloze.text
+	};
+}
+/** Seçim "A", "a, c", "AC" gibi gelebilir; harfler kümesi. */
+function letters(choice, count) {
+	const picked = new Set(choice.toUpperCase().replace(/[^A-Z]/g, "").split("").filter(Boolean));
+	return [...picked].every((letter) => LETTERS.indexOf(letter) >= 0 && LETTERS.indexOf(letter) < count) && picked.size ? picked : void 0;
+}
+function grade(card, answer) {
+	if (card.kind === "question") {
+		if (answer.choice === void 0) return {
+			ok: false,
+			issue: "A question is answered with --choice and the letter (or letters) the reader chose."
+		};
+		const picked = letters(answer.choice, card.question.options.length);
+		if (!picked) return {
+			ok: false,
+			issue: `--choice takes letters from A to ${LETTERS[card.question.options.length - 1]}.`
+		};
+		const right = new Set(card.question.options.flatMap((option, index) => option.correct ? [LETTERS[index]] : []));
+		return {
+			ok: true,
+			remembered: picked.size === right.size && [...picked].every((letter) => right.has(letter)),
+			feedback: { chosen: card.question.options.flatMap((option, index) => picked.has(LETTERS[index]) ? [{
+				letter: LETTERS[index],
+				text: option.label,
+				correct: option.correct,
+				why: option.explanation
+			}] : []) }
+		};
+	}
+	if (card.kind === "highlight" && answer.typed !== void 0 && answer.remembered === void 0) {
+		if (!answer.typed.trim()) return {
+			ok: false,
+			issue: "--typed needs the word the reader wrote."
+		};
+		return clozeMatches(answer.typed, card.cloze.answer) ? {
+			ok: true,
+			remembered: true,
+			feedback: { typed: answer.typed.trim() }
+		} : {
+			ok: true,
+			remembered: void 0,
+			feedback: { typed: answer.typed.trim() }
+		};
+	}
+	if (answer.remembered === void 0) return {
+		ok: false,
+		issue: card.kind === "concept" ? "Show the reader the answer (--show), let them say whether they remembered it, then record it with --remembered yes or no." : "A highlight card is answered with --typed and the word the reader wrote, or --remembered yes or no."
+	};
+	return {
+		ok: true,
+		remembered: answer.remembered,
+		feedback: {}
+	};
+}
+/**
+* Bir kartın sonucunu stüdyonun kaydına yazar. `file` yeni `study.json`;
+* `needsReader` ise yazılan kelime tutmadı ve karar okuyucunun.
+*/
+function answerChatCard(projects, rawStudyFile, projectId, cardId, answer, now) {
+	const study = parseStudyFile(rawStudyFile);
+	const project = projects.find((item) => item.id === projectId);
+	if (!project) return {
+		ok: false,
+		issue: `No paper with the id "${projectId}" in the library.`
+	};
+	const card = reviewCards([project], study).find((item) => item.review.id === cardId);
+	if (!card) return {
+		ok: false,
+		issue: `No review card "${cardId}" for this paper. Run review to see the cards that are due.`
+	};
+	if (!isDue(card.review, now)) return {
+		ok: false,
+		issue: `This card is not due; it comes back ${describeDue(card.review.due, now)}.`
+	};
+	const graded = grade(card, answer);
+	if (!graded.ok) return {
+		ok: false,
+		issue: graded.issue
+	};
+	if (graded.remembered === void 0) return {
+		ok: true,
+		recorded: false,
+		needsReader: true,
+		...graded.feedback,
+		answer: chatCardAnswer(card)
+	};
+	const progress = recordReview(study.get(projectId), card, graded.remembered, now);
+	study.set(projectId, progress);
+	const due = progress.reviews.find((item) => item.id === cardId).due;
+	const left = reviewCards(projects, study).filter((item) => isDue(item.review, now)).length;
+	return {
+		ok: true,
+		recorded: true,
+		remembered: graded.remembered,
+		comesBack: describeDue(due, now),
+		due,
+		...graded.feedback,
+		answer: chatCardAnswer(card),
+		stillDue: left,
+		file: studyFileToJson(study)
+	};
+}
+/** `--show`: kartın yanıtı, yazmadan. */
+function showChatCard(projects, study, projectId, cardId) {
+	const project = projects.find((item) => item.id === projectId);
+	const card = project ? reviewCards([project], study).find((item) => item.review.id === cardId) : void 0;
+	if (!card) return {
+		ok: false,
+		issue: `No review card "${cardId}" for the paper "${projectId}".`
+	};
+	return {
+		ok: true,
+		card: chatCard(card),
+		answer: chatCardAnswer(card)
 	};
 }
 
@@ -23930,4 +24185,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, answerChatCard, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, chatReviewQueue, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, showChatCard, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };

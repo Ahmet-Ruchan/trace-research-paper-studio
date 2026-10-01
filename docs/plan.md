@@ -123,8 +123,18 @@ yapıldığı ve nasıl test edildiği yazıyor.
   - *Test:* kartlar, yarım makale, okuma listesi, okuma sırası, hedef tutmuş ve boş kütüphane
     birim testlerde; köprü komutu gerçek bir `~/.trace` klasöründe çalıştırılıyor; eklenti smoke
     testi Codex, Claude Code ve Antigravity'de `bridge today`.
-- [ ] **22. Sohbette tekrar.** Ajan vadesi gelen kartları sohbette sorar ve sonucu
+- [x] **22. Sohbette tekrar.** Ajan vadesi gelen kartları sohbette sorar ve sonucu
   stüdyonun kaydına yazar.
+  - *Yapıldı:* `trace-agent.mjs review` vadesi gelen kartları yanıtsız listeliyor (makaleler
+    karışık, `--limit`); `--answer` okuyucunun yanıtını stüdyonun kuralıyla denetleyip
+    `study.json`'a aynı kilitle yazıyor (`src/lib/chat-review.ts`): soru harfle (yalnızca ilk
+    yanıt sayılıyor), vurgu kartı yazılan kelimeyle (tutmazsa karar okuyucunun), kavram `--show`
+    ile yanıt gösterildikten sonra okuyucunun "hatırladım/hatırlamadım"ıyla. Yalnızca vadesi
+    gelmiş kart yazılıyor. SKILL.md'de "Review in the chat", README'de örnek istem; eklenti 0.31.0.
+  - *Test:* liste yanıt içermiyor, harf biçimleri, yanlış/doğru soru, vadesi gelmemiş kartın
+    reddi, yanlış yazılan kelime, kavramın yalnızca okuyucunun kararıyla yazılması birim
+    testlerde; köprü gerçek bir `~/.trace` üzerinde listeleyip yazıyor; eklenti smoke testi
+    Codex, Claude Code ve Antigravity'de `bridge review`.
 - [ ] **23. MCP sunucusu.** Kütüphane, iddia araması, notlar ve okuma listesi MCP araçları
   olarak sunulur.
 

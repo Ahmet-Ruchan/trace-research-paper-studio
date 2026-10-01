@@ -43,6 +43,9 @@ import {
   savedReason,
   workKey,
   todayBrief,
+  chatReviewQueue,
+  answerChatCard,
+  showChatCard,
   recordCheckedExplanation,
   aliasBatches,
   aliasMap,
@@ -368,6 +371,7 @@ Usage:
   node trace-agent.mjs progress
   node trace-agent.mjs work [--days <n>]
   node trace-agent.mjs today
+  node trace-agent.mjs review [--limit <n>] | review --show --id <library id> --card <card id> | review --answer --id <library id> --card <card id> (--choice <letters> | --typed "<word>" | --remembered yes|no)
   node trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <notes.md>]
   node trace-agent.mjs reading [--add <arxiv:id | DOI | title> --title "<title>" [--for <library id> --relation reference|cited-by|concept [--concept "<term>"]] [--year <n>] [--url <link>]] [--remove <id>]
   node trace-agent.mjs concepts --names [--part <n>]
@@ -459,6 +463,13 @@ Usage:
             in the reading order, today's and this week's work time against the
             goal, and suggestions to tell the reader in that order. Reads only;
             no network, no model.
+  review    Review in the chat: lists the review cards due now without their
+            answers (--limit, default 10). --show prints one card's answer;
+            --answer checks the reader's answer by the studio's rules and
+            writes the result to the studio's study progress (same lock):
+            --choice for a question, --typed for a highlight's missing word,
+            --remembered yes|no for a concept after its answer was shown. Only a
+            due card is written. No network, no model.
   notes     Prints the reader's own notes and highlights on a paper (kept in
             ~/.trace/library/notes.json, never in the project) as Markdown, in
             the paper's order: story sections, report sections, claims with
@@ -548,7 +559,7 @@ function parseArgs(values) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const value = values[index + 1];
-    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest", "no-save", "names", "different", "forget", "obsidian"].includes(key)) {
+    if (["no-open", "no-app", "install-app", "strict", "no-report", "no-appendix", "no-learning", "no-figures", "suggest", "no-save", "names", "different", "forget", "obsidian", "show", "answer"].includes(key)) {
       args[key] = true;
       continue;
     }
@@ -2229,6 +2240,71 @@ function printToday() {
 }
 
 /**
+ * Sohbette tekrar (`chat-review.ts`): vadesi gelen kartlar yanıtsız
+ * listeleniyor; ajan soruyor, okuyucunun yanıtını --answer ile veriyor ve
+ * sonuç stüdyonun `study.json`'ına aynı kilitle yazılıyor.
+ */
+function chatReview(args) {
+  const { library, projects, study } = readLibrary();
+  const now = new Date().toISOString();
+  if (args.show) {
+    if (!args.id || !args.card) throw new Error("review --show needs --id <library id> and --card <card id>.");
+    const shown = showChatCard(projects, study, args.id, args.card);
+    if (!shown.ok) throw new Error(shown.issue);
+    console.log(JSON.stringify({ ok: true, card: shown.card, answer: shown.answer, note: "Show this to the reader only after they have tried. For a concept, ask whether they remembered it, then record it with --answer --remembered yes or no." }, null, 2));
+    return;
+  }
+  if (args.answer) {
+    if (!args.id || !args.card) throw new Error("review --answer needs --id <library id> and --card <card id>.");
+    const yesNo = (value) => {
+      if (value === undefined) return undefined;
+      if (/^(yes|y|true|1)$/i.test(value)) return true;
+      if (/^(no|n|false|0)$/i.test(value)) return false;
+      throw new Error("--remembered takes yes or no.");
+    };
+    const release = acquireDirectoryLock(library, "study.lock", "The study progress is busy. Please retry in a moment.");
+    try {
+      const path = join(library, "study.json");
+      let raw;
+      let exists = true;
+      try {
+        raw = JSON.parse(readFileSync(path, "utf8"));
+      } catch (error) {
+        if (error?.code === "ENOENT") exists = false;
+        else if (!(error instanceof SyntaxError)) throw error;
+      }
+      const outcome = answerChatCard(projects, raw, args.id, args.card, { choice: args.choice, typed: args.typed, remembered: yesNo(args.remembered) }, now);
+      if (!outcome.ok) throw new Error(outcome.issue);
+      if (outcome.recorded) {
+        if (exists && !isStudyFile(raw)) renameSync(path, join(library, `study.damaged-${now.replace(/[-:.]/g, "")}.json`));
+        atomicWrite(path, `${JSON.stringify(outcome.file, null, 2)}\n`);
+      }
+      // Yeni kayıt dosyaya yazıldı; çıktıya yalnızca sonuç.
+      const result = { ...outcome };
+      delete result.file;
+      console.log(JSON.stringify({
+        ...result,
+        note: outcome.recorded
+          ? "Recorded in the studio, as if answered in Review. Tell the reader whether it was right, with the answer and its reason, and when the card comes back; then ask the next card."
+          : "The word does not match. Show the reader the missing word and ask whether they had it (a typo, a synonym); record their answer with --remembered yes or no.",
+      }, null, 2));
+    } finally {
+      release();
+    }
+    return;
+  }
+  const limit = args.limit === undefined ? undefined : Number(args.limit);
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 50)) throw new Error("--limit must be a whole number from 1 to 50.");
+  const queue = chatReviewQueue(projects, study, now, limit);
+  console.log(JSON.stringify({
+    ok: true,
+    library,
+    ...queue,
+    note: "Ask the cards one at a time, in this order, without giving the answer. A question: show the options with their letters and pass the reader's letters with --choice (a first answer counts; chooseAll means every correct letter). A highlight: pass the word the reader wrote with --typed. A concept: let the reader explain it, then show the answer with --show and record what they say with --remembered yes or no. Never answer for the reader and never write a result they did not give.",
+  }, null, 2));
+}
+
+/**
  * Okuma listesi: stüdyoda "Read later" denen çalışmalar, okuma sırasına
  * yerleştirilmiş. --add ve --remove stüdyonun kilidiyle yazıyor.
  */
@@ -2377,6 +2453,7 @@ try {
   else if (command === "work") printWork(args);
   else if (command === "notes") printNotes(args);
   else if (command === "today") printToday();
+  else if (command === "review") chatReview(args);
   else if (command === "reading") readingList(args);
   else if (command === "alias") recordAlias(args);
   else usage(1);

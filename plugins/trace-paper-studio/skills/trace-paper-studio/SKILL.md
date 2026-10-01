@@ -1,6 +1,6 @@
 ---
 name: trace-paper-studio
-description: Turns a research paper (a PDF, title, DOI or repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite a section, primer concept, quiz question, derivation or equation with the evidence locked; to generate with or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a Jupyter notebook, BibTeX/RIS or Anki flashcards; to show the citation graph; to report how each model's quotes held up; to check a reader's own explanation of a section; to tell a reader which concepts they already studied in other papers and which cited works teach the rest, to order a library for reading, and to report a reader's day, study progress, work time, notes and reading list.
+description: Turns a research paper (a PDF, title, DOI or repository link) into an evidence-grounded Trace project (.trace.json) and a local interactive site, using the active Codex, Claude Code or Antigravity CLI model instead of an external LLM API. Use it to analyze a paper, explain its equations and methods with cited claims, and validate, import or deliver a .trace.json project. Also use it to rewrite a section, primer concept, quiz question, derivation or equation with the evidence locked; to use or save a narrative template; to publish a shareable link; to check quotes against the PDF text; to export a report, slides, a notebook, BibTeX/RIS or Anki cards; to show the citation graph; to report how each model's quotes held up; to check a reader's explanation of a section; to tell a reader which concepts they studied in other papers and which cited works teach the rest, to order a library for reading, to report a reader's day, study progress, work time, notes and reading list, and to quiz them on due review cards.
 ---
 
 # Trace Paper Studio
@@ -219,6 +219,18 @@ node scripts/trace-agent.mjs today
 ```
 
 It reads the user's own record in the studio and prints the day in one answer: review cards due now and from which papers (`review`), papers they started studying and left, with steps done (`continueStudying`), what to read next (`readNext`: the next paper in the library's reading order, a work on their reading list, or a paper not started yet), today and this week against the daily goal with the streak (`work`), and the papers finished and cards reviewed this week against the weekly learning goal the user set on their profile (`learningThisWeek`, `goal: null` when none). `suggestions` says the same in order of importance, as sentences for the user: give them briefly in that order and offer to start with the first. Cards are answered in the studio (Review). It is the user's own record: never write it into a project.
+
+## Review in the chat
+
+When the user asks to review, to be quizzed on what they studied, or to go through their due cards here, run:
+
+```bash
+node scripts/trace-agent.mjs review [--limit 10]
+node scripts/trace-agent.mjs review --show --id <library id> --card <card id>
+node scripts/trace-agent.mjs review --answer --id <library id> --card <card id> (--choice <letters> | --typed "<word>" | --remembered yes|no)
+```
+
+The first lists the cards due now, mixed across papers, without their answers. Ask them one at a time and never give the answer first. A question (`answerWith: choice`): show its options with their letters and pass the letters the user picks with `--choice`; only that first answer counts, as in the studio (`chooseAll`: every correct letter). A highlight (`typed`): pass the word the user writes with `--typed`; when it does not match (`needsReader`), show the missing word and ask whether they had it, then record `--remembered yes` or `no`. A concept (`remembered`): let the user explain it, show the answer with `--show`, and record what they say with `--remembered`. Each answer is written to the studio's study progress, as if answered in Review: tell the user whether it was right, with the answer and its reason, and when the card comes back (`comesBack`). Only a due card is written. Never answer or decide for the user, and never record a result they did not give.
 
 ## Learning progress
 
