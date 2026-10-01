@@ -646,6 +646,11 @@ quote was found on its page, and what a reviewer decided. A rejected claim is st
 Every word you type must appear in the claim or its quote. Nothing but the claims is searched, and
 no model is asked. Click a result and the project opens on that claim.
 
+**Your notes** searches what you wrote and highlighted instead: every note and highlight in the
+library, each with its paper and where it is (a story or report section, a Primer concept or a
+claim). A note on a claim opens on that claim; the others open the paper's notes, where **Show it**
+goes to the passage.
+
 ![Search the claims of every paper](docs/images/library.jpg)
 
 ### Group papers with tags
@@ -1368,7 +1373,7 @@ the two from mixing.
 - [x] Quotes checked against the page text; Docker image and password protection
 - [x] Claim review by a person, quotes shown on the page, evidence-locked questions, Anki export
 - [x] Exports: reports, slides, runnable notebook, citations
-- [x] Claim search across the library, tags, and a per-model quote record
+- [x] Claim search across the library, your notes searched too, tags, and a per-model quote record
 - [x] Dark theme, adjustable text size, contrast-checked colours
 - [x] Learning in the studio: a teaching model, traced numbers, a quiz that teaches, terms in place, a guided study path, spaced review
 - [x] Learning that sticks: predictions first, common misreadings, learning health, explaining it back, concepts across papers

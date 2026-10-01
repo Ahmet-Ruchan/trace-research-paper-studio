@@ -420,6 +420,13 @@ span.library-tag { cursor: default; }
 .claim-hit-marks .is-good { border-color: color-mix(in srgb, var(--green) 45%, transparent); color: var(--green); }
 .claim-hit-marks .is-warn { border-color: color-mix(in srgb, var(--amber) 45%, transparent); color: var(--amber); }
 .claim-hit-marks .is-bad { border-color: var(--danger-line); color: var(--danger); }
+.note-hit-where { color: var(--ink-soft); font-size: var(--text-sm); }
+.note-hit-quote { border-left-color: var(--note-yellow); }
+.note-hit-quote.is-green { border-left-color: var(--note-green); }
+.note-hit-quote.is-blue { border-left-color: var(--note-blue); }
+.note-hit-quote.is-pink { border-left-color: var(--note-pink); }
+.note-hit-quote.is-purple { border-left-color: var(--note-purple); }
+.note-hit-text { font: var(--text-md)/1.55 var(--font-geist-sans), Arial, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
 .claim-results-more { margin: 6px 0 0; color: var(--muted); font-size: var(--text-sm); text-align: center; }
 @media (max-width: 720px) {
   .library-toolbar { flex-wrap: wrap; gap: 10px; }

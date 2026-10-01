@@ -496,6 +496,12 @@ function Studio() {
     }
   }
 
+  /** Kütüphanedeki not aramasından: proje laboratuvarda, notların bölümünde. */
+  function openNotes(nextProject: ResearchProject) {
+    openProject(nextProject);
+    setLabJump({ section: "notes", nonce: Date.now() });
+  }
+
   /** Kütüphanedeki iddia aramasından: proje laboratuvarda, o iddia seçili ve görünür açılır. */
   function openClaim(nextProject: ResearchProject, claimId: string) {
     openProject(nextProject);
@@ -678,6 +684,7 @@ function Studio() {
         onProgress={() => setScreen("progress")}
         onOpen={openProject}
         onOpenClaim={openClaim}
+        onOpenNotes={openNotes}
         onModelRecord={() => setScreen("models")}
         onDelete={requestDelete}
         pendingDeletion={pendingDeletion}

@@ -99,8 +99,19 @@ yapıldığı ve nasıl test edildiği yazıyor.
     eşleşmesi, kuyruk ve sonraki tekrar, kelime değişince baştan başlama, silme, bozuk kart,
     iki cihazın birleşmesi birim testlerde; vurgudan kart yapıp tekrar ekranında biri doğru biri
     yanlış yanıtlamak ve vurguyu silince kartın gitmesi e2e'de; telefon genişliği elle kontrol.
-- [ ] **7. Notlarda arama.** Kütüphane araması iddiaların yanında notlarda ve vurgularda da
+- [x] **7. Notlarda arama.** Kütüphane araması iddiaların yanında notlarda ve vurgularda da
   arar.
+  - *Yapıldı:* Kütüphane aramasında **Papers** ve **Claims**'in yanında **Your notes**: bütün
+    makalelerin notları ve vurguları, her biri makalesi ve yeriyle (hikâye, rapor, Primer ya da
+    iddia ve başlığı), eşleşen kelimeler işaretli (`src/lib/note-search.ts`). Her kelime notun
+    metninde, vurgusunda ya da yerinin başlığında geçmeli; kendi yazdığın ve vurguladığın başlıktan
+    ağır basıyor, eşit puanda en yeni not önce. İddia notu iddiayı, ötekiler makalenin Notes
+    bölümünü açıyor. Etiketle seçilmiş koleksiyonda yalnızca onun notları. Notlar API'si
+    kimliksiz istekte bütün kütüphanenin notlarını veriyor.
+  - *Test:* dizin (işaretlerin ve kütüphanede olmayan makalenin dışarıda kalması), sıralama,
+    birden çok kelime, sınır ve bütün notları veren API birim testlerde; arama, sayım, yer
+    etiketleri, işaretli kelime, bölüm notundan Notes'a ve iddia notundan iddiaya gitmek e2e'de;
+    telefon genişliğinde taşma yok.
 - [ ] **8. Bütün kütüphaneyi Obsidian'a aktarmak.** Her makale bir not; notlar ve vurgular
   içinde; makaleler arasında kavram ve okuma sırası bağlantıları. Ajan tek komutla yapar.
 - [ ] **25. Notları isteğe bağlı paylaşmak.** Yayın panelinde "seçtiğim notları dahil et";

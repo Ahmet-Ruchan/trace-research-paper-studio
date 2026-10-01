@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BarChart3, BookMarked, BookmarkCheck, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, BookMarked, BookmarkCheck, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, NotebookPen, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import {
   LIBRARY_LAYOUT_KEY,
@@ -17,6 +17,8 @@ import {
 } from "@/lib/library-order";
 import { buildClaimIndex, excerptAround, highlightSegments, searchClaims, type ClaimHit, type ClaimSearch } from "@/lib/library-search";
 import { MAX_TAG_LENGTH, addTag, hasTag, removeTag, tagCounts, tagKey } from "@/lib/library-tags";
+import { buildNoteIndex, searchNotes, type NoteHit, type NoteSearch } from "@/lib/note-search";
+import { parseNotesFile, type ReaderNote } from "@/lib/reader-notes";
 import { UNDO_WINDOW_MS } from "@/lib/pending-deletion";
 import { listLibraryTags, saveProjectTags } from "@/lib/project-library";
 import type { ResearchProject } from "@/lib/schema";
@@ -35,6 +37,8 @@ type LibraryViewProps = {
   onOpen: (project: ResearchProject) => void;
   /** Bir arama sonucundan projeye, doğrudan o iddianın üstüne. */
   onOpenClaim: (project: ResearchProject, claimId: string) => void;
+  /** Not aramasından projeye: Lab'in Notes bölümü. */
+  onOpenNotes?: (project: ResearchProject) => void;
   /** Modellerin alıntı karnesi: kütüphanedeki bütün projelerden hesaplanıyor. */
   onModelRecord: () => void;
   /** Tekrar ekranı; kütüphanedeki bütün makalelerin kartları. */
@@ -61,7 +65,7 @@ type LibraryViewProps = {
   onCompare: (projects: ResearchProject[]) => void;
 };
 
-type SearchScope = "papers" | "claims";
+type SearchScope = "papers" | "claims" | "notes";
 
 const TAG_OPTIONS_ID = "library-tag-options";
 
@@ -81,7 +85,7 @@ function count(value: number, noun: string) {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onReview, onConcepts, onReadingList, onContinue, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onModelRecord, onReview, onConcepts, onReadingList, onContinue, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
   const reading = useReadingList();
   const positions = useReadingPositions();
   const review = useReviewForecast(projects);
@@ -160,6 +164,28 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
 
   const claimIndex = useMemo(() => (scope === "claims" ? buildClaimIndex(inCollection) : []), [scope, inCollection]);
   const claimSearch = useMemo(() => searchClaims(claimIndex, query), [claimIndex, query]);
+  // Notlar yalnızca not araması açılınca okunuyor; her açılışta yeniden (Lab'de yazılmış olabilir).
+  const [readerNotes, setReaderNotes] = useState<{ status: "idle" | "loading" } | { status: "ready"; notes: Map<string, ReaderNote[]> } | { status: "failed"; message: string }>({ status: "idle" });
+  useEffect(() => {
+    if (scope !== "notes") return;
+    let cancelled = false;
+    const start = setTimeout(() => setReaderNotes({ status: "loading" }), 0);
+    fetch("/api/library/notes", { cache: "no-store" })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
+        if (!response.ok) throw new Error(data?.error ?? "Your notes could not be read.");
+        if (!cancelled) setReaderNotes({ status: "ready", notes: parseNotesFile(data) });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setReaderNotes({ status: "failed", message: error instanceof Error ? error.message : "Your notes could not be read." });
+      });
+    return () => {
+      cancelled = true;
+      clearTimeout(start);
+    };
+  }, [scope]);
+  const noteIndex = useMemo(() => (scope === "notes" && readerNotes.status === "ready" ? buildNoteIndex(inCollection, readerNotes.notes) : []), [scope, inCollection, readerNotes]);
+  const noteSearch = useMemo(() => searchNotes(noteIndex, query), [noteIndex, query]);
 
   function persistTags(projectId: string, next: string[]) {
     setTags((current) => {
@@ -198,9 +224,13 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
 
   const toolbarCount = scope === "papers"
     ? count(filtered.length, "result")
-    : claimSearch.terms.length
-      ? `${count(claimSearch.total, "claim")} in ${count(claimSearch.papers, "paper")}`
-      : count(claimIndex.length, "claim");
+    : scope === "notes"
+      ? noteSearch.terms.length
+        ? `${count(noteSearch.total, "note")} in ${count(noteSearch.papers, "paper")}`
+        : count(noteIndex.length, "note")
+      : claimSearch.terms.length
+        ? `${count(claimSearch.total, "claim")} in ${count(claimSearch.papers, "paper")}`
+        : count(claimIndex.length, "claim");
 
   return (
     <main className="library-page">
@@ -260,14 +290,15 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
         <div className="library-scope" role="group" aria-label="Search in">
           <button aria-pressed={scope === "papers"} onClick={() => setScope("papers")}>Papers</button>
           <button aria-pressed={scope === "claims"} onClick={() => setScope("claims")}>Claims</button>
+          <button aria-pressed={scope === "notes"} onClick={() => setScope("notes")}>Your notes</button>
         </div>
         <label>
           <Search size={17} />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label={scope === "papers" ? "Search papers" : "Search claims"}
-            placeholder={scope === "papers" ? "Search title, author, venue or tag" : "Search what your papers claim"}
+            aria-label={scope === "papers" ? "Search papers" : scope === "notes" ? "Search your notes" : "Search claims"}
+            placeholder={scope === "papers" ? "Search title, author, venue or tag" : scope === "notes" ? "Search your notes and highlights" : "Search what your papers claim"}
           />
         </label>
         {scope === "papers" && (
@@ -332,7 +363,16 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onModelRecord, onRe
         </div>
       )}
 
-      {projects.length > 0 && scope === "claims" ? (
+      {projects.length > 0 && scope === "notes" ? (
+        <NoteResults
+          state={readerNotes}
+          search={noteSearch}
+          noteCount={noteIndex.length}
+          paperCount={inCollection.length}
+          collection={collection}
+          onOpen={(hit) => (hit.note.target.kind === "claim" ? onOpenClaim(hit.project, hit.note.target.claimId) : (onOpenNotes ?? onOpen)(hit.project))}
+        />
+      ) : projects.length > 0 && scope === "claims" ? (
         <ClaimResults search={claimSearch} claimCount={claimIndex.length} paperCount={inCollection.length} collection={collection} onOpenClaim={onOpenClaim} />
       ) : filtered.length ? (
         <section className={layout === "list" ? "library-grid is-list" : "library-grid"} aria-label="Papers">
@@ -466,6 +506,63 @@ function Highlighted({ text, terms }: { text: string; terms: readonly string[] }
         segment.match ? <mark key={index}>{segment.text}</mark> : <Fragment key={index}>{segment.text}</Fragment>,
       )}
     </>
+  );
+}
+
+type NoteResultsProps = {
+  state: { status: "idle" | "loading" } | { status: "ready" } | { status: "failed"; message: string };
+  search: NoteSearch;
+  noteCount: number;
+  paperCount: number;
+  collection?: string;
+  onOpen: (hit: NoteHit) => void;
+};
+
+/** Okuyucunun notları ve vurguları; sonuç kartı iddia kartının düzeninde. */
+function NoteResults({ state, search, noteCount, paperCount, collection, onOpen }: NoteResultsProps) {
+  if (state.status === "failed") return <p className="regen-error" role="alert">{state.message}</p>;
+  if (state.status !== "ready") return <p className="review-status" role="status">Reading your notes…</p>;
+  if (!search.terms.length) {
+    return (
+      <section className="library-empty">
+        <NotebookPen size={30} />
+        <h2>Search what you noted.</h2>
+        <p>
+          {noteCount
+            ? `Type a word or two to search your ${count(noteCount, "note")} and highlights across ${count(paperCount, "paper")}${collection ? ` tagged “${collection}”` : ""}.`
+            : "Highlight a passage or write a note in a paper's Lab, and it can be found here."}
+        </p>
+      </section>
+    );
+  }
+  if (!search.hits.length) {
+    return (
+      <section className="library-empty">
+        <NotebookPen size={30} />
+        <h2>No note or highlight mentions every word you typed.</h2>
+        <p>The search reads your notes, your highlights and where they are.</p>
+      </section>
+    );
+  }
+  return (
+    <section className="claim-results" aria-label="Matching notes">
+      {search.hits.map((hit) => (
+        <article key={JSON.stringify([hit.project.id, hit.note.id])} className="claim-hit note-hit" style={{ "--card-accent": hit.project.story.accent } as React.CSSProperties}>
+          <button onClick={() => onOpen(hit)} title={hit.note.target.kind === "claim" ? "Open this claim in its project" : "Open your notes on this paper"}>
+            <span className="claim-hit-source">
+              <b>{hit.project.evidence.paper.title}</b>
+              <small>{hit.place}</small>
+            </span>
+            <span className="note-hit-where">{hit.heading}</span>
+            {hit.note.quote ? <span className={`claim-hit-quote note-hit-quote is-${hit.note.color}`}>“<Highlighted text={excerptAround(hit.note.quote, search.terms)} terms={search.terms} />”</span> : null}
+            {hit.note.text ? <span className="note-hit-text"><Highlighted text={excerptAround(hit.note.text, search.terms)} terms={search.terms} /></span> : null}
+          </button>
+        </article>
+      ))}
+      {search.total > search.hits.length && (
+        <p className="claim-results-more">Showing the first {search.hits.length} of {search.total} notes. Add a word to narrow the search.</p>
+      )}
+    </section>
   );
 }
 

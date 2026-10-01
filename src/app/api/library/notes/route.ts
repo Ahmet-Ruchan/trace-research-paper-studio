@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { readerNotesSchema } from "@/lib/reader-notes";
-import { readReaderNotes, readStoredProject, saveReaderNotes } from "@/lib/trace-storage";
+import { notesFileToJson, readerNotesSchema } from "@/lib/reader-notes";
+import { readAllReaderNotes, readReaderNotes, readStoredProject, saveReaderNotes } from "@/lib/trace-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,11 +20,11 @@ function projectIdOf(request: Request) {
   return new URL(request.url).searchParams.get("id")?.trim();
 }
 
-/** `?id=` ile bir makalenin notları. */
+/** `?id=` ile bir makalenin notları; kimliksiz bütün kütüphaneninki (kütüphane araması için). */
 export async function GET(request: Request) {
   const projectId = projectIdOf(request);
-  if (!projectId) return noStore({ error: "A project id is required." }, { status: 400 });
   try {
+    if (!projectId) return noStore(notesFileToJson(await readAllReaderNotes()));
     return noStore({ notes: await readReaderNotes(projectId) });
   } catch (error) {
     return noStore({ error: error instanceof Error ? error.message : "Your notes could not be read." }, { status: 500 });

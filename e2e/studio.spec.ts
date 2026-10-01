@@ -729,6 +729,45 @@ test.describe("library search and tags", () => {
     await expect(page.locator(".claim-row.selected")).toContainText("Quokka routing doubles throughput");
   });
 
+  test("searches your own notes and highlights across the library, and opens where they are", async ({ page, request }) => {
+    const first = await seed(request, projectNamed("e2e-note-search-a"));
+    const second = await seed(request, { ...projectNamed("e2e-note-search-b"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Second noted paper" } } });
+    const at = new Date().toISOString();
+    // Eşit puanda en yeni not önce.
+    const earlier = new Date(Date.now() - 3_600_000).toISOString();
+    const claim = first.evidence.claims[0];
+    const notesOf = (notes: unknown[]) => ({ data: { notes } });
+    expect((await request.put(`/api/library/notes?id=${first.id}`, notesOf([
+      { id: "n1", target: { kind: "section", place: "report", sectionId: first.deepReport!.sections[0].id }, quote: "the scaling keeps the gradients alive", text: "Wombat question for the reading group.", color: "green", createdAt: at, updatedAt: at },
+      { id: "n2", target: { kind: "claim", claimId: claim.id }, text: "Is the wombat gain significant?", color: "yellow", createdAt: at, updatedAt: at },
+    ]))).ok()).toBe(true);
+    expect((await request.put(`/api/library/notes?id=${second.id}`, notesOf([
+      { id: "n3", target: { kind: "section", place: "concept", sectionId: second.primer!.concepts[0].id }, quote: "a wombat example of a dot product", color: "pink", createdAt: earlier, updatedAt: earlier },
+    ]))).ok()).toBe(true);
+
+    await page.goto("/?library=1");
+    await page.getByRole("group", { name: "Search in" }).getByRole("button", { name: "Your notes" }).click();
+    await expect(page.locator(".library-empty h2")).toHaveText("Search what you noted.");
+    await page.getByLabel("Search your notes").fill("WOMBAT");
+    const hits = page.locator(".note-hit");
+    await expect(hits).toHaveCount(3);
+    await expect(page.locator(".library-toolbar > span")).toHaveText("3 notes in 2 papers");
+    await expect(page.locator(".note-hit .claim-hit-source small")).toHaveText(["Deep report", "Claim", "Primer"]);
+    await expect(hits.nth(2)).toContainText(second.primer!.concepts[0].term);
+    await expect(hits.first().locator("mark")).toHaveText(["Wombat"]);
+    await page.getByLabel("Search your notes").fill("wombat reading group");
+    await expect(hits).toHaveCount(1);
+
+    // Bölüm notu Lab'in notlarını açıyor; iddia notu iddianın kendisini.
+    await hits.first().getByRole("button").click();
+    await expect(page.locator(".lab-nav > button.active")).toContainText("Notes (2)");
+    await page.goto("/?library=1");
+    await page.getByRole("group", { name: "Search in" }).getByRole("button", { name: "Your notes" }).click();
+    await page.getByLabel("Search your notes").fill("significant");
+    await page.locator(".note-hit").first().getByRole("button").click();
+    await expect(page.locator(".claim-row.selected")).toContainText(claim.statement.slice(0, 40));
+  });
+
   test("gathers papers under a tag, filters by it and maps the collection", async ({ page, request }) => {
     for (const year of ["2015", "2018", "2021"]) {
       const project = projectNamed(`e2e-tag-${year}`);

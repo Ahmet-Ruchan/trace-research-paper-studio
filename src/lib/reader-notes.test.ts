@@ -114,7 +114,8 @@ describe("the notes file and its API", () => {
     expect((await put("", { notes: [] })).status).toBe(400);
     expect((await put("?id=noted", "{")).status).toBe(400);
     expect((await put("?id=noted", { notes: [{ id: "x", target: { kind: "section", place: "story", sectionId: "s" }, createdAt: at, updatedAt: at }] })).status).toBe(400);
-    expect((await GET(new Request(base))).status).toBe(400);
+    // Kimliksiz istek bütün kütüphanenin notları (kütüphane araması için).
+    expect(await (await GET(new Request(base))).json()).toEqual({ version: 1, projects: [] });
 
     writeFileSync(join(workspace, "library", "notes.json"), "{ not json");
     expect(await readReaderNotes("noted")).toEqual([]);
