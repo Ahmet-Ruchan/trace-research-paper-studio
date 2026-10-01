@@ -236,12 +236,40 @@ function pickedSelection(): Picked | undefined {
   return { target: { kind: "section", place: place as NotePlace, sectionId: rest.join(":") }, quote, above: rect.top - 10, below: rect.bottom + 10, left };
 }
 
-/** Bir bölümde metin seçilince: renkle vurgula ya da vurgulayıp not yaz. */
+/** Klavyeyle vurgunun rengi: araç çubuğunda en son seçilen, ilk seferde sarı. Bu cihaza ait. */
+const LAST_COLOR_KEY = "trace-note-color";
+
+function lastColor(): NoteColor {
+  try {
+    const stored = window.localStorage.getItem(LAST_COLOR_KEY);
+    return NOTE_COLORS.find((color) => color === stored) ?? "yellow";
+  } catch {
+    return "yellow";
+  }
+}
+
+function rememberColor(color: NoteColor) {
+  try {
+    window.localStorage.setItem(LAST_COLOR_KEY, color);
+  } catch {
+    // Depolama kapalı: bir sonraki kısayol yine sarı.
+  }
+}
+
+/** Yazı alanındayken harfler yazıya gidiyor, kısayola değil. */
+const typing = (target: EventTarget | null) =>
+  target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
+/**
+ * Bir bölümde metin seçilince: renkle vurgula ya da vurgulayıp not yaz.
+ * Klavyeden de: seçim varken H son rengiyle vurguluyor, N not kutusunu açıyor.
+ */
 export function SelectionNoteBar() {
   const context = useReaderNotes();
   const [picked, setPicked] = useState<Picked>();
   const [writing, setWriting] = useState<Picked>();
   const [draft, setDraft] = useState("");
+  const [shortcutColor, setShortcutColor] = useState<NoteColor>("yellow");
 
   useEffect(() => {
     if (!context || context.state.status !== "ready") return;
@@ -258,6 +286,36 @@ export function SelectionNoteBar() {
       window.removeEventListener("scroll", check, true);
     };
   }, [context]);
+
+  // Seçim o anda okunuyor: araç çubuğu kısa bir gecikmeyle çıkıyor, kısayol onu beklemiyor.
+  useEffect(() => {
+    if (!context || context.state.status !== "ready" || writing) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || typing(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key !== "h" && key !== "n") return;
+      const selected = pickedSelection();
+      if (!selected) return;
+      event.preventDefault();
+      if (key === "n") {
+        setPicked(selected);
+        setWriting(selected);
+        return;
+      }
+      context.add({ target: selected.target, quote: selected.quote, color: lastColor() });
+      window.getSelection()?.removeAllRanges();
+      setPicked(undefined);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [context, writing]);
+
+  // Araç çubuğu açılınca H'nin rengi gösteriliyor.
+  useEffect(() => {
+    if (!picked) return;
+    const read = setTimeout(() => setShortcutColor(lastColor()), 0);
+    return () => clearTimeout(read);
+  }, [picked]);
 
   if (!context || context.state.status !== "ready") return null;
   const place = writing ?? picked;
@@ -301,14 +359,16 @@ export function SelectionNoteBar() {
           type="button"
           className={`note-swatch is-${color}`}
           aria-label={`Highlight in ${colorNames[color]}`}
-          title={`Highlight in ${colorNames[color]}`}
+          title={`Highlight in ${colorNames[color]}${color === shortcutColor ? " (H)" : ""}`}
+          aria-keyshortcuts={color === shortcutColor ? "H" : undefined}
           onClick={() => {
             context.add({ target: place.target, quote: place.quote, color });
+            rememberColor(color);
             done();
           }}
         />
       ))}
-      <button type="button" className="note-bar-write" onClick={() => setWriting(place)}><NotebookPen size={14} /> Note</button>
+      <button type="button" className="note-bar-write" onClick={() => setWriting(place)} title="Write a note (N)" aria-keyshortcuts="N"><NotebookPen size={14} /> Note</button>
     </div>
   );
 }
@@ -522,7 +582,7 @@ export function NotesPanel({
   return (
     <div className="notes-panel">
       <p className="section-intro">
-        Select any text in the Deep report, the Story preview, a Study step or a Primer concept to highlight it, or open a claim to write a note on it. Your notes are
+        Select any text in the Deep report, the Story preview, a Study step or a Primer concept to highlight it (or press H, and N for a note), or open a claim to write a note on it. Your notes are
         kept in your library, never in the project file, so exports and published pages do not carry them.
       </p>
       <div className="notes-export">

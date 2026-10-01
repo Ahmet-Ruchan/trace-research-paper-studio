@@ -82,7 +82,14 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Notlar ve vurgular
 
-- [ ] **4. Klavyeyle vurgu.** Metin seçiliyken H vurgular, N not kutusunu açar.
+- [x] **4. Klavyeyle vurgu.** Metin seçiliyken H vurgular, N not kutusunu açar.
+  - *Yapıldı:* Not alınabilen bir yerde (rapor, Story önizlemesi, Study, Primer) metin seçiliyken
+    **H** araç çubuğunda en son seçilen renkle (ilk seferde sarı, bu cihazda hatırlanıyor)
+    vurguluyor, **N** vurgulayıp not kutusunu açıyor. Seçim o anda okunuyor, araç çubuğunu
+    beklemiyor. Yazı alanındayken, Ctrl/Cmd/Alt ile ya da seçim yokken harfler bir şey yapmıyor.
+    Araç çubuğunda H'nin rengi ve N `aria-keyshortcuts` ve ipucuyla gösteriliyor.
+  - *Test:* seçim yokken H'nin bir şey yapmaması, H ile sarı, çubukta pembe seçilince H'nin
+    pembe vurgulaması, N ile not kutusunun açılıp odaklanması ve "n"nin kutuya düşmemesi e2e'de.
 - [x] **5. Study ve Primer'de vurgu ve not.** Vurgu yalnızca Deep report ve Story
   önizlemesinde değil, Study yolunda ve kavram açıklamalarında da yapılabilir.
   - *Yapıldı:* Study yolundaki bölüm metni hikâyenin aynı bölümüyle aynı işareti taşıyor:

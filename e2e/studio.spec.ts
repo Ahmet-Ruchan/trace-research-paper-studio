@@ -2871,6 +2871,42 @@ test.describe("reader notes", () => {
     expect(saved).not.toContain("short sequences too");
   });
 
+  test("highlights with H in the last colour chosen, and opens a note with N", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-notes-keys"));
+    const [first, second, third] = project.deepReport!.sections;
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Deep report" }).click();
+
+    // Seçim yokken harfler bir şey yapmıyor.
+    await page.locator(".lab-main").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("h");
+    const quoteOne = await selectIn(page, `[data-note-section="report:${first.id}"] .report-analysis`, 20);
+    await page.keyboard.press("h");
+    await expect.poll(() => stored(request, project.id)).toEqual([expect.objectContaining({ quote: quoteOne, color: "yellow" })]);
+    await expect(page.getByRole("toolbar", { name: "Highlight the selected text" })).toHaveCount(0);
+
+    // Araç çubuğunda seçilen renk H'nin rengi oluyor.
+    await selectIn(page, `[data-note-section="report:${second.id}"] .report-analysis`, 20);
+    const bar = page.getByRole("toolbar", { name: "Highlight the selected text" });
+    await expect(bar.getByRole("button", { name: "Highlight in yellow" })).toHaveAttribute("aria-keyshortcuts", "H");
+    await bar.getByRole("button", { name: "Highlight in pink" }).click();
+    const quoteThree = await selectIn(page, `[data-note-section="report:${third.id}"] .report-analysis`, 20);
+    await page.keyboard.press("H");
+    await expect.poll(async () => (await stored(request, project.id)).map((note) => note.color)).toEqual(["yellow", "pink", "pink"]);
+    expect((await stored(request, project.id))[2].quote).toBe(quoteThree);
+
+    // N: vurgulayıp not kutusu; yazılan "n" kutuya gitmiyor.
+    const quoteFour = await selectIn(page, `[data-note-section="report:${first.id}"] .report-analysis`, 34);
+    await page.keyboard.press("n");
+    const form = page.getByRole("form", { name: "Note on the highlight" });
+    await expect(form.getByLabel("Your note")).toBeFocused();
+    await expect(form.getByLabel("Your note")).toHaveValue("");
+    await page.keyboard.type("hold on, check this");
+    await form.getByRole("button", { name: "Save" }).click();
+    await expect.poll(async () => (await stored(request, project.id)).at(-1)).toMatchObject({ quote: quoteFour, text: "hold on, check this" });
+    expect(await stored(request, project.id)).toHaveLength(4);
+  });
+
   test("highlights in a Study step and in a Primer concept too, and shows them in the Story preview and the notes", async ({ page, request }) => {
     const project = await seed(request, projectNamed("e2e-notes-study"));
     const path = studyPath(project, readingDrillFor(project));
