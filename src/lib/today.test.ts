@@ -79,6 +79,14 @@ describe("the day's brief", () => {
     expect(ordered.suggestions[0]).toBe(`Next in your reading order: ${example.evidence.paper.title}.`);
   });
 
+  it("adds the weekly learning goal when the reader set one", () => {
+    const study = new Map([[project.id, { ...studied().get(project.id)!, reviewDays: [{ day: "2026-09-29", reviewed: 12, remembered: 9 }] }]]);
+    const brief = todayBrief({ projects: [project], study, readingList: [], log: emptyWorkLog(), goalMinutes: 60, weeklyGoals: { papers: 1, cards: 30 }, weekStart: 1, now });
+    expect(brief.learning).toMatchObject({ from: "2026-09-28", daysLeft: 5, papers: { goal: 1, done: 0 }, cards: { goal: 30, done: 12, remembered: 9 } });
+    expect(brief.suggestions).toContain("0 of 1 paper finished and 12 of 30 cards reviewed this week.");
+    expect(todayBrief({ projects: [project], study, readingList: [], log: emptyWorkLog(), goalMinutes: 60, weekStart: 1, now }).suggestions.some((line) => line.includes("this week"))).toBe(false);
+  });
+
   it("stays quiet about reading on an empty library", () => {
     const brief = todayBrief({ projects: [], study: new Map(), readingList: [], log: emptyWorkLog(), goalMinutes: 90, weekStart: 0, now });
     expect(brief.readNext).toBeUndefined();
@@ -95,7 +103,7 @@ describe("the day's brief", () => {
       writeFileSync(join(workspace, "library", "reading-list.json"), JSON.stringify(readingListToJson([saved("A saved survey")])));
       const recent = Date.now();
       writeFileSync(join(workspace, "focus-log.json"), JSON.stringify(addSessions(emptyWorkLog(), [{ id: "s", start: new Date(recent - 30 * 60_000).toISOString(), end: new Date(recent - 5 * 60_000).toISOString(), kind: "focus" }])));
-      writeFileSync(join(workspace, "profile.json"), JSON.stringify({ version: 1, firstName: "Ada", createdAt: T0, updatedAt: T0 }));
+      writeFileSync(join(workspace, "profile.json"), JSON.stringify({ version: 1, firstName: "Ada", createdAt: T0, updatedAt: T0, preferences: { weeklyGoals: { papers: 2, cards: 0 } } }));
       const run = spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "today"], { encoding: "utf8", env: { ...process.env, TRACE_DATA_DIR: workspace } });
       expect(run.stderr).toBe("");
       expect(run.status).toBe(0);
@@ -105,6 +113,8 @@ describe("the day's brief", () => {
       expect(answer.suggestions[0]).toMatch(/^Review 1 card from /);
       expect(answer.suggestions.at(-1)).toMatch(/goal/);
       expect(answer.note).toMatch(/Never write any of this into a project/);
+      expect((JSON.parse(run.stdout) as { learningThisWeek: unknown }).learningThisWeek).toMatchObject({ papersFinished: { done: 0, goal: 2 }, cardsReviewed: { done: 0, goal: null } });
+      expect(answer.suggestions).toContain("0 of 2 papers finished this week.");
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }

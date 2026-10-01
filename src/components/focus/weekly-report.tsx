@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
+import { Check } from "lucide-react";
 import type { ResearchProject } from "@/lib/schema";
+import type { StudyProgress } from "@/lib/study-path";
+import { cardsPerDay, hasWeeklyGoal, weeklyGoalProgress } from "@/lib/weekly-goals";
 import { dailyTotals, dayDate, dayKey, formatDuration } from "@/lib/work-log";
 import { hourLevel, hourPattern, PATTERN_WEEKS, weekReport } from "@/lib/work-report";
 import { liveSessions, useFocus, useFocusClock } from "./focus-provider";
@@ -9,7 +12,8 @@ import { liveSessions, useFocus, useFocusClock } from "./focus-provider";
 /**
  * Profilde haftalık rapor: bu hafta geçen haftanın aynı anına göre, gün gün
  * ve makale makale; altında son dört haftada günün hangi saatlerinde
- * çalışıldığı. Hesap `work-report.ts`'te.
+ * çalışıldığı. Hesap `work-report.ts`'te. En üstte haftalık öğrenme hedefi
+ * (`weekly-goals.ts`): bitirilen makaleler ve tekrar edilen kartlar.
  */
 
 const weekday = new Intl.DateTimeFormat("en", { weekday: "short" });
@@ -30,7 +34,49 @@ function changeText(change: number, byNow: number, thisWeek: number) {
   return `${formatDuration(Math.abs(change))} ${change > 0 ? "more" : "less"} than last week by this time (${change > 0 ? "+" : "−"}${percent}%).`;
 }
 
-export function WeeklyReport({ projects, onOpen }: { projects: ResearchProject[]; onOpen: (project: ResearchProject) => void }) {
+function GoalRow({ label, done, goal, note }: { label: string; done: number; goal: number; note?: string }) {
+  const met = goal > 0 && done >= goal;
+  return (
+    <div className={`week-goal${met ? " is-met" : ""}`}>
+      <span>{label}</span>
+      <strong>
+        {goal ? `${done} of ${goal}` : done}
+        {met ? <Check size={18} aria-label="goal met" /> : null}
+      </strong>
+      {goal ? (
+        <span className="week-goal-bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={goal} aria-valuenow={Math.min(done, goal)} aria-valuetext={`${done} of ${goal}${met ? ", goal met" : ""}`}>
+          <i style={{ width: `${Math.min(100, (done / goal) * 100)}%` }} />
+        </span>
+      ) : null}
+      <small>{note ?? (goal ? "" : "no goal set")}</small>
+    </div>
+  );
+}
+
+function WeekGoals({ study, now, weekStart, goals }: { study: ReadonlyMap<string, StudyProgress>; now: Date; weekStart: 0 | 1; goals: Parameters<typeof weeklyGoalProgress>[1] }) {
+  const progress = weeklyGoalProgress(study, goals, now, weekStart);
+  const pace = cardsPerDay(progress);
+  const met = hasWeeklyGoal(goals) && progress.papers.done >= goals.papers && progress.cards.done >= goals.cards;
+  const note = !hasWeeklyGoal(goals)
+    ? "Set a weekly goal for papers and cards under Goals and preferences."
+    : met
+      ? "This week's learning goal is met."
+      : pace
+        ? `${pace.left} ${pace.left === 1 ? "card" : "cards"} to go in ${progress.daysLeft} ${progress.daysLeft === 1 ? "day" : "days"}: about ${pace.perDay} a day.`
+        : `${progress.daysLeft} ${progress.daysLeft === 1 ? "day" : "days"} left this week.`;
+  return (
+    <div className="week-goals" role="group" aria-label="Learning this week">
+      <h3>Learning this week</h3>
+      <div className="week-goal-rows">
+        <GoalRow label="Papers finished" done={progress.papers.done} goal={goals.papers} />
+        <GoalRow label="Cards reviewed" done={progress.cards.done} goal={goals.cards} note={progress.cards.done ? `${progress.cards.remembered} remembered` : undefined} />
+      </div>
+      <p className="focus-note">{note}</p>
+    </div>
+  );
+}
+
+export function WeeklyReport({ projects, study, onOpen }: { projects: ResearchProject[]; study?: ReadonlyMap<string, StudyProgress>; onOpen: (project: ResearchProject) => void }) {
   const { log, profile, store, liveIntervals } = useFocus();
   const now = useFocusClock();
   const { weekStart, clock } = profile.preferences;
@@ -61,6 +107,7 @@ export function WeeklyReport({ projects, onOpen }: { projects: ResearchProject[]
   return (
     <section className="stats-block profile-week" aria-label="Week by week">
       <h2>This week against last</h2>
+      {study ? <WeekGoals study={study} now={today} weekStart={weekStart} goals={profile.preferences.weeklyGoals} /> : null}
       <div className="week-report">
         <div>
           <div className="week-figures">

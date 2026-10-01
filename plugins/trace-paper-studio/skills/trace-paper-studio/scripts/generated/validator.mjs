@@ -20743,6 +20743,17 @@ function trimExplanations(items) {
 	}
 	return kept.reverse().slice(-60);
 }
+/** Gün gün tekrar sayısı en çok bu kadar gün tutuluyor. */
+const MAX_REVIEW_DAYS = 400;
+/**
+* Bir günde tekrar edilen ve hatırlanan kart sayısı (yerel gün). Kart yalnızca
+* son tekrarını biliyor; haftalık hedef "bu hafta kaç tekrar" diye soruyor.
+*/
+const reviewDaySchema = object({
+	day: string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	reviewed: number().int().min(0).max(99999),
+	remembered: number().int().min(0).max(99999)
+});
 const studyProgressSchema = object({
 	version: literal(1),
 	current: string().max(MAX_ID$1).optional(),
@@ -20754,7 +20765,9 @@ const studyProgressSchema = object({
 	/** Tekrar kartları (`review-schedule.ts`); çalışmada yanıtlanan sorular ve okunan kavramlar. */
 	reviews: array(studyReviewSchema).max(400).optional(),
 	/** Kendi cümleleriyle anlatışlar; bölüm başına en yenileri. */
-	explanations: array(studyExplanationSchema).max(60).optional()
+	explanations: array(studyExplanationSchema).max(60).optional(),
+	/** Gün gün tekrarlar, eskiden yeniye. */
+	reviewDays: array(reviewDaySchema).max(400).optional()
 });
 function emptyStudyProgress(now) {
 	return {
@@ -21412,186 +21425,6 @@ function readingDrillFor(project) {
 }
 
 //#endregion
-//#region src/lib/review-queue.ts
-const REVIEW_SESSION_SIZE = 20;
-function reviewCards(projects, progress) {
-	const cards = [];
-	for (const project of projects) {
-		const reviews = progress.get(project.id)?.reviews ?? [];
-		if (!reviews.length) continue;
-		const questions = new Map([...project.quiz?.questions ?? [], ...readingDrillFor(project)?.questions ?? []].map((question) => [question.id, question]));
-		const concepts = new Map((project.primer?.concepts ?? []).map((concept) => [concept.id, concept]));
-		const base = {
-			projectId: project.id,
-			paperTitle: project.evidence.paper.title,
-			language: project.language
-		};
-		for (const review of reviews) {
-			const key = `${project.id}\u0000${review.id}`;
-			if (review.id.startsWith("q:")) {
-				const question = questions.get(review.id.slice(2));
-				if (question && review.sig === questionSignature(question)) cards.push({
-					...base,
-					key,
-					kind: "question",
-					question,
-					review
-				});
-			} else if (review.id.startsWith("c:")) {
-				const concept = concepts.get(review.id.slice(2));
-				if (concept) cards.push({
-					...base,
-					key,
-					kind: "concept",
-					concept,
-					review
-				});
-			}
-		}
-	}
-	return cards;
-}
-/** Vadesi gelmiş kartlar, en eskisi önce, makaleler sırayla karışık; en fazla bir oturumluk. */
-function dueCards(cards, now, limit = 20) {
-	const byPaper = /* @__PURE__ */ new Map();
-	for (const card of [...cards].filter((item) => isDue(item.review, now)).sort((left, right) => left.review.due.localeCompare(right.review.due))) byPaper.set(card.projectId, [...byPaper.get(card.projectId) ?? [], card]);
-	const queues = [...byPaper.values()];
-	const ordered = [];
-	while (ordered.length < limit && queues.some((queue) => queue.length)) for (const queue of queues) {
-		const next = queue.shift();
-		if (next && ordered.length < limit) ordered.push(next);
-	}
-	return ordered;
-}
-function reviewForecast(cards, now) {
-	const due = cards.filter((card) => isDue(card.review, now));
-	const later = cards.filter((card) => !isDue(card.review, now)).map((card) => card.review.due).sort();
-	return {
-		due: due.length,
-		papers: new Set(due.map((card) => card.projectId)).size,
-		total: cards.length,
-		nextDue: later[0]
-	};
-}
-
-//#endregion
-//#region src/lib/learning-stats.ts
-/**
-* Öğrenme istatistikleri: kütüphanedeki çalışmanın dökümü.
-*
-* Hepsi sayım, tahmin yok: çalışma kaydında (`study.json`) ne varsa o. Tekrar
-* kartında her tekrar ve her unutuş sayılıyor, dolayısıyla "hatırlanan"
-* tekrarlar = tekrarlar − unutuşlar tam bir sayı. Oranlar hep sayılarıyla
-* birlikte veriliyor: üç tekrardan bir oran, üç yüz tekrardan bir oran değil.
-*
-* Kartlar projenin bugünkü içeriğinden okunuyor (`review-queue.ts`): yeniden
-* yazılan soru ya da silinen makale sayılmıyor.
-*/
-/** Bu kutudan itibaren kart "uzun süreli": bir sonraki tekrarı iki haftadan sonra. */
-const LONG_TERM_BOX = REVIEW_INTERVALS_DAYS.findIndex((days) => days >= 14);
-const HARDEST = 8;
-const pad$1 = (value) => String(value).padStart(2, "0");
-/**
-* Okuyucunun günleri, kendi saatine göre: bugünün başından itibaren `count`
-* gün. UTC günü İstanbul'da gece üçte, Los Angeles'ta akşam beşte bitiyor;
-* "bugün" okuyucunun takvimindeki gün olmalı. Yaz saatine geçilen gün 23,
-* dönülen gün 25 saat.
-*/
-function localDays(now, count = 7) {
-	const at = new Date(now);
-	return Array.from({ length: count }, (_, offset) => {
-		const start = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset);
-		const end = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset + 1);
-		return {
-			day: `${start.getFullYear()}-${pad$1(start.getMonth() + 1)}-${pad$1(start.getDate())}`,
-			start: start.toISOString(),
-			end: end.toISOString()
-		};
-	});
-}
-function learningStats(projects, study, now, days = localDays(now)) {
-	const cards = reviewCards(projects, study);
-	const papers = [];
-	const gain = {
-		sections: 0,
-		before: 0,
-		after: 0,
-		total: 0
-	};
-	for (const project of projects) {
-		const progress = study.get(project.id);
-		if (!progress) continue;
-		const path = studyPath(project, readingDrillFor(project));
-		const summary = studySummary(project, path, progress);
-		const own = cards.filter((card) => card.projectId === project.id);
-		const bySection = /* @__PURE__ */ new Map();
-		for (const item of progress.explanations ?? []) bySection.set(item.target, [...bySection.get(item.target) ?? [], item]);
-		const again = [...bySection.values()].filter((items) => items.length > 1);
-		for (const items of again) {
-			const ordered = [...items].sort((left, right) => left.at.localeCompare(right.at));
-			gain.sections += 1;
-			gain.before += ordered[0].covered.length;
-			gain.after += ordered.at(-1).covered.length;
-			gain.total += ordered.at(-1).total;
-		}
-		papers.push({
-			project,
-			status: studyStatus(progress),
-			steps: {
-				done: summary.done,
-				total: summary.total
-			},
-			checks: {
-				answered: summary.checks.answered,
-				firstTry: summary.checks.firstTry
-			},
-			cards: {
-				total: own.length,
-				due: own.filter((card) => isDue(card.review, now)).length,
-				longTerm: own.filter((card) => card.review.box >= LONG_TERM_BOX).length
-			},
-			recalls: {
-				reviews: own.reduce((sum, card) => sum + card.review.reviews, 0),
-				remembered: own.reduce((sum, card) => sum + card.review.reviews - card.review.lapses, 0)
-			},
-			explanations: {
-				sections: bySection.size,
-				again: again.length
-			},
-			lastStudied: [progress.updatedAt, ...(progress.reviews ?? []).map((review) => review.last ?? "")].sort().at(-1)
-		});
-	}
-	papers.sort((left, right) => right.lastStudied.localeCompare(left.lastStudied));
-	const sum = (pick) => papers.reduce((total, paper) => total + pick(paper), 0);
-	const boxes = Array.from({ length: MAX_REVIEW_BOX + 1 }, (_, box) => cards.filter((card) => card.review.box === box).length);
-	const at = (iso) => Date.parse(iso);
-	const week = days.map(({ day, start, end }, offset) => ({
-		day,
-		start,
-		due: cards.filter((card) => (offset === 0 || at(card.review.due) >= at(start)) && at(card.review.due) < at(end)).length
-	}));
-	const hardest = cards.filter((card) => card.review.lapses > 0).sort((left, right) => right.review.lapses - left.review.lapses || right.review.reviews - left.review.reviews || left.key.localeCompare(right.key)).slice(0, HARDEST);
-	return {
-		papers,
-		totals: {
-			finished: papers.filter((paper) => paper.status === "finished").length,
-			started: papers.filter((paper) => paper.status === "started").length,
-			cards: cards.length,
-			due: cards.filter((card) => isDue(card.review, now)).length,
-			longTerm: cards.filter((card) => card.review.box >= LONG_TERM_BOX).length,
-			reviews: sum((paper) => paper.recalls.reviews),
-			remembered: sum((paper) => paper.recalls.remembered),
-			answered: sum((paper) => paper.checks.answered),
-			firstTry: sum((paper) => paper.checks.firstTry)
-		},
-		boxes,
-		week,
-		hardest,
-		explanationGain: gain
-	};
-}
-
-//#endregion
 //#region src/lib/focus-colors.ts
 /**
 * Çalışma saatinin renkleri.
@@ -21664,151 +21497,6 @@ const FOCUS_COLOR_IDS = FOCUS_COLORS.map((color) => color.id);
 const focusColorSchema = _enum(FOCUS_COLOR_IDS);
 
 //#endregion
-//#region src/lib/profile.ts
-/**
-* Okuyucunun profili: kim olduğu ve çalışma saatinin ayarları.
-*
-* `~/.trace/profile.json` içinde, makinede duruyor; hiçbir projeye ya da
-* yayınlanan sayfaya girmiyor. Zamanlayıcı ayarları, alarmlar ve renkler de
-* burada: tarayıcının verisi silinince kaybolmasınlar, başka bir tarayıcıda
-* da aynı olsunlar. Çalışılan zamanın kaydı ayrı dosyada (`work-log.ts`).
-*/
-const PROFILE_VERSION = 1;
-/** Profil fotoğrafı istemcide 192 px'e küçültülüp JPEG olarak geliyor; bu sınır bol. */
-const MAX_PHOTO_CHARS = 2e5;
-const MAX_ALARMS = 20;
-const text = (max) => string().trim().max(max).default("");
-const SOUNDS = [
-	{
-		id: "chime",
-		label: "Chime"
-	},
-	{
-		id: "bell",
-		label: "Bell"
-	},
-	{
-		id: "beep",
-		label: "Soft beep"
-	},
-	{
-		id: "none",
-		label: "No sound"
-	}
-];
-/** Odak turu sürerken çalan arka plan sesi; ses dosyası yok, tarayıcıda üretiliyor. */
-const AMBIENT_SOUNDS = [
-	{
-		id: "none",
-		label: "None"
-	},
-	{
-		id: "white",
-		label: "White noise"
-	},
-	{
-		id: "brown",
-		label: "Brown noise"
-	},
-	{
-		id: "rain",
-		label: "Rain"
-	}
-];
-const ambientSchema = _enum(AMBIENT_SOUNDS.map((sound) => sound.id));
-const soundSchema = _enum(SOUNDS.map((sound) => sound.id));
-const alarmSchema = object({
-	id: string().min(1).max(60),
-	/** Yerel saat, "HH:MM". */
-	time: string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-	label: text(80),
-	/** Tekrarlanan günler (0 pazar … 6 cumartesi); boşsa bir kez çalıyor ve kapanıyor. */
-	days: array(number().int().min(0).max(6)).max(7).default([]),
-	enabled: boolean().default(true),
-	color: focusColorSchema.default("purple")
-});
-const focusSettingsSchema = object({
-	/** Dakika. */
-	work: number().int().min(1).max(240).default(25),
-	shortBreak: number().int().min(1).max(60).default(5),
-	longBreak: number().int().min(1).max(120).default(15),
-	/** Kaç odak turundan sonra uzun mola. */
-	longEvery: number().int().min(1).max(12).default(4),
-	/** Kaç tur; 0: durdurulana kadar sürüyor. */
-	rounds: number().int().min(0).max(24).default(0),
-	autoStartBreaks: boolean().default(true),
-	autoStartWork: boolean().default(true)
-});
-const preferencesSchema = object({
-	/** Profilin ve çalışma takviminin rengi. */
-	color: focusColorSchema.default("green"),
-	colors: object({
-		focus: focusColorSchema.default("red"),
-		timer: focusColorSchema.default("orange"),
-		stopwatch: focusColorSchema.default("blue"),
-		alarm: focusColorSchema.default("purple")
-	}).default({
-		focus: "red",
-		timer: "orange",
-		stopwatch: "blue",
-		alarm: "purple"
-	}),
-	focus: focusSettingsSchema.default(focusSettingsSchema.parse({})),
-	/** Geri sayımın son ayarı, saniye. */
-	timerSeconds: number().int().min(1).max(86399).default(600),
-	/** Geri sayım ve kronometre çalışma süresi sayılsın mı. */
-	timerCountsAsWork: boolean().default(true),
-	stopwatchCountsAsWork: boolean().default(true),
-	/** Tekrar ekranında geçen süre çalışma sayılsın mı. */
-	reviewCountsAsWork: boolean().default(true),
-	/** Günlük hedef, dakika; takvimin en koyu tonu hedefe ulaşılan gün. */
-	dailyGoalMinutes: number().int().min(15).max(1440).default(240),
-	/** Haftanın ilk günü: 1 pazartesi, 0 pazar. */
-	weekStart: union([literal(0), literal(1)]).default(1),
-	clock: _enum(["24h", "12h"]).default("24h"),
-	sound: soundSchema.default("chime"),
-	volume: number().min(0).max(1).default(.6),
-	/** Sekme arka plandayken masaüstü bildirimi. */
-	notifications: boolean().default(false),
-	/** Odak turlarında arka plan sesi ve düzeyi. */
-	ambient: ambientSchema.default("none"),
-	ambientVolume: number().min(0).max(1).default(.35),
-	/** Kısa molada vadesi gelmiş birkaç tekrar kartı önerilsin mi. */
-	breakReview: boolean().default(true)
-});
-const profileSchema = object({
-	version: literal(1),
-	firstName: text(60),
-	lastName: text(60),
-	/** "PhD student", "Research engineer". */
-	title: text(80),
-	institution: text(120),
-	field: text(120),
-	email: string().trim().max(200).refine((value) => value === "" || email().safeParse(value).success, "Enter an email address, or leave it empty.").default(""),
-	bio: text(400),
-	photo: string().max(MAX_PHOTO_CHARS).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/).optional(),
-	createdAt: string().max(40),
-	updatedAt: string().max(40),
-	preferences: preferencesSchema.default(preferencesSchema.parse({})),
-	alarms: array(alarmSchema).max(20).default([])
-});
-function emptyProfile(now) {
-	return profileSchema.parse({
-		version: 1,
-		createdAt: now,
-		updatedAt: now
-	});
-}
-/** Okunamayan ya da tanınmayan dosya boş profille karşılanıyor (depolama onu kenara alıyor, silmiyor). */
-function parseProfile(raw, now) {
-	const parsed = profileSchema.safeParse(raw);
-	return parsed.success ? parsed.data : emptyProfile(now);
-}
-function displayName(profile) {
-	return [profile.firstName, profile.lastName].filter(Boolean).join(" ");
-}
-
-//#endregion
 //#region src/lib/work-log.ts
 /**
 * Çalışılan zamanın kaydı.
@@ -21869,10 +21557,10 @@ function parseWorkLog(raw) {
 	const parsed = workLogSchema.safeParse(raw);
 	return parsed.success ? parsed.data : emptyWorkLog();
 }
-const pad = (value) => String(value).padStart(2, "0");
+const pad$1 = (value) => String(value).padStart(2, "0");
 /** Yerel gün, "YYYY-MM-DD". */
 function dayKey(date) {
-	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+	return `${date.getFullYear()}-${pad$1(date.getMonth() + 1)}-${pad$1(date.getDate())}`;
 }
 /** "YYYY-MM-DD" → o günün yerel gece yarısı. */
 function dayDate(day) {
@@ -21995,6 +21683,341 @@ function formatDuration(seconds) {
 	const minutes = Math.floor(whole % 3600 / 60);
 	if (!hours) return `${minutes}m`;
 	return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+//#endregion
+//#region src/lib/review-queue.ts
+const REVIEW_SESSION_SIZE = 20;
+function reviewCards(projects, progress) {
+	const cards = [];
+	for (const project of projects) {
+		const reviews = progress.get(project.id)?.reviews ?? [];
+		if (!reviews.length) continue;
+		const questions = new Map([...project.quiz?.questions ?? [], ...readingDrillFor(project)?.questions ?? []].map((question) => [question.id, question]));
+		const concepts = new Map((project.primer?.concepts ?? []).map((concept) => [concept.id, concept]));
+		const base = {
+			projectId: project.id,
+			paperTitle: project.evidence.paper.title,
+			language: project.language
+		};
+		for (const review of reviews) {
+			const key = `${project.id}\u0000${review.id}`;
+			if (review.id.startsWith("q:")) {
+				const question = questions.get(review.id.slice(2));
+				if (question && review.sig === questionSignature(question)) cards.push({
+					...base,
+					key,
+					kind: "question",
+					question,
+					review
+				});
+			} else if (review.id.startsWith("c:")) {
+				const concept = concepts.get(review.id.slice(2));
+				if (concept) cards.push({
+					...base,
+					key,
+					kind: "concept",
+					concept,
+					review
+				});
+			}
+		}
+	}
+	return cards;
+}
+/** Vadesi gelmiş kartlar, en eskisi önce, makaleler sırayla karışık; en fazla bir oturumluk. */
+function dueCards(cards, now, limit = 20) {
+	const byPaper = /* @__PURE__ */ new Map();
+	for (const card of [...cards].filter((item) => isDue(item.review, now)).sort((left, right) => left.review.due.localeCompare(right.review.due))) byPaper.set(card.projectId, [...byPaper.get(card.projectId) ?? [], card]);
+	const queues = [...byPaper.values()];
+	const ordered = [];
+	while (ordered.length < limit && queues.some((queue) => queue.length)) for (const queue of queues) {
+		const next = queue.shift();
+		if (next && ordered.length < limit) ordered.push(next);
+	}
+	return ordered;
+}
+function reviewForecast(cards, now) {
+	const due = cards.filter((card) => isDue(card.review, now));
+	const later = cards.filter((card) => !isDue(card.review, now)).map((card) => card.review.due).sort();
+	return {
+		due: due.length,
+		papers: new Set(due.map((card) => card.projectId)).size,
+		total: cards.length,
+		nextDue: later[0]
+	};
+}
+
+//#endregion
+//#region src/lib/learning-stats.ts
+/**
+* Öğrenme istatistikleri: kütüphanedeki çalışmanın dökümü.
+*
+* Hepsi sayım, tahmin yok: çalışma kaydında (`study.json`) ne varsa o. Tekrar
+* kartında her tekrar ve her unutuş sayılıyor, dolayısıyla "hatırlanan"
+* tekrarlar = tekrarlar − unutuşlar tam bir sayı. Oranlar hep sayılarıyla
+* birlikte veriliyor: üç tekrardan bir oran, üç yüz tekrardan bir oran değil.
+*
+* Kartlar projenin bugünkü içeriğinden okunuyor (`review-queue.ts`): yeniden
+* yazılan soru ya da silinen makale sayılmıyor.
+*/
+/** Bu kutudan itibaren kart "uzun süreli": bir sonraki tekrarı iki haftadan sonra. */
+const LONG_TERM_BOX = REVIEW_INTERVALS_DAYS.findIndex((days) => days >= 14);
+const HARDEST = 8;
+const pad = (value) => String(value).padStart(2, "0");
+/**
+* Okuyucunun günleri, kendi saatine göre: bugünün başından itibaren `count`
+* gün. UTC günü İstanbul'da gece üçte, Los Angeles'ta akşam beşte bitiyor;
+* "bugün" okuyucunun takvimindeki gün olmalı. Yaz saatine geçilen gün 23,
+* dönülen gün 25 saat.
+*/
+function localDays(now, count = 7) {
+	const at = new Date(now);
+	return Array.from({ length: count }, (_, offset) => {
+		const start = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset);
+		const end = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset + 1);
+		return {
+			day: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+			start: start.toISOString(),
+			end: end.toISOString()
+		};
+	});
+}
+function learningStats(projects, study, now, days = localDays(now)) {
+	const cards = reviewCards(projects, study);
+	const papers = [];
+	const gain = {
+		sections: 0,
+		before: 0,
+		after: 0,
+		total: 0
+	};
+	for (const project of projects) {
+		const progress = study.get(project.id);
+		if (!progress) continue;
+		const path = studyPath(project, readingDrillFor(project));
+		const summary = studySummary(project, path, progress);
+		const own = cards.filter((card) => card.projectId === project.id);
+		const bySection = /* @__PURE__ */ new Map();
+		for (const item of progress.explanations ?? []) bySection.set(item.target, [...bySection.get(item.target) ?? [], item]);
+		const again = [...bySection.values()].filter((items) => items.length > 1);
+		for (const items of again) {
+			const ordered = [...items].sort((left, right) => left.at.localeCompare(right.at));
+			gain.sections += 1;
+			gain.before += ordered[0].covered.length;
+			gain.after += ordered.at(-1).covered.length;
+			gain.total += ordered.at(-1).total;
+		}
+		papers.push({
+			project,
+			status: studyStatus(progress),
+			steps: {
+				done: summary.done,
+				total: summary.total
+			},
+			checks: {
+				answered: summary.checks.answered,
+				firstTry: summary.checks.firstTry
+			},
+			cards: {
+				total: own.length,
+				due: own.filter((card) => isDue(card.review, now)).length,
+				longTerm: own.filter((card) => card.review.box >= LONG_TERM_BOX).length
+			},
+			recalls: {
+				reviews: own.reduce((sum, card) => sum + card.review.reviews, 0),
+				remembered: own.reduce((sum, card) => sum + card.review.reviews - card.review.lapses, 0)
+			},
+			explanations: {
+				sections: bySection.size,
+				again: again.length
+			},
+			lastStudied: [progress.updatedAt, ...(progress.reviews ?? []).map((review) => review.last ?? "")].sort().at(-1)
+		});
+	}
+	papers.sort((left, right) => right.lastStudied.localeCompare(left.lastStudied));
+	const sum = (pick) => papers.reduce((total, paper) => total + pick(paper), 0);
+	const boxes = Array.from({ length: MAX_REVIEW_BOX + 1 }, (_, box) => cards.filter((card) => card.review.box === box).length);
+	const at = (iso) => Date.parse(iso);
+	const week = days.map(({ day, start, end }, offset) => ({
+		day,
+		start,
+		due: cards.filter((card) => (offset === 0 || at(card.review.due) >= at(start)) && at(card.review.due) < at(end)).length
+	}));
+	const hardest = cards.filter((card) => card.review.lapses > 0).sort((left, right) => right.review.lapses - left.review.lapses || right.review.reviews - left.review.reviews || left.key.localeCompare(right.key)).slice(0, HARDEST);
+	return {
+		papers,
+		totals: {
+			finished: papers.filter((paper) => paper.status === "finished").length,
+			started: papers.filter((paper) => paper.status === "started").length,
+			cards: cards.length,
+			due: cards.filter((card) => isDue(card.review, now)).length,
+			longTerm: cards.filter((card) => card.review.box >= LONG_TERM_BOX).length,
+			reviews: sum((paper) => paper.recalls.reviews),
+			remembered: sum((paper) => paper.recalls.remembered),
+			answered: sum((paper) => paper.checks.answered),
+			firstTry: sum((paper) => paper.checks.firstTry)
+		},
+		boxes,
+		week,
+		hardest,
+		explanationGain: gain
+	};
+}
+
+//#endregion
+//#region src/lib/profile.ts
+/**
+* Okuyucunun profili: kim olduğu ve çalışma saatinin ayarları.
+*
+* `~/.trace/profile.json` içinde, makinede duruyor; hiçbir projeye ya da
+* yayınlanan sayfaya girmiyor. Zamanlayıcı ayarları, alarmlar ve renkler de
+* burada: tarayıcının verisi silinince kaybolmasınlar, başka bir tarayıcıda
+* da aynı olsunlar. Çalışılan zamanın kaydı ayrı dosyada (`work-log.ts`).
+*/
+const PROFILE_VERSION = 1;
+/** Profil fotoğrafı istemcide 192 px'e küçültülüp JPEG olarak geliyor; bu sınır bol. */
+const MAX_PHOTO_CHARS = 2e5;
+const MAX_ALARMS = 20;
+const MAX_WEEKLY_PAPERS = 20;
+const MAX_WEEKLY_CARDS = 2e3;
+const text = (max) => string().trim().max(max).default("");
+const SOUNDS = [
+	{
+		id: "chime",
+		label: "Chime"
+	},
+	{
+		id: "bell",
+		label: "Bell"
+	},
+	{
+		id: "beep",
+		label: "Soft beep"
+	},
+	{
+		id: "none",
+		label: "No sound"
+	}
+];
+/** Odak turu sürerken çalan arka plan sesi; ses dosyası yok, tarayıcıda üretiliyor. */
+const AMBIENT_SOUNDS = [
+	{
+		id: "none",
+		label: "None"
+	},
+	{
+		id: "white",
+		label: "White noise"
+	},
+	{
+		id: "brown",
+		label: "Brown noise"
+	},
+	{
+		id: "rain",
+		label: "Rain"
+	}
+];
+const ambientSchema = _enum(AMBIENT_SOUNDS.map((sound) => sound.id));
+const soundSchema = _enum(SOUNDS.map((sound) => sound.id));
+const alarmSchema = object({
+	id: string().min(1).max(60),
+	/** Yerel saat, "HH:MM". */
+	time: string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+	label: text(80),
+	/** Tekrarlanan günler (0 pazar … 6 cumartesi); boşsa bir kez çalıyor ve kapanıyor. */
+	days: array(number().int().min(0).max(6)).max(7).default([]),
+	enabled: boolean().default(true),
+	color: focusColorSchema.default("purple")
+});
+const focusSettingsSchema = object({
+	/** Dakika. */
+	work: number().int().min(1).max(240).default(25),
+	shortBreak: number().int().min(1).max(60).default(5),
+	longBreak: number().int().min(1).max(120).default(15),
+	/** Kaç odak turundan sonra uzun mola. */
+	longEvery: number().int().min(1).max(12).default(4),
+	/** Kaç tur; 0: durdurulana kadar sürüyor. */
+	rounds: number().int().min(0).max(24).default(0),
+	autoStartBreaks: boolean().default(true),
+	autoStartWork: boolean().default(true)
+});
+const preferencesSchema = object({
+	/** Profilin ve çalışma takviminin rengi. */
+	color: focusColorSchema.default("green"),
+	colors: object({
+		focus: focusColorSchema.default("red"),
+		timer: focusColorSchema.default("orange"),
+		stopwatch: focusColorSchema.default("blue"),
+		alarm: focusColorSchema.default("purple")
+	}).default({
+		focus: "red",
+		timer: "orange",
+		stopwatch: "blue",
+		alarm: "purple"
+	}),
+	focus: focusSettingsSchema.default(focusSettingsSchema.parse({})),
+	/** Geri sayımın son ayarı, saniye. */
+	timerSeconds: number().int().min(1).max(86399).default(600),
+	/** Geri sayım ve kronometre çalışma süresi sayılsın mı. */
+	timerCountsAsWork: boolean().default(true),
+	stopwatchCountsAsWork: boolean().default(true),
+	/** Tekrar ekranında geçen süre çalışma sayılsın mı. */
+	reviewCountsAsWork: boolean().default(true),
+	/** Günlük hedef, dakika; takvimin en koyu tonu hedefe ulaşılan gün. */
+	dailyGoalMinutes: number().int().min(15).max(1440).default(240),
+	/** Haftalık öğrenme hedefi (`weekly-goals.ts`): bitirilecek makale ve tekrar edilecek kart; 0 hedef yok. */
+	weeklyGoals: object({
+		papers: number().int().min(0).max(20).default(0),
+		cards: number().int().min(0).max(MAX_WEEKLY_CARDS).default(0)
+	}).default({
+		papers: 0,
+		cards: 0
+	}),
+	/** Haftanın ilk günü: 1 pazartesi, 0 pazar. */
+	weekStart: union([literal(0), literal(1)]).default(1),
+	clock: _enum(["24h", "12h"]).default("24h"),
+	sound: soundSchema.default("chime"),
+	volume: number().min(0).max(1).default(.6),
+	/** Sekme arka plandayken masaüstü bildirimi. */
+	notifications: boolean().default(false),
+	/** Odak turlarında arka plan sesi ve düzeyi. */
+	ambient: ambientSchema.default("none"),
+	ambientVolume: number().min(0).max(1).default(.35),
+	/** Kısa molada vadesi gelmiş birkaç tekrar kartı önerilsin mi. */
+	breakReview: boolean().default(true)
+});
+const profileSchema = object({
+	version: literal(1),
+	firstName: text(60),
+	lastName: text(60),
+	/** "PhD student", "Research engineer". */
+	title: text(80),
+	institution: text(120),
+	field: text(120),
+	email: string().trim().max(200).refine((value) => value === "" || email().safeParse(value).success, "Enter an email address, or leave it empty.").default(""),
+	bio: text(400),
+	photo: string().max(MAX_PHOTO_CHARS).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/).optional(),
+	createdAt: string().max(40),
+	updatedAt: string().max(40),
+	preferences: preferencesSchema.default(preferencesSchema.parse({})),
+	alarms: array(alarmSchema).max(20).default([])
+});
+function emptyProfile(now) {
+	return profileSchema.parse({
+		version: 1,
+		createdAt: now,
+		updatedAt: now
+	});
+}
+/** Okunamayan ya da tanınmayan dosya boş profille karşılanıyor (depolama onu kenara alıyor, silmiyor). */
+function parseProfile(raw, now) {
+	const parsed = profileSchema.safeParse(raw);
+	return parsed.success ? parsed.data : emptyProfile(now);
+}
+function displayName(profile) {
+	return [profile.firstName, profile.lastName].filter(Boolean).join(" ");
 }
 
 //#endregion
@@ -22290,6 +22313,59 @@ function savedFrom(why) {
 }
 
 //#endregion
+//#region src/lib/weekly-goals.ts
+function weeklyGoalProgress(study, goals, now, weekStart) {
+	const first = startOfWeek(now, weekStart);
+	const from = dayKey(first);
+	const to = dayKey(addDaysLocal(first, 6));
+	const inWeek = (day) => day >= from && day <= to;
+	const finished = [];
+	let reviewed = 0;
+	let remembered = 0;
+	for (const [projectId, progress] of study) {
+		if (progress.finishedAt && inWeek(dayKey(new Date(progress.finishedAt)))) finished.push({
+			projectId,
+			at: progress.finishedAt
+		});
+		for (const day of progress.reviewDays ?? []) {
+			if (!inWeek(day.day)) continue;
+			reviewed += day.reviewed;
+			remembered += day.remembered;
+		}
+	}
+	finished.sort((left, right) => left.at.localeCompare(right.at));
+	const today = dayKey(now);
+	let daysLeft = 0;
+	for (let day = 0; day < 7; day += 1) if (dayKey(addDaysLocal(first, day)) >= today) daysLeft += 1;
+	return {
+		from,
+		to,
+		daysLeft,
+		papers: {
+			goal: goals.papers,
+			done: finished.length,
+			finished
+		},
+		cards: {
+			goal: goals.cards,
+			done: reviewed,
+			remembered
+		}
+	};
+}
+const hasWeeklyGoal = (goals) => goals.papers > 0 || goals.cards > 0;
+const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+/** Okuyucuya tek cümle: "1 of 2 papers finished and 23 of 40 cards reviewed this week." */
+function weeklyGoalSentence(progress) {
+	const parts = [];
+	if (progress.papers.goal) parts.push(`${progress.papers.done} of ${plural(progress.papers.goal, "paper", "papers")} finished`);
+	if (progress.cards.goal) parts.push(`${progress.cards.done} of ${plural(progress.cards.goal, "card", "cards")} reviewed`);
+	if (!parts.length) return `${plural(progress.papers.done, "paper", "papers")} finished and ${plural(progress.cards.done, "card", "cards")} reviewed this week.`;
+	const met = (!progress.papers.goal || progress.papers.done >= progress.papers.goal) && (!progress.cards.goal || progress.cards.done >= progress.cards.goal);
+	return `${parts.join(" and ")} this week${met ? ": the weekly goal is met" : ""}.`;
+}
+
+//#endregion
 //#region src/lib/today.ts
 const minutes = (seconds) => {
 	const total = Math.round(seconds / 60);
@@ -22367,6 +22443,11 @@ function todayBrief(input) {
 		lastWeekByNow: week.lastWeek.byNow,
 		streak: summary.currentStreak
 	};
+	const goals = input.weeklyGoals ?? {
+		papers: 0,
+		cards: 0
+	};
+	const learning = weeklyGoalProgress(study, goals, now, input.weekStart);
 	const suggestions = [];
 	if (review.due) {
 		const reviewMinutes = Math.max(1, Math.round(review.due * .75));
@@ -22376,6 +22457,7 @@ function todayBrief(input) {
 	if (studying) suggestions.push(`Continue studying ${studying.paper}: ${studying.done} of ${studying.total} steps done.`);
 	if (readNext?.kind === "paper" && readNext.projectId !== studying?.projectId) suggestions.push(readNext.from === "reading order" ? `Next in your reading order: ${readNext.paper}.` : `Not started yet: ${readNext.paper}.`);
 	if (readNext?.kind === "saved") suggestions.push(`Next on your reading list: ${readNext.title}. ${readNext.why}`);
+	if (hasWeeklyGoal(goals)) suggestions.push(weeklyGoalSentence(learning).replace(/^./, (letter) => letter.toUpperCase()));
 	if (work.today < work.goal) suggestions.push(`${minutes(work.goal - work.today)} to go for today's goal of ${minutes(work.goal)}${work.streak > 1 ? `, and a ${work.streak}-day streak to keep` : ""}.`);
 	else suggestions.push(`Today's goal of ${minutes(work.goal)} is met.`);
 	return {
@@ -22384,6 +22466,7 @@ function todayBrief(input) {
 		continueStudying,
 		...readNext ? { readNext } : {},
 		work,
+		learning,
 		suggestions
 	};
 }

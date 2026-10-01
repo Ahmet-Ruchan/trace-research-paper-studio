@@ -218,7 +218,7 @@ When the user asks what to do today, where they left off, or how their day is go
 node scripts/trace-agent.mjs today
 ```
 
-It reads the user's own record in the studio and prints the day in one answer: review cards due now and from which papers (`review`), papers they started studying and left, with steps done (`continueStudying`), what to read next (`readNext`: the next paper in the library's reading order, a work on their reading list, or a paper not started yet), and today and this week against the daily goal with the streak (`work`). `suggestions` says the same in order of importance, as sentences for the user: give them briefly in that order and offer to start with the first. Cards are answered in the studio (Review). It is the user's own record: never write it into a project.
+It reads the user's own record in the studio and prints the day in one answer: review cards due now and from which papers (`review`), papers they started studying and left, with steps done (`continueStudying`), what to read next (`readNext`: the next paper in the library's reading order, a work on their reading list, or a paper not started yet), today and this week against the daily goal with the streak (`work`), and the papers finished and cards reviewed this week against the weekly learning goal the user set on their profile (`learningThisWeek`, `goal: null` when none). `suggestions` says the same in order of importance, as sentences for the user: give them briefly in that order and offer to start with the first. Cards are answered in the studio (Review). It is the user's own record: never write it into a project.
 
 ## Learning progress
 

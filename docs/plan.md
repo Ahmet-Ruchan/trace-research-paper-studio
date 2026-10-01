@@ -49,8 +49,17 @@ yapıldığı ve nasıl test edildiği yazıyor.
   oturuma yazılır, takvimde ve haftalık raporda görünür.
 - [ ] **9. Takvim dışa aktarımı ve haftalık özet.** Oturumlar takvim dosyası (.ics) olarak
   iner; hafta sonunda bir özet bildirimi gelir.
-- [ ] **16. Haftalık öğrenme hedefi.** "Bu hafta 2 makale bitir, 40 kart tekrar et" gibi
+- [x] **16. Haftalık öğrenme hedefi.** "Bu hafta 2 makale bitir, 40 kart tekrar et" gibi
   hedefler; haftalık raporda ne kadarının tamamlandığı görünür.
+  - *Yapıldı:* Profilde "Goals and preferences" altında haftalık makale ve kart hedefi (0: yok).
+    Her tekrar o günün sayısına yazılıyor (`study.json`'da `reviewDays`, yerel gün; Review, Lab
+    ve moladaki tekrar hepsi); iki cihaz birleşince aynı gün iki kez sayılmıyor. "This week
+    against last" en üstte **Learning this week**: bitirilen makaleler ve tekrar edilen kartlar
+    ilerleme çubuklarıyla, hatırlananlar ve "günde kaç kart kaldı". `today` komutu da hedefi
+    veriyor (`learningThisWeek`). Eklenti 0.29.0.
+  - *Test:* gün gün sayım (gece yarısı sınırı dahil), 400 gün sınırı, birleştirme, eski
+    profilin okunması, pazartesi/pazar başlayan hafta birim testlerde; hedef koyup kart tekrar
+    edince sayının artması e2e'de; `today` köprüsü hedefle; telefon genişliğinde taşma yok.
 
 ## Notlar ve vurgular
 

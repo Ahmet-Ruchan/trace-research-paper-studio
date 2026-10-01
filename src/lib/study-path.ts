@@ -181,6 +181,20 @@ export function trimExplanations(items: readonly StudyExplanation[]) {
   return kept.reverse().slice(-MAX_EXPLANATIONS);
 }
 
+/** Gün gün tekrar sayısı en çok bu kadar gün tutuluyor. */
+export const MAX_REVIEW_DAYS = 400;
+
+/**
+ * Bir günde tekrar edilen ve hatırlanan kart sayısı (yerel gün). Kart yalnızca
+ * son tekrarını biliyor; haftalık hedef "bu hafta kaç tekrar" diye soruyor.
+ */
+export const reviewDaySchema = z.object({
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reviewed: z.number().int().min(0).max(99_999),
+  remembered: z.number().int().min(0).max(99_999),
+});
+export type ReviewDay = z.infer<typeof reviewDaySchema>;
+
 export const studyProgressSchema = z.object({
   version: z.literal(1),
   current: z.string().max(MAX_ID).optional(),
@@ -193,6 +207,8 @@ export const studyProgressSchema = z.object({
   reviews: z.array(studyReviewSchema).max(MAX_ENTRIES).optional(),
   /** Kendi cümleleriyle anlatışlar; bölüm başına en yenileri. */
   explanations: z.array(studyExplanationSchema).max(MAX_EXPLANATIONS).optional(),
+  /** Gün gün tekrarlar, eskiden yeniye. */
+  reviewDays: z.array(reviewDaySchema).max(MAX_REVIEW_DAYS).optional(),
 });
 export type StudyProgress = z.infer<typeof studyProgressSchema>;
 

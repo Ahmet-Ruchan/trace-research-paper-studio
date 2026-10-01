@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BarChart3, Camera, Download, Pencil, Play, Timer, Trash2, Upload, X } from "lucide-react";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { learningStats } from "@/lib/learning-stats";
-import { displayName, MAX_PHOTO_CHARS, SOUNDS, type Preferences, type Profile, type SoundId } from "@/lib/profile";
+import { displayName, MAX_PHOTO_CHARS, MAX_WEEKLY_CARDS, MAX_WEEKLY_PAPERS, SOUNDS, type Preferences, type Profile, type SoundId } from "@/lib/profile";
 import type { ResearchProject } from "@/lib/schema";
 import { calendarYears, dailyTotals, dayDate, dayKey, formatDuration, SESSION_KIND_LABELS, sessionPieces, workSummary, type WorkSession } from "@/lib/work-log";
 import { DisplayControl } from "../display-control";
@@ -164,8 +164,7 @@ function IdentityCard({ onFocus }: { onFocus: () => void }) {
   );
 }
 
-function StudyingCard({ projects, onProgress }: { projects: ResearchProject[]; onProgress: () => void }) {
-  const state = useLibraryStudyState();
+function StudyingCard({ projects, state, onProgress }: { projects: ResearchProject[]; state: ReturnType<typeof useLibraryStudyState>; onProgress: () => void }) {
   const now = useFocusClock();
   const stats = useMemo(() => (state.status === "ready" && now ? learningStats(projects, state.study, new Date(now).toISOString()) : undefined), [projects, state, now]);
   if (!stats) return null;
@@ -197,6 +196,11 @@ function PreferencesCard() {
         <NumberField label="Daily goal, hours" value={goalHours} min={0} max={24} onChange={(hours) => set({ dailyGoalMinutes: Math.min(1440, Math.max(15, hours * 60 + goalMinutes)) })} />
         <NumberField label="and minutes" value={goalMinutes} min={0} max={59} onChange={(minutes) => set({ dailyGoalMinutes: Math.min(1440, Math.max(15, goalHours * 60 + minutes)) })} />
       </div>
+      <div className="focus-number-grid profile-weekly-goals">
+        <NumberField label="Papers to finish a week" value={preferences.weeklyGoals.papers} min={0} max={MAX_WEEKLY_PAPERS} onChange={(papers) => set({ weeklyGoals: { ...preferences.weeklyGoals, papers } })} />
+        <NumberField label="Cards to review a week" value={preferences.weeklyGoals.cards} min={0} max={MAX_WEEKLY_CARDS} onChange={(cards) => set({ weeklyGoals: { ...preferences.weeklyGoals, cards } })} />
+      </div>
+      <p className="focus-note">A weekly learning goal, shown in This week against last. 0 leaves it out.</p>
       <div className="profile-choices">
         <div role="group" aria-label="Week starts on">
           <span>Week starts on</span>
@@ -417,6 +421,7 @@ export function ProfileView({
 }) {
   const { profile, saveProfile, log, logReady, liveIntervals, profileReady } = useFocus();
   const now = useFocusClock();
+  const studyState = useLibraryStudyState();
   const [range, setRange] = useState<CalendarRange>("recent");
   const [selected, setSelected] = useState<string>();
   const { preferences } = profile;
@@ -497,14 +502,14 @@ export function ProfileView({
         </div>
       </section>
 
-      {logReady && now ? <WeeklyReport projects={projects} onOpen={onOpen} /> : null}
+      {logReady && now ? <WeeklyReport projects={projects} study={studyState.status === "ready" ? studyState.study : undefined} onOpen={onOpen} /> : null}
 
       <div className="stats-columns profile-columns">
         <SessionsCard key={selected ?? "recent"} selected={selected} />
         <div className="profile-stack">
           <PaperTimeCard projects={projects} onOpen={onOpen} range={paperRange} />
           <PreferencesCard />
-          <StudyingCard projects={projects} onProgress={onProgress} />
+          <StudyingCard projects={projects} state={studyState} onProgress={onProgress} />
           <DataCard papers={projects.length} onLibraryChanged={onLibraryChanged} />
         </div>
       </div>

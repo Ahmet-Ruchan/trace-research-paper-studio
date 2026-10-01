@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { StudyReview } from "./review-schedule";
 import type { ResearchProject } from "./schema";
-import { MAX_ENTRIES, studyProgressSchema, trimExplanations, type StudyAnswer, type StudyProgress } from "./study-path";
+import { MAX_ENTRIES, MAX_REVIEW_DAYS, studyProgressSchema, trimExplanations, type ReviewDay, type StudyAnswer, type StudyProgress } from "./study-path";
 
 /**
  * Çalışma ilerlemesini taşımak.
@@ -63,6 +63,19 @@ function pickReview(left: StudyReview, right: StudyReview) {
   return later(left.last, right.last) ? left : right;
 }
 
+/**
+ * Aynı günün tekrarları iki cihazda: toplamak aynı dosyayı iki kez yüklemekte
+ * iki kat sayardı; büyük olan tutuluyor (az sayabilir, fazla saymaz).
+ */
+function mergeReviewDays(left: readonly ReviewDay[], right: readonly ReviewDay[]) {
+  const merged = new Map<string, ReviewDay>();
+  for (const item of [...left, ...right]) {
+    const existing = merged.get(item.day);
+    merged.set(item.day, !existing || item.reviewed > existing.reviewed || (item.reviewed === existing.reviewed && item.remembered > existing.remembered) ? item : existing);
+  }
+  return [...merged.values()].sort((first, second) => first.day.localeCompare(second.day)).slice(-MAX_REVIEW_DAYS);
+}
+
 function byId<T extends { id: string }>(left: readonly T[], right: readonly T[], pick: (a: T, b: T) => T) {
   const merged = new Map<string, T>();
   for (const item of [...left, ...right]) {
@@ -84,6 +97,7 @@ export function mergeStudyProgress(current: StudyProgress | undefined, incoming:
   const explanations = new Map<string, NonNullable<StudyProgress["explanations"]>[number]>();
   for (const item of [...(current.explanations ?? []), ...(incoming.explanations ?? [])]) explanations.set(`${item.target}\u0000${item.at}\u0000${item.text}`, item);
   const reviews = byId(current.reviews ?? [], incoming.reviews ?? [], pickReview).slice(-MAX_ENTRIES);
+  const reviewDays = mergeReviewDays(current.reviewDays ?? [], incoming.reviewDays ?? []);
   const merged: StudyProgress = {
     version: 1,
     ...(newer.current ? { current: newer.current } : {}),
@@ -94,6 +108,7 @@ export function mergeStudyProgress(current: StudyProgress | undefined, incoming:
     ...(finished ? { finishedAt: finished } : {}),
     ...(reviews.length ? { reviews } : {}),
     ...(explanations.size ? { explanations: trimExplanations([...explanations.values()]) } : {}),
+    ...(reviewDays.length ? { reviewDays } : {}),
   };
   return studyProgressSchema.parse(merged);
 }

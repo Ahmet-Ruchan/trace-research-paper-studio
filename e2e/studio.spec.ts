@@ -7,7 +7,7 @@ import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
 import { TRACE_ACCENT_PALETTE } from "../src/lib/trace-storage";
 import { readingDrillFor } from "../src/lib/reading-drill";
 import { REWRITE_PRESETS } from "../src/lib/rewrite-presets";
-import { completeStep, questionSignature, recordAnswer, studyPath, type StudyProgress } from "../src/lib/study-path";
+import { completeStep, questionSignature, recordAnswer, studyPath, visitStep, type StudyProgress } from "../src/lib/study-path";
 import { emptyTestLibrary } from "./fresh-library";
 import type { Profile } from "../src/lib/profile";
 import { dayKey as dayKeyOf, type WorkLog } from "../src/lib/work-log";
@@ -2845,6 +2845,47 @@ test.describe("weekly report", () => {
     await expect(report.locator(".hour-row").first().locator(".work-cell").nth(10)).toHaveAttribute("title", "Monday, 10:00–11:00: 2h");
     await table.getByRole("button", { name: "Weekly paper" }).click();
     await expect(page.locator(".lab-section-header h1")).toHaveText("Weekly paper");
+  });
+});
+
+test.describe("weekly learning goal", () => {
+  test.use({ timezoneId: "Europe/Istanbul" });
+
+  test("sets a goal of papers and cards for the week, and counts the papers finished and the cards reviewed", async ({ page, request }) => {
+    const project = await seed(request, { ...projectNamed("e2e-weekly-goal"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Goal paper" } } });
+    // Pazar çalışılmış (kart pazartesi vadeli), salı bitirilmiş; bu hafta pazartesi başlıyor.
+    const studied = recordAnswer(undefined, project.quiz!.questions[0], { correct: false, attempts: 1, revealed: true }, new Date("2026-09-13T10:00:00+03:00").toISOString());
+    const progress = visitStep(studied, "finish", new Date("2026-09-15T10:00:00+03:00").toISOString());
+    expect((await request.put(`/api/library/study?id=${project.id}`, { data: { progress } })).ok()).toBe(true);
+    await page.clock.install({ time: new Date("2026-09-16T15:00:00+03:00") });
+    await page.goto("/?profile=1");
+
+    const goals = page.getByRole("group", { name: "Learning this week" });
+    await expect(goals.locator(".week-goal").first()).toContainText("1");
+    await expect(goals.locator(".focus-note")).toHaveText("Set a weekly goal for papers and cards under Goals and preferences.");
+    const preferences = page.getByRole("region", { name: "Goals and preferences" });
+    await preferences.getByRole("button", { name: "More papers to finish a week" }).click();
+    await preferences.getByRole("spinbutton", { name: "Cards to review a week" }).fill("3");
+    await expect.poll(async () => ((await (await request.get("/api/profile")).json()) as { profile: Profile }).profile.preferences.weeklyGoals).toEqual({ papers: 1, cards: 3 });
+
+    await expect(goals.getByRole("progressbar", { name: "Papers finished" })).toHaveAttribute("aria-valuetext", "1 of 1, goal met");
+    await expect(goals.getByRole("progressbar", { name: "Cards reviewed" })).toHaveAttribute("aria-valuetext", "0 of 3");
+    await expect(goals.locator(".focus-note")).toHaveText("3 cards to go in 5 days: about 1 a day.");
+
+    // Kart tekrar edilince haftanın sayısına giriyor.
+    await page.goto("/?library=1");
+    await page.locator(".library-review").click();
+    const card = page.locator(".review-card");
+    const question = example.quiz!.questions[0];
+    await card.getByText(question.options.find((option) => option.correct)!.label, { exact: true }).click();
+    await card.getByRole("button", { name: "Check answer" }).click();
+    await expect(card.locator(".review-card-foot")).toContainText("Remembered.");
+    await expect.poll(async () => ((await (await request.get(`/api/library/study?id=${project.id}`)).json()) as { progress: StudyProgress }).progress.reviewDays).toEqual([{ day: "2026-09-16", reviewed: 1, remembered: 1 }]);
+
+    await page.goto("/?profile=1");
+    await expect(goals.getByRole("progressbar", { name: "Cards reviewed" })).toHaveAttribute("aria-valuetext", "1 of 3");
+    await expect(goals.locator(".week-goal").nth(1)).toContainText("1 remembered");
+    await expect(goals.locator(".focus-note")).toHaveText("2 cards to go in 5 days: about 1 a day.");
   });
 });
 

@@ -338,14 +338,19 @@ without the timer, or delete a session started by mistake.
 Tuesday afternoon is not measured against a whole week: day by day in paired bars, and paper by
 paper with both weeks' time. Below it, **When you work** shades each hour of each weekday over the
 last four weeks and says which three hours hold most of your work and which day is your busiest.
-Your agent reads the same record:
+
+Above them, **Learning this week** measures what you learned rather than the hours: the papers you
+finished and the cards you reviewed this week, against a weekly goal you set under **Goals and
+preferences** ("finish 2 papers, review 40 cards"), with how many cards a day are left to reach it.
+Every review counts on the day you made it, wherever you answered it: Review, a paper's Lab, or a
+short break on the timer. Your agent reads the same record:
 
 ```text
 How much did I work this week compared with last week, on which papers, and when in the day? Use the Trace plugin.
 ```
 
 Or ask for the whole day at once: the cards due and from which papers, the paper you left half way,
-what to read next, and the time left for today's goal.
+what to read next, the weekly learning goal, and the time left for today's goal.
 
 ```text
 What should I do today, and where did I leave off? Use the Trace plugin.
@@ -1283,8 +1288,8 @@ guide), predictions before every chart and derivation step, a guided study path 
 progress, explanations in the reader's own words checked against the evidence, spaced review across
 the library, concepts linked across papers with reading suggestions from the references and a reading order for
 the library, learning statistics, a work timer (focus rounds with breaks, countdown, stopwatch,
-alarms, due review cards offered in short breaks) with a profile, a calendar of the days worked and a
-weekly report, your own notes and highlights with Markdown and Obsidian export, a reading list placed in
+alarms, due review cards offered in short breaks) with a profile, a calendar of the days worked, a
+weekly report and a weekly learning goal, your own notes and highlights with Markdown and Obsidian export, a reading list placed in
 the reading order, a learning
 health panel, a reading drill made from the evidence, terms defined where they are used, the
 paper's own figures placed beside the prose that argues them, the evidence health panel, a

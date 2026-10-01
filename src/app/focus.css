@@ -221,6 +221,18 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 
 /* Haftalık rapor: bu hafta geçen haftayla, makaleler ve günün saatleri. */
 .profile-week > h2 { margin-bottom: 16px; }
+.week-goals { margin: 0 0 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.week-goals h3 { margin: 0 0 12px; font-size: var(--text-md); }
+.week-goals .focus-note { margin: 12px 0 0; }
+.week-goal-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 32px; }
+.week-goal { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.week-goal > span:first-child { color: var(--ink-soft); font-size: var(--text-xs); letter-spacing: .08em; text-transform: uppercase; }
+.week-goal strong { display: flex; align-items: center; gap: 6px; font: 400 1.6rem/1.1 Georgia, serif; font-variant-numeric: tabular-nums; }
+.week-goal strong svg { color: var(--focus-line); }
+.week-goal-bar { height: 10px; overflow: hidden; border-radius: 999px; background: var(--track); }
+.week-goal-bar i { display: block; height: 100%; border-radius: inherit; background: var(--focus-line); }
+.week-goal small { min-height: 1.2em; color: var(--ink-soft); font-size: var(--text-sm); }
+.profile-weekly-goals { margin-top: 10px; }
 .week-report { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; }
 .week-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .week-figures div { display: grid; gap: 3px; }
@@ -260,6 +272,8 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
   .week-report { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
+  .week-goal-rows { grid-template-columns: 1fr; }
+  .week-goal small:empty { display: none; }
   .hour-row { gap: 2px; }
   .hour-grid { gap: 2px; }
   .week-figures strong { font-size: 1.6rem; }

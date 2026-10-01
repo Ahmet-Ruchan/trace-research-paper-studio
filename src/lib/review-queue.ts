@@ -1,7 +1,8 @@
 import { readingDrillFor } from "./reading-drill";
 import { applyReview, isDue, type StudyReview } from "./review-schedule";
 import type { PrimerConcept, QuizQuestion, ResearchProject } from "./schema";
-import { emptyStudyProgress, questionSignature, type StudyProgress } from "./study-path";
+import { emptyStudyProgress, MAX_REVIEW_DAYS, questionSignature, type ReviewDay, type StudyProgress } from "./study-path";
+import { dayKey } from "./work-log";
 
 /**
  * Kütüphanenin tekrar kuyruğu: bütün makalelerin vadesi gelmiş kartları.
@@ -85,5 +86,17 @@ export function recordReview(progress: StudyProgress | undefined, card: ReviewCa
   const base = progress ?? emptyStudyProgress(now);
   const reviews = base.reviews ?? [];
   const current = reviews.find((item) => item.id === card.review.id) ?? card.review;
-  return { ...base, updatedAt: now, reviews: [...reviews.filter((item) => item.id !== current.id), applyReview(current, remembered, now)] };
+  return {
+    ...base,
+    updatedAt: now,
+    reviews: [...reviews.filter((item) => item.id !== current.id), applyReview(current, remembered, now)],
+    reviewDays: countReviewDay(base.reviewDays ?? [], dayKey(new Date(now)), remembered),
+  };
+}
+
+/** Günün tekrar sayısına bir kart ekler; en eski günler sınırın dışında kalıyor. */
+export function countReviewDay(days: readonly ReviewDay[], day: string, remembered: boolean): ReviewDay[] {
+  const today = days.find((item) => item.day === day) ?? { day, reviewed: 0, remembered: 0 };
+  const counted = { day, reviewed: today.reviewed + 1, remembered: today.remembered + (remembered ? 1 : 0) };
+  return [...days.filter((item) => item.day !== day), counted].sort((left, right) => left.day.localeCompare(right.day)).slice(-MAX_REVIEW_DAYS);
 }

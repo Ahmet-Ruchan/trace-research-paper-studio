@@ -5,6 +5,7 @@ import { readingOrder, studyStatus } from "./reading-order";
 import { dueCards, reviewCards, reviewForecast } from "./review-queue";
 import type { ResearchProject } from "./schema";
 import { studyPath, studySummary, type StudyProgress } from "./study-path";
+import { hasWeeklyGoal, weeklyGoalProgress, weeklyGoalSentence, type WeeklyGoalProgress, type WeeklyGoals } from "./weekly-goals";
 import { dailyTotals, dayKey, workSummary, type WorkLog } from "./work-log";
 import { weekReport } from "./work-report";
 
@@ -12,7 +13,8 @@ import { weekReport } from "./work-report";
  * Günün özeti: bir ajan "bugün ne yapayım?" sorusunu tek komutla
  * cevaplasın (`trace-agent.mjs today`). Hepsi okuyucunun kendi kaydından,
  * model yok: vadesi gelen kartlar, yarım kalan makaleler, okuma sırasında
- * sıradaki çalışma, bugünün ve haftanın çalışma süresi. `suggestions`
+ * sıradaki çalışma, bugünün ve haftanın çalışma süresi, haftalık öğrenme
+ * hedefi (`weekly-goals.ts`). `suggestions`
  * bunları önem sırasıyla, okuyucuya söylenecek cümleler olarak veriyor.
  */
 
@@ -23,6 +25,8 @@ export type TodayBrief = {
   /** `from`: okuma sırasından mı, yoksa sıraya girmeyen (bağı olmayan) başlanmamış bir makale mi. */
   readNext?: { kind: "paper"; projectId: string; paper: string; status: string; from: "reading order" | "library" } | { kind: "saved"; title: string; identifier?: string; why: string };
   work: { today: number; goal: number; week: number; lastWeekByNow: number; streak: number };
+  /** Bu hafta bitirilen makaleler ve tekrar edilen kartlar, haftalık hedefle. */
+  learning: WeeklyGoalProgress;
   suggestions: string[];
 };
 
@@ -39,6 +43,7 @@ export function todayBrief(input: {
   aliases?: ConceptAliases;
   log: WorkLog;
   goalMinutes: number;
+  weeklyGoals?: WeeklyGoals;
   weekStart: 0 | 1;
   now: Date;
 }): TodayBrief {
@@ -88,6 +93,9 @@ export function todayBrief(input: {
   const week = weekReport(input.log.sessions, totals, now, input.weekStart);
   const work = { today: summary.today, goal: input.goalMinutes * 60, week: summary.week, lastWeekByNow: week.lastWeek.byNow, streak: summary.currentStreak };
 
+  const goals = input.weeklyGoals ?? { papers: 0, cards: 0 };
+  const learning = weeklyGoalProgress(study, goals, now, input.weekStart);
+
   const suggestions: string[] = [];
   if (review.due) {
     const reviewMinutes = Math.max(1, Math.round(review.due * 0.75));
@@ -97,8 +105,9 @@ export function todayBrief(input: {
   if (studying) suggestions.push(`Continue studying ${studying.paper}: ${studying.done} of ${studying.total} steps done.`);
   if (readNext?.kind === "paper" && readNext.projectId !== studying?.projectId) suggestions.push(readNext.from === "reading order" ? `Next in your reading order: ${readNext.paper}.` : `Not started yet: ${readNext.paper}.`);
   if (readNext?.kind === "saved") suggestions.push(`Next on your reading list: ${readNext.title}. ${readNext.why}`);
+  if (hasWeeklyGoal(goals)) suggestions.push(weeklyGoalSentence(learning).replace(/^./, (letter) => letter.toUpperCase()));
   if (work.today < work.goal) suggestions.push(`${minutes(work.goal - work.today)} to go for today's goal of ${minutes(work.goal)}${work.streak > 1 ? `, and a ${work.streak}-day streak to keep` : ""}.`);
   else suggestions.push(`Today's goal of ${minutes(work.goal)} is met.`);
 
-  return { day: dayKey(now), review, continueStudying, ...(readNext ? { readNext } : {}), work, suggestions };
+  return { day: dayKey(now), review, continueStudying, ...(readNext ? { readNext } : {}), work, learning, suggestions };
 }

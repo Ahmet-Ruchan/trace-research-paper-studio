@@ -2203,7 +2203,7 @@ function printToday() {
   const profile = parseProfile(readJson(join(traceDataDirectory(), "profile.json")), now.toISOString());
   const log = parseWorkLog(readJson(join(traceDataDirectory(), "focus-log.json")));
   const readingList = parseReadingList(readJson(join(library, "reading-list.json")));
-  const brief = todayBrief({ projects, study, readingList, aliases, log, goalMinutes: profile.preferences.dailyGoalMinutes, weekStart: profile.preferences.weekStart, now });
+  const brief = todayBrief({ projects, study, readingList, aliases, log, goalMinutes: profile.preferences.dailyGoalMinutes, weeklyGoals: profile.preferences.weeklyGoals, weekStart: profile.preferences.weekStart, now });
   const time = (seconds) => ({ seconds, time: formatDuration(seconds) });
   console.log(JSON.stringify({
     ok: true,
@@ -2215,6 +2215,13 @@ function printToday() {
     continueStudying: brief.continueStudying,
     readNext: brief.readNext ?? null,
     work: { today: time(brief.work.today), goal: time(brief.work.goal), thisWeek: time(brief.work.week), lastWeekByThisTime: time(brief.work.lastWeekByNow), streak: brief.work.streak },
+    learningThisWeek: {
+      from: brief.learning.from,
+      to: brief.learning.to,
+      daysLeft: brief.learning.daysLeft,
+      papersFinished: { done: brief.learning.papers.done, goal: brief.learning.papers.goal || null },
+      cardsReviewed: { done: brief.learning.cards.done, remembered: brief.learning.cards.remembered, goal: brief.learning.cards.goal || null },
+    },
     suggestions: brief.suggestions,
     note: "The reader's day, from their own record in the studio. Give the suggestions in this order, briefly; offer to start with the first. Review cards are answered in the studio (Review) or with the review commands if available. Never write any of this into a project.",
   }, null, 2));

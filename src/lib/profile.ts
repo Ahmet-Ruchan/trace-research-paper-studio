@@ -16,6 +16,8 @@ export const WORK_DATA_KIND = "trace-work-data";
 /** Profil fotoğrafı istemcide 192 px'e küçültülüp JPEG olarak geliyor; bu sınır bol. */
 export const MAX_PHOTO_CHARS = 200_000;
 export const MAX_ALARMS = 20;
+export const MAX_WEEKLY_PAPERS = 20;
+export const MAX_WEEKLY_CARDS = 2000;
 
 const text = (max: number) => z.string().trim().max(max).default("");
 
@@ -88,6 +90,13 @@ export const preferencesSchema = z.object({
   reviewCountsAsWork: z.boolean().default(true),
   /** Günlük hedef, dakika; takvimin en koyu tonu hedefe ulaşılan gün. */
   dailyGoalMinutes: z.number().int().min(15).max(24 * 60).default(4 * 60),
+  /** Haftalık öğrenme hedefi (`weekly-goals.ts`): bitirilecek makale ve tekrar edilecek kart; 0 hedef yok. */
+  weeklyGoals: z
+    .object({
+      papers: z.number().int().min(0).max(MAX_WEEKLY_PAPERS).default(0),
+      cards: z.number().int().min(0).max(MAX_WEEKLY_CARDS).default(0),
+    })
+    .default({ papers: 0, cards: 0 }),
   /** Haftanın ilk günü: 1 pazartesi, 0 pazar. */
   weekStart: z.union([z.literal(0), z.literal(1)]).default(1),
   clock: z.enum(["24h", "12h"]).default("24h"),
