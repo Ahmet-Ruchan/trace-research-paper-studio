@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -283,6 +283,13 @@ describe("time by paper", () => {
       expect(report.papers.allTime[0].paper).toBe(english.evidence.paper.title);
       expect(report.papers.allTime[2].paper).toBe("A paper no longer in the library");
       expect(spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "work", "--days", "0"], { encoding: "utf8", env: { ...process.env, TRACE_DATA_DIR: workspace } }).status).toBe(1);
+      // Takvim dosyası: son üç günün oturumları, makalenin adıyla.
+      const ics = spawnSync(process.execPath, [join(root, "plugins/trace-paper-studio/skills/trace-paper-studio/scripts/trace-agent.mjs"), "work", "--ics", join(workspace, "out", "work.ics"), "--days", "3"], { encoding: "utf8", env: { ...process.env, TRACE_DATA_DIR: workspace } });
+      expect(ics.status).toBe(0);
+      expect(JSON.parse(ics.stdout)).toMatchObject({ ok: true, sessions: 3, days: 3 });
+      const calendar = readFileSync(join(workspace, "out", "work.ics"), "utf8");
+      expect(calendar.match(/BEGIN:VEVENT/g)).toHaveLength(3);
+      expect(calendar).toContain(`SUMMARY:${english.evidence.paper.title} · Focus`);
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }

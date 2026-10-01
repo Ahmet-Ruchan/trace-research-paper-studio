@@ -35,6 +35,7 @@ import {
 } from "@/lib/focus-timer";
 import { emptyProfile, WORK_DATA_KIND, type Alarm, type Profile } from "@/lib/profile";
 import { describeBackupImport, type BackupSummary } from "@/lib/full-backup";
+import { lastWeekSummary, weekSummaryText } from "@/lib/work-export";
 import { addSessions, emptyWorkLog, formatClock, formatDuration, MAX_SESSION_NOTE, removeSession, roundSession, sessionPieces, type ReviewBlock, type WorkLog, type WorkSession } from "@/lib/work-log";
 import { playSound, setAmbient, stopAmbient, unlockAudio } from "./focus-sound";
 
@@ -60,20 +61,23 @@ const RING_EVERY_MS = 4_000;
 const RING_FOR_MS = 60_000;
 const RETRY_MS = 15_000;
 const MAX_ALERTS = 4;
+/** Haftalık özetin gösterildiği hafta (ilk günü). */
+const WEEK_SUMMARY_KEY = "trace-week-summary";
 export const SNOOZE_MS = 5 * 60_000;
 
 type Snooze = { alarmId: string; at: number };
 
 export type FocusAlert = {
   id: string;
-  kind: "phase" | "done" | "timer" | "alarm" | "notice";
+  kind: "phase" | "done" | "timer" | "alarm" | "notice" | "summary";
   title: string;
   body?: string;
   color: FocusColorId;
   at: number;
   /** Zil bu ana kadar çalıyor; 0 sessiz. */
   ringUntil: number;
-  action?: "start-next" | "skip-break" | "restart" | "extend" | "snooze" | "resume";
+  /** `report`: profilin haftalık raporu (bildirim çubuğu açıyor). */
+  action?: "start-next" | "skip-break" | "restart" | "extend" | "snooze" | "resume" | "report";
   /** Düğmenin yazısı, eylemin varsayılanından farklıysa. */
   actionLabel?: string;
   alarmId?: string;
@@ -669,6 +673,27 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   );
   const logReviewTime = useCallback((block: ReviewBlock, subject?: Subject) => logBlock("review", block, subject), [logBlock]);
   const logStudyTime = useCallback((block: ReviewBlock, subject?: Subject) => logBlock("study", block, subject), [logBlock]);
+
+  // Yeni haftanın ilk açılışında geçen haftanın özeti, bir kez (bu tarayıcıda hatırlanıyor).
+  useEffect(() => {
+    if (!logReady || !profileReady) return;
+    const show = setTimeout(() => {
+      const { preferences } = profileRef.current;
+      if (!preferences.weeklySummary) return;
+      const summary = lastWeekSummary(logRef.current, new Date(), preferences.weekStart);
+      if (!summary) return;
+      try {
+        if (window.localStorage.getItem(WEEK_SUMMARY_KEY) === summary.from) return;
+        window.localStorage.setItem(WEEK_SUMMARY_KEY, summary.from);
+      } catch {
+        return;
+      }
+      const at = Date.now();
+      const alert: FocusAlert = { id: `week-${summary.from}`, kind: "summary", title: "Your week", body: weekSummaryText(summary), color: preferences.color, at, ringUntil: 0, action: "report", actionLabel: "See the weekly report" };
+      commit(raise([alert], storeRef.current, at));
+    }, 1500);
+    return () => clearTimeout(show);
+  }, [commit, logReady, profileReady, raise]);
 
   const noteRound = useCallback(
     (endAt: number, note: string) => {

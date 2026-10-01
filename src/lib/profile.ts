@@ -111,6 +111,8 @@ export const preferencesSchema = z.object({
   ambientVolume: z.number().min(0).max(1).default(0.35),
   /** Kısa molada vadesi gelmiş birkaç tekrar kartı önerilsin mi. */
   breakReview: z.boolean().default(true),
+  /** Yeni hafta başlayınca geçen haftanın özeti bildirilsin mi. */
+  weeklySummary: z.boolean().default(true),
 });
 export type Preferences = z.infer<typeof preferencesSchema>;
 

@@ -30,6 +30,7 @@ export { displayName, parseProfile } from "./profile";
 export { addDaysLocal, dailyTotals, dayKey, formatDuration, parseWorkLog, startOfWeek, timeByProject, workSummary } from "./work-log";
 export { hourPattern, PATTERN_WEEKS, weekReport } from "./work-report";
 export { todayBrief } from "./today";
+export { sessionsIcs } from "./work-export";
 export { answerChatCard, chatReviewQueue, showChatCard } from "./chat-review";
 export { notesFileName, notesMarkdown, parseNotesFile } from "./reader-notes";
 export { addToReadingList, isReadingListFile, mergeReadingOrder, parseReadingList, readingItemSchema, readingListToJson, removeFromReadingList, savedFrom, savedReason, workKey } from "./reading-list";

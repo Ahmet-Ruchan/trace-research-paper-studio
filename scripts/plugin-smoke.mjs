@@ -144,6 +144,7 @@ function bridgeSmoke(agent, bridge) {
     ["notes --obsidian", ["notes", "--project", "paper.trace.json", "--obsidian"]],
     ["reading", ["reading"]],
     ["today", ["today"]],
+    ["work --ics", ["work", "--ics", "work-sessions.ics"]],
     ["review", ["review"]],
     ["section", ["section", "--project", "paper.trace.json", "--target", `primer:${project.primer.concepts[0].id}`]],
     ["explain", ["explain", "--project", "paper.trace.json", "--target", `story:${project.story.sections[0].id}`, "--text", "The paper replaces recurrence with attention, so every position can look at every other position in one step and training runs in parallel."]],

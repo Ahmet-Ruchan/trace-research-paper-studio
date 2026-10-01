@@ -21570,6 +21570,15 @@ const SESSION_KINDS = [
 	"review",
 	"study"
 ];
+/** Oturum listelerinde adı olmayan bir oturumun adı. */
+const SESSION_KIND_LABELS = {
+	focus: "Focus",
+	timer: "Timer",
+	stopwatch: "Stopwatch",
+	manual: "Added by hand",
+	review: "Review",
+	study: "Study"
+};
 /** Tur sonunda yazılan tek satırlık not: "ne yaptın?". */
 const MAX_SESSION_NOTE = 200;
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -22094,7 +22103,9 @@ const preferencesSchema = object({
 	ambient: ambientSchema.default("none"),
 	ambientVolume: number().min(0).max(1).default(.35),
 	/** Kısa molada vadesi gelmiş birkaç tekrar kartı önerilsin mi. */
-	breakReview: boolean().default(true)
+	breakReview: boolean().default(true),
+	/** Yeni hafta başlayınca geçen haftanın özeti bildirilsin mi. */
+	weeklySummary: boolean().default(true)
 });
 const profileSchema = object({
 	version: literal(1),
@@ -22577,6 +22588,57 @@ function todayBrief(input) {
 		learning,
 		suggestions
 	};
+}
+
+//#endregion
+//#region src/lib/work-export.ts
+/**
+* Çalışma kaydının dışarıya çıkan iki hâli.
+*
+* Takvim dosyası (.ics, RFC 5545): her oturum bir etkinlik; Google Takvim,
+* Apple Takvim ve Outlook içe aktarıyor. Kimlik oturumun kimliğinden, yani
+* aynı dosyayı iki kez içe aktarmak etkinlikleri çoğaltmıyor.
+*
+* Haftalık özet: yeni hafta başlayınca geçen haftanın tek paragraflık özeti
+* (stüdyo bunu bir kez, bildirim olarak gösteriyor).
+*/
+const stamp = (iso) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+/** Metin değerinde ters bölü, virgül, noktalı virgül ve satır sonu kaçıyor. */
+const escapeText = (text) => text.replace(/\\/g, "\\\\").replace(/;/g, ";").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+/** Satırlar 75 baytta katlanıyor; çok baytlı bir karakter ortadan bölünmüyor. */
+function fold(line) {
+	const encoder = new TextEncoder();
+	const parts = [];
+	let current = "";
+	for (const character of line) {
+		const limit = parts.length ? 74 : 75;
+		if (encoder.encode(current + character).length > limit) {
+			parts.push(current);
+			current = character;
+		} else current += character;
+	}
+	parts.push(current);
+	return parts.join("\r\n ");
+}
+function sessionsIcs(sessions, options) {
+	const created = stamp((/* @__PURE__ */ new Date(Math.floor(options.now.getTime() / 1e3) * 1e3)).toISOString());
+	const lines = [
+		"BEGIN:VCALENDAR",
+		"VERSION:2.0",
+		"PRODID:-//Trace//Research Paper Studio//EN",
+		"CALSCALE:GREGORIAN",
+		"X-WR-CALNAME:Trace work sessions"
+	];
+	for (const session of sessions) {
+		const paper = session.projectId ? options.paperTitle?.(session.projectId) : void 0;
+		const kind = SESSION_KIND_LABELS[session.kind];
+		const name = session.label || paper || kind;
+		const summary = name === kind ? kind : `${name} · ${kind}`;
+		const details = [paper && paper !== name ? `Paper: ${paper}` : "", session.note ? `What I did: ${session.note}` : ""].filter(Boolean).join("\n");
+		lines.push("BEGIN:VEVENT", `UID:${session.id}@trace`, `DTSTAMP:${created}`, `DTSTART:${stamp((/* @__PURE__ */ new Date(Math.floor(Date.parse(session.start) / 1e3) * 1e3)).toISOString())}`, `DTEND:${stamp((/* @__PURE__ */ new Date(Math.floor(Date.parse(session.end) / 1e3) * 1e3)).toISOString())}`, `SUMMARY:${escapeText(summary)}`, ...details ? [`DESCRIPTION:${escapeText(details)}`] : [], `CATEGORIES:${escapeText(kind)}`, "TRANSP:OPAQUE", "END:VEVENT");
+	}
+	lines.push("END:VCALENDAR");
+	return `${lines.map(fold).join("\r\n")}\r\n`;
 }
 
 //#endregion
@@ -24226,4 +24288,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, answerChatCard, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, chatReviewQueue, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sharedConcepts, shouldSnapshot, showChatCard, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, answerChatCard, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, chatReviewQueue, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sessionsIcs, sharedConcepts, shouldSnapshot, showChatCard, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };

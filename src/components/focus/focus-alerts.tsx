@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlarmClock, BellRing, Coffee, PartyPopper, PauseCircle } from "lucide-react";
+import { AlarmClock, BarChart3, BellRing, Coffee, PartyPopper, PauseCircle } from "lucide-react";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { MAX_SESSION_NOTE } from "@/lib/work-log";
 import { useFocus, useFocusClock, type FocusAlert } from "./focus-provider";
@@ -13,9 +13,10 @@ const actionLabel: Record<NonNullable<FocusAlert["action"]>, string> = {
   extend: "One more minute",
   snooze: "Snooze 5 minutes",
   resume: "Resume",
+  report: "See the report",
 };
 
-const icons = { phase: Coffee, done: PartyPopper, timer: BellRing, alarm: AlarmClock, notice: PauseCircle } as const;
+const icons = { phase: Coffee, done: PartyPopper, timer: BellRing, alarm: AlarmClock, notice: PauseCircle, summary: BarChart3 } as const;
 
 /**
  * Tur bitince tek satır: "ne yaptın?". İsteğe bağlı; yazılan, turun
@@ -44,7 +45,7 @@ function RoundNote({ endAt }: { endAt: number }) {
  * Zamanlayıcının bildirimleri, her ekranda: tur bitti, mola başladı, süre
  * doldu, alarm çalıyor. Zil çalarken "Stop" hem zili hem bildirimi kapatıyor.
  */
-export function FocusAlerts({ onOpen }: { onOpen: () => void }) {
+export function FocusAlerts({ onOpen, onReport }: { onOpen: () => void; onReport?: () => void }) {
   const { store, dismissAlert, runAlert } = useFocus();
   const now = useFocusClock();
   if (!store.alerts.length) return null;
@@ -68,12 +69,21 @@ export function FocusAlerts({ onOpen }: { onOpen: () => void }) {
               {alert.roundEnd ? <RoundNote endAt={alert.roundEnd} /> : null}
               <div className="focus-alert-actions">
                 {alert.action ? (
-                  <button type="button" className="focus-alert-primary" onClick={() => runAlert(alert)}>
+                  <button
+                    type="button"
+                    className="focus-alert-primary"
+                    onClick={() => {
+                      if (alert.action === "report") {
+                        dismissAlert(alert.id);
+                        onReport?.();
+                      } else runAlert(alert);
+                    }}
+                  >
                     {alert.actionLabel ?? actionLabel[alert.action]}
                   </button>
                 ) : null}
                 <button type="button" onClick={() => dismissAlert(alert.id)}>{ringing ? "Stop" : "Dismiss"}</button>
-                <button type="button" className="focus-alert-open" onClick={() => { dismissAlert(alert.id); onOpen(); }}>Open the timer</button>
+                {alert.kind !== "summary" ? <button type="button" className="focus-alert-open" onClick={() => { dismissAlert(alert.id); onOpen(); }}>Open the timer</button> : null}
               </div>
             </div>
           </section>

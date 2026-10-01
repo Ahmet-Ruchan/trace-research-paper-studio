@@ -3260,6 +3260,41 @@ test.describe("weekly report", () => {
   });
 });
 
+test.describe("calendar file and weekly summary", () => {
+  test.use({ timezoneId: "Europe/Istanbul" });
+
+  test("downloads the sessions as a calendar file, and sums up the last week once when a new one starts", async ({ page, request }) => {
+    const project = await seed(request, { ...projectNamed("e2e-ics"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Calendar paper" } } });
+    const span = (id: string, day: string, from: string, to: string, extra: Record<string, string> = {}) => ({ id, kind: "focus", start: new Date(`${day}T${from}:00+03:00`).toISOString(), end: new Date(`${day}T${to}:00+03:00`).toISOString(), ...extra });
+    expect((await request.post("/api/profile/sessions", { data: { sessions: [
+      span("c1", "2026-09-07", "09:00", "10:00"),
+      span("c2", "2026-09-14", "09:00", "11:00", { projectId: project.id, note: "Drafted the method, part 1." }),
+      span("c3", "2026-09-16", "14:00", "15:30"),
+    ] } })).ok()).toBe(true);
+    // Saat 22 Eylül pazartesi: geçen hafta 14–20 Eylül.
+    await page.clock.install({ time: new Date("2026-09-22T09:00:00+03:00") });
+    await page.goto("/?library=1");
+    const summary = page.locator(".focus-alert", { hasText: "Your week" });
+    await expect(summary).toContainText("Last week you worked 3h 30m on 2 days, 2h 30m more than the week before. Your best day was Monday (2h).");
+    await summary.getByRole("button", { name: "See the weekly report" }).click();
+    await expect(page.getByRole("region", { name: "Week by week" })).toBeVisible();
+    await expect(summary).toHaveCount(0);
+    // Aynı hafta için bir kez.
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Week by week" })).toBeVisible();
+    await page.waitForTimeout(2_000);
+    await expect(summary).toHaveCount(0);
+
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Calendar file" }).click()]);
+    expect(download.suggestedFilename()).toBe("trace-work-2026-09-22.ics");
+    const ics = readFileSync((await download.path())!, "utf8");
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(3);
+    expect(ics).toContain("UID:c2@trace");
+    expect(ics).toContain("SUMMARY:Calendar paper · Focus");
+    expect(ics).toContain("DESCRIPTION:What I did: Drafted the method\\, part 1.");
+  });
+});
+
 test.describe("weekly learning goal", () => {
   test.use({ timezoneId: "Europe/Istanbul" });
 

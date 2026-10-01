@@ -355,7 +355,12 @@ day, darker the closer you came to your daily goal, in the colour you choose; sh
 months or any past year, and choose a day to see its sessions. Around it are today against your
 goal, this week and month, your streak and longest streak, your daily average and your best day,
 and your time by paper for the period shown, where choosing a paper opens it. Add time you worked
-without the timer, or delete a session started by mistake.
+without the timer, or delete a session started by mistake. **Calendar file** downloads the sessions of
+the period shown as an `.ics` file, one event each with its paper and your note, for Google Calendar,
+Apple Calendar or Outlook; importing it again does not duplicate them. When a new week starts, a note
+sums up the last one once: the time worked, on how many days, against the week before, and your best
+day, with a link to the weekly report (and a desktop notification if you allow them; turn it off in
+your profile).
 
 **This week against last** sets the week so far against last week *up to the same moment*, so a
 Tuesday afternoon is not measured against a whole week: day by day in paired bars, and paper by
@@ -1104,6 +1109,7 @@ npm run trace:agent -- progress
 
 # The reader's work time from the Focus timer: today, against last week, when in the day, time by paper
 npm run trace:agent -- work --days 14
+npm run trace:agent -- work --ics ~/Desktop/trace-work.ics --days 30
 
 # The reader's notes and highlights on a paper, as Markdown or into an Obsidian vault
 npm run trace:agent -- notes --project "paper.trace.json" --obsidian --out ~/Vault/Papers
@@ -1170,7 +1176,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.34.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.35.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 

@@ -66,8 +66,19 @@ yapıldığı ve nasıl test edildiği yazıyor.
   - *Test:* notun oturumla birleşmesi, uzayan oturum, silme, sınır ve turun oturumunu bulma
     birim testlerde; bir tur bitince bildirimden not yazıp Focus ekranında, profilde ve
     haftalık raporda görmek e2e'de (boşluk tuşu zamanlayıcıyı durdurmuyor).
-- [ ] **9. Takvim dışa aktarımı ve haftalık özet.** Oturumlar takvim dosyası (.ics) olarak
+- [x] **9. Takvim dışa aktarımı ve haftalık özet.** Oturumlar takvim dosyası (.ics) olarak
   iner; hafta sonunda bir özet bildirimi gelir.
+  - *Yapıldı:* Profilin takviminde **Calendar file**: gösterilen aralığın oturumları RFC 5545
+    `.ics` olarak (`src/lib/work-export.ts`), her oturum bir etkinlik, makalesi ve tur notuyla;
+    kimlik oturumdan, yeniden içe aktarmak çoğaltmıyor; satırlar 75 baytta katlanıyor. Ajan da
+    `work --ics <dosya> [--days N]` ile yazıyor. Yeni hafta başlayınca geçen haftanın özeti bir
+    kez bildirim olarak geliyor (süre, gün sayısı, önceki haftaya göre, en iyi gün; masaüstü
+    bildirimi açıksa orada da), "See the weekly report" profile götürüyor; profilde
+    "Weekly summary" ile kapatılıyor. Eklenti 0.35.0.
+  - *Test:* takvim dosyasının biçimi (UTC, kaçışlar, katlama, özet adları), hafta özeti (pazartesi
+    ve pazar başlayan hafta, boş hafta, metin) ve köprünün dosya yazması birim testlerde;
+    özetin bir kez çıkması, rapora götürmesi ve takvim dosyasının indirilmesi e2e'de; eklenti
+    smoke testi üç CLI'da `bridge work --ics`.
 - [x] **16. Haftalık öğrenme hedefi.** "Bu hafta 2 makale bitir, 40 kart tekrar et" gibi
   hedefler; haftalık raporda ne kadarının tamamlandığı görünür.
   - *Yapıldı:* Profilde "Goals and preferences" altında haftalık makale ve kart hedefi (0: yok).

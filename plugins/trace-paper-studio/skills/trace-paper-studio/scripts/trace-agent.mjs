@@ -43,6 +43,7 @@ import {
   savedReason,
   workKey,
   todayBrief,
+  sessionsIcs,
   chatReviewQueue,
   answerChatCard,
   showChatCard,
@@ -369,7 +370,7 @@ Usage:
   node trace-agent.mjs record
   node trace-agent.mjs concepts [--project <project.trace.json> [--suggest | --references <file>]]
   node trace-agent.mjs progress
-  node trace-agent.mjs work [--days <n>]
+  node trace-agent.mjs work [--days <n>] [--ics <file.ics>]
   node trace-agent.mjs today
   node trace-agent.mjs review [--limit <n>] | review --show --id <library id> --card <card id> | review --answer --id <library id> --card <card id> (--choice <letters> | --typed "<word>" | --remembered yes|no)
   node trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <notes.md>]
@@ -457,7 +458,9 @@ Usage:
             (~/.trace/focus-log.json): today, this week and month against the
             daily goal, streaks, the last --days days (default 7), time by
             paper this week and in all, and the latest sessions. Days on this
-            machine's clock. Reads only; no network, no model.
+            machine's clock. --ics <file> writes the sessions (of the last
+            --days days, or all) as a calendar file instead. No network, no
+            model.
   today     Prints the reader's day in one place: review cards due (and from
             which papers), papers studied halfway, the next paper or saved work
             in the reading order, today's and this week's work time against the
@@ -2139,6 +2142,16 @@ function printWork(args) {
   const { projects, files } = readLibrary();
   const byId = new Map(projects.map((project) => [project.id, project]));
   const { weekStart, dailyGoalMinutes } = profile.preferences;
+  // --ics: oturumları takvim dosyasına yazıyor (--days verildiyse yalnızca o günler).
+  if (args.ics) {
+    const from = args.days === undefined ? 0 : addDaysLocal(now, 1 - days).setHours(0, 0, 0, 0);
+    const sessions = log.sessions.filter((session) => Date.parse(session.end) > from);
+    const out = resolve(String(args.ics));
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, sessionsIcs(sessions, { paperTitle: (id) => byId.get(id)?.evidence.paper.title, now }));
+    console.log(JSON.stringify({ ok: true, written: out, sessions: sessions.length, ...(args.days === undefined ? {} : { days }), note: "A calendar file (.ics) of the reader's work sessions, one event each, with the paper and the round's note. Google Calendar, Apple Calendar and Outlook import it; importing it again does not duplicate events." }, null, 2));
+    return;
+  }
   const totals = dailyTotals(log);
   const summary = workSummary(totals, now, { weekStart, goalMinutes: dailyGoalMinutes });
   const time = (seconds) => ({ seconds, time: formatDuration(seconds) });

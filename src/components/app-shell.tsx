@@ -593,7 +593,7 @@ function Studio() {
   const withWork = (content: React.ReactNode) => (
     <StudioNavProvider value={{ open: openWork, current: screen === "focus" || screen === "profile" ? screen : undefined }}>
       {content}
-      <FocusAlerts onOpen={() => openWork("focus")} />
+      <FocusAlerts onOpen={() => openWork("focus")} onReport={() => openWork("profile")} />
     </StudioNavProvider>
   );
 

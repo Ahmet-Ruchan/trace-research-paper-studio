@@ -318,6 +318,7 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .stat-tiles.profile-tiles { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 12px; }
 .profile-calendar-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .profile-calendar-head .focus-select { grid-auto-flow: column; align-items: center; gap: 10px; }
+.profile-calendar-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .profile-calendar-color { display: grid; gap: 8px; margin-top: 16px; }
 .profile-columns { align-items: start; margin-top: 12px; }
 .profile-stack { display: grid; gap: 12px; }

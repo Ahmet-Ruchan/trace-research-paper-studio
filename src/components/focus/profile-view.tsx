@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BarChart3, Camera, Download, Pencil, Play, Timer, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, BarChart3, CalendarDays, Camera, Download, Pencil, Play, Timer, Trash2, Upload, X } from "lucide-react";
+import { sessionsIcs, sessionsIcsName } from "@/lib/work-export";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { learningStats } from "@/lib/learning-stats";
 import { displayName, MAX_PHOTO_CHARS, MAX_WEEKLY_CARDS, MAX_WEEKLY_PAPERS, SOUNDS, type Preferences, type Profile, type SoundId } from "@/lib/profile";
@@ -44,8 +45,8 @@ async function photoFrom(file: File) {
   }
 }
 
-function download(name: string, content: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+function download(name: string, content: string, type = "application/json") {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = name;
@@ -242,6 +243,7 @@ function PreferencesCard() {
         hint={permission === "denied" ? "Blocked in this browser; allow them in the site settings." : "When a round ends or an alarm rings while Trace is in the background."}
       />
       <Toggle checked={preferences.reviewCountsAsWork} onChange={(reviewCountsAsWork) => set({ reviewCountsAsWork })} label="Count review time as work" hint="The time you spend on cards in Review, up to five minutes a card, is added to your calendar." />
+      <Toggle checked={preferences.weeklySummary} onChange={(weeklySummary) => set({ weeklySummary })} label="Weekly summary" hint="When a new week starts, a note sums up the last one: time worked, days, and how it compares." />
       <Toggle checked={preferences.studyCountsAsWork} onChange={(studyCountsAsWork) => set({ studyCountsAsWork })} label="Count study time as work" hint="The time you spend on the Study path, up to twenty minutes a step, is added to your calendar and to the paper." />
     </section>
   );
@@ -439,6 +441,12 @@ export function ProfileView({
     return { from: new Date(range, 0, 1).getTime(), to: new Date(range + 1, 0, 1).getTime(), label: `In ${range}` };
   }, [range, today]);
 
+  // Takvim dosyası, gösterilen aralığın oturumları.
+  const rangeSessions = useMemo(
+    () => log.sessions.filter((session) => Date.parse(session.end) > paperRange.from && (paperRange.to === undefined || Date.parse(session.start) < paperRange.to)),
+    [log.sessions, paperRange],
+  );
+
   const tiles = [
     { label: "Today", value: formatDuration(summary.today), note: `goal ${formatDuration(preferences.dailyGoalMinutes * 60)}` },
     { label: "This week", value: formatDuration(summary.week), note: `goal met on ${summary.goalDaysThisWeek} ${summary.goalDaysThisWeek === 1 ? "day" : "days"}` },
@@ -477,13 +485,28 @@ export function ProfileView({
       <section className="stats-block profile-calendar" aria-label="Work calendar">
         <div className="profile-calendar-head">
           <h2>Work calendar</h2>
-          <label className="focus-select">
-            <span>Show</span>
-            <select value={String(range)} onChange={(event) => { setSelected(undefined); setRange(event.target.value === "recent" ? "recent" : Number(event.target.value)); }}>
-              <option value="recent">The last 12 months</option>
-              {years.map((year) => <option key={year} value={year}>{year}</option>)}
-            </select>
-          </label>
+          <div className="profile-calendar-tools">
+            <label className="focus-select">
+              <span>Show</span>
+              <select value={String(range)} onChange={(event) => { setSelected(undefined); setRange(event.target.value === "recent" ? "recent" : Number(event.target.value)); }}>
+                <option value="recent">The last 12 months</option>
+                {years.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="focus-secondary"
+              disabled={!rangeSessions.length}
+              title="A calendar file for Google Calendar, Apple Calendar or Outlook"
+              onClick={() => {
+                const titles = new Map(projects.map((project) => [project.id, project.evidence.paper.title]));
+                const file = sessionsIcs(rangeSessions, { paperTitle: (id) => titles.get(id), now: new Date() });
+                download(sessionsIcsName(new Date()), file, "text/calendar;charset=utf-8");
+              }}
+            >
+              <CalendarDays size={14} /> Calendar file
+            </button>
+          </div>
         </div>
         <p>Each square is a day; the darker, the closer you came to your daily goal. Choose a day to see its sessions.</p>
         {logReady && now ? (
