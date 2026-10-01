@@ -60,10 +60,12 @@ describe("the library as an Obsidian vault", () => {
     try {
       const archive = join(workspace, "vault.zip");
       writeFileSync(archive, zipFiles([{ path: "Trace/Papers/Çalışma ü.md", content: "# Hello\n" }, { path: "Trace/Trace library.md", content: "index\n" }], new Date(2026, 8, 30, 10, 0, 0)));
-      const test = spawnSync("unzip", ["-t", archive], { encoding: "utf8" });
+      // CI'daki gibi UTF-8 yerelinde: MS-DOS işaretli bir arşivde Debian'ın unzip'i Türkçe adı bozuyordu.
+      const options = { encoding: "utf8" as const, env: { ...process.env, LC_ALL: "C.UTF-8" } };
+      const test = spawnSync("unzip", ["-t", archive], options);
       if (test.error) return; // unzip yoksa biçim testi atlanıyor
       expect(test.stdout).toContain("No errors detected");
-      expect(spawnSync("unzip", ["-p", archive, "Trace/Papers/Çalışma ü.md"], { encoding: "utf8" }).stdout).toBe("# Hello\n");
+      expect(spawnSync("unzip", ["-p", archive, "Trace/Papers/Çalışma ü.md"], options).stdout).toBe("# Hello\n");
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }

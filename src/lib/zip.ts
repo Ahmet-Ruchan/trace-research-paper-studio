@@ -53,7 +53,9 @@ export function zipFiles(files: ReadonlyArray<{ path: string; content: string | 
     const central = new Uint8Array(46 + name.length);
     const record = new DataView(central.buffer);
     record.setUint32(0, 0x02014b50, true);
-    record.setUint16(4, 20, true);
+    // Oluşturan sistem Unix: MS-DOS denirse Debian'ın unzip'i UTF-8 bayrağına rağmen adları
+    // OEM kod sayfasından çeviriyor ("Ç" bozuluyor). Unix'te adlar olduğu gibi kalıyor.
+    record.setUint16(4, (3 << 8) | 20, true);
     record.setUint16(6, 20, true);
     record.setUint16(8, 0x0800, true);
     record.setUint16(10, 0, true);
@@ -63,6 +65,7 @@ export function zipFiles(files: ReadonlyArray<{ path: string; content: string | 
     record.setUint32(20, data.length, true);
     record.setUint32(24, data.length, true);
     record.setUint16(28, name.length, true);
+    record.setUint32(38, (0o100644 << 16) >>> 0, true); // sıradan dosya, rw-r--r--
     record.setUint32(42, offset, true);
     central.set(name, 46);
     locals.push(local, data);
