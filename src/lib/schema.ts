@@ -684,6 +684,12 @@ export const claimReviewSchema = z.object({
   note: z.string().max(600).optional(),
 });
 
+/**
+ * Ekip incelemesinde bir üyenin oyu (`team.ts`). `claimReviews` kararı oylardan
+ * hesaplanıyor: yeterli onay ve hiç ret yoksa onaylı, biri reddederse reddedilmiş.
+ */
+export const claimVoteSchema = claimReviewSchema.extend({ memberId: z.string().min(1).max(80) });
+
 export const researchProjectSchema = generationResultSchema.extend({
   version: z.literal(1),
   id: z.string(),
@@ -703,6 +709,8 @@ export const researchProjectSchema = generationResultSchema.extend({
   figures: z.array(figureSchema).max(6).optional(),
   excerptCheck: excerptCheckSchema.optional(),
   claimReviews: z.record(z.string(), claimReviewSchema).optional(),
+  /** Ekip kipinde iddia başına üyelerin oyları; karar `claimReviews`'ta. */
+  claimReviewVotes: z.record(z.string(), z.array(claimVoteSchema).max(20)).optional(),
   /** Anlatı bu şablona göre üretildiyse onun kopyası; yeniden üretim ve doğrulama yapıyı buradan korur. */
   template: narrativeTemplateSchema.optional(),
   generation: z.object({
@@ -721,6 +729,7 @@ export const researchProjectSchema = generationResultSchema.extend({
 
 export type ExcerptCheck = z.infer<typeof excerptCheckSchema>;
 export type ClaimReview = z.infer<typeof claimReviewSchema>;
+export type ClaimVote = z.infer<typeof claimVoteSchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type SourceReference = z.infer<typeof sourceReferenceSchema>;
 export type Claim = z.infer<typeof claimSchema>;

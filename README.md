@@ -626,6 +626,24 @@ ledger. Trace shows which sections still rest on it, and a rewrite of those sect
 to cite it again. Reviews are part of the `.trace.json`, so they travel with the project. An agent
 cannot write them.
 
+### Review as a team
+
+On a studio that several people reach, **Team** on the profile turns on accounts. Whoever creates the
+first account becomes its owner; from then on everyone signs in with their own name and password,
+and the owner adds and removes members. Reviewing a claim becomes a vote: the owner sets how many
+approvals a claim needs (one to five), a claim is approved once that many members approve it and
+nobody has rejected it, and one rejection is enough to reject it. The queue shows who voted what and
+how many approvals are still missing, and each member can change or withdraw only their own vote; the
+server keeps the others' votes as they were, so two people reviewing at once do not overwrite each
+other. Notes stay with whoever wrote them: **Share with the team** on a note lets the others read
+it, marked with your name, and nobody else can change it. Notes written before the team existed
+belong to the owner. Every member can add, edit and remove papers; signing out also deletes the
+browser's offline copy, so the next person on a shared computer does not see your notes.
+
+This first version is for reviewing and annotating together: study progress, review cards, the work
+timer and the profile are still one for the whole studio. Without an account nothing changes; the
+studio stays a single reader's, as before.
+
 ### Ask the evidence
 
 Ask a question in the **Ask** tab. The model answering has not read the paper: it sees only the
@@ -1273,7 +1291,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.39.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.40.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live [--require-live codex,claude]] [--report report.json]
 ```
 
@@ -1417,13 +1435,21 @@ the server.
   can produce an "approved" claim. The question in **Ask** is passed to the model as data, and an
   answer that cites an unknown or rejected claim is refused.
 - `TRACE_ACCESS_PASSWORD` puts the studio and its API behind one shared password, compared in
-  constant time. It is not an account system: published stories, shared reading lists and the health
-  check stay open.
+  constant time. It is not an account system (team accounts are below): published stories, shared
+  reading lists and the health check stay open.
 - A context source that returns an unreliable record is dropped rather than trusted.
 - LaTeX is rendered to MathML and passed through a tag and attribute allowlist.
 - Supplementary URLs are restricted by protocol, DNS/IP range, redirect count, response type,
   timeout and payload size.
 - PDF and web content are treated as source material, never as instructions.
+- Team accounts live in `~/.trace/team.json`. Passwords are hashed with scrypt and a salt of their
+  own, and are never stored; a session is a random key in an HttpOnly, SameSite=Lax cookie (Secure
+  over HTTPS), kept on the server only as its SHA-256. Five wrong passwords for a name pause it for
+  fifteen minutes, an unknown name takes as long to refuse as a wrong password, and changing a
+  password signs out the member's other devices. With a team, every API needs a signed-in member; a
+  member can change only their own votes and notes, and only an owner can export, import or back up
+  all the data, since it holds everyone's notes. A damaged `team.json` locks the studio rather than
+  opening it.
 - The installed app's offline copy (`public/sw.js`) keeps only what the studio already showed in that
   browser, and only successful answers: a password prompt or an error is never stored, and online
   the server is always asked first. It touches only the studio's page and the API reads of the library;

@@ -26,6 +26,7 @@ import { LibraryView } from "./library-view";
 import { LiteratureMapView } from "./literature-map-view";
 import { ModelRecordView } from "./model-record-view";
 import { OfflineNotice } from "./offline";
+import { TeamGate, TeamProvider } from "./team";
 import { Onboarding } from "./onboarding";
 import { ReadingListProvider } from "./reading-list";
 import { scrollToSection } from "./reading-position";
@@ -49,12 +50,17 @@ import { WorkspaceView } from "./studio/workspace-view";
  * ekran değiştirse de sürüyor (`focus/focus-provider.tsx`).
  */
 export function AppShell() {
+  // Ekip kipinde oturum yoksa giriş ekranı; sağlayıcılar API'lere ancak oturumla gidiyor (`team.tsx`).
   return (
-    <FocusProvider>
-      <ReadingListProvider>
-        <Studio />
-      </ReadingListProvider>
-    </FocusProvider>
+    <TeamProvider>
+      <TeamGate>
+        <FocusProvider>
+          <ReadingListProvider>
+            <Studio />
+          </ReadingListProvider>
+        </FocusProvider>
+      </TeamGate>
+    </TeamProvider>
   );
 }
 

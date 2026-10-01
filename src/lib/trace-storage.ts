@@ -1,5 +1,4 @@
 import { createHash, randomInt, randomUUID } from "node:crypto";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
   copyFile,
@@ -47,6 +46,7 @@ import {
   type PublicationSettingsInput,
 } from "./publications";
 import { narrativeTemplateSchema, researchProjectSchema, type NarrativeTemplate, type ResearchProject } from "./schema";
+import { traceDataDirectory } from "./server/data-directory";
 
 export const TRACE_ACCENT_PALETTE = [
   "#2563EB",
@@ -94,11 +94,7 @@ type AccentState = {
 
 export type PaperAccent = AccentAssignment & { reused: boolean };
 
-export function traceDataDirectory() {
-  return process.env.TRACE_DATA_DIR
-    ? resolve(process.env.TRACE_DATA_DIR)
-    : join(homedir(), ".trace");
-}
+export { traceDataDirectory };
 
 export function traceLibraryDirectory() {
   return process.env.TRACE_LIBRARY_DIR
@@ -518,13 +514,22 @@ export async function readReaderNotes(projectId: string) {
 
 /** Bir makalenin notlarını yazar; boş liste kaydı kaldırır. Değişiklik yoksa dosyaya dokunulmuyor. */
 export async function saveReaderNotes(projectId: string, notes: readonly ReaderNote[]) {
-  const next = readerNotesSchema.parse(notes);
+  return updateReaderNotes(projectId, () => notes);
+}
+
+/**
+ * Bir makalenin notlarını kilit altında değiştirmek: değişiklik diskteki son
+ * hâle uygulanıyor. Ekip kipinde iki üyenin aynı anda kaydettiği notlar
+ * böylece birbirini silmiyor (`team.ts`, `mergeNotes`).
+ */
+export async function updateReaderNotes(projectId: string, change: (current: ReaderNote[]) => readonly ReaderNote[]) {
   const directory = traceLibraryDirectory();
   const path = join(directory, NOTES_FILE);
   const release = await acquireDirectoryLock(directory, NOTES_LOCK, "Your notes are busy. Please retry in a moment.");
   try {
     const file = await readJsonFile(path);
     const current = parseNotesFile(file.raw);
+    const next = readerNotesSchema.parse(change(current.get(projectId) ?? []));
     if (!next.length && !current.has(projectId)) return next;
     if (file.exists && !isNotesFile(file.raw)) await setAsideDamaged(path, "notes");
     else if (file.exists) await dailyBackup(path, "notes");

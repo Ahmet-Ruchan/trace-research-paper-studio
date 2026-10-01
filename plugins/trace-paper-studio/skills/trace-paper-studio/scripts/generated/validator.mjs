@@ -5365,6 +5365,11 @@ const claimReviewSchema = object({
 	at: string(),
 	note: string().max(600).optional()
 });
+/**
+* Ekip incelemesinde bir üyenin oyu (`team.ts`). `claimReviews` kararı oylardan
+* hesaplanıyor: yeterli onay ve hiç ret yoksa onaylı, biri reddederse reddedilmiş.
+*/
+const claimVoteSchema = claimReviewSchema.extend({ memberId: string().min(1).max(80) });
 const researchProjectSchema = generationResultSchema.extend({
 	version: literal(1),
 	id: string(),
@@ -5392,6 +5397,8 @@ const researchProjectSchema = generationResultSchema.extend({
 	figures: array(figureSchema).max(6).optional(),
 	excerptCheck: excerptCheckSchema.optional(),
 	claimReviews: record(string(), claimReviewSchema).optional(),
+	/** Ekip kipinde iddia başına üyelerin oyları; karar `claimReviews`'ta. */
+	claimReviewVotes: record(string(), array(claimVoteSchema).max(20)).optional(),
 	/** Anlatı bu şablona göre üretildiyse onun kopyası; yeniden üretim ve doğrulama yapıyı buradan korur. */
 	template: narrativeTemplateSchema.optional(),
 	generation: object({
@@ -22877,7 +22884,13 @@ const readerNoteSchema = object({
 	text: string().trim().max(MAX_NOTE_TEXT).default(""),
 	color: _enum(NOTE_COLORS).default("yellow"),
 	createdAt: string().max(40),
-	updatedAt: string().max(40)
+	updatedAt: string().max(40),
+	/** Ekip kipinde notu yazan üye; yoksa kütüphanenin sahibinin (ekipten önceki notlar). */
+	author: string().min(1).max(80).optional(),
+	/** Ekiple paylaşıldı: başka üyeler okuyabiliyor, değiştiremiyor. */
+	shared: boolean().optional(),
+	/** Yalnızca gösterim için, sunucu yazıyor: başka bir üyenin notunda onun adı. */
+	authorName: string().max(80).optional()
 }).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
 const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
 const notesFileSchema = object({

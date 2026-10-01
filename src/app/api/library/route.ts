@@ -1,6 +1,8 @@
-import { deleteStoredProject, listStoredProjects, saveStoredProject } from "@/lib/trace-storage";
+import { deleteStoredProject, listStoredProjects, readStoredProject, saveStoredProject } from "@/lib/trace-storage";
 import { MAX_REVISION_LABEL, revisionReasonSchema } from "@/lib/project-revisions";
 import { researchProjectSchema } from "@/lib/schema";
+import { currentMember, readTeam } from "@/lib/server/team-store";
+import { mergeVotes } from "@/lib/team";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,7 +49,15 @@ export async function PUT(request: Request) {
     const reason = revisionReasonSchema.safeParse(url.searchParams.get("reason") ?? "edit");
     if (!reason.success) return noStore({ error: "Unknown save reason." }, { status: 400 });
     const label = url.searchParams.get("label")?.slice(0, MAX_REVISION_LABEL) || undefined;
-    await saveStoredProject(parsed.data, { reason: reason.data, label });
+    // Ekip kipinde bir üye yalnızca kendi oyunu değiştirebiliyor; kararlar oylardan yeniden hesaplanıyor (`team.ts`).
+    const team = readTeam();
+    let project = parsed.data;
+    if (team.members.length) {
+      const member = currentMember(request);
+      if (!member) return noStore({ error: "Sign in to the studio first." }, { status: 401 });
+      project = mergeVotes(await readStoredProject(project.id), project, member, team.approvalsNeeded);
+    }
+    await saveStoredProject(project, { reason: reason.data, label });
     return noStore({ ok: true });
   } catch (error) {
     if (error instanceof SyntaxError) return noStore({ error: "The request is not valid JSON." }, { status: 400 });

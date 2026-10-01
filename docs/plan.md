@@ -384,6 +384,26 @@ yapıldığı ve nasıl test edildiği yazıyor.
     satırı; bağlantı gelince yeni makale; çevrimdışı kopyanın silinmesi. Üç kez üst üste geçti.
     `access-gate.test.ts` açık yollar; bütün e2e (101) ve `npm run check` (749) geçti.
     Gerçek bir telefona kurulum bu ortamda denenemedi.
-- [ ] **12. Hesaplar ve ekip incelemesi.** Birlikte onay, paylaşılan notlar.
+- [x] **12. Hesaplar ve ekip incelemesi.** Birlikte onay, paylaşılan notlar.
+  - *Yapıldı:* İsteğe bağlı ekip kipi (`src/lib/team.ts`, `src/lib/server/team-store.ts`,
+    `/api/team`, `/api/team/session`, `/api/team/members`): Profil'deki **Team** ilk hesabı açıyor
+    (açan sahip), sahip üye ekleyip çıkarıyor ve bir iddianın kaç onay gerektirdiğini (1–5)
+    seçiyor; her üye kendi parolasını değiştiriyor. Parolalar scrypt ve üye başına tuzla,
+    oturum HttpOnly/SameSite=Lax çerezde, sunucuda yalnızca SHA-256'sı; beş yanlış parola adı
+    on beş dakika durduruyor, bilinmeyen ad aynı sürede reddediliyor, parola değişince öbür
+    oturumlar kapanıyor, bozuk dosya stüdyoyu kilitliyor. Proxy ekip kipinde her API için üye
+    istiyor; oturumsuz kişi giriş ekranını görüyor. Birlikte onay: iddia başına üyelerin oyları
+    (`claimReviewVotes`), karar oylardan (yeterli onay ve ret yoksa onaylı, bir ret yeterli);
+    sunucu kayıtta yalnızca üyenin kendi oyunu alıyor, başkalarınınkini diskteki gibi tutuyor
+    (sahte oy yok, aynı anda inceleyenler birbirini silmiyor), kararı elle yazdırmıyor.
+    Paylaşılan notlar: notun yazarı var, **Share with the team** ile başkaları okuyabiliyor
+    (adıyla, değiştiremeden); kayıt kilit altında birleştiriliyor; kütüphane araması, Obsidian
+    kasası ve yayınlar yalnızca görülebilen notları alıyor; tam dışa/içe aktarım ekipte yalnızca
+    sahibin. Çalışma kaydı, zamanlayıcı ve profil bu sürümde stüdyo için tek. Eklenti 0.40.0.
+  - *Test:* `team.test.ts` (10: karar kuralı, oy verme/geri çekme, sunucuda sahte oy ve eş zamanlı
+    inceleme, not görünürlüğü ve birleştirme, açık yollar, hesaplar ve oturumlar, deneme sınırı,
+    parola değişimi, proxy kapısı ve bozuk dosya, notlar ve oylar API'den); e2e "team review"
+    (ekip kipini açmak, üye eklemek, iki onay, çıkış ve giriş, paylaşılan/özel not, ikinci
+    onayla karar, üye için tam dışa aktarım yasak).
 - [ ] **13. Arayüz dili.** Arayüz şu an bilinçli olarak İngilizce; başlamadan önce karar
   gerekiyor.

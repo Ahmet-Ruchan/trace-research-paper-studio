@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Check, RotateCcw, X } from "lucide-react";
 import { reviewSummary, setClaimReview, type ReviewItem, type ReviewReason } from "@/lib/claim-review";
+import { castVote } from "@/lib/team";
+import { useTeamMember } from "./team";
 import type { RevisionReason } from "@/lib/project-revisions";
 import type { ResearchProject } from "@/lib/schema";
 
@@ -47,10 +49,18 @@ export function ReviewPanel({
   });
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [showDecided, setShowDecided] = useState(false);
-  const name = reviewer.trim();
+  // Ekip kipinde ad oturumdan geliyor; karar üyelerin oylarından (`team.ts`).
+  const team = useTeamMember();
+  const name = team ? team.me.name : reviewer.trim();
+  const votesOf = (item: ReviewItem) => project.claimReviewVotes?.[item.claim.id] ?? [];
+  const myVote = (item: ReviewItem) => (team ? votesOf(item).find((vote) => vote.memberId === team.me.id) : undefined);
 
   function decide(item: ReviewItem, status?: "approved" | "rejected") {
     const note = notes[item.claim.id]?.trim();
+    if (team) {
+      onProjectChange(castVote(project, item.claim.id, team.me, status ? { status, at: new Date().toISOString(), ...(note ? { note } : {}) } : undefined, team.approvalsNeeded), "edit");
+      return;
+    }
     onProjectChange(
       setClaimReview(
         project,
@@ -72,6 +82,15 @@ export function ReviewPanel({
         <article className="health-stat"><strong>{summary.rejected}</strong><span>rejected</span><small>Kept in the ledger, marked as not supported.</small></article>
       </div>
 
+      {team ? (
+        <p className="review-name">
+          Reviewing as <strong>{team.me.name}</strong>.{" "}
+          <small>
+            A claim is approved when {team.approvalsNeeded === 1 ? "one member approves it" : `${team.approvalsNeeded} members approve it`} and nobody rejects it; one
+            rejection is enough to reject it. You can change or withdraw your own vote.
+          </small>
+        </p>
+      ) : (
       <label className="review-name">
         Reviewing as
         <input
@@ -89,6 +108,7 @@ export function ReviewPanel({
         />
         <small>Saved with every decision. Approving does not change what the model said about its own claim.</small>
       </label>
+      )}
 
       {summary.sectionsOnRejected.length ? (
         <section className="health-block">
@@ -117,9 +137,16 @@ export function ReviewPanel({
                 placeholder="Note (optional): what you saw on the page"
                 onChange={(event) => setNotes((current) => ({ ...current, [item.claim.id]: event.target.value }))}
               />
+              {team ? <VoteLine votes={votesOf(item)} needed={team.approvalsNeeded} /> : null}
               <div className="review-actions">
-                <button disabled={!name} title={name ? undefined : "Enter your name first"} className="review-approve" onClick={() => decide(item, "approved")}><Check size={13} /> Approve</button>
-                <button disabled={!name} title={name ? undefined : "Enter your name first"} className="review-reject" onClick={() => decide(item, "rejected")}><X size={13} /> Reject</button>
+                {myVote(item) ? (
+                  <button onClick={() => decide(item)}><RotateCcw size={13} /> Withdraw your {myVote(item)!.status === "approved" ? "approval" : "rejection"}</button>
+                ) : (
+                  <>
+                    <button disabled={!name} title={name ? undefined : "Enter your name first"} className="review-approve" onClick={() => decide(item, "approved")}><Check size={13} /> Approve</button>
+                    <button disabled={!name} title={name ? undefined : "Enter your name first"} className="review-reject" onClick={() => decide(item, "rejected")}><X size={13} /> Reject</button>
+                  </>
+                )}
               </div>
             </ReviewCard>
           </li>
@@ -137,8 +164,9 @@ export function ReviewPanel({
               {decided.map((item) => (
                 <li key={item.claim.id}>
                   <ReviewCard item={item} language={project.language} onClaimSelect={onClaimSelect}>
+                    {team ? <VoteLine votes={votesOf(item)} needed={team.approvalsNeeded} /> : null}
                     <div className="review-actions">
-                      <button onClick={() => decide(item)}><RotateCcw size={13} /> Undo</button>
+                      {!team ? <button onClick={() => decide(item)}><RotateCcw size={13} /> Undo</button> : myVote(item) ? <button onClick={() => decide(item)}><RotateCcw size={13} /> Withdraw your vote</button> : null}
                     </div>
                   </ReviewCard>
                 </li>
@@ -148,6 +176,18 @@ export function ReviewPanel({
         </section>
       ) : null}
     </div>
+  );
+}
+
+/** Ekip kipinde bir iddianın oyları: kim ne dedi, kaç onay daha gerekiyor. */
+function VoteLine({ votes, needed }: { votes: ReadonlyArray<{ by: string; status: "approved" | "rejected" }>; needed: number }) {
+  const approvals = votes.filter((vote) => vote.status === "approved").length;
+  const rejected = votes.some((vote) => vote.status === "rejected");
+  return (
+    <p className="review-votes">
+      {votes.length ? votes.map((vote) => `${vote.by} ${vote.status === "approved" ? "approved" : "rejected"}`).join(" · ") : "No votes yet"}
+      {!rejected ? ` · ${Math.min(approvals, needed)} of ${needed} approval${needed === 1 ? "" : "s"}` : ""}
+    </p>
   );
 }
 

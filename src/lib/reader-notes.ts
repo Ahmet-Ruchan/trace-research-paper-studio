@@ -42,6 +42,12 @@ export const readerNoteSchema = z
     color: z.enum(NOTE_COLORS).default("yellow"),
     createdAt: z.string().max(40),
     updatedAt: z.string().max(40),
+    /** Ekip kipinde notu yazan üye; yoksa kütüphanenin sahibinin (ekipten önceki notlar). */
+    author: z.string().min(1).max(80).optional(),
+    /** Ekiple paylaşıldı: başka üyeler okuyabiliyor, değiştiremiyor. */
+    shared: z.boolean().optional(),
+    /** Yalnızca gösterim için, sunucu yazıyor: başka bir üyenin notunda onun adı. */
+    authorName: z.string().max(80).optional(),
   })
   // Bölümde ne vurgu ne not varsa kayıt boş; iddiada boş kayıt "işaretlendi" demek.
   .refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");

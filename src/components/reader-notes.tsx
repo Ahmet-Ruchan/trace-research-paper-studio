@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Download, Highlighter, Layers, NotebookPen, Pencil, Star, Trash2, X } from "lucide-react";
+import { Download, Highlighter, Layers, NotebookPen, Pencil, Star, Trash2, Users, X } from "lucide-react";
 import { addHighlightCard, clozeCandidates, highlightCardOf, removeHighlightCard } from "@/lib/highlight-cards";
 import {
   cleanQuote,
@@ -21,6 +21,7 @@ import {
 import { describeDue } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyProgress } from "@/lib/study-path";
+import { useTeamMember } from "./team";
 
 /**
  * Okuyucunun notları ve vurguları (`reader-notes.ts`), stüdyoda.
@@ -41,7 +42,14 @@ type NotesValue = {
   add: (input: NewNote) => void;
   update: (id: string, patch: Partial<Pick<ReaderNote, "text" | "color">>) => void;
   remove: (id: string) => void;
+  /** Ekip kipinde: notu ekiple paylaşmak ya da geri almak. */
+  share: (id: string, shared: boolean) => void;
+  /** Ekip kipinde mi (paylaşma düğmesi yalnızca orada). */
+  team: boolean;
 };
+
+/** Başka bir üyenin paylaştığı not: sunucu ona yazarının adını koyuyor; okunuyor, değiştirilmiyor. */
+export const isOthersNote = (note: ReaderNote) => Boolean(note.authorName);
 
 const NotesContext = createContext<NotesValue | undefined>(undefined);
 
@@ -54,6 +62,7 @@ const endpoint = (projectId: string) => `/api/library/notes?id=${encodeURICompon
 const newId = () => `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export function ReaderNotesProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const team = Boolean(useTeamMember());
   const [state, setState] = useState<Status>({ status: "loading" });
   const [notes, setNotes] = useState<ReaderNote[]>([]);
   const [saveError, setSaveError] = useState<string>();
@@ -132,9 +141,11 @@ export function ReaderNotesProvider({ projectId, children }: { projectId: string
       if (note.target.kind === "section" && !note.quote && !note.text) return;
       commit((current) => [...current, note]);
     },
-    update: (id, patch) => commit((current) => current.map((note) => (note.id === id ? { ...note, ...patch, ...(patch.text !== undefined ? { text: patch.text.trim().slice(0, MAX_NOTE_TEXT) } : {}), updatedAt: new Date().toISOString() } : note))),
-    remove: (id) => commit((current) => current.filter((note) => note.id !== id)),
-  }), [commit, notes, saveError, state]);
+    update: (id, patch) => commit((current) => current.map((note) => (note.id === id && !isOthersNote(note) ? { ...note, ...patch, ...(patch.text !== undefined ? { text: patch.text.trim().slice(0, MAX_NOTE_TEXT) } : {}), updatedAt: new Date().toISOString() } : note))),
+    remove: (id) => commit((current) => current.filter((note) => note.id !== id || isOthersNote(note))),
+    share: (id, shared) => commit((current) => current.map((note) => (note.id === id && !isOthersNote(note) ? { ...note, shared, updatedAt: new Date().toISOString() } : note))),
+    team,
+  }), [commit, notes, saveError, state, team]);
 
   return <NotesContext.Provider value={value}>{children}</NotesContext.Provider>;
 }
@@ -435,7 +446,7 @@ export function ClaimNotes({ claimId }: { claimId: string }) {
   if (context.state.status === "failed") return <p className="regen-error">{context.state.message}</p>;
   const target: NoteTarget = { kind: "claim", claimId };
   const mine = context.notes.filter((note) => sameTarget(note.target, target));
-  const mark = mine.find((note) => !note.text && !note.quote);
+  const mark = mine.find((note) => !note.text && !note.quote && !isOthersNote(note));
   const written = mine.filter((note) => note.text || note.quote);
 
   return (
@@ -538,8 +549,17 @@ function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
   const [choosing, setChoosing] = useState(false);
   const canCard = Boolean(source && note.quote && clozeCandidates(note.quote, source.project).length);
   const hasCard = Boolean(source && highlightCardOf(source.study.progress, note.id));
+  if (isOthersNote(note)) {
+    return (
+      <article className={`note-item is-${note.color} is-shared-by-other`}>
+        <p className="note-author">Shared by {note.authorName}</p>
+        {note.quote ? <blockquote>{note.quote}</blockquote> : null}
+        {note.text ? <p>{note.text}</p> : null}
+      </article>
+    );
+  }
   return (
-    <article className={`note-item is-${note.color}`}>
+    <article className={`note-item is-${note.color}${note.shared ? " is-shared" : ""}`}>
       {note.quote ? <blockquote>{note.quote}</blockquote> : null}
       {editing ? (
         <form
@@ -570,6 +590,11 @@ function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
             </span>
           ) : null}
           <button type="button" onClick={() => setEditing(true)}><Pencil size={13} /> {note.text ? "Edit" : "Add a note"}</button>
+          {context.team && (note.text || note.quote) ? (
+            <button type="button" aria-pressed={Boolean(note.shared)} onClick={() => context.share(note.id, !note.shared)} title={note.shared ? "The team can read this note" : "Only you can read this note"}>
+              <Users size={13} /> {note.shared ? "Shared with the team" : "Share with the team"}
+            </button>
+          ) : null}
           {canCard && !choosing ? (
             <button type="button" onClick={() => setChoosing(true)}><Layers size={13} /> {hasCard ? "Change the card" : "Make a review card"}</button>
           ) : null}

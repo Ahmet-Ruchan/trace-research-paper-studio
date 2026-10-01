@@ -1215,3 +1215,24 @@ html[data-text-size="larger"] { font-size: 125%; }
 /* ---------- Çevrimdışı (offline.tsx) ---------- */
 .offline-notice { position: fixed; left: 16px; bottom: 16px; z-index: 110; max-width: min(520px, calc(100vw - 32px)); display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 14px; border: 1px solid var(--line-dark); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink); font-size: var(--text-sm); line-height: 1.45; }
 .offline-notice svg { flex: none; margin-top: 3px; }
+
+/* ---------- Ekip kipi (team.tsx) ---------- */
+.team-sign-in { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--paper); }
+.team-sign-in form { width: min(380px, 100%); display: grid; gap: 14px; padding: 28px 26px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.team-sign-in h1 { margin: 0; font: 500 1.625rem/1.2 Georgia, serif; }
+.team-sign-in p { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.55; }
+.team-sign-in label, .team-form label, .team-approvals { display: grid; gap: 5px; color: var(--ink-soft); font-size: var(--text-xs); }
+.team-sign-in input, .team-form input, .team-approvals select { min-height: 38px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); color: var(--ink); font-size: var(--text-md); }
+.team-sign-in button { min-height: 40px; border: 0; border-radius: 9px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-md); font-weight: 600; }
+.team-sign-in button:disabled { opacity: .45; cursor: default; }
+.profile-team h2 { display: flex; align-items: center; gap: 8px; }
+.team-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 12px; }
+.team-form label { flex: 1 1 160px; }
+.team-approvals { margin-top: 12px; max-width: 220px; }
+.team-members { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.team-members li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.team-members li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.team-members li small { color: var(--muted); font-size: var(--text-xs); }
+.review-votes { margin: 4px 0 0; color: var(--ink-soft); font-size: var(--text-sm); }
+.note-author { margin: 0 0 4px; color: var(--muted); font-size: var(--text-xs); letter-spacing: .04em; }
+.note-item.is-shared-by-other { border-style: dashed; }

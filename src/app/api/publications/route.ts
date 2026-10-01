@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { publicationIdPattern, publicationSettingsSchema, publicationStatusSchema } from "@/lib/publications";
-import { createPublication, deletePublication, listPublications, updatePublication } from "@/lib/trace-storage";
+import { createPublication, deletePublication, listPublications, readPublication, readReaderNotes, updatePublication } from "@/lib/trace-storage";
+import { notesFilterFor } from "@/lib/server/team-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,10 +40,18 @@ export async function GET(request: Request) {
 
 const createSchema = z.object({ projectId: z.string().min(1).max(200), settings: publicationSettingsSchema });
 
+/** Ekip kipinde yayına yalnızca yayınlayanın görebildiği notlar girebiliyor. */
+async function visibleNoteIds(request: Request, projectId: string, noteIds: string[] | undefined): Promise<string[]> {
+  if (!noteIds?.length) return noteIds ?? [];
+  const visible = new Set(notesFilterFor(request)(await readReaderNotes(projectId)).map((note) => note.id));
+  return noteIds.filter((id) => visible.has(id));
+}
+
 export async function POST(request: Request) {
   try {
     const body = createSchema.parse(JSON.parse(await request.text()));
-    const publication = await createPublication(body.projectId, body.settings);
+    const noteIds = await visibleNoteIds(request, body.projectId, body.settings.noteIds);
+    const publication = await createPublication(body.projectId, { ...body.settings, noteIds });
     if (!publication) return noStore({ error: "Save the project to the library before publishing it." }, { status: 404 });
     return noStore({ publication });
   } catch (error) {
@@ -60,7 +69,12 @@ export async function PATCH(request: Request) {
   const id = idFrom(request);
   if (!publicationIdPattern.test(id)) return noStore({ error: "The publication id is not valid." }, { status: 400 });
   try {
-    const publication = await updatePublication(id, patchSchema.parse(JSON.parse(await request.text())));
+    const patch = patchSchema.parse(JSON.parse(await request.text()));
+    if (patch.settings?.noteIds?.length) {
+      const record = await readPublication(id);
+      if (record) patch.settings = { ...patch.settings, noteIds: await visibleNoteIds(request, record.projectId, patch.settings.noteIds) };
+    }
+    const publication = await updatePublication(id, patch);
     if (!publication) return noStore({ error: "That publication does not exist." }, { status: 404 });
     return noStore({ publication });
   } catch (error) {

@@ -25,6 +25,7 @@ import {
   updateReadingList,
   updateWorkLog,
 } from "@/lib/trace-storage";
+import { ownerOnlyInTeam } from "@/lib/server/team-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,8 @@ function noStore(body: unknown, init?: ResponseInit) {
  * makaleler dışarıda kalıyor; dosya küçülüyor, okuyucunun kayıtları yine tam.
  */
 export async function GET(request?: Request) {
+  const blocked = request ? ownerOnlyInTeam(request) : undefined;
+  if (blocked) return blocked;
   try {
     const withPapers = request ? new URL(request.url).searchParams.get("papers") !== "0" : true;
     return noStore(await collectBackup({ withPapers }));
@@ -58,6 +61,8 @@ export async function GET(request?: Request) {
  * makalenin üzerine yazılmıyor.
  */
 export async function POST(request: Request) {
+  const blocked = ownerOnlyInTeam(request);
+  if (blocked) return blocked;
   try {
     const text = await request.text();
     if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: "The file is larger than 300 MB." }, { status: 413 });

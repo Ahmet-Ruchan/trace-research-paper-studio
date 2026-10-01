@@ -2940,6 +2940,78 @@ test.describe("installable app", () => {
   });
 });
 
+test.describe("team review", () => {
+  test("turns on accounts, needs two approvals for a claim, keeps notes private unless shared, and signs people in and out", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-team"));
+    const claim = project.evidence.claims[0];
+    await page.goto("/?profile=1");
+    const team = page.getByRole("region", { name: "Team" });
+    const first = team.getByRole("form", { name: "Create the first account" });
+    await first.getByLabel("Your name").fill("Ada");
+    await first.getByLabel("Password (10+ characters)").fill("correct horse battery");
+    await first.getByLabel("Password again").fill("correct horse battery");
+    await first.getByRole("button", { name: "Turn on team review" }).click();
+    await expect(team).toContainText("Signed in as Ada (owner)");
+
+    // Sahip bir üye ekliyor ve iki onay istiyor.
+    const add = team.getByRole("form", { name: "Add a member" });
+    await add.getByLabel("Name").fill("Grace");
+    await add.getByLabel("First password").fill("another long password");
+    await add.getByRole("button", { name: "Add a member" }).click();
+    await expect(team.getByRole("status")).toContainText("Grace can sign in now.");
+    await team.getByLabel("Approvals a claim needs").selectOption("2");
+    await expect(team).toContainText("when 2 members approve it");
+
+    // Oturumsuz bir istek artık geri çevriliyor; oturumlu tarayıcı yazabiliyor.
+    expect((await request.get("/api/library")).status()).toBe(401);
+    const at = new Date().toISOString();
+    expect((await page.request.put(`/api/library/notes?id=${project.id}`, { data: { notes: [
+      { id: "ada-private", target: { kind: "claim", claimId: claim.id }, text: "Ada's private doubt.", createdAt: at, updatedAt: at },
+      { id: "ada-shared", target: { kind: "claim", claimId: claim.id }, text: "Ada shares: check Table 2.", shared: true, createdAt: at, updatedAt: at },
+    ] } })).ok()).toBe(true);
+
+    // Ada onaylıyor: iki onay gerektiği için karar yok, oyu görünüyor.
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: "Review" }).click();
+    const card = page.locator(".review-list > li", { hasText: claim.statement.slice(0, 40) }).first();
+    await card.getByRole("button", { name: "Approve" }).click();
+    await expect(card.locator(".review-votes")).toHaveText("Ada approved · 1 of 2 approvals");
+    await expect(card.getByRole("button", { name: "Withdraw your approval" })).toBeVisible();
+    await expect.poll(async () => ((await (await page.request.get("/api/library")).json()) as { projects: ResearchProject[] }).projects[0].claimReviewVotes?.[claim.id]?.length).toBe(1);
+
+    // Çıkış: giriş ekranı. Grace giriyor.
+    await page.goto("/?profile=1");
+    await page.getByRole("region", { name: "Team" }).getByRole("button", { name: "Sign out" }).click();
+    const signIn = page.getByRole("form", { name: "Sign in" });
+    await expect(signIn).toBeVisible();
+    await signIn.getByLabel("Name").fill("Grace");
+    await signIn.getByLabel("Password").fill("wrong password!!");
+    await signIn.getByRole("button", { name: "Sign in" }).click();
+    await expect(signIn.getByRole("alert")).toHaveText("The name or the password is wrong.");
+    await signIn.getByLabel("Password").fill("another long password");
+    await signIn.getByRole("button", { name: "Sign in" }).click();
+    await expect(signIn).toHaveCount(0);
+
+    // Grace yalnızca Ada'nın paylaştığı notu görüyor, adıyla ve değiştirmeden.
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".lab-nav > button", { hasText: /^Notes/ }).click();
+    const shared = page.locator(".note-item.is-shared-by-other");
+    await expect(shared).toContainText("Shared by Ada");
+    await expect(shared).toContainText("Ada shares: check Table 2.");
+    await expect(shared.getByRole("button")).toHaveCount(0);
+    await expect(page.getByText("Ada's private doubt.")).toHaveCount(0);
+
+    // Grace de onaylıyor: iki onayla karar "Approved by Ada, Grace".
+    await page.locator(".lab-nav > button", { hasText: "Review" }).click();
+    const graceCard = page.locator(".review-list > li", { hasText: claim.statement.slice(0, 40) }).first();
+    await expect(graceCard.locator(".review-votes")).toHaveText("Ada approved · 1 of 2 approvals");
+    await graceCard.getByRole("button", { name: "Approve" }).click();
+    await expect.poll(async () => ((await (await page.request.get("/api/library")).json()) as { projects: ResearchProject[] }).projects[0].claimReviews?.[claim.id]).toMatchObject({ status: "approved", by: "Ada, Grace" });
+    // Grace tam dışa aktarımı yapamıyor: herkesin notunu taşıyor.
+    expect((await page.request.get("/api/profile/data")).status()).toBe(403);
+  });
+});
+
 test.describe("practice exam", () => {
   test("asks questions from every paper against the clock, grades them at the end, and can bring the missed ones back", async ({ page, request }) => {
     const first = await seed(request, projectNamed("e2e-exam-a"));
