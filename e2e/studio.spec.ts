@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { devices, expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { devices, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { evidenceFingerprint } from "../src/lib/section-regeneration";
 import type { ResearchProject } from "../src/lib/schema";
 import { UNDO_WINDOW_MS } from "../src/lib/pending-deletion";
@@ -51,7 +52,8 @@ async function openStory(page: Page, projectId: string) {
 }
 
 test.describe("test isolation", () => {
-  // İki test sırayla koşuyor: ilkinin bıraktığı hiçbir şey ikincide yok.
+  // İki test aynı işçide sırayla koşuyor: ilkinin bıraktığı hiçbir şey ikincide yok.
+  test.describe.configure({ mode: "serial" });
   test("leaves a paper, a tag, study progress and a concept alias behind", async ({ request }) => {
     const project = await seed(request, projectNamed("e2e-left-behind"));
     expect((await request.put(`/api/library/tags?id=${project.id}`, { data: { tags: ["Left behind"] } })).ok()).toBe(true);
@@ -1016,6 +1018,8 @@ test.describe("reading comfort", () => {
   });
 
   test("keeps the paper header's buttons clear of the mode tabs at every width, with a timer running too", async ({ page, request }) => {
+    // Yirmi sayfa yüklemesi: paralel koşuda tek işçinin payına düşen işlemciyle 30 saniye sınırda.
+    test.setTimeout(75_000);
     const project = await seed(request, projectNamed("e2e-header-fit"));
     const measure = () =>
       page.evaluate(() => {

@@ -1253,6 +1253,10 @@ npm run version:set -- 0.38.0  # write one version into the package and every pl
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 
+`test:e2e` runs in parallel: each Playwright worker starts its own production server on its own
+port with its own throwaway data folder, and every test begins with an empty library. It uses half
+the CPU cores (at most four); set `TRACE_E2E_WORKERS` to change that, rather than `--workers`.
+
 `test:plugins` installs the plugin into each agent CLI you pass, in a throwaway home directory, the
 way a user would. It then asks the agent how it sees the plugin (version, skill, description,
 starter prompts) and treats any warning that names the plugin as a failure, because an agent that
@@ -1268,7 +1272,9 @@ by hand fails. It needs `OPENAI_API_KEY` for Codex and `ANTHROPIC_API_KEY` for C
 reports `skip` without them; the weekly and manual runs pass `--live` with the repository secrets of
 those names. Antigravity CLI is not tried live: `agy -p` needs a Google sign-in, not a key. There
 the check stops at what can be verified without one: the plugin installs, its skill is processed and
-the bridge runs from the installed copy.
+the bridge runs from the installed copy. In all three it also checks the plugin's MCP server: Codex
+starts it and lists its tools, `claude mcp list` connects to it, Antigravity takes it in on install,
+and the server answers from each installed copy.
 
 <details>
 <summary><b>Architecture notes worth knowing before contributing</b></summary>

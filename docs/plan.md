@@ -311,7 +311,17 @@ yapıldığı ve nasıl test edildiği yazıyor.
     vurgulama; alttaki seçimde çubuk ve form üstte; ortadaki seçimde form alt kenarda; yatay
     taşma yok. Eski yerleşimde bu denetim düşüyordu. Gerçek bir telefonda elle deneme bu
     ortamda yapılamadı.
-- [ ] **28. Testleri hızlandırmak.** Her test işçisine ayrı veri klasörü; e2e paralel koşar.
+- [x] **28. Testleri hızlandırmak.** Her test işçisine ayrı veri klasörü; e2e paralel koşar.
+  - *Yapıldı:* `playwright.config.ts` her işçiye kendi `next start` sunucusunu (`3217 + sıra`)
+    ve kendi geçici veri klasörünü (`worker-<sıra>`, işaret dosyasıyla) açıyor; `fullyParallel`.
+    `e2e/fixtures.ts` işçinin `parallelIndex`'ine göre `baseURL`'ü seçiyor, `emptyTestLibrary`
+    yalnızca kendi klasörünü boşaltıyor. İşçi sayısı çekirdeklerin yarısı, en çok dört
+    (`TRACE_E2E_WORKERS`). Sıraya bağlı tek grup ("test isolation") seri. Yük altında görülen
+    "socket hang up" için sunucunun keep-alive süresi uzatıldı; yirmi sayfa yükleyen başlık
+    testine daha uzun süre. Süre 5,0 dk → 2,7 dk (2 işçi), 2,4 dk (3 işçi).
+  - *Test:* bütün e2e (99) 2 işçiyle iki kez ve 3 işçiyle bir kez üst üste geçti; 4 işçide (4
+    çekirdekte 4 sunucu ve 4 tarayıcı) aşırı yükten düşen testler varsayılanın neden yarı
+    çekirdek olduğunu gösterdi.
 - [ ] **29. Kod düzeni.** Ekran geçişlerini yöneten ana dosya bölünür.
 - [ ] **30. Gerçek oturum testi.** Hangi ajanın gerçek bir model oturumuyla sınandığının
   kontrolü.
