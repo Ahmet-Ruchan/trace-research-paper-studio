@@ -144,6 +144,7 @@ function bridgeSmoke(agent, bridge) {
     ["notes --obsidian", ["notes", "--project", "paper.trace.json", "--obsidian"]],
     ["reading", ["reading"]],
     ["today", ["today"]],
+    ["obsidian", ["obsidian", "--out", "vault"]],
     ["work --ics", ["work", "--ics", "work-sessions.ics"]],
     ["review", ["review"]],
     ["section", ["section", "--project", "paper.trace.json", "--target", `primer:${project.primer.concepts[0].id}`]],

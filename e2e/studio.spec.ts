@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
@@ -2860,6 +2861,23 @@ test.describe("practice exam", () => {
     await page.clock.runFor(10 * 60_000 + 2_000);
     await expect(page.locator(".exam-score")).toContainText("when the time ran out");
     await expect(page.locator(".exam-score")).toContainText("10 questions left unanswered");
+  });
+});
+
+test.describe("library for Obsidian", () => {
+  test("downloads the whole library as an Obsidian vault in one zip, with the reader's notes", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-vault"));
+    const at = new Date().toISOString();
+    expect((await request.put(`/api/library/notes?id=${project.id}`, { data: { notes: [{ id: "n1", target: { kind: "claim", claimId: project.evidence.claims[0].id }, text: "Vault note for the seminar.", color: "yellow", createdAt: at, updatedAt: at }] } })).ok()).toBe(true);
+    await page.goto("/?profile=1");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Library for Obsidian" }).click()]);
+    expect(download.suggestedFilename()).toMatch(/^trace-obsidian-\d{4}-\d{2}-\d{2}\.zip$/);
+    const archive = (await download.path())!;
+    const listing = spawnSync("unzip", ["-l", archive], { encoding: "utf8" });
+    test.skip(Boolean(listing.error), "unzip is not installed");
+    expect(listing.stdout).toContain(`Trace/Papers/${project.evidence.paper.title}.md`);
+    expect(listing.stdout).toContain("Trace/Trace library.md");
+    expect(spawnSync("unzip", ["-p", archive, `Trace/Papers/${project.evidence.paper.title}.md`], { encoding: "utf8" }).stdout).toContain("Vault note for the seminar.");
   });
 });
 

@@ -292,6 +292,17 @@ callouts, ready to drop into a vault. Your agent can write the same file into yo
 Put my notes on the Attention paper into my Obsidian vault. Use the Trace plugin.
 ```
 
+**Library for Obsidian** under *Your data* on your profile does the same for the whole library in
+one `.zip`: a note per paper (its summary, its place in the reading order, the concepts it explains
+and your notes and highlights), a note for each concept two or more papers explain, and *Trace
+library* with the reading order and your reading list. Papers link to each other through shared
+concepts and the reading order, so Obsidian's graph becomes a map of your library. Your agent can
+write it straight into your vault:
+
+```text
+Put my whole Trace library into my Obsidian vault at ~/Vault.
+```
+
 ![Highlights and notes on the deep report](docs/images/notes.jpg)
 
 ### See what you have learned
@@ -1133,6 +1144,7 @@ npm run trace:agent -- work --ics ~/Desktop/trace-work.ics --days 30
 
 # The reader's notes and highlights on a paper, as Markdown or into an Obsidian vault
 npm run trace:agent -- notes --project "paper.trace.json" --obsidian --out ~/Vault/Papers
+npm run trace:agent -- obsidian --out ~/Vault
 
 # The reading list placed in the library's reading order; save a work found with graph or concepts --suggest
 npm run trace:agent -- reading
@@ -1196,7 +1208,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.35.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.36.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live]
 ```
 

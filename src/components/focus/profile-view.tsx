@@ -397,6 +397,10 @@ function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChang
           }}
         />
         <button type="button" className="focus-secondary" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} /> Import a file</button>
+        {/* Bütün kütüphane bir Obsidian kasası olarak: makale başına bir not, ortak kavramlar, dizin. */}
+        <a className="focus-secondary" href="/api/library/obsidian" download title="Every paper as a note with your highlights, linked through shared concepts and the reading order">
+          <Download size={14} /> Library for Obsidian
+        </a>
       </div>
       {message ? <p className={message.ok ? "" : "regen-error"} role={message.ok ? "status" : "alert"}>{message.text}</p> : null}
     </section>

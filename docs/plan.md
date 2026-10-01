@@ -139,8 +139,19 @@ yapıldığı ve nasıl test edildiği yazıyor.
     birden çok kelime, sınır ve bütün notları veren API birim testlerde; arama, sayım, yer
     etiketleri, işaretli kelime, bölüm notundan Notes'a ve iddia notundan iddiaya gitmek e2e'de;
     telefon genişliğinde taşma yok.
-- [ ] **8. Bütün kütüphaneyi Obsidian'a aktarmak.** Her makale bir not; notlar ve vurgular
+- [x] **8. Bütün kütüphaneyi Obsidian'a aktarmak.** Her makale bir not; notlar ve vurgular
   içinde; makaleler arasında kavram ve okuma sırası bağlantıları. Ajan tek komutla yapar.
+  - *Yapıldı:* `src/lib/obsidian-vault.ts` kütüphaneyi `Trace/` klasörüne çeviriyor: makale başına
+    bir not (ön bilgi, tez, özet, okuma sırasındaki yeri ve önce/sonra bağlantıları, varsaydığı
+    kavramların hangi makalede tanımlandığı, ortak kavramlar, Primer, bulgular, okuyucunun notları
+    ve vurguları), iki ya da daha çok makalenin anlattığı her kavram bir not, ve okuma sırası ile
+    okuma listesini veren *Trace library*. Aynı başlıklı iki analiz ayrı notlar; dosya adları
+    temizleniyor. Profilde **Library for Obsidian** hepsini tek `.zip` olarak indiriyor
+    (bağımlılıksız, `src/lib/zip.ts`); ajan `obsidian --out <kasa>` ile doğrudan yazıyor.
+    Eklenti 0.36.0.
+  - *Test:* makale ve kavram notları, okuma sırası bağlantıları, notların gelmesi, dizin, aynı
+    başlık, CRC ve zip'in `unzip` ile açılması, köprünün kasaya yazması birim testlerde; profilden
+    zip indirip içinde notu görmek e2e'de; eklenti smoke testi üç CLI'da `bridge obsidian`.
 - [ ] **25. Notları isteğe bağlı paylaşmak.** Yayın panelinde "seçtiğim notları dahil et";
   varsayılan kapalı.
 

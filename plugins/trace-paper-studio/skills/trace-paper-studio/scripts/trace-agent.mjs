@@ -44,6 +44,7 @@ import {
   workKey,
   todayBrief,
   sessionsIcs,
+  libraryVault,
   chatReviewQueue,
   answerChatCard,
   showChatCard,
@@ -374,6 +375,7 @@ Usage:
   node trace-agent.mjs today
   node trace-agent.mjs review [--limit <n>] | review --show --id <library id> --card <card id> | review --answer --id <library id> --card <card id> (--choice <letters> | --typed "<word>" | --remembered yes|no)
   node trace-agent.mjs notes (--project <project.trace.json> | --id <library id>) [--obsidian] [--out <notes.md>]
+  node trace-agent.mjs obsidian --out <vault folder>
   node trace-agent.mjs reading [--add <arxiv:id | DOI | title> --title "<title>" [--for <library id> --relation reference|cited-by|concept [--concept "<term>"]] [--year <n>] [--url <link>]] [--remove <id>]
   node trace-agent.mjs concepts --names [--part <n>]
   node trace-agent.mjs alias --a "<name>" --b "<name>" [--different | --forget] [--proposed-by model] [--reason "<why>"]
@@ -479,6 +481,11 @@ Usage:
             concepts, claims with their page. --obsidian adds YAML front matter
             and callouts; --out writes the file instead. Reads only; no
             network, no model.
+  obsidian  Writes the whole library into an Obsidian vault folder, under
+            Trace/: a note per paper (summary, place in the reading order,
+            concepts, the reader's notes and highlights), a note per concept
+            two or more papers explain, and Trace library.md with the reading
+            order and reading list. Overwrites only those files.
   reading   Prints the reader's reading list (papers saved to read later in
             the studio, ~/.trace/library/reading-list.json) placed in the
             library's reading order: a work a paper builds on, or that explains
@@ -2255,6 +2262,41 @@ function printToday() {
 }
 
 /**
+ * Bütün kütüphane bir Obsidian kasasına (`obsidian-vault.ts`): `<out>/Trace/`
+ * altında makale notları, ortak kavramlar ve bir dizin. Var olan dosyaların
+ * üzerine yazıyor; kasanın başka hiçbir yerine dokunmuyor.
+ */
+function writeVault(args) {
+  if (!args.out) throw new Error("obsidian needs --out <vault folder>.");
+  const { library, projects, study, aliases } = readLibrary();
+  const readJson = (path) => {
+    try {
+      return JSON.parse(readFileSync(path, "utf8"));
+    } catch {
+      return undefined;
+    }
+  };
+  const notes = parseNotesFile(readJson(join(library, "notes.json")));
+  const readingList = parseReadingList(readJson(join(library, "reading-list.json")));
+  const files = libraryVault({ projects, notes, study, aliases, readingList, exportedAt: new Date().toISOString() });
+  const root = resolve(String(args.out));
+  for (const file of files) {
+    const path = join(root, file.path);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, file.content);
+  }
+  console.log(JSON.stringify({
+    ok: true,
+    vault: root,
+    folder: join(root, "Trace"),
+    papers: files.filter((file) => file.path.startsWith("Trace/Papers/")).length,
+    concepts: files.filter((file) => file.path.startsWith("Trace/Concepts/")).length,
+    index: join(root, "Trace", "Trace library.md"),
+    note: "Every paper of the library is a note under Trace/Papers with the reader's notes and highlights, concepts explained by more than one paper are notes under Trace/Concepts, and Trace library.md lists the reading order. Obsidian's graph links them. Tell the user where the folder is; nothing outside it was changed.",
+  }, null, 2));
+}
+
+/**
  * Sohbette tekrar (`chat-review.ts`): vadesi gelen kartlar yanıtsız
  * listeleniyor; ajan soruyor, okuyucunun yanıtını --answer ile veriyor ve
  * sonuç stüdyonun `study.json`'ına aynı kilitle yazılıyor.
@@ -2468,6 +2510,7 @@ try {
   else if (command === "work") printWork(args);
   else if (command === "notes") printNotes(args);
   else if (command === "today") printToday();
+  else if (command === "obsidian") writeVault(args);
   else if (command === "review") chatReview(args);
   else if (command === "reading") readingList(args);
   else if (command === "alias") recordAlias(args);

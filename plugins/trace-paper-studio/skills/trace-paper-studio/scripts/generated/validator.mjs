@@ -22642,6 +22642,365 @@ function sessionsIcs(sessions, options) {
 }
 
 //#endregion
+//#region src/lib/reader-notes.ts
+/**
+* Okuyucunun notları ve vurguları.
+*
+* Bir iddiaya, bir bölüme (hikâye ya da derin rapor) ya da bir Primer
+* kavramına bağlı: bölümde
+* seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
+* iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
+*
+* Çalışma ilerlemesi gibi okuyucunun kaydı, makalenin değil: proje
+* dosyasına, dışa aktarımlara ve yayınlara girmiyor; kütüphanenin yanında
+* `notes.json` içinde duruyor. Markdown'a ya da Obsidian'a (ön bilgi,
+* etiketler ve callout'larla) buradan çıkıyor.
+*/
+const NOTE_COLORS = [
+	"yellow",
+	"green",
+	"blue",
+	"pink",
+	"purple"
+];
+const MAX_NOTES_PER_PAPER = 1e3;
+const MAX_NOTE_TEXT = 4e3;
+const MAX_NOTE_QUOTE = 1200;
+const MAX_ID = 300;
+/** Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor bölümü ya da Primer kavramı. */
+const NOTE_PLACES = [
+	"story",
+	"report",
+	"concept"
+];
+const noteTargetSchema = discriminatedUnion("kind", [object({
+	kind: literal("claim"),
+	claimId: string().min(1).max(160)
+}), object({
+	kind: literal("section"),
+	place: _enum(NOTE_PLACES),
+	sectionId: string().min(1).max(160)
+})]);
+const readerNoteSchema = object({
+	id: string().min(1).max(80),
+	target: noteTargetSchema,
+	/** Vurgulanan metin, bölümde göründüğü gibi. */
+	quote: string().trim().min(1).max(MAX_NOTE_QUOTE).optional(),
+	text: string().trim().max(MAX_NOTE_TEXT).default(""),
+	color: _enum(NOTE_COLORS).default("yellow"),
+	createdAt: string().max(40),
+	updatedAt: string().max(40)
+}).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
+const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
+const notesFileSchema = object({
+	version: literal(1),
+	projects: array(unknown())
+});
+const notesEntrySchema = object({
+	id: string().min(1).max(MAX_ID),
+	notes: array(unknown())
+});
+/** Proje kimliği → notlar. Bozuk bir not tek başına düşüyor, diğerleri kalıyor. */
+function parseNotesFile(raw) {
+	const entries = /* @__PURE__ */ new Map();
+	const file = notesFileSchema.safeParse(raw);
+	if (!file.success) return entries;
+	for (const item of file.data.projects) {
+		const entry = notesEntrySchema.safeParse(item);
+		if (!entry.success) continue;
+		const notes = entry.data.notes.flatMap((note) => {
+			const parsed = readerNoteSchema.safeParse(note);
+			return parsed.success ? [parsed.data] : [];
+		});
+		if (notes.length) entries.set(entry.data.id, notes.slice(0, MAX_NOTES_PER_PAPER));
+	}
+	return entries;
+}
+const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
+/**
+* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, Primer
+* kavramları, sonra iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
+* "no longer in the paper" başlığıyla kalıyor.
+*/
+function groupNotes(project, notes) {
+	const groups = [];
+	const used = /* @__PURE__ */ new Set();
+	const take = (target, heading, place, extra = {}) => {
+		const matched = notes.filter((note) => sameTarget(note.target, target)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+		if (!matched.length) return;
+		matched.forEach((note) => used.add(note.id));
+		groups.push({
+			target,
+			heading,
+			place,
+			notes: matched,
+			...extra
+		});
+	};
+	for (const section of project.story.sections) take({
+		kind: "section",
+		place: "story",
+		sectionId: section.id
+	}, section.title, "Story");
+	for (const section of project.deepReport?.sections ?? []) take({
+		kind: "section",
+		place: "report",
+		sectionId: section.id
+	}, section.title, "Deep report");
+	for (const concept of project.primer?.concepts ?? []) take({
+		kind: "section",
+		place: "concept",
+		sectionId: concept.id
+	}, concept.term, "Primer");
+	for (const claim of project.evidence.claims) {
+		const reference = claim.sourceRefs[0];
+		take({
+			kind: "claim",
+			claimId: claim.id
+		}, claim.statement, "Claim", {
+			...reference?.page ? { page: reference.page } : {},
+			...reference?.excerpt ? { excerpt: reference.excerpt } : {}
+		});
+	}
+	const orphans = notes.filter((note) => !used.has(note.id));
+	if (orphans.length) groups.push({
+		target: orphans[0].target,
+		heading: "No longer in the paper",
+		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
+		notes: orphans
+	});
+	return groups;
+}
+const quoted = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
+const yamlString = (value) => JSON.stringify(value);
+/**
+* Markdown dışa aktarımı. `obsidian`: YAML ön bilgisi (başlık, yazarlar, yıl,
+* DOI, etiketler), vurgular `[!quote]`, iddianın kaynağı `[!cite]` callout'u.
+* Düz Markdown'da aynı içerik alıntı bloklarıyla.
+*/
+function notesMarkdown(project, notes, options) {
+	const { paper } = project.evidence;
+	const lines = [];
+	if (options.obsidian) lines.push("---", `title: ${yamlString(paper.title)}`, `authors: [${paper.authors.map(yamlString).join(", ")}]`, ...paper.year ? [`year: ${yamlString(paper.year)}`] : [], ...paper.venue ? [`venue: ${yamlString(paper.venue)}`] : [], ...paper.doi ? [`doi: ${yamlString(paper.doi)}`] : [], "tags: [trace, paper-notes]", `exported: ${options.exportedAt.slice(0, 10)}`, "---", "");
+	lines.push(`# ${paper.title}: notes`, "");
+	if (!options.obsidian) {
+		const byline = [
+			paper.authors.join(", "),
+			paper.venue,
+			paper.year
+		].filter(Boolean).join(" · ");
+		if (byline) lines.push(`*${byline}*`, "");
+		if (paper.doi) lines.push(`DOI: ${paper.doi}`, "");
+	}
+	const groups = groupNotes(project, notes);
+	if (!groups.length) lines.push("No notes or highlights yet.", "");
+	for (const group of groups) {
+		lines.push(`## ${group.place === "Claim" ? "Claim" : group.place}: ${group.heading}${group.page ? ` (p. ${group.page})` : ""}`, "");
+		if (group.excerpt) lines.push(options.obsidian ? `> [!cite] The paper, p. ${group.page ?? "?"}\n${quoted(`“${group.excerpt}”`)}` : quoted(`“${group.excerpt}” (p. ${group.page ?? "?"})`), "");
+		for (const note of group.notes) {
+			if (note.quote) lines.push(options.obsidian ? `> [!quote] Highlight\n${quoted(note.quote)}` : quoted(note.quote), "");
+			if (note.text) lines.push(note.text, "");
+			if (!note.quote && !note.text) lines.push(options.obsidian ? "#highlighted" : "*Marked as important.*", "");
+		}
+	}
+	if (!options.obsidian) lines.push(`Exported from Trace on ${options.exportedAt.slice(0, 10)}.`);
+	return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
+}
+/** Dosya adı: başlıktan, güvenli karakterlerle. */
+function notesFileName(project) {
+	return `${project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "trace-paper"}-notes.md`;
+}
+
+//#endregion
+//#region src/lib/reading-share.ts
+/**
+* Okuma listesini bir bağlantıyla paylaşmak.
+*
+* Paylaşılan, listenin O ANKİ bir kopyası: çalışmalar okuma sırasındaki
+* yerleri ve nedenleriyle, istenirse kütüphanedeki makaleler de. Okuyucunun
+* notları, ilerlemesi ve ne kadarını okuduğu girmiyor. Kopya Trace sunucusunun
+* kendisinden `/r/<kimlik>` adresinde sunuluyor; makale yayınları gibi
+* (`publications.ts`) bağlantıyı bilen açıyor, listeleme yok, yayından
+* kaldırılabiliyor ve isteğe bağlı bir son kullanma tarihi var.
+*/
+const readingShareIdPattern = /^[a-f0-9]{20}$/;
+const MAX_SHARED_WORKS = 500;
+const sharedWorkSchema = object({
+	kind: _enum(["saved", "paper"]),
+	title: string().max(500),
+	authors: array(string().max(200)).max(12).default([]),
+	year: string().max(10).optional(),
+	venue: string().max(300).optional(),
+	link: string().max(2e3).optional(),
+	/** Neden burada: "Before X: that paper builds on it." */
+	why: string().max(600).optional()
+});
+const readingShareSchema = object({
+	version: literal(1),
+	id: string().regex(readingShareIdPattern),
+	title: string().trim().min(1).max(120),
+	createdAt: string(),
+	updatedAt: string(),
+	status: _enum(["live", "unpublished"]),
+	expiresAt: datetime().nullable(),
+	/** Kütüphanedeki makaleler de sırada mı. */
+	includePapers: boolean(),
+	works: array(sharedWorkSchema).max(500)
+});
+/** Çalışmanın açılacağı yer: kendi adresi, yoksa arXiv ya da DOI. */
+function workLink(item) {
+	if (item.url) return item.url;
+	const identifier = item.identifier?.trim() ?? "";
+	const arxiv = /^arxiv:(.+)$/i.exec(identifier);
+	if (arxiv) return `https://arxiv.org/abs/${arxiv[1]}`;
+	const doi = /^(?:doi:)?(10\.\d{4,9}\/\S+)$/i.exec(identifier);
+	if (doi) return `https://doi.org/${doi[1]}`;
+}
+
+//#endregion
+//#region src/lib/obsidian-vault.ts
+const VAULT_FOLDER = "Trace";
+/** Dosya adı: Obsidian'ın ve dosya sistemlerinin kabul etmediği karakterler atılıyor. */
+function noteName(title) {
+	return title.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "Untitled";
+}
+const link = (title) => `[[${noteName(title)}]]`;
+const yaml = (value) => JSON.stringify(value);
+const statusLabel = {
+	new: "not started",
+	started: "in progress",
+	finished: "finished"
+};
+function libraryVault(input) {
+	const { projects, study } = input;
+	const names = /* @__PURE__ */ new Map();
+	const used = /* @__PURE__ */ new Set();
+	for (const project of projects) {
+		let name = noteName(project.evidence.paper.title);
+		if (used.has(name.toLowerCase())) name = noteName(`${project.evidence.paper.title} (${project.evidence.paper.year || project.id})`);
+		for (let index = 2; used.has(name.toLowerCase()); index += 1) name = noteName(`${project.evidence.paper.title} ${index}`);
+		used.add(name.toLowerCase());
+		names.set(project.id, name);
+	}
+	const paperLink = (project) => `[[${names.get(project.id)}]]`;
+	const order = readingOrder(projects, study, input.aliases);
+	const position = new Map(order.steps.map((step, index) => [step.project.id, index]));
+	const concepts = sharedConcepts(projects, study, input.aliases);
+	const conceptsOf = /* @__PURE__ */ new Map();
+	for (const concept of concepts) for (const source of concept.sources) conceptsOf.set(source.projectId, [...conceptsOf.get(source.projectId) ?? [], concept.term]);
+	const files = [];
+	for (const project of projects) {
+		const { paper } = project.evidence;
+		const step = order.steps.find((item) => item.project.id === project.id);
+		const index = position.get(project.id);
+		const before = index !== void 0 ? order.steps[index - 1]?.project : void 0;
+		const after = index !== void 0 ? order.steps[index + 1]?.project : void 0;
+		const status = studyStatus(study.get(project.id));
+		const own = input.notes.get(project.id) ?? [];
+		const notesBody = own.length ? notesMarkdown(project, own, {
+			obsidian: true,
+			exportedAt: input.exportedAt
+		}).replace(/^---[\s\S]*?---\n+/, "").replace(/^# .*\n+/, "") : "";
+		const lines = [
+			"---",
+			`title: ${yaml(paper.title)}`,
+			`authors: [${paper.authors.map(yaml).join(", ")}]`,
+			...paper.year ? [`year: ${yaml(paper.year)}`] : [],
+			...paper.venue ? [`venue: ${yaml(paper.venue)}`] : [],
+			...paper.doi ? [`doi: ${yaml(paper.doi)}`] : [],
+			`study: ${yaml(statusLabel[status])}`,
+			"tags: [trace, paper]",
+			"---",
+			"",
+			`# ${paper.title}`,
+			"",
+			`*${[
+				paper.authors.slice(0, 6).join(", ") + (paper.authors.length > 6 ? " et al." : ""),
+				paper.venue,
+				paper.year
+			].filter(Boolean).join(" · ")}*`,
+			"",
+			`> ${project.evidence.thesis}`,
+			"",
+			project.evidence.plainSummary,
+			""
+		];
+		if (index !== void 0) {
+			lines.push("## In the reading order", "", `Step ${index + 1} of ${order.steps.length}.${before ? ` After ${paperLink(before)}.` : ""}${after ? ` Before ${paperLink(after)}.` : ""}`, "");
+			for (const item of step?.after ?? []) lines.push(`- Assumes ${item.concepts.map((concept) => concept.term).join(", ")}, defined in ${paperLink(item.project)}.`);
+			if (step?.after.length) lines.push("");
+		}
+		const shared = conceptsOf.get(project.id) ?? [];
+		if (shared.length) lines.push("## Concepts shared with other papers", "", shared.map((term) => link(term)).join(" · "), "");
+		if (project.primer?.concepts.length) lines.push("## Concepts it explains", "", project.primer.concepts.map((concept) => `- **${concept.term}**: ${concept.intuition}`).join("\n"), "");
+		lines.push("## Findings", "", project.evidence.findings.map((finding) => `- ${finding}`).join("\n"), "");
+		if (notesBody) lines.push("## Your notes and highlights", "", notesBody.trim(), "");
+		files.push({
+			path: `${VAULT_FOLDER}/Papers/${names.get(project.id)}.md`,
+			content: `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`
+		});
+	}
+	for (const concept of concepts) {
+		const lines = [
+			"---",
+			`concept: ${yaml(concept.term)}`,
+			"tags: [trace, concept]",
+			"---",
+			"",
+			`# ${concept.term}`,
+			"",
+			`Explained in ${concept.papers} papers of your library.`,
+			"",
+			...concept.sources.map((source) => {
+				const project = projects.find((item) => item.id === source.projectId);
+				return `- ${project ? paperLink(project) : source.paperTitle}${source.term !== concept.term ? ` (as “${source.term}”)` : ""}: ${source.definition}`;
+			})
+		];
+		files.push({
+			path: `${VAULT_FOLDER}/Concepts/${noteName(concept.term)}.md`,
+			content: `${lines.join("\n")}\n`
+		});
+	}
+	const merged = mergeReadingOrder(order, input.readingList ?? [], [...projects]);
+	const index = [
+		"---",
+		"tags: [trace]",
+		`exported: ${input.exportedAt.slice(0, 10)}`,
+		"---",
+		"",
+		"# Trace library",
+		"",
+		`${projects.length} ${projects.length === 1 ? "paper" : "papers"} and ${concepts.length} shared ${concepts.length === 1 ? "concept" : "concepts"}, exported from Trace.`,
+		""
+	];
+	if (merged.entries.length) {
+		index.push("## Reading order", "");
+		let step = 0;
+		for (const entry of merged.entries) if (entry.kind === "paper") {
+			step += 1;
+			index.push(`${step}. ${paperLink(entry.step.project)} (${statusLabel[entry.step.status]})`);
+		} else {
+			const href = workLink(entry.place.item);
+			index.push(`   - To read: ${href ? `[${entry.place.item.title}](${href})` : entry.place.item.title}${entry.place.why ? `. ${savedReason(entry.place.why)}` : ""}`);
+		}
+		index.push("");
+	}
+	const unordered = projects.filter((project) => !position.has(project.id));
+	if (unordered.length) index.push(order.steps.length ? "## Other papers" : "## Papers", "", ...unordered.map((project) => `- ${paperLink(project)}`), "");
+	const saved = merged.others.filter((place) => !place.owned);
+	if (saved.length) index.push("## Also on the reading list", "", ...saved.map((place) => {
+		const href = workLink(place.item);
+		return `- ${href ? `[${place.item.title}](${href})` : place.item.title}`;
+	}), "");
+	if (concepts.length) index.push("## Shared concepts", "", concepts.map((concept) => link(concept.term)).join(" · "), "");
+	files.push({
+		path: `${VAULT_FOLDER}/Trace library.md`,
+		content: `${index.join("\n").trim()}\n`
+	});
+	return files;
+}
+
+//#endregion
 //#region src/lib/highlight-cards.ts
 const STOPWORDS = new Set("about above after again against among because before being below between both cannot could doing during each either every further having however itself might other others ought rather shall should since still their theirs them themselves then there these they those through under until upon very were what when where whereas whether which while whose with within without would your yours also into only same such than that this from have more most much many some will been does using used uses based thus hence".split(" "));
 /** Yazılan yanıt gizlenen kelime mi: büyük-küçük harf, aksan ve noktalama önemsiz. */
@@ -22842,176 +23201,6 @@ function showChatCard(projects, study, projectId, cardId) {
 		card: chatCard(card),
 		answer: chatCardAnswer(card)
 	};
-}
-
-//#endregion
-//#region src/lib/reader-notes.ts
-/**
-* Okuyucunun notları ve vurguları.
-*
-* Bir iddiaya, bir bölüme (hikâye ya da derin rapor) ya da bir Primer
-* kavramına bağlı: bölümde
-* seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
-* iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
-*
-* Çalışma ilerlemesi gibi okuyucunun kaydı, makalenin değil: proje
-* dosyasına, dışa aktarımlara ve yayınlara girmiyor; kütüphanenin yanında
-* `notes.json` içinde duruyor. Markdown'a ya da Obsidian'a (ön bilgi,
-* etiketler ve callout'larla) buradan çıkıyor.
-*/
-const NOTE_COLORS = [
-	"yellow",
-	"green",
-	"blue",
-	"pink",
-	"purple"
-];
-const MAX_NOTES_PER_PAPER = 1e3;
-const MAX_NOTE_TEXT = 4e3;
-const MAX_NOTE_QUOTE = 1200;
-const MAX_ID = 300;
-/** Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor bölümü ya da Primer kavramı. */
-const NOTE_PLACES = [
-	"story",
-	"report",
-	"concept"
-];
-const noteTargetSchema = discriminatedUnion("kind", [object({
-	kind: literal("claim"),
-	claimId: string().min(1).max(160)
-}), object({
-	kind: literal("section"),
-	place: _enum(NOTE_PLACES),
-	sectionId: string().min(1).max(160)
-})]);
-const readerNoteSchema = object({
-	id: string().min(1).max(80),
-	target: noteTargetSchema,
-	/** Vurgulanan metin, bölümde göründüğü gibi. */
-	quote: string().trim().min(1).max(MAX_NOTE_QUOTE).optional(),
-	text: string().trim().max(MAX_NOTE_TEXT).default(""),
-	color: _enum(NOTE_COLORS).default("yellow"),
-	createdAt: string().max(40),
-	updatedAt: string().max(40)
-}).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
-const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
-const notesFileSchema = object({
-	version: literal(1),
-	projects: array(unknown())
-});
-const notesEntrySchema = object({
-	id: string().min(1).max(MAX_ID),
-	notes: array(unknown())
-});
-/** Proje kimliği → notlar. Bozuk bir not tek başına düşüyor, diğerleri kalıyor. */
-function parseNotesFile(raw) {
-	const entries = /* @__PURE__ */ new Map();
-	const file = notesFileSchema.safeParse(raw);
-	if (!file.success) return entries;
-	for (const item of file.data.projects) {
-		const entry = notesEntrySchema.safeParse(item);
-		if (!entry.success) continue;
-		const notes = entry.data.notes.flatMap((note) => {
-			const parsed = readerNoteSchema.safeParse(note);
-			return parsed.success ? [parsed.data] : [];
-		});
-		if (notes.length) entries.set(entry.data.id, notes.slice(0, MAX_NOTES_PER_PAPER));
-	}
-	return entries;
-}
-const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
-/**
-* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, Primer
-* kavramları, sonra iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
-* "no longer in the paper" başlığıyla kalıyor.
-*/
-function groupNotes(project, notes) {
-	const groups = [];
-	const used = /* @__PURE__ */ new Set();
-	const take = (target, heading, place, extra = {}) => {
-		const matched = notes.filter((note) => sameTarget(note.target, target)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-		if (!matched.length) return;
-		matched.forEach((note) => used.add(note.id));
-		groups.push({
-			target,
-			heading,
-			place,
-			notes: matched,
-			...extra
-		});
-	};
-	for (const section of project.story.sections) take({
-		kind: "section",
-		place: "story",
-		sectionId: section.id
-	}, section.title, "Story");
-	for (const section of project.deepReport?.sections ?? []) take({
-		kind: "section",
-		place: "report",
-		sectionId: section.id
-	}, section.title, "Deep report");
-	for (const concept of project.primer?.concepts ?? []) take({
-		kind: "section",
-		place: "concept",
-		sectionId: concept.id
-	}, concept.term, "Primer");
-	for (const claim of project.evidence.claims) {
-		const reference = claim.sourceRefs[0];
-		take({
-			kind: "claim",
-			claimId: claim.id
-		}, claim.statement, "Claim", {
-			...reference?.page ? { page: reference.page } : {},
-			...reference?.excerpt ? { excerpt: reference.excerpt } : {}
-		});
-	}
-	const orphans = notes.filter((note) => !used.has(note.id));
-	if (orphans.length) groups.push({
-		target: orphans[0].target,
-		heading: "No longer in the paper",
-		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
-		notes: orphans
-	});
-	return groups;
-}
-const quoted = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
-const yamlString = (value) => JSON.stringify(value);
-/**
-* Markdown dışa aktarımı. `obsidian`: YAML ön bilgisi (başlık, yazarlar, yıl,
-* DOI, etiketler), vurgular `[!quote]`, iddianın kaynağı `[!cite]` callout'u.
-* Düz Markdown'da aynı içerik alıntı bloklarıyla.
-*/
-function notesMarkdown(project, notes, options) {
-	const { paper } = project.evidence;
-	const lines = [];
-	if (options.obsidian) lines.push("---", `title: ${yamlString(paper.title)}`, `authors: [${paper.authors.map(yamlString).join(", ")}]`, ...paper.year ? [`year: ${yamlString(paper.year)}`] : [], ...paper.venue ? [`venue: ${yamlString(paper.venue)}`] : [], ...paper.doi ? [`doi: ${yamlString(paper.doi)}`] : [], "tags: [trace, paper-notes]", `exported: ${options.exportedAt.slice(0, 10)}`, "---", "");
-	lines.push(`# ${paper.title}: notes`, "");
-	if (!options.obsidian) {
-		const byline = [
-			paper.authors.join(", "),
-			paper.venue,
-			paper.year
-		].filter(Boolean).join(" · ");
-		if (byline) lines.push(`*${byline}*`, "");
-		if (paper.doi) lines.push(`DOI: ${paper.doi}`, "");
-	}
-	const groups = groupNotes(project, notes);
-	if (!groups.length) lines.push("No notes or highlights yet.", "");
-	for (const group of groups) {
-		lines.push(`## ${group.place === "Claim" ? "Claim" : group.place}: ${group.heading}${group.page ? ` (p. ${group.page})` : ""}`, "");
-		if (group.excerpt) lines.push(options.obsidian ? `> [!cite] The paper, p. ${group.page ?? "?"}\n${quoted(`“${group.excerpt}”`)}` : quoted(`“${group.excerpt}” (p. ${group.page ?? "?"})`), "");
-		for (const note of group.notes) {
-			if (note.quote) lines.push(options.obsidian ? `> [!quote] Highlight\n${quoted(note.quote)}` : quoted(note.quote), "");
-			if (note.text) lines.push(note.text, "");
-			if (!note.quote && !note.text) lines.push(options.obsidian ? "#highlighted" : "*Marked as important.*", "");
-		}
-	}
-	if (!options.obsidian) lines.push(`Exported from Trace on ${options.exportedAt.slice(0, 10)}.`);
-	return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
-}
-/** Dosya adı: başlıktan, güvenli karakterlerle. */
-function notesFileName(project) {
-	return `${project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "trace-paper"}-notes.md`;
 }
 
 //#endregion
@@ -24288,4 +24477,4 @@ function checkExplanationFeedback(input, rawBrief, rawFeedback) {
 }
 
 //#endregion
-export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, answerChatCard, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, chatReviewQueue, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sessionsIcs, sharedConcepts, shouldSnapshot, showChatCard, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };
+export { PATTERN_WEEKS, REVIEW_INTERVALS_DAYS, addDaysLocal, addToReadingList, aliasBatches, aliasMap, ankiCards, answerChatCard, applyExcerptCheck, buildAnkiDeck, buildExplanationBrief, buildSectionBrief, builtInTemplates, cardText, chatReviewQueue, checkExplanationFeedback, conceptKeys, conceptLinks, conceptNames, dailyTotals, dayKey, decideAlias, defaultPublicationInclude, displayName, evidenceHealth, expectedSectionCounts, expiryFromDays, exportDefinitions, findBuiltInTemplate, findExport, forgetAlias, formatDuration, hourPattern, isAliasFile, isReadingListFile, isRevisionFileName, isStudyFile, learningStats, libraryModelRecord, libraryPaperFor, libraryVault, mergeReadingOrder, narrativeTemplateSchema, notesFileName, notesMarkdown, paperKey, parseAliasFile, parseNotesFile, parseProfile, parseReadingList, parseStudyFile, parseWorkLog, projectContentFingerprint, projectForPublication, publicationPath, publicationRecordSchema, readFirst, readingItemSchema, readingListToJson, readingOrder, recordCheckedExplanation, removeFromReadingList, revisionFileName, revisionId, revisionRecordSchema, revisionsToPrune, savedFrom, savedReason, sessionsIcs, sharedConcepts, shouldSnapshot, showChatCard, spliceSectionObject, splitPages, startOfWeek, suggestReferences, templateFromProject, templateIssues, templateReportInstructions, templateStoryInstructions, timeByProject, todayBrief, validateProjectObject, weekReport, workKey, workSummary };

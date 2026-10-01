@@ -31,6 +31,7 @@ export { addDaysLocal, dailyTotals, dayKey, formatDuration, parseWorkLog, startO
 export { hourPattern, PATTERN_WEEKS, weekReport } from "./work-report";
 export { todayBrief } from "./today";
 export { sessionsIcs } from "./work-export";
+export { libraryVault } from "./obsidian-vault";
 export { answerChatCard, chatReviewQueue, showChatCard } from "./chat-review";
 export { notesFileName, notesMarkdown, parseNotesFile } from "./reader-notes";
 export { addToReadingList, isReadingListFile, mergeReadingOrder, parseReadingList, readingItemSchema, readingListToJson, removeFromReadingList, savedFrom, savedReason, workKey } from "./reading-list";
