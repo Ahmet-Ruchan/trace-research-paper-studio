@@ -248,6 +248,21 @@ export function visitStep(progress: StudyProgress | undefined, stepId: string, n
   return { ...base, current: stepId, updatedAt: now, ...(stepId === "finish" && !base.finishedAt ? { finishedAt: now } : {}) };
 }
 
+/**
+ * "Start over": adımlar ve yanıtlar siliniyor; tekrar kartları, anlatışlar ve
+ * gün gün tekrar sayıları kalıyor. Yolu baştan yürümek aylardır süren
+ * tekrarları, okuyucunun neyi eklediğini gösteren geçmişi ya da haftalık
+ * hedefin sayısını silmemeli.
+ */
+export function startOverProgress(previous: StudyProgress | undefined, now: string): StudyProgress | undefined {
+  const kept = {
+    ...(previous?.reviews?.length ? { reviews: previous.reviews } : {}),
+    ...(previous?.explanations?.length ? { explanations: previous.explanations } : {}),
+    ...(previous?.reviewDays?.length ? { reviewDays: previous.reviewDays } : {}),
+  };
+  return Object.keys(kept).length ? { ...emptyStudyProgress(now), ...kept } : undefined;
+}
+
 /** Adımı bitmiş sayar ve bir sonrakine geçer. */
 export function completeStep(progress: StudyProgress | undefined, stepId: string, nextId: string | undefined, now: string): StudyProgress {
   const base = progress ?? emptyStudyProgress(now);

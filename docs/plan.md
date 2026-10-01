@@ -43,8 +43,18 @@ yapıldığı ve nasıl test edildiği yazıyor.
 
 ## Çalışma saati
 
-- [ ] **2. Study süresi de çalışma sayılır.** Study yolunda geçen süre takvime ve makale
+- [x] **2. Study süresi de çalışma sayılır.** Study yolunda geçen süre takvime ve makale
   başına süreye eklenir; bölüm başına bir üst sınırla.
+  - *Yapıldı:* Study yolunda her adımda geçen süre, yalnızca sekme öndeyken ve adım başına en
+    çok 20 dakika, "Study" türünde bir oturum olarak o makaleye yazılıyor; adımlar arka arkaya
+    geldikçe aynı oturum uzuyor, sınırı aşan adımdan sonra yeni oturum başlıyor. Profilde "Count
+    study time as work" ile kapatılabiliyor; aynı anda süren odak turuyla bir kez sayılıyor.
+    Ayrıca: çalışma kaydında bozuk ya da daha yeni bir sürümün bilinmeyen türdeki tek bir oturum
+    artık bütün kaydı değil yalnızca kendisini düşürüyor; Study'de "Start over" haftalık hedefin
+    gün gün tekrar sayılarını silmiyor. Eklenti 0.32.0.
+  - *Test:* Study oturumu, bloğun uzaması, bozuk oturumun tek başına düşmesi, "Start over"ın
+    sayıları koruması birim testlerde; Study'de saat ileri alınarak 3 + 20 (sınır) dakikanın
+    makaleye iki oturum olarak yazılması ve profilde makale süresinde görünmesi e2e'de.
 - [ ] **3. Tur sonunda "ne yaptın?"** Odak turu bitince tek satırlık bir not istenir; not
   oturuma yazılır, takvimde ve haftalık raporda görünür.
 - [ ] **9. Takvim dışa aktarımı ve haftalık özet.** Oturumlar takvim dosyası (.ics) olarak

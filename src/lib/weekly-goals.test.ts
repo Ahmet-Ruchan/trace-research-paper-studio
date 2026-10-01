@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadExampleProject } from "./example-fixture";
 import { emptyProfile, profileSchema } from "./profile";
 import { countReviewDay, recordReview, reviewCards } from "./review-queue";
-import { completeStep, emptyStudyProgress, MAX_REVIEW_DAYS, studyProgressSchema, visitStep, type StudyProgress } from "./study-path";
+import { completeStep, emptyStudyProgress, MAX_REVIEW_DAYS, startOverProgress, studyProgressSchema, visitStep, type StudyProgress } from "./study-path";
 import { mergeStudyProgress } from "./study-transfer";
 import { cardsPerDay, hasWeeklyGoal, weeklyGoalProgress, weeklyGoalSentence } from "./weekly-goals";
 
@@ -44,6 +44,13 @@ describe("reviews day by day", () => {
     for (let index = 0; index < MAX_REVIEW_DAYS + 5; index += 1) days = countReviewDay(days, new Date(Date.UTC(2025, 0, 2 + index)).toISOString().slice(0, 10), false);
     expect(days).toHaveLength(MAX_REVIEW_DAYS);
     expect(days[0].day > "2025-01-01").toBe(true);
+  });
+
+  it("keeps the days reviewed when the reader starts the path over", () => {
+    const progress = recordReview(learned(), card(learned()), true, at("2026-09-28"));
+    const fresh = startOverProgress(progress, at("2026-09-29"))!;
+    expect(fresh).toMatchObject({ done: [], answers: [], reviewDays: progress.reviewDays, reviews: progress.reviews });
+    expect(startOverProgress(emptyStudyProgress(at("2026-09-28")), at("2026-09-29"))).toBeUndefined();
   });
 
   it("merges two devices' days without counting the same file twice", () => {

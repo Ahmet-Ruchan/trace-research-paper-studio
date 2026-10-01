@@ -21,7 +21,9 @@ import {
   REVIEW_CARD_CAP_MS,
   parseWorkLog,
   removeSession,
+  SESSION_KIND_LABELS,
   sessionPieces,
+  STUDY_STEP_CAP_MS,
   timeByProject,
   workLogSchema,
   workLogToJson,
@@ -195,6 +197,25 @@ describe("time in review", () => {
     // Oturum büyüdükçe aynı kimlikle yeniden yazılıyor; kayıtta bir tane kalıyor.
     const longer = sessionPieces({ kind: "review", id: "review-1", projectId: "attention" }, T0, T0 + 12 * MIN);
     expect(addSessions(addSessions(emptyWorkLog(), review), longer).sessions.map((item) => [item.id, item.end])).toEqual([["review-1", new Date(T0 + 12 * MIN).toISOString()]]);
+  });
+
+  it("keeps study time as its own kind, growing step by step when the cap is left to the Study path", () => {
+    let block = extendReviewBlock(undefined, T0, T0 + 3 * MIN, newId, Number.POSITIVE_INFINITY);
+    block = extendReviewBlock(block, T0 + 3 * MIN, T0 + 3 * MIN + STUDY_STEP_CAP_MS, newId, Number.POSITIVE_INFINITY);
+    expect(block).toMatchObject({ start: T0, end: T0 + 3 * MIN + STUDY_STEP_CAP_MS });
+    const study = sessionPieces({ kind: "study", id: block!.id, label: "Attention", projectId: "attention" }, block!.start, block!.end);
+    expect(workLogSchema.safeParse({ ...emptyWorkLog(), sessions: study }).success).toBe(true);
+    expect(SESSION_KIND_LABELS.study).toBe("Study");
+    expect(timeByProject(study).get("attention")).toBe(23 * 60);
+  });
+
+  it("drops only a damaged session, or one of a kind a newer version knows, and reads the rest", () => {
+    const good = sessionPieces({ kind: "focus" }, T0, T0 + 25 * MIN);
+    const raw = { version: 1, sessions: [...good, { id: "x", start: new Date(T0).toISOString(), end: new Date(T0 + MIN).toISOString(), kind: "meditation" }, { id: "y" }], archive: { "2026-01-01": 600 } };
+    expect(workLogSchema.safeParse(raw).success).toBe(false);
+    expect(parseWorkLog(raw)).toEqual({ version: 1, sessions: good, archive: { "2026-01-01": 600 } });
+    expect(parseWorkLog({ ...raw, archive: "broken" }).archive).toEqual({});
+    expect(parseWorkLog({ version: 2, sessions: good })).toEqual(emptyWorkLog());
   });
 });
 

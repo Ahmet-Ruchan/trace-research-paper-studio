@@ -2803,6 +2803,41 @@ test.describe("reader notes", () => {
   });
 });
 
+test.describe("study time", () => {
+  test.use({ timezoneId: "Europe/Istanbul" });
+
+  test("counts the time on the Study path as work for the paper, up to twenty minutes a step", async ({ page, request }) => {
+    const project = await seed(request, { ...projectNamed("e2e-study-time"), evidence: { ...example.evidence, paper: { ...example.evidence.paper, title: "Study time paper" } } });
+    const T = new Date("2026-09-16T10:00:00+03:00").getTime();
+    await page.clock.install({ time: T });
+    await page.goto(`/?project=${project.id}`);
+    await page.locator(".study-offer").getByRole("button", { name: "Start studying" }).click();
+    const study = page.locator("section.study");
+    await expect(study.locator(".study-title")).toHaveText("What this paper asks");
+    await page.clock.fastForward("03:00");
+    await study.getByRole("button", { name: "Begin →" }).click();
+    // Bir adımda yarım saat: yirmi dakikası sayılıyor.
+    await page.clock.fastForward("30:00");
+    await study.getByRole("button", { name: /Next →|I've read it/ }).first().click();
+    await page.clock.fastForward("02:00");
+    await page.locator(".lab-nav > button", { hasText: "Overview" }).click();
+
+    const studied = async () => {
+      const { log } = (await (await request.get("/api/profile/sessions")).json()) as { log: WorkLog };
+      return log.sessions.filter((session) => session.kind === "study");
+    };
+    await expect.poll(async () => Math.round((await studied()).reduce((sum, session) => sum + Date.parse(session.end) - Date.parse(session.start), 0) / 60_000)).toBe(25);
+    const sessions = await studied();
+    expect(sessions.every((session) => session.projectId === project.id && session.label === "Study time paper")).toBe(true);
+    // Sınırı aşan adımdan sonra yeni bir oturum: arada sayılmayan on dakika var.
+    expect(sessions).toHaveLength(2);
+    expect(Math.abs(Date.parse(sessions[0].start) - T)).toBeLessThan(5_000);
+
+    await page.goto("/?profile=1");
+    await expect(page.locator(".paper-time")).toContainText("Study time paper");
+  });
+});
+
 test.describe("cards from highlights", () => {
   const progressOf = async (request: APIRequestContext, id: string) => ((await (await request.get(`/api/library/study?id=${id}`)).json()) as { progress?: StudyProgress }).progress;
 

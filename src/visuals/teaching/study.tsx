@@ -12,10 +12,10 @@ import { QuizView } from "./quiz";
 import { sectionPrerequisites, termIndex } from "@/lib/term-index";
 import {
   completeStep,
-  emptyStudyProgress,
   recordAnswer,
   resumeStepId,
   savedAnswer,
+  startOverProgress,
   studyPath,
   studySummary,
   visitStep,
@@ -25,6 +25,7 @@ import {
 } from "@/lib/study-path";
 import type { Quiz, QuizQuestion, ResearchProject } from "@/lib/schema";
 import { mergeStudyProgress, readStudyTransfer, studyTransferFile, studyTransferFileName } from "@/lib/study-transfer";
+import { STUDY_STEP_CAP_MS } from "@/lib/work-log";
 
 /** Bölüm ekine verilen: ilerleme ve onu değiştirmenin tek yolu, çalışmanın kendi kaydıyla. */
 export type StudyHandle = {
@@ -46,6 +47,7 @@ export function StudyView({
   note,
   sectionExtra,
   conceptExtra,
+  onStepTime,
 }: {
   project: ResearchProject;
   /** Kanıttan üretilen okuma alıştırması; quiz'in yetmediği bölümlere soru sağlıyor. */
@@ -62,6 +64,12 @@ export function StudyView({
   sectionExtra?: (sectionId: string, study: StudyHandle) => ReactNode;
   /** Stüdyo verir: kavramın kütüphanedeki başka makalelerde çalışılıp çalışılmadığı. */
   conceptExtra?: (conceptId: string) => ReactNode;
+  /**
+   * Stüdyo verir: adımda geçen süre, parça parça (dakikada bir, adım
+   * değişince, sekme gizlenince, çıkarken). Adım başına en çok
+   * `STUDY_STEP_CAP_MS`; gizli sekmede geçen süre sayılmıyor.
+   */
+  onStepTime?: (start: number, end: number) => void;
 }) {
   const t = useStrings();
   const path = useMemo(() => studyPath(project, drill), [project, drill]);
@@ -82,6 +90,38 @@ export function StudyView({
     saved.current = progress;
     onSave(progress);
   }, [progress, onSave]);
+
+  // Adımda geçen süre: her adım kendi sınırıyla, yalnızca sekme görünürken.
+  const stepTime = useRef(onStepTime);
+  useEffect(() => {
+    stepTime.current = onStepTime;
+  });
+  useEffect(() => {
+    if (!stepTime.current) return;
+    let shown: number | undefined = document.hidden ? undefined : Date.now();
+    let spent = 0;
+    const report = () => {
+      if (shown === undefined) return;
+      const at = Date.now();
+      const end = Math.min(at, shown + Math.max(0, STUDY_STEP_CAP_MS - spent));
+      if (end > shown) {
+        stepTime.current?.(shown, end);
+        spent += end - shown;
+      }
+      shown = document.hidden ? undefined : at;
+    };
+    const visibility = () => {
+      if (document.hidden) report();
+      else if (shown === undefined) shown = Date.now();
+    };
+    const tick = setInterval(report, 60_000);
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      clearInterval(tick);
+      document.removeEventListener("visibilitychange", visibility);
+      report();
+    };
+  }, [stepId]);
 
   // Adım değişince okuyucu yeni adımın başına dönüyor; açılışta sayfa kaymıyor.
   useEffect(() => {
@@ -121,10 +161,7 @@ export function StudyView({
     setStepId(path.steps[0].id);
     // Tekrar kartları ve anlatışlar kalıyor: yolu baştan yürümek, aylardır süren
     // tekrarları ya da okuyucunun neyi eklediğini gösteren geçmişi silmemeli.
-    setProgress((previous) => {
-      const kept = { ...(previous?.reviews?.length ? { reviews: previous.reviews } : {}), ...(previous?.explanations?.length ? { explanations: previous.explanations } : {}) };
-      return Object.keys(kept).length ? { ...emptyStudyProgress(now()), ...kept } : undefined;
-    });
+    setProgress((previous) => startOverProgress(previous, now()));
   }
 
   /** İlerlemeyi bir dosyaya indiriyor (`study-transfer.ts`); başka bir cihazda yükleniyor. */

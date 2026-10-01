@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -66,6 +66,8 @@ import { studyPath, studySummary } from "@/lib/study-path";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import { useConceptAliases, useLibraryStudy, useStudyProgress } from "./study-progress";
 import { FocusRoundBar, PaperFocusOffer } from "./focus/paper-time";
+import { useFocus } from "./focus/focus-provider";
+import { extendReviewBlock, type ReviewBlock } from "@/lib/work-log";
 import { NotesPanel, useReaderNotes } from "./reader-notes";
 import { ResumeBar, scrollToSection, useReadingTracker } from "./reading-position";
 import { sectionMark } from "@/lib/reader-notes";
@@ -229,6 +231,16 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   const terms = useMemo(() => termIndex(project), [project]);
   const study = useStudyProgress(project.id);
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
+  // Study yolunda geçen süre çalışma takvimine ve makaleye: adımlar arka arkaya geldikçe aynı oturum uzuyor.
+  const { logStudyTime } = useFocus();
+  const studyBlock = useRef<ReviewBlock | undefined>(undefined);
+  const paperTitle = project.evidence.paper.title;
+  const onStepTime = useCallback((start: number, end: number) => {
+    const next = extendReviewBlock(studyBlock.current, start, end, () => `study-${start}`, Number.POSITIVE_INFINITY);
+    if (!next || next === studyBlock.current) return;
+    studyBlock.current = next;
+    logStudyTime(next, { label: paperTitle, projectId: project.id });
+  }, [logStudyTime, paperTitle, project.id]);
   // Kavram bağları: bu makalenin kavramları kütüphanenin başka makalelerinde.
   const libraryStudy = useLibraryStudy();
   // Okuyucunun "aynı kavram" dediği adlar; okunamazsa eşleşme yalnızca ada göre.
@@ -421,6 +433,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 drill={drill}
                 initialProgress={study.state.progress}
                 onSave={study.save}
+                onStepTime={onStepTime}
                 note="Your progress is saved in your library, next to this paper. It is not part of the project file, so exports and published pages never carry your answers."
                 sectionExtra={(sectionId, handle) => <ExplainPanel project={project} target={{ kind: "story", sectionId }} study={handle} onClaimSelect={onClaimSelect} />}
                 conceptExtra={library ? (conceptId) => <ConceptNote link={linkFor(conceptId)} /> : undefined}

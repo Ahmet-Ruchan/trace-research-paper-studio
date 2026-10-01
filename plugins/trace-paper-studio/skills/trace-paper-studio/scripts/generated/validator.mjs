@@ -21567,7 +21567,8 @@ const SESSION_KINDS = [
 	"timer",
 	"stopwatch",
 	"manual",
-	"review"
+	"review",
+	"study"
 ];
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const instant = string().max(40).refine((value) => Number.isFinite(Date.parse(value)), "Not a date.");
@@ -21594,9 +21595,31 @@ function emptyWorkLog() {
 		archive: {}
 	};
 }
+const looseLogSchema = object({
+	version: literal(1),
+	sessions: array(unknown()),
+	archive: unknown().optional()
+});
+/**
+* Bozuk ya da daha yeni bir sürümün bilmediği türde bir oturum yalnızca
+* kendisi düşüyor; kaydın geri kalanı okunuyor. Dosya tümüyle geçerli
+* değilse yazarken kenara alınıyor (`isWorkLog`).
+*/
 function parseWorkLog(raw) {
 	const parsed = workLogSchema.safeParse(raw);
-	return parsed.success ? parsed.data : emptyWorkLog();
+	if (parsed.success) return parsed.data;
+	const loose = looseLogSchema.safeParse(raw);
+	if (!loose.success) return emptyWorkLog();
+	const sessions = loose.data.sessions.flatMap((item) => {
+		const session = workSessionSchema.safeParse(item);
+		return session.success ? [session.data] : [];
+	});
+	const archive = workLogSchema.shape.archive.safeParse(loose.data.archive ?? {});
+	return {
+		version: 1,
+		sessions: sessions.slice(-2e4),
+		archive: archive.success ? archive.data : {}
+	};
 }
 const pad$1 = (value) => String(value).padStart(2, "0");
 /** Yerel gün, "YYYY-MM-DD". */
@@ -22044,6 +22067,8 @@ const preferencesSchema = object({
 	stopwatchCountsAsWork: boolean().default(true),
 	/** Tekrar ekranında geçen süre çalışma sayılsın mı. */
 	reviewCountsAsWork: boolean().default(true),
+	/** Study yolunda geçen süre çalışma sayılsın mı. */
+	studyCountsAsWork: boolean().default(true),
 	/** Günlük hedef, dakika; takvimin en koyu tonu hedefe ulaşılan gün. */
 	dailyGoalMinutes: number().int().min(15).max(1440).default(240),
 	/** Haftalık öğrenme hedefi (`weekly-goals.ts`): bitirilecek makale ve tekrar edilecek kart; 0 hedef yok. */

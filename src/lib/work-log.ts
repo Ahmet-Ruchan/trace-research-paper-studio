@@ -25,13 +25,15 @@ export const MAX_SESSIONS = 20_000;
 export const MAX_SESSION_SECONDS = 12 * 3600;
 /** Bir gün en az bu kadar çalışılmışsa "çalışılan gün" (seri ve ortalama için). */
 export const ACTIVE_DAY_SECONDS = 60;
-export const SESSION_KINDS = ["focus", "timer", "stopwatch", "manual", "review"] as const;
+export const SESSION_KINDS = ["focus", "timer", "stopwatch", "manual", "review", "study"] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 /** Oturum listelerinde adı olmayan bir oturumun adı. */
-export const SESSION_KIND_LABELS: Record<SessionKind, string> = { focus: "Focus", timer: "Timer", stopwatch: "Stopwatch", manual: "Added by hand", review: "Review" };
+export const SESSION_KIND_LABELS: Record<SessionKind, string> = { focus: "Focus", timer: "Timer", stopwatch: "Stopwatch", manual: "Added by hand", review: "Review", study: "Study" };
 
 /** Tekrarda bir kartın en çok sayılan süresi: açık kalıp unutulan bir kart geceyi çalışma saymasın. */
 export const REVIEW_CARD_CAP_MS = 5 * 60_000;
+/** Study yolunda bir adımın en çok sayılan süresi: bir bölümü okumak kartı yanıtlamaktan uzun sürüyor. */
+export const STUDY_STEP_CAP_MS = 20 * 60_000;
 export type ReviewBlock = { id: string; start: number; end: number };
 
 /**
@@ -39,8 +41,8 @@ export type ReviewBlock = { id: string; start: number; end: number };
  * kadar, en çok `REVIEW_CARD_CAP_MS`. Kartlar arka arkaya geldikçe aynı oturum
  * uzuyor (aynı kimlik, daha geç bitiş); araya boşluk girdiyse yeni oturum.
  */
-export function extendReviewBlock(block: ReviewBlock | undefined, shownAt: number, doneAt: number, newId: () => string): ReviewBlock | undefined {
-  const end = Math.min(doneAt, shownAt + REVIEW_CARD_CAP_MS);
+export function extendReviewBlock(block: ReviewBlock | undefined, shownAt: number, doneAt: number, newId: () => string, cap = REVIEW_CARD_CAP_MS): ReviewBlock | undefined {
+  const end = Math.min(doneAt, shownAt + cap);
   if (end <= shownAt) return block;
   if (block && shownAt >= block.start && shownAt - block.end <= 1000) return { ...block, end: Math.max(block.end, end) };
   return { id: newId(), start: shownAt, end };
@@ -80,9 +82,24 @@ export function isWorkLog(raw: unknown) {
   return workLogSchema.safeParse(raw).success;
 }
 
+const looseLogSchema = z.object({ version: z.literal(WORK_LOG_VERSION), sessions: z.array(z.unknown()), archive: z.unknown().optional() });
+
+/**
+ * Bozuk ya da daha yeni bir sürümün bilmediği türde bir oturum yalnızca
+ * kendisi düşüyor; kaydın geri kalanı okunuyor. Dosya tümüyle geçerli
+ * değilse yazarken kenara alınıyor (`isWorkLog`).
+ */
 export function parseWorkLog(raw: unknown): WorkLog {
   const parsed = workLogSchema.safeParse(raw);
-  return parsed.success ? parsed.data : emptyWorkLog();
+  if (parsed.success) return parsed.data;
+  const loose = looseLogSchema.safeParse(raw);
+  if (!loose.success) return emptyWorkLog();
+  const sessions = loose.data.sessions.flatMap((item) => {
+    const session = workSessionSchema.safeParse(item);
+    return session.success ? [session.data] : [];
+  });
+  const archive = workLogSchema.shape.archive.safeParse(loose.data.archive ?? {});
+  return { version: WORK_LOG_VERSION, sessions: sessions.slice(-MAX_SESSIONS), archive: archive.success ? archive.data : {} };
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");

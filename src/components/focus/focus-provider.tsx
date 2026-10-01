@@ -158,6 +158,8 @@ export type FocusContextValue = {
   previewAmbient: () => void;
   /** Tekrar ekranında geçen süre (`extendReviewBlock`); ayar kapalıysa yazılmıyor. */
   logReviewTime: (block: ReviewBlock, subject?: Subject) => void;
+  /** Study yolunda geçen süre; `ReviewBlock` gibi adım adım uzayan bir oturum. */
+  logStudyTime: (block: ReviewBlock, subject?: Subject) => void;
 };
 
 const FocusContext = createContext<FocusContextValue | undefined>(undefined);
@@ -300,7 +302,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     const sessions = segments
       .filter((segment) => segment.kind === "focus" || segment.kind === "manual" || (segment.kind === "timer" ? preferences.timerCountsAsWork : preferences.stopwatchCountsAsWork))
       .flatMap((segment) =>
-        sessionPieces({ kind: segment.kind, label: segment.label, projectId: segment.projectId, color: preferences.colors[segment.kind === "manual" || segment.kind === "review" ? "focus" : segment.kind] }, segment.start, segment.end),
+        sessionPieces({ kind: segment.kind, label: segment.label, projectId: segment.projectId, color: preferences.colors[segment.kind === "timer" || segment.kind === "stopwatch" ? segment.kind : "focus"] }, segment.start, segment.end),
       );
     if (!sessions.length) return current;
     setLog((existing) => addSessions(existing, sessions));
@@ -644,11 +646,11 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   );
 
   // Tekrar oturumu büyüdükçe aynı kimlikle yeniden yazılıyor; bekleyen eski hâli yenisiyle değişiyor.
-  const logReviewTime = useCallback(
-    (block: ReviewBlock, subject: Subject = {}) => {
+  const logBlock = useCallback(
+    (kind: "review" | "study", block: ReviewBlock, subject: Subject = {}) => {
       const { preferences } = profileRef.current;
-      if (!preferences.reviewCountsAsWork) return;
-      const sessions = sessionPieces({ kind: "review", id: block.id, label: subject.label, projectId: subject.projectId, color: preferences.colors.focus }, block.start, block.end);
+      if (!(kind === "review" ? preferences.reviewCountsAsWork : preferences.studyCountsAsWork)) return;
+      const sessions = sessionPieces({ kind, id: block.id, label: subject.label, projectId: subject.projectId, color: preferences.colors.focus }, block.start, block.end);
       if (!sessions.length) return;
       const ids = new Set(sessions.map((session) => session.id));
       setLog((existing) => addSessions(existing, sessions));
@@ -657,6 +659,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     },
     [commit, flush],
   );
+  const logReviewTime = useCallback((block: ReviewBlock, subject?: Subject) => logBlock("review", block, subject), [logBlock]);
+  const logStudyTime = useCallback((block: ReviewBlock, subject?: Subject) => logBlock("study", block, subject), [logBlock]);
 
   const deleteSession = useCallback(async (id: string) => {
     const response = await fetch(`/api/profile/sessions?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
@@ -731,8 +735,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       previewSound,
       previewAmbient,
       logReviewTime,
+      logStudyTime,
     }),
-    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, logReviewTime, previewAmbient, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
+    [actions, addManual, deleteSession, dismissAlert, importData, liveIntervals, log, logError, logReady, logReviewTime, logStudyTime, previewAmbient, previewSound, profile, profileError, profileReady, runAlert, saveProfile, store],
   );
 
   return (

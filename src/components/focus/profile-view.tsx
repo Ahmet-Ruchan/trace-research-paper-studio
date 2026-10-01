@@ -242,6 +242,7 @@ function PreferencesCard() {
         hint={permission === "denied" ? "Blocked in this browser; allow them in the site settings." : "When a round ends or an alarm rings while Trace is in the background."}
       />
       <Toggle checked={preferences.reviewCountsAsWork} onChange={(reviewCountsAsWork) => set({ reviewCountsAsWork })} label="Count review time as work" hint="The time you spend on cards in Review, up to five minutes a card, is added to your calendar." />
+      <Toggle checked={preferences.studyCountsAsWork} onChange={(studyCountsAsWork) => set({ studyCountsAsWork })} label="Count study time as work" hint="The time you spend on the Study path, up to twenty minutes a step, is added to your calendar and to the paper." />
     </section>
   );
 }
