@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mergeReadingOrder, savedFrom, savedReason, type ReadingItem } from "./reading-list";
+import { mergeReadingOrder, SAVED_REASON_WORDS, savedFrom, savedReason, type ReadingItem, type SavedReasonWords } from "./reading-list";
 import type { ReadingOrder } from "./reading-order";
 import type { ResearchProject } from "./schema";
 
@@ -12,6 +12,10 @@ import type { ResearchProject } from "./schema";
  * kendisinden `/r/<kimlik>` adresinde sunuluyor; makale yayınları gibi
  * (`publications.ts`) bağlantıyı bilen açıyor, listeleme yok, yayından
  * kaldırılabiliyor ve isteğe bağlı bir son kullanma tarihi var.
+ *
+ * Liste birçok dildeki makaleyi bir arada taşıyor; sayfanın dili listeyi
+ * paylaşan kişinin arayüz dili (`language`, paylaşırken kaydediliyor; eski
+ * kayıtlarda yok, onlar İngilizce).
  */
 
 export const readingShareIdPattern = /^[a-f0-9]{20}$/;
@@ -39,6 +43,8 @@ export const readingShareSchema = z.object({
   expiresAt: z.iso.datetime().nullable(),
   /** Kütüphanedeki makaleler de sırada mı. */
   includePapers: z.boolean(),
+  /** Sayfanın dili: paylaşanın arayüz dili. Yoksa İngilizce. */
+  language: z.enum(["en", "tr"]).optional(),
   works: z.array(sharedWorkSchema).max(MAX_SHARED_WORKS),
 });
 export type ReadingShare = z.infer<typeof readingShareSchema>;
@@ -52,6 +58,43 @@ export function readingShareState(share: Pick<ReadingShare, "status" | "expiresA
 }
 
 export const readingSharePath = (id: string) => `/r/${id}`;
+
+/**
+ * Paylaşılan listenin kayıtta ve sayfada yazdığı metinler. Türkçesi
+ * `src/i18n/messages/pages.ts`'te; bu modül eklenti paketine de girdiği için
+ * sözlüğü içine çekmiyor, çağıran veriyor.
+ */
+export type ReadingShareWords = {
+  /** Sayfanın `lang`'ı. */
+  lang: string;
+  /** Başlık boş bırakılınca. */
+  defaultTitle: string;
+  /** Listede olup kütüphaneye de girmiş makale. */
+  alreadyAnalysed: string;
+  /** Çalışmanın sıradaki yerinin nedeni (`savedReason`, `savedFrom`). */
+  reasons: SavedReasonWords;
+  eyebrow: string;
+  kindPaper: string;
+  kindSaved: string;
+  /** Dörtten çok yazar varsa adların ardına. */
+  etAl: string;
+  lede: (count: number, updated: string) => string;
+  footer: string;
+};
+
+export const READING_SHARE_WORDS: ReadingShareWords = {
+  lang: "en",
+  defaultTitle: "Reading list",
+  alreadyAnalysed: "On the list, and already analysed.",
+  reasons: SAVED_REASON_WORDS,
+  eyebrow: "Reading list",
+  kindPaper: "Read with Trace",
+  kindSaved: "To read",
+  etAl: " et al.",
+  lede: (count, updated) =>
+    `${count} ${count === 1 ? "work" : "works"}, in the order to read them: a work comes before a paper that builds on it or needs a concept it explains, after a paper it cites. Updated ${updated}.`,
+  footer: "Shared from Trace, an evidence-grounded research studio. Only the list is shared: no notes and no reading progress.",
+};
 
 export function summarizeReadingShare(share: ReadingShare, now: string): ReadingShareSummary {
   const { works, ...rest } = share;
@@ -98,16 +141,22 @@ const savedWork = (item: ReadingItem, why?: string): SharedWork => {
  * yeri olmayanlar. Analiz edilmiş bir çalışma, makaleler dahil değilse yine
  * çalışma olarak giriyor.
  */
-export function readingShareWorks(order: ReadingOrder, list: readonly ReadingItem[], library: readonly ResearchProject[], includePapers: boolean): SharedWork[] {
+export function readingShareWorks(
+  order: ReadingOrder,
+  list: readonly ReadingItem[],
+  library: readonly ResearchProject[],
+  includePapers: boolean,
+  words: ReadingShareWords = READING_SHARE_WORDS,
+): SharedWork[] {
   const merged = mergeReadingOrder(order, list, library);
   const works: SharedWork[] = [];
   for (const entry of merged.entries) {
-    if (entry.kind === "saved") works.push(savedWork(entry.place.item, entry.place.why ? savedReason(entry.place.why) : undefined));
+    if (entry.kind === "saved") works.push(savedWork(entry.place.item, entry.place.why ? savedReason(entry.place.why, words.reasons) : undefined));
     else if (includePapers) works.push(paperWork(entry.step.project));
   }
   for (const place of merged.others) {
-    if (place.owned && includePapers) works.push(paperWork(place.owned, "On the list, and already analysed."));
-    else works.push(savedWork(place.item, place.why ? savedFrom(place.why) : undefined));
+    if (place.owned && includePapers) works.push(paperWork(place.owned, words.alreadyAnalysed));
+    else works.push(savedWork(place.item, place.why ? savedFrom(place.why, words.reasons) : undefined));
   }
   return works.slice(0, MAX_SHARED_WORKS);
 }
@@ -115,18 +164,21 @@ export function readingShareWorks(order: ReadingOrder, list: readonly ReadingIte
 const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const safeLink = (link: string) => (/^https?:\/\//i.test(link) ? link : undefined);
 
-/** Okuyucunun gördüğü sayfa: kendi kendine yeten, betiksiz HTML. */
-export function readingShareHtml(share: ReadingShare) {
+/**
+ * Okuyucunun gördüğü sayfa: kendi kendine yeten, betiksiz HTML. Metinler
+ * kaydın dilinde olmalı; çağıran `share.language`'a göre seçip veriyor.
+ */
+export function readingShareHtml(share: ReadingShare, words: ReadingShareWords = READING_SHARE_WORDS) {
   const items = share.works
     .map((work) => {
       const href = work.link ? safeLink(work.link) : undefined;
       const title = href ? `<a href="${escapeHtml(href)}" rel="noreferrer noopener" target="_blank">${escapeHtml(work.title)}</a>` : escapeHtml(work.title);
-      const meta = [work.authors.slice(0, 4).join(", ") + (work.authors.length > 4 ? " et al." : ""), work.venue, work.year].filter(Boolean).join(" · ");
-      return `<li class="${work.kind}"><span class="kind">${work.kind === "paper" ? "Read with Trace" : "To read"}</span><h2>${title}</h2>${meta ? `<p class="meta">${escapeHtml(meta)}</p>` : ""}${work.why ? `<p class="why">${escapeHtml(work.why)}</p>` : ""}</li>`;
+      const meta = [work.authors.slice(0, 4).join(", ") + (work.authors.length > 4 ? words.etAl : ""), work.venue, work.year].filter(Boolean).join(" · ");
+      return `<li class="${work.kind}"><span class="kind">${escapeHtml(work.kind === "paper" ? words.kindPaper : words.kindSaved)}</span><h2>${title}</h2>${meta ? `<p class="meta">${escapeHtml(meta)}</p>` : ""}${work.why ? `<p class="why">${escapeHtml(work.why)}</p>` : ""}</li>`;
     })
     .join("");
   const updated = share.updatedAt.slice(0, 10);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${escapeHtml(share.title)}</title><style>
+  return `<!doctype html><html lang="${escapeHtml(words.lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${escapeHtml(share.title)}</title><style>
 :root{color-scheme:light dark;--paper:#f2efe7;--surface:#fbfaf6;--ink:#191b18;--soft:#5d625b;--line:#d9d4c7;--accent:#2f6f4f}
 @media (prefers-color-scheme:dark){:root{--paper:#121411;--surface:#1a1c18;--ink:#ecebe5;--soft:#a8aca4;--line:#33362f;--accent:#7cc39b}}
 *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 Georgia,serif}main{max-width:44rem;margin:0 auto;padding:48px 20px 64px}
@@ -135,5 +187,5 @@ header p{margin:0;color:var(--soft);font:13px/1.5 system-ui,sans-serif;letter-sp
 li{counter-increment:work;position:relative;padding:16px 18px 16px 56px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}li::before{content:counter(work);position:absolute;left:18px;top:16px;color:var(--soft);font:600 14px/1.6 system-ui,sans-serif}
 li.paper{background:transparent}.kind{color:var(--soft);font:11px/1.4 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase}h2{margin:2px 0 4px;font-size:1.15rem;font-weight:500;line-height:1.35;overflow-wrap:anywhere}
 a{color:var(--accent)}.meta{margin:0;color:var(--soft);font:14px/1.5 system-ui,sans-serif}.why{margin:6px 0 0;font:14px/1.55 system-ui,sans-serif}footer{margin-top:32px;color:var(--soft);font:13px/1.6 system-ui,sans-serif}
-</style></head><body><main><header><p>Reading list</p><h1>${escapeHtml(share.title)}</h1></header><p class="lede">${share.works.length} ${share.works.length === 1 ? "work" : "works"}, in the order to read them: a work comes before a paper that builds on it or needs a concept it explains, after a paper it cites. Updated ${escapeHtml(updated)}.</p><ol>${items}</ol><footer>Shared from Trace, an evidence-grounded research studio. Only the list is shared: no notes and no reading progress.</footer></main></body></html>`;
+</style></head><body><main><header><p>${escapeHtml(words.eyebrow)}</p><h1>${escapeHtml(share.title)}</h1></header><p class="lede">${escapeHtml(words.lede(share.works.length, updated))}</p><ol>${items}</ol><footer>${escapeHtml(words.footer)}</footer></main></body></html>`;
 }

@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Gauge } from "lucide-react";
+import { useT } from "@/i18n/client";
 import {
   generationTaskCatalog,
   getProvider,
+  localizedProvider,
   resolveProviderModel,
   type GenerationTaskRole,
   type ModelTeam,
@@ -45,6 +47,7 @@ type TeamProbeProps = {
  * değişince liste kayboluyor, eski bir "hızlı" hükmü yeni seçime yapışmasın.
  */
 export function TeamProbe({ assignments, apiKeys, depth, template }: TeamProbeProps) {
+  const { providers: words, probe, keyRequired, teamProbe: t } = useT().studio.models;
   const signature = JSON.stringify({ assignments, apiKeys, depth, template: template?.id });
   const [result, setResult] = useState<{ signature: string; rows: Row[] }>();
   const controller = useRef<AbortController | undefined>(undefined);
@@ -58,7 +61,7 @@ export function TeamProbe({ assignments, apiKeys, depth, template }: TeamProbePr
     controller.current?.abort();
     const abort = new AbortController();
     controller.current = abort;
-    const profiles = generationStageProfiles({ depth, template });
+    const profiles = generationStageProfiles({ depth, template }, probe.stages);
 
     const groups = new Map<string, Row>();
     for (const task of generationTaskCatalog) {
@@ -77,15 +80,15 @@ export function TeamProbe({ assignments, apiKeys, depth, template }: TeamProbePr
 
     for (const row of current) {
       if (abort.signal.aborted) return;
-      const provider = getProvider(row.provider)!;
+      const provider = localizedProvider(getProvider(row.provider)!, words);
       const selection = resolveProviderModel(row.provider, row.model);
       const apiKey = apiKeys[row.provider]?.trim() ?? "";
       if (!selection) {
-        update(row.key, { name: "failed", message: "The model name is not valid for this provider." });
+        update(row.key, { name: "failed", message: t.invalidModel });
         continue;
       }
       if (!provider.local && !apiKey) {
-        update(row.key, { name: "failed", message: `${provider.keyLabel} is required.` });
+        update(row.key, { name: "failed", message: keyRequired(provider.keyLabel) });
         continue;
       }
       update(row.key, { name: "running" });
@@ -97,7 +100,7 @@ export function TeamProbe({ assignments, apiKeys, depth, template }: TeamProbePr
         update(row.key, { name: "done", verdict: answer.verdict, message: answer.message, stages: answer.stages ?? [] });
       } catch (caught) {
         if (abort.signal.aborted) return;
-        update(row.key, { name: "failed", message: caught instanceof Error ? caught.message : "The model could not be tested." });
+        update(row.key, { name: "failed", message: caught instanceof Error ? caught.message : t.couldNotTest });
       }
     }
     if (controller.current === abort) controller.current = undefined;
@@ -106,25 +109,25 @@ export function TeamProbe({ assignments, apiKeys, depth, template }: TeamProbePr
   return (
     <div className="team-probe">
       <div className="team-probe-heading">
-        <span>A short request to each model estimates how long its longest step would take, before the PDF is sent.</span>
+        <span>{t.intro}</span>
         <button type="button" disabled={running} onClick={() => { void run(); }}>
-          <Gauge size={13} /> {running ? "Testing…" : rows ? "Test again" : "Test models"}
+          <Gauge size={13} /> {running ? t.testing : rows ? t.testAgain : t.testModels}
         </button>
       </div>
       {rows && (
         <ul className="team-probe-list">
           {rows.map((row) => (
             <li key={row.key} className={`regen-probe ${row.state.name === "done" ? `probe-${row.state.verdict}` : row.state.name === "failed" ? "probe-too-slow" : ""}`}>
-              <b>{getProvider(row.provider)?.label} · {row.model}</b>
-              <small>{row.roles.map((role) => generationTaskCatalog.find((task) => task.id === role)?.shortLabel).join(", ")}</small>
+              <b>{localizedProvider(getProvider(row.provider)!, words).label} · {row.model}</b>
+              <small>{row.roles.map((role) => words.tasks[role].shortLabel).join(", ")}</small>
               <span role={row.state.name === "failed" ? "alert" : "status"}>
-                {row.state.name === "waiting" && "Waiting…"}
-                {row.state.name === "running" && "Testing with a short request…"}
+                {row.state.name === "waiting" && t.waiting}
+                {row.state.name === "running" && t.running}
                 {(row.state.name === "done" || row.state.name === "failed") && row.state.message}
               </span>
               {row.state.name === "done" && row.state.stages.length > 1 && (
                 <small className="team-probe-stages">
-                  {row.state.stages.map((stage) => `${stage.label}: ${stage.estimateSeconds === null ? "too slow" : `about ${formatDuration(stage.estimateSeconds)}`}`).join(" · ")}
+                  {row.state.stages.map((stage) => `${stage.label}: ${stage.estimateSeconds === null ? t.tooSlow : t.about(formatDuration(stage.estimateSeconds, probe))}`).join(" · ")}
                 </small>
               )}
             </li>

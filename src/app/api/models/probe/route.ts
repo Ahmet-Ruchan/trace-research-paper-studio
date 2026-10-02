@@ -17,6 +17,8 @@ import {
   safeDiagnostic,
   type ProviderRuntime,
 } from "@/lib/server/model-runtime";
+import { routeMessages } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -45,14 +47,16 @@ const requestSchema = z.object({
  * yeniden üretimdeki gibi yalnızca bu istek süresince bellekte.
  */
 export async function POST(request: Request) {
+  const messages = routeMessages(request);
+  const t = messages.server;
   let input: z.infer<typeof requestSchema>;
   try {
     input = requestSchema.parse(await request.json());
   } catch {
-    return Response.json({ ok: false, error: "The model test request is not valid." }, { status: 400 });
+    return Response.json({ ok: false, error: t.probe.requestInvalid }, { status: 400 });
   }
   const assignment = resolveProviderModel(input.assignment.provider, input.assignment.model);
-  if (!assignment) return Response.json({ ok: false, error: "The model and provider selection is not valid." }, { status: 400 });
+  if (!assignment) return Response.json({ ok: false, error: t.request.modelSelectionInvalid }, { status: 400 });
   const provider = getProvider(assignment.provider)!;
 
   let apiKey = input.apiKey.trim();
@@ -60,10 +64,10 @@ export async function POST(request: Request) {
     try {
       apiKey = resolveLocalEndpoint(apiKey);
     } catch (error) {
-      return Response.json({ ok: false, error: error instanceof Error ? error.message : "The local model address is not valid." }, { status: 400 });
+      return Response.json({ ok: false, error: errorMessage(error, t.errors, t.request.localAddressInvalid) }, { status: 400 });
     }
   } else if (!apiKey) {
-    return Response.json({ ok: false, error: `${provider.keyLabel} is required.` }, { status: 401 });
+    return Response.json({ ok: false, error: t.request.keyRequired(provider) }, { status: 401 });
   }
 
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]);
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
 
   try {
     providerRuntime = await prepareProviderRuntime(
-      { ...assignment, apiKey, needsDocument: false, taskRole: "visual" },
+      { ...assignment, apiKey, needsDocument: false, taskRole: "visual", progressText: t.progress },
       signal,
       () => undefined,
       () => undefined,
@@ -115,11 +119,11 @@ export async function POST(request: Request) {
       }));
       const slowest = slowestEstimate(stages)!;
       const result = { ok: true as const, ...measurement, ...slowest, stages };
-      return Response.json({ ...result, message: describeProbe(result, slowest.label) });
+      return Response.json({ ...result, message: describeProbe(result, slowest.label, messages.studio.models.probe) });
     }
     const estimate = estimateSection(measurement, { promptCharacters: input.promptCharacters, limitMs });
     const result = { ok: true as const, ...measurement, ...estimate };
-    return Response.json({ ...result, message: describeProbe(result) });
+    return Response.json({ ...result, message: describeProbe(result, undefined, messages.studio.models.probe) });
   } catch (error) {
     const timedOut = !request.signal.aborted && signal.aborted;
     if (timedOut) {
@@ -134,11 +138,11 @@ export async function POST(request: Request) {
         estimateSeconds: null,
         limitSeconds,
         stages: input.stages?.map((stage) => ({ id: stage.id, label: stage.label, estimateSeconds: null, limitSeconds, verdict: "too-slow" })),
-        message: `The model did not finish a short test within ${PROBE_TIMEOUT_MS / 1000} s. ${input.stages ? "A full analysis" : "A section"} would almost certainly exceed the limit. Pick a faster model.`,
+        message: t.probe.timedOut(PROBE_TIMEOUT_MS / 1000, Boolean(input.stages)),
       });
     }
     console.error("Trace model probe failed", { fallbackProvider: assignment.provider, fallbackModel: assignment.model, ...safeDiagnostic(error) });
-    return Response.json({ ok: false, error: publicError(error, request.signal.aborted, assignment.provider) }, { status: 502 });
+    return Response.json({ ok: false, error: publicError(error, request.signal.aborted, assignment.provider, t.errors) }, { status: 502 });
   } finally {
     await providerRuntime?.cleanup().catch(() => undefined);
   }

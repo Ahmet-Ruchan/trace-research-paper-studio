@@ -29,11 +29,11 @@ import {
   Waypoints,
 } from "lucide-react";
 import type { RevisionReason } from "@/lib/project-revisions";
-import type { Claim, ResearchProject } from "@/lib/schema";
+import type { ResearchProject } from "@/lib/schema";
 import { claimHash, elementId, parseDeepLink, scrollToDeepLink } from "@/lib/deep-link";
 import { foldForSearch } from "@/lib/search-text";
 import { excerptAround, highlightSegments } from "@/lib/library-search";
-import { PAPER_HIT_LABELS, PAPER_SEARCH_KINDS, searchPaper, type PaperHit } from "@/lib/paper-search";
+import { PAPER_SEARCH_KINDS, searchPaper, type PaperHit } from "@/lib/paper-search";
 import type { NotePlace } from "@/lib/reader-notes";
 import {
   ApplicationGuideView,
@@ -63,7 +63,7 @@ import { ConceptNote } from "./concept-note";
 import { ConceptsView } from "./concepts-view";
 import { conceptLinks } from "@/lib/concept-links";
 import { readFirst } from "@/lib/reading-order";
-import { learningBlockList, missingLearningBlocks } from "@/lib/learning-generation";
+import { missingLearningBlocks } from "@/lib/learning-generation";
 import { readingDrillFor } from "@/lib/reading-drill";
 import { termIndex } from "@/lib/term-index";
 import { studyPath, studySummary } from "@/lib/study-path";
@@ -77,6 +77,7 @@ import { ResumeBar, scrollToSection, useReadingTracker } from "./reading-positio
 import { ListenButton, ReadAloudProvider } from "./read-aloud";
 import { reportSpeech } from "@/lib/read-aloud";
 import { sectionMark } from "@/lib/reader-notes";
+import { useUiLanguage } from "@/i18n/client";
 
 type LabViewProps = {
   project: ResearchProject;
@@ -100,37 +101,24 @@ type LabViewProps = {
   jump?: { section: string; reportSectionId?: string; conceptId?: string; term?: string; query?: string; nonce: number };
 };
 
-const kindLabels: Record<Claim["kind"], string> = {
-  "reported-result": "Result",
-  "author-interpretation": "Interpretation",
-  method: "Method",
-  background: "Background",
-  limitation: "Limitation",
-};
-
-const reportKindLabels = {
-  contribution: "Contribution",
-  mechanism: "Mechanism",
-  experiment: "Experiment",
-  critique: "Critique",
-  reproduction: "Reproduction",
-  implication: "Implication",
-} as const;
-
 export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview, library, onAnalysePaper, onShowStorySection, jump }: LabViewProps) {
   const notes = useReaderNotes();
   const notedClaims = useMemo(() => new Set((notes?.notes ?? []).flatMap((note) => (note.target.kind === "claim" ? [note.target.claimId] : []))), [notes?.notes]);
-  const t = stringsFor(project.language);
+  const { language, t: messages } = useUiLanguage();
+  const t = messages.paper.lab;
+  const { claimKinds, claimStatus } = messages.paper;
+  // Görsellerin etiketleri arayüzün dilinde; `locale` makalenin dili.
+  const strings = stringsFor(project.language, language);
   const regeneration = useSectionRegeneration(project, onProjectChange);
   /** Öğrenme katmanı öğeleri için aynı tetikleyici; görüntüleyicide hiç çizilmiyor. */
-  const regenerateButton = (kind: SectionKind, id: string, noun: string) => regeneration.enabled ? (
+  const regenerateButton = (kind: SectionKind, id: string, noun: "equation" | "derivation" | "concept" | "question") => regeneration.enabled ? (
     <span className="learning-regen">
       <button
         className="regen-trigger"
         onClick={() => regeneration.open({ kind, sectionId: id })}
-        title={`Rewrite this ${noun} with a model; the evidence stays locked`}
+        title={t.regenerateTitle(noun)}
       >
-        <RefreshCw size={12} /> Regenerate
+        <RefreshCw size={12} /> {t.regenerate}
       </button>
     </span>
   ) : null;
@@ -220,7 +208,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
    * sonuç projeye yazılır ve alıntısı bulunamayan iddialar needs-review olur.
    */
   async function checkQuotes(file: File) {
-    setQuoteCheck({ message: "Comparing every quote with the text of the page it cites…" });
+    setQuoteCheck({ message: t.quoteCheck.running });
     try {
       const form = new FormData();
       form.set("paper", file);
@@ -229,7 +217,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
       const data = (await response.json().catch(() => undefined)) as
         | { excerptCheck?: ResearchProject["excerptCheck"]; downgradedIds?: string[]; error?: string }
         | undefined;
-      if (!response.ok || !data?.excerptCheck) throw new Error(data?.error ?? "The quotes could not be checked.");
+      if (!response.ok || !data?.excerptCheck) throw new Error(data?.error ?? t.quoteCheck.failed);
       const downgraded = new Set(data.downgradedIds ?? []);
       onProjectChange?.({
         ...project,
@@ -245,11 +233,11 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
       const missing = data.excerptCheck.unlocated.length;
       setQuoteCheck({
         message: missing
-          ? `${data.excerptCheck.checked - missing} of ${data.excerptCheck.checked} quotes were found. ${downgraded.size} claim(s) were marked needs-review.`
-          : `All ${data.excerptCheck.checked} quotes were found on the page they cite.`,
+          ? t.quoteCheck.partlyFound(data.excerptCheck.checked - missing, data.excerptCheck.checked, downgraded.size)
+          : t.quoteCheck.allFound(data.excerptCheck.checked),
       });
     } catch (caught) {
-      setQuoteCheck({ failed: true, message: caught instanceof Error ? caught.message : "The quotes could not be checked." });
+      setQuoteCheck({ failed: true, message: caught instanceof Error ? caught.message : t.quoteCheck.failed });
     }
   }
   const selectedClaim = useMemo(
@@ -291,7 +279,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   }, []);
 
   // Kanıttan üretilen okuma alıştırması öğrenme katmanı olmayan projede de var.
-  const drill = useMemo(() => readingDrillFor(project), [project]);
+  const drill = useMemo(() => readingDrillFor(project, messages.learning.words.readingDrill), [project, messages]);
   const terms = useMemo(() => termIndex(project), [project]);
   const study = useStudyProgress(project.id);
   const studyProgress = study.state.status === "ready" ? study.state.progress : undefined;
@@ -334,38 +322,38 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   );
 
   const nav = [
-    { id: "overview", label: "Overview", icon: Lightbulb },
-    { id: "search", label: "Search", icon: Search },
-    { id: "study", label: t.tabStudy, icon: Route },
-    ...(project.primer ? [{ id: "primer", label: t.navPrimer, icon: GraduationCap }] : []),
-    ...(library && project.primer ? [{ id: "concepts", label: "Concepts", icon: Waypoints }] : []),
-    ...(hasPractice ? [{ id: "practice", label: t.navPractice, icon: SlidersHorizontal }] : []),
-    ...(project.deepReport ? [{ id: "report", label: "Deep report", icon: BookOpenCheck }] : []),
-    { id: "claims", label: "Claims", icon: Quote },
+    { id: "overview", label: t.nav.overview, icon: Lightbulb },
+    { id: "search", label: messages.common.search, icon: Search },
+    { id: "study", label: strings.tabStudy, icon: Route },
+    ...(project.primer ? [{ id: "primer", label: strings.navPrimer, icon: GraduationCap }] : []),
+    ...(library && project.primer ? [{ id: "concepts", label: t.nav.concepts, icon: Waypoints }] : []),
+    ...(hasPractice ? [{ id: "practice", label: strings.navPractice, icon: SlidersHorizontal }] : []),
+    ...(project.deepReport ? [{ id: "report", label: t.nav.deepReport, icon: BookOpenCheck }] : []),
+    { id: "claims", label: t.nav.claims, icon: Quote },
     // Okuyucunun notları stüdyoda; sağlayıcı yoksa (salt okunur görünüm) sekme de yok.
-    ...(notes ? [{ id: "notes", label: notes.notes.length ? `Notes (${notes.notes.length})` : "Notes", icon: NotebookPen }] : []),
-    { id: "health", label: t.navHealth, icon: ShieldCheck },
+    ...(notes ? [{ id: "notes", label: t.nav.notes(notes.notes.length), icon: NotebookPen }] : []),
+    { id: "health", label: strings.navHealth, icon: ShieldCheck },
     // Öğrenme sağlığı düzeltmeleri yeniden üretimle yapılıyor; salt okunur görünümde yok.
-    ...(onProjectChange ? [{ id: "learning", label: "Learning health", icon: Activity }] : []),
-    { id: "ask", label: "Ask", icon: MessageCircleQuestion },
+    ...(onProjectChange ? [{ id: "learning", label: t.nav.learningHealth, icon: Activity }] : []),
+    { id: "ask", label: t.nav.ask, icon: MessageCircleQuestion },
     // İnceleme projeyi değiştiriyor; salt okunur görünümde kuyruk gösterilmez.
-    ...(onProjectChange ? [{ id: "review", label: "Review", icon: UserCheck }] : []),
-    { id: "method", label: "Method", icon: FlaskConical },
-    ...(project.technicalAppendix ? [{ id: "technical", label: "Technical", icon: Code2 }] : []),
-    { id: "metrics", label: "Metrics", icon: Gauge },
-    { id: "limits", label: "Limitations", icon: TriangleAlert },
-    { id: "glossary", label: "Glossary", icon: BookMarked },
+    ...(onProjectChange ? [{ id: "review", label: t.nav.review, icon: UserCheck }] : []),
+    { id: "method", label: t.nav.method, icon: FlaskConical },
+    ...(project.technicalAppendix ? [{ id: "technical", label: t.nav.technical, icon: Code2 }] : []),
+    { id: "metrics", label: t.nav.metrics, icon: Gauge },
+    { id: "limits", label: t.nav.limitations, icon: TriangleAlert },
+    { id: "glossary", label: t.nav.glossary, icon: BookMarked },
   ];
 
   return (
-    <LanguageProvider language={project.language}>
+    <LanguageProvider language={project.language} ui={language}>
     <div className="lab-layout">
-      <nav className="lab-nav" aria-label={t.labSectionsAria}>
-        <div className="lab-nav-label">{t.paperMap}</div>
+      <nav className="lab-nav" aria-label={strings.labSectionsAria}>
+        <div className="lab-nav-label">{strings.paperMap}</div>
         {/* Telefonda simge şeridinin yerine: on üç simgenin hangisinin ne olduğu görünmüyordu. */}
         <label className="lab-nav-select">
-          <span>{t.paperMap}</span>
-          <select value={section} onChange={(event) => setSection(event.target.value)} aria-label="Section">
+          <span>{strings.paperMap}</span>
+          <select value={section} onChange={(event) => setSection(event.target.value)} aria-label={t.nav.select}>
             {nav.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
@@ -386,7 +374,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         })}
         <div className="source-count">
           <span>{project.evidence.sources.length}</span>
-          <small>{t.linkedSources}</small>
+          <small>{strings.linkedSources}</small>
         </div>
       </nav>
 
@@ -400,34 +388,31 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         {section === "overview" && (
           <div className="lab-content-stack">
             {missingLearning.length > 0 && (
-              <section className="learning-offer" aria-label="Learning layer">
+              <section className="learning-offer" aria-label={t.learningOffer.aria}>
                 <GraduationCap size={20} aria-hidden="true" />
                 <div>
-                  <strong>Learn this paper, not just read it</strong>
-                  <p>
-                    This project is missing {learningBlockList(missingLearning)}. Trace can write them from the evidence already
-                    collected: every item cites its claims, and the PDF is not needed.
-                  </p>
+                  <strong>{t.learningOffer.title}</strong>
+                  <p>{t.learningOffer.body(messages.paper.learningBlockList(missingLearning))}</p>
                 </div>
-                <button onClick={() => setLearningOpen(true)}><Sparkles size={14} /> Add the learning layer</button>
+                <button onClick={() => setLearningOpen(true)}><Sparkles size={14} /> {t.learningOffer.action}</button>
               </section>
             )}
-            <section className="study-offer" aria-label={t.studyHeading}>
+            <section className="study-offer" aria-label={strings.studyHeading}>
               <Route size={20} aria-hidden="true" />
               <div>
-                <strong>{t.studyHeading}</strong>
+                <strong>{strings.studyHeading}</strong>
                 <p>
                   {studyProgress
                     ? studyProgress.finishedAt
-                      ? `You reached the end: ${studyStatus.summary.checks.firstTry} of ${studyStatus.summary.checks.answered} questions right on the first try. The results show what to read again.`
-                      : `${studyStatus.summary.done} of ${studyStatus.summary.total} steps done. You continue where you left off.`
-                    : `A guided path in ${studyStatus.steps} steps: what the paper assumes, each section with one question after it, then what to read again.`}
+                      ? t.studyOffer.finished(studyStatus.summary.checks.firstTry, studyStatus.summary.checks.answered)
+                      : t.studyOffer.inProgress(studyStatus.summary.done, studyStatus.summary.total)
+                    : t.studyOffer.notStarted(studyStatus.steps)}
                 </p>
               </div>
               <div className="study-offer-actions">
                 {onReview && studyStatus.review.due ? (
                   <button onClick={onReview}>
-                    Review {studyStatus.review.due} {studyStatus.review.due === 1 ? "card" : "cards"} <ArrowRight size={14} />
+                    {t.studyOffer.reviewCards(studyStatus.review.due)} <ArrowRight size={14} />
                   </button>
                 ) : null}
                 <button
@@ -435,27 +420,27 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                   onClick={() => setSection("study")}
                   disabled={study.state.status === "loading"}
                 >
-                  {studyProgress ? (studyProgress.finishedAt ? "See your results" : "Continue studying") : "Start studying"} <ArrowRight size={14} />
+                  {studyProgress ? (studyProgress.finishedAt ? t.studyOffer.seeResults : t.studyOffer.continue) : t.studyOffer.start} <ArrowRight size={14} />
                 </button>
               </div>
             </section>
             {onProjectChange ? <PaperFocusOffer project={project} /> : null}
             <section className="thesis-card">
-              <span>Core thesis</span>
+              <span>{t.overview.coreThesis}</span>
               <blockquote>{project.evidence.thesis}</blockquote>
             </section>
             <section className="lab-block two-column-block">
               <div>
-                <div className="block-title"><Lightbulb size={16} /> Research question</div>
+                <div className="block-title"><Lightbulb size={16} /> {t.overview.researchQuestion}</div>
                 <p className="large-body">{project.evidence.researchQuestion}</p>
               </div>
               <div>
-                <div className="block-title"><ListChecks size={16} /> Plain-language summary</div>
+                <div className="block-title"><ListChecks size={16} /> {t.overview.plainSummary}</div>
                 <p>{project.evidence.plainSummary}</p>
               </div>
             </section>
             <section className="lab-block">
-              <div className="block-title"><Quote size={16} /> Key findings</div>
+              <div className="block-title"><Quote size={16} /> {t.overview.keyFindings}</div>
               <div className="finding-list">
                 {project.evidence.findings.map((finding, index) => {
                   const claim = project.evidence.claims.find((item) =>
@@ -476,7 +461,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 benziyor" sorusunun cevabı okuyucunun ilk aradığı şey. */}
             {project.figures?.length ? (
               <section className="lab-block">
-                <div className="block-title"><ImageIcon size={16} /> {t.figuresHeading}</div>
+                <div className="block-title"><ImageIcon size={16} /> {strings.figuresHeading}</div>
                 <FiguresView figures={project.figures} />
               </section>
             ) : null}
@@ -486,11 +471,11 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         {section === "study" && (
           <div className="lab-content-stack">
             {onProjectChange ? (
-              <FocusRoundBar subject={{ label: project.evidence.paper.title, projectId: project.id }} hint="Work through the path in a focus round, with a break after it: the time is counted for this paper." />
+              <FocusRoundBar subject={{ label: project.evidence.paper.title, projectId: project.id }} hint={t.study.focusHint} />
             ) : null}
-            {study.state.status === "loading" ? <p className="section-intro" role="status">Loading your study progress…</p> : null}
+            {study.state.status === "loading" ? <p className="section-intro" role="status">{t.study.loading}</p> : null}
             {study.state.status === "failed" ? (
-              <p className="regen-error" role="alert">{study.state.message} Nothing was changed; reload the page to try again.</p>
+              <p className="regen-error" role="alert">{study.state.message} {t.study.nothingChanged}</p>
             ) : null}
             {study.state.status === "ready" ? (
               <StudyView
@@ -499,12 +484,12 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 initialProgress={study.state.progress}
                 onSave={study.save}
                 onStepTime={onStepTime}
-                note="Your progress is saved in your library, next to this paper. It is not part of the project file, so exports and published pages never carry your answers."
+                note={t.study.note}
                 sectionExtra={(sectionId, handle) => <ExplainPanel project={project} target={{ kind: "story", sectionId }} study={handle} onClaimSelect={onClaimSelect} />}
                 conceptExtra={library ? (conceptId) => <ConceptNote link={linkFor(conceptId)} /> : undefined}
               />
             ) : null}
-            {study.saveError ? <p className="regen-error" role="status">Progress not saved: {study.saveError}</p> : null}
+            {study.saveError ? <p className="regen-error" role="status">{t.study.notSaved(study.saveError)}</p> : null}
           </div>
         )}
 
@@ -512,7 +497,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
           <div className="deep-report">
             {onProjectChange ? <ResumeBar projectId={project.id} place="report" /> : null}
             <header className="report-intro">
-              <div><span>Deep report · {project.deepReport.readingTime}</span><h2>{project.deepReport.title}</h2></div>
+              <div><span>{t.report.kicker(project.deepReport.readingTime)}</span><h2>{project.deepReport.title}</h2></div>
               <p>{project.deepReport.dek}</p>
             </header>
             {regeneration.undoBar}
@@ -522,14 +507,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 <article className={`report-section report-${item.kind}`} key={item.id} data-note-section={sectionMark("report", item.id)}>
                   <header>
                     <span>
-                      {String(index + 1).padStart(2, "0")} · {reportKindLabels[item.kind]}
+                      {String(index + 1).padStart(2, "0")} · {t.report.kinds[item.kind]}
                       {regeneration.enabled && (
                         <button
                           className="regen-trigger"
                           onClick={() => regeneration.open({ kind: "report", sectionId: item.id })}
-                          title="Rewrite this section with a model; the evidence stays locked"
+                          title={t.regenerateTitle("section")}
                         >
-                          <RefreshCw size={12} /> Regenerate
+                          <RefreshCw size={12} /> {t.regenerate}
                         </button>
                       )}
                     </span>
@@ -548,8 +533,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             </div>
             </ReadAloudProvider>
             <section className="report-questions">
-              <span>Open questions</span>
-              <h2>Questions the paper has not answered yet</h2>
+              <span>{t.report.openQuestions}</span>
+              <h2>{t.report.openQuestionsHeading}</h2>
               <ol>{project.deepReport.openQuestions.map((question, index) => <li key={`${question}-${index}`}><i>{String(index + 1).padStart(2, "0")}</i><p>{question}</p></li>)}</ol>
             </section>
           </div>
@@ -558,8 +543,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         {section === "claims" && (
           <section className="lab-block">
             <div className="block-heading-row">
-              <div className="block-title"><Quote size={16} /> Evidence ledger</div>
-              <span>{project.evidence.claims.filter((claim) => claim.confidence === "verified").length}/{project.evidence.claims.length} verified</span>
+              <div className="block-title"><Quote size={16} /> {t.claims.heading}</div>
+              <span>{t.claims.verifiedCount(project.evidence.claims.filter((claim) => claim.confidence === "verified").length, project.evidence.claims.length)}</span>
             </div>
             <div className="claims-table">
               {project.evidence.claims.map((claim) => (
@@ -569,13 +554,13 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                   className={selectedClaimId === claim.id ? "claim-row selected" : "claim-row"}
                 >
                   <button onClick={() => onClaimSelect(claim.id)}>
-                    <span className="claim-kind">{kindLabels[claim.kind]}{notedClaims.has(claim.id) ? <Star className="claim-noted" size={12} aria-label="You noted this claim" /> : null}</span>
+                    <span className="claim-kind">{claimKinds.short[claim.kind]}{notedClaims.has(claim.id) ? <Star className="claim-noted" size={12} aria-label={t.claims.noted} /> : null}</span>
                     <p>{claim.statement}</p>
                     <span className={`claim-confidence ${claim.confidence}`}>
-                      {claim.confidence === "verified" ? "Verified" : "Review"}
+                      {claim.confidence === "verified" ? claimStatus.verified : t.claims.review}
                     </span>
                     <span className="claim-page">
-                      {claim.sourceRefs[0]?.page ? `p. ${claim.sourceRefs[0].page}` : "web"}
+                      {claim.sourceRefs[0]?.page ? messages.common.page(claim.sourceRefs[0].page) : "web"}
                     </span>
                   </button>
                   <PermalinkButton hash={claimHash(claim.id)} />
@@ -587,7 +572,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "notes" && (
           <section className="lab-block">
-            <div className="block-title"><NotebookPen size={16} /> Your notes and highlights</div>
+            <div className="block-title"><NotebookPen size={16} /> {t.notes.heading}</div>
             <NotesPanel
               project={project}
               study={study.state.status === "ready" ? { progress: study.state.progress, save: study.save } : undefined}
@@ -602,22 +587,16 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "ask" && (
           <section className="lab-block">
-            <div className="block-title"><MessageCircleQuestion size={16} /> Ask the evidence</div>
-            <p className="section-intro">
-              The model answering here has not read the paper. It sees only the claims, metrics and glossary collected in this
-              project, must name the claims it used, and says so when they do not cover your question. Nothing is saved.
-            </p>
+            <div className="block-title"><MessageCircleQuestion size={16} /> {t.ask.heading}</div>
+            <p className="section-intro">{t.ask.intro}</p>
             <AskPanel project={project} onClaimSelect={onClaimSelect} />
           </section>
         )}
 
         {section === "review" && onProjectChange && (
           <section className="lab-block">
-            <div className="block-title"><UserCheck size={16} /> Claim review</div>
-            <p className="section-intro">
-              A model says how sure it is, and a program can check that a quote is on its page. Neither can say that the quote
-              actually supports the claim. That takes a person: open the claim, look at the page, decide.
-            </p>
+            <div className="block-title"><UserCheck size={16} /> {t.review.heading}</div>
+            <p className="section-intro">{t.review.intro}</p>
             {regeneration.undoBar}
             <ReviewPanel
               project={project}
@@ -630,8 +609,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "health" && (
           <section className="lab-block">
-            <div className="block-title"><ShieldCheck size={16} /> {t.healthHeading}</div>
-            <p className="section-intro">{t.healthIntro}</p>
+            <div className="block-title"><ShieldCheck size={16} /> {strings.healthHeading}</div>
+            <p className="section-intro">{strings.healthIntro}</p>
             {regeneration.undoBar}
             <input
               ref={quoteCheckInput}
@@ -658,23 +637,16 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "concepts" && library && project.primer && (
           <section className="lab-block">
-            <div className="block-title"><Waypoints size={16} /> Concepts across your papers</div>
-            <p className="section-intro">
-              The concepts this paper assumes, and where else your library explains them. Nothing is generated: concepts are
-              matched by name across your papers, and each paper&apos;s study progress says what you have already studied.
-            </p>
+            <div className="block-title"><Waypoints size={16} /> {t.concepts.heading}</div>
+            <p className="section-intro">{t.concepts.intro}</p>
             <ConceptsView project={project} links={links} readFirst={firstReads} library={library} onAnalyse={onAnalysePaper} />
           </section>
         )}
 
         {section === "learning" && onProjectChange && (
           <section className="lab-block">
-            <div className="block-title"><Activity size={16} /> Learning health</div>
-            <p className="section-intro">
-              Evidence health asks whether every sentence is tied to a page. This asks whether a reader can learn from the result:
-              whether a question checks every section, whether the quiz asks about results, interpretations and limitations,
-              whether the playgrounds respond and the derivations explain. It is computed from the project; no model is asked.
-            </p>
+            <div className="block-title"><Activity size={16} /> {t.learning.heading}</div>
+            <p className="section-intro">{t.learning.intro}</p>
             {regeneration.undoBar}
             <LearningHealthView
               project={project}
@@ -687,7 +659,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "method" && (
           <section className="lab-block">
-            <div className="block-title"><FlaskConical size={16} /> Method flow</div>
+            <div className="block-title"><FlaskConical size={16} /> {t.method.heading}</div>
             <div className="method-timeline">
               {project.evidence.methods.map((method, index) => (
                 <div key={`${method}-${index}`}>
@@ -702,14 +674,14 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         {section === "technical" && project.technicalAppendix && (
           <div className="technical-appendix">
             <header className="technical-intro">
-              <span>Technical appendix</span>
+              <span>{t.technical.kicker}</span>
               <h2>{project.technicalAppendix.title}</h2>
               <p>{project.technicalAppendix.overview}</p>
             </header>
             {regeneration.undoBar}
 
             {project.technicalAppendix.equations.length > 0 && <section className="technical-section">
-              <div className="block-title"><Code2 size={16} /> Equations and mechanisms</div>
+              <div className="block-title"><Code2 size={16} /> {t.technical.equations}</div>
               <div className="technical-equations">{project.technicalAppendix.equations.map((equation) => {
                 // Aynı kimliği taşıyan türetim varsa denklemin hemen altına
                 // yerleşir: okuyucu formülü görüp adım adım açabilir.
@@ -729,25 +701,25 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             </section>}
 
             <section className="technical-section">
-              <div className="block-title"><FlaskConical size={16} /> Algorithm flow</div>
+              <div className="block-title"><FlaskConical size={16} /> {t.technical.algorithm}</div>
               <ol className="technical-steps">{project.technicalAppendix.algorithmSteps.map((step, index) => <li key={`${step.label}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{step.label}</strong><p>{step.detail}</p><TechnicalClaimLinks claimIds={step.claimIds} project={project} onClaimSelect={onClaimSelect} /></div></li>)}</ol>
             </section>
 
             {project.technicalAppendix.codeSketches.length > 0 && <section className="technical-section">
-              <div className="block-title"><Code2 size={16} /> Explanatory code sketches</div>
+              <div className="block-title"><Code2 size={16} /> {t.technical.codeSketches}</div>
               <div className="code-sketches">{project.technicalAppendix.codeSketches.map((sketch) => <article key={sketch.title}><header><strong>{sketch.title}</strong><span>{sketch.language}</span></header><pre><code>{sketch.code}</code></pre><p>{sketch.explanation}</p><TechnicalClaimLinks claimIds={sketch.claimIds} project={project} onClaimSelect={onClaimSelect} /></article>)}</div>
             </section>}
 
             <div className="technical-bottom-grid">
-              <section className="technical-section"><div className="block-title"><Gauge size={16} /> Complexity</div>{project.technicalAppendix.complexity.map((item) => <article className="complexity-card" key={item.operation}><span lang={project.language}>{item.operation}</span><strong>{item.cost}</strong><p>{item.context}</p><TechnicalClaimLinks claimIds={item.claimIds} project={project} onClaimSelect={onClaimSelect} /></article>)}</section>
-              <section className="technical-section"><div className="block-title"><ListChecks size={16} /> Implementation notes</div><ul className="implementation-notes">{project.technicalAppendix.implementationNotes.map((note, index) => <li key={`${note}-${index}`}>{note}</li>)}</ul></section>
+              <section className="technical-section"><div className="block-title"><Gauge size={16} /> {t.technical.complexity}</div>{project.technicalAppendix.complexity.map((item) => <article className="complexity-card" key={item.operation}><span lang={project.language}>{item.operation}</span><strong>{item.cost}</strong><p>{item.context}</p><TechnicalClaimLinks claimIds={item.claimIds} project={project} onClaimSelect={onClaimSelect} /></article>)}</section>
+              <section className="technical-section"><div className="block-title"><ListChecks size={16} /> {t.technical.implementationNotes}</div><ul className="implementation-notes">{project.technicalAppendix.implementationNotes.map((note, index) => <li key={`${note}-${index}`}>{note}</li>)}</ul></section>
             </div>
           </div>
         )}
 
         {section === "metrics" && (
           <section className="lab-block">
-            <div className="block-title"><Gauge size={16} /> Extracted metrics</div>
+            <div className="block-title"><Gauge size={16} /> {t.metrics.heading}</div>
             <div className="metrics-table">
               {project.evidence.metrics.map((metric) => (
                 <button
@@ -764,7 +736,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                   <span>{metric.label}</span>
                   <strong>{metric.displayValue} <small>{metric.unit}</small></strong>
                   <p>{metric.context}</p>
-                  <em>p. {metric.sourceRef.page ?? "—"}</em>
+                  <em>{t.metrics.page(metric.sourceRef.page)}</em>
                 </button>
               ))}
             </div>
@@ -773,8 +745,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
         {section === "limits" && (
           <section className="lab-block limit-block">
-            <div className="block-title"><TriangleAlert size={16} /> Limitations of the paper</div>
-            <p className="section-intro">A strong account keeps its limits as visible as its findings.</p>
+            <div className="block-title"><TriangleAlert size={16} /> {t.limits.heading}</div>
+            <p className="section-intro">{t.limits.intro}</p>
             <ol>
               {project.evidence.limitations.map((limitation, index) => (
                 <li key={`${limitation}-${index}`}>
@@ -787,8 +759,8 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         )}
 
         {section === "search" && (
-          <section className="lab-block paper-search" aria-label="Search this paper">
-            <div className="block-title"><Search size={16} /> Search this paper</div>
+          <section className="lab-block paper-search" aria-label={t.search.heading}>
+            <div className="block-title"><Search size={16} /> {t.search.heading}</div>
             <label className="paper-search-field">
               <Search size={16} aria-hidden="true" />
               <input
@@ -796,23 +768,23 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 autoFocus
                 value={paperQuery}
                 onChange={(event) => setPaperQuery(event.target.value)}
-                aria-label="Search this paper"
-                placeholder="Claims, sections, concepts, terms and your notes"
+                aria-label={t.search.heading}
+                placeholder={t.search.placeholder}
               />
             </label>
             <p className="section-intro" role="status">
               {!paperSearch.terms.length
-                ? "Type a word or two. Press / anywhere in the Lab to come back here, or Ctrl+K to go anywhere in the studio."
+                ? t.search.hint
                 : paperSearch.total
-                  ? `${paperSearch.total} ${paperSearch.total === 1 ? "match" : "matches"}: ${PAPER_SEARCH_KINDS.filter((kind) => paperSearch.counts[kind]).map((kind) => `${paperSearch.counts[kind]} ${PAPER_HIT_LABELS[kind].toLowerCase()}`).join(", ")}.`
-                  : "Nothing in this paper mentions every word you typed."}
+                  ? t.search.summary(paperSearch.total, PAPER_SEARCH_KINDS.filter((kind) => paperSearch.counts[kind]).map((kind) => ({ kind, count: paperSearch.counts[kind] })))
+                  : t.search.nothing}
             </p>
             {paperSearch.hits.length ? (
               <ol className="paper-search-results">
                 {paperSearch.hits.map((hit) => (
                   <li key={`${hit.kind}-${hit.id}`}>
                     <button type="button" onClick={() => openHit(hit)}>
-                      <span className={`paper-hit-kind is-${hit.kind}`}>{PAPER_HIT_LABELS[hit.kind]}</span>
+                      <span className={`paper-hit-kind is-${hit.kind}`}>{t.search.hitLabels[hit.kind]}</span>
                       <strong>{highlightSegments(hit.title, paperSearch.terms).map((part, index) => (part.match ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>))}</strong>
                       {hit.text ? (
                         <span className="paper-hit-text">
@@ -824,13 +796,13 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
                 ))}
               </ol>
             ) : null}
-            {paperSearch.total > paperSearch.hits.length ? <p className="section-intro">Showing the first {paperSearch.hits.length}. Add a word to narrow the search.</p> : null}
+            {paperSearch.total > paperSearch.hits.length ? <p className="section-intro">{t.search.showingFirst(paperSearch.hits.length)}</p> : null}
           </section>
         )}
 
         {section === "glossary" && (
           <section className="lab-block">
-            <div className="block-title"><BookMarked size={16} /> Glossary</div>
+            <div className="block-title"><BookMarked size={16} /> {t.glossary.heading}</div>
             <div className="glossary-grid">
               {project.evidence.glossary.map((item) => (
                 <article key={item.term} data-glossary-term={item.term}>
@@ -860,7 +832,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             {regeneration.undoBar}
             {project.derivations?.length ? (
               <>
-                <div className="block-title"><Sigma size={16} /> {t.derivationsHeading}</div>
+                <div className="block-title"><Sigma size={16} /> {strings.derivationsHeading}</div>
                 {project.derivations.map((derivation) => (
                   <DerivationView derivation={derivation} key={derivation.id} action={regenerateButton("derivation", derivation.id, "derivation")} />
                 ))}
@@ -869,7 +841,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
             {project.interactives?.length ? (
               <>
-                <div className="block-title"><SlidersHorizontal size={16} /> {t.interactivesHeading}</div>
+                <div className="block-title"><SlidersHorizontal size={16} /> {strings.interactivesHeading}</div>
                 {project.interactives.map((interactive) => (
                   <InteractiveRenderer interactive={interactive} key={interactive.id} />
                 ))}

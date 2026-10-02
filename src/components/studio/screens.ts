@@ -9,5 +9,3 @@ export type WorkspacePanel = "publish" | "citations" | "history";
 
 /** Eski tek-proje kaydı: ilk açılışta kütüphaneye taşınıyor, sonra son açılan proje burada. */
 export const STORAGE_KEY = "trace-research-project-v1";
-
-export const returnLabels: Partial<Record<AppScreen, string>> = { home: "Home", library: "Library", workspace: "Back to the paper", progress: "Progress", concepts: "Concepts", models: "Model record", review: "Review", focus: "Focus", profile: "Profile" };

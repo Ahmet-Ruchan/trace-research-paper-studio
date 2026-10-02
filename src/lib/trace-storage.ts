@@ -47,6 +47,10 @@ import {
 } from "./publications";
 import { narrativeTemplateSchema, researchProjectSchema, type NarrativeTemplate, type ResearchProject } from "./schema";
 import { traceDataDirectory } from "./server/data-directory";
+import { UserFacingError } from "./user-error";
+
+/** Kilit alınamadığında okuyucuya söylenen: hangi kayıt meşgul. */
+type BusyKey = "accentBusy" | "tagsBusy" | "studyBusy" | "notesBusy" | "readingListBusy" | "aliasesBusy" | "profileBusy" | "workLogBusy";
 
 export const TRACE_ACCENT_PALETTE = [
   "#2563EB",
@@ -162,7 +166,7 @@ export async function atomicWrite(path: string, contents: string) {
  * Oku-değiştir-yaz yapan her durum dosyası (renk döngüsü, etiketler) bunu
  * kullanıyor; iki stüdyo ya da stüdyo ile ajan aynı anda yazabiliyor.
  */
-async function acquireDirectoryLock(directory: string, name: string, busyMessage: string) {
+async function acquireDirectoryLock(directory: string, name: string, busy: BusyKey) {
   const lockPath = join(directory, name);
   await mkdir(directory, { recursive: true, mode: 0o700 });
 
@@ -184,14 +188,14 @@ async function acquireDirectoryLock(directory: string, name: string, busyMessage
       await new Promise((done) => setTimeout(done, 10 + Math.min(attempt, 40)));
     }
   }
-  throw new Error(busyMessage);
+  throw new UserFacingError(busy);
 }
 
 export async function allocatePaperAccent(paperIdentity: string): Promise<PaperAccent> {
   if (!paperIdentity.trim()) throw new Error("A paper identity is required for accent allocation.");
   const dataDirectory = traceDataDirectory();
   const statePath = join(dataDirectory, STATE_FILE);
-  const release = await acquireDirectoryLock(dataDirectory, STATE_LOCK, "The Trace accent cycle is busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(dataDirectory, STATE_LOCK, "accentBusy");
   try {
     let state = freshAccentState();
     try {
@@ -423,7 +427,7 @@ export async function readLibraryTags() {
 export async function saveStoredProjectTags(projectId: string, tags: readonly string[]) {
   const next = tagListSchema.parse(tags);
   const directory = traceLibraryDirectory();
-  const release = await acquireDirectoryLock(directory, TAGS_LOCK, "The Trace tags are busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(directory, TAGS_LOCK, "tagsBusy");
   try {
     const file = await readTagsFile();
     const current = parseLibraryTags(file.raw);
@@ -475,7 +479,7 @@ export async function readStudyProgress(projectId: string) {
 export async function saveStudyProgress(projectId: string, progress: StudyProgress | undefined) {
   const next = progress === undefined ? undefined : studyProgressSchema.parse(progress);
   const directory = traceLibraryDirectory();
-  const release = await acquireDirectoryLock(directory, STUDY_LOCK, "The study progress is busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(directory, STUDY_LOCK, "studyBusy");
   try {
     const file = await readStudyFile();
     const current = parseStudyFile(file.raw);
@@ -525,7 +529,7 @@ export async function saveReaderNotes(projectId: string, notes: readonly ReaderN
 export async function updateReaderNotes(projectId: string, change: (current: ReaderNote[]) => readonly ReaderNote[]) {
   const directory = traceLibraryDirectory();
   const path = join(directory, NOTES_FILE);
-  const release = await acquireDirectoryLock(directory, NOTES_LOCK, "Your notes are busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(directory, NOTES_LOCK, "notesBusy");
   try {
     const file = await readJsonFile(path);
     const current = parseNotesFile(file.raw);
@@ -560,7 +564,7 @@ export async function readReadingList() {
 export async function updateReadingList(change: (items: ReadingItem[]) => ReadingItem[]) {
   const directory = traceLibraryDirectory();
   const path = join(directory, READING_FILE);
-  const release = await acquireDirectoryLock(directory, READING_LOCK, "The reading list is busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(directory, READING_LOCK, "readingListBusy");
   try {
     const file = await readJsonFile(path);
     const current = parseReadingList(file.raw);
@@ -603,7 +607,7 @@ export async function readConceptAliases(): Promise<AliasFile> {
 /** Kararları kilidin altında değiştirir; tanınmayan bir dosya kenara alınıyor, üzerine yazılmıyor. */
 export async function updateConceptAliases(change: (file: AliasFile) => AliasFile): Promise<AliasFile> {
   const directory = traceLibraryDirectory();
-  const release = await acquireDirectoryLock(directory, ALIASES_LOCK, "The concept links are busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(directory, ALIASES_LOCK, "aliasesBusy");
   try {
     const file = await readAliasesFile();
     const next = aliasFileSchema.parse(change(parseAliasFile(file.raw)));
@@ -677,7 +681,7 @@ export async function readProfile(): Promise<Profile> {
 export async function updateProfile(change: (profile: Profile) => Profile): Promise<Profile> {
   const directory = traceDataDirectory();
   const path = join(directory, PROFILE_FILE);
-  const release = await acquireDirectoryLock(directory, PROFILE_LOCK, "The profile is busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(directory, PROFILE_LOCK, "profileBusy");
   try {
     const file = await readJsonFile(path);
     const now = new Date().toISOString();
@@ -698,7 +702,7 @@ export async function readWorkLog(): Promise<WorkLog> {
 export async function updateWorkLog(change: (log: WorkLog) => WorkLog): Promise<WorkLog> {
   const directory = traceDataDirectory();
   const path = join(directory, WORK_LOG_FILE);
-  const release = await acquireDirectoryLock(directory, WORK_LOG_LOCK, "The work log is busy. Please retry in a moment.");
+  const release = await acquireDirectoryLock(directory, WORK_LOG_LOCK, "workLogBusy");
   try {
     const file = await readJsonFile(path);
     const next = workLogSchema.parse(change(parseWorkLog(file.raw)));
@@ -726,7 +730,7 @@ export function traceTemplateDirectory() {
 
 function templatePath(id: string) {
   // Kimlik şemayla kebab-case'e kısıtlı; yine de yol üretmeden önce doğrulanıyor.
-  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) throw new Error("The template id is not valid.");
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) throw new UserFacingError("templateIdInvalid");
   return join(traceTemplateDirectory(), `${id}.template.json`);
 }
 
@@ -753,9 +757,9 @@ export async function listStoredTemplates() {
 
 export async function saveStoredTemplate(input: unknown) {
   const template = { ...narrativeTemplateSchema.parse(input), builtIn: false };
-  if (findBuiltInTemplate(template.id)) throw new Error("That id belongs to a built-in template; choose another name.");
+  if (findBuiltInTemplate(template.id)) throw new UserFacingError("templateIdBuiltIn");
   const issues = templateIssues(template);
-  if (issues.length) throw new Error(`The template cannot be used: ${issues.join("; ")}.`);
+  if (issues.length) throw new UserFacingError("templateUnusable", issues.join("; "));
   await atomicWrite(templatePath(template.id), `${JSON.stringify(template, null, 2)}\n`);
   return template;
 }
@@ -781,7 +785,7 @@ export function tracePublicationDirectory() {
 }
 
 function publicationFile(id: string) {
-  if (!publicationIdPattern.test(id)) throw new Error("The publication id is not valid.");
+  if (!publicationIdPattern.test(id)) throw new UserFacingError("publicationIdInvalid");
   return join(tracePublicationDirectory(), `${id}.publication.json`);
 }
 
@@ -872,7 +876,7 @@ export async function updatePublication(id: string, patch: PublicationPatch) {
   let source: ResearchProject | undefined;
   if (patch.refresh) {
     source = await readStoredProject(record.projectId);
-    if (!source) throw new Error("The project is no longer in the library, so this publication cannot be updated.");
+    if (!source) throw new UserFacingError("publicationSourceGone");
   } else if (patch.settings) {
     // Denetim değişince kopya YENİDEN süzülmeli; ama yazarın yayından sonra
     // yaptığı düzenlemeler bu yolla sızmamalı. Kaynak, yayındaki içerik —

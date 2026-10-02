@@ -2,6 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BarChart3, BookMarked, BookmarkCheck, BookOpen, Columns2, FileText, FileUp, Gauge, LayoutGrid, List, NotebookPen, Plus, Quote, Search, Tag, Trash2, Waypoints, X } from "lucide-react";
+import { useUiLanguage } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
+import { uiLocale } from "@/i18n/languages";
 import { MAX_MAP_PAPERS } from "@/lib/literature-map";
 import {
   LIBRARY_LAYOUT_KEY,
@@ -18,12 +21,11 @@ import {
 import { buildClaimIndex, excerptAround, highlightSegments, searchClaims, type ClaimHit, type ClaimSearch } from "@/lib/library-search";
 import { MAX_TAG_LENGTH, addTag, hasTag, removeTag, tagCounts, tagKey } from "@/lib/library-tags";
 import { buildNoteIndex, searchNotes, type NoteHit, type NoteSearch } from "@/lib/note-search";
-import { parseNotesFile, type ReaderNote } from "@/lib/reader-notes";
+import { ORPHAN_HEADING, parseNotesFile, type ReaderNote } from "@/lib/reader-notes";
 import { UNDO_WINDOW_MS } from "@/lib/pending-deletion";
 import { listLibraryTags, saveProjectTags } from "@/lib/project-library";
 import type { ResearchProject } from "@/lib/schema";
 import { foldForSearch } from "@/lib/search-text";
-import { claimKindLabels } from "./evidence-drawer";
 import { DisplayControl } from "./display-control";
 import { useReviewForecast } from "./study-progress";
 import { describeDue } from "@/lib/review-schedule";
@@ -66,26 +68,21 @@ type LibraryViewProps = {
 };
 
 type SearchScope = "papers" | "claims" | "notes";
+type LibraryWords = Messages["studio"]["library"];
 
 const TAG_OPTIONS_ID = "library-tag-options";
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" })
-    .format(new Date(value));
-}
-
-function generationLabel(project: ResearchProject) {
+function generationLabel(project: ResearchProject, t: LibraryWords) {
   const assignments = project.generation?.assignments;
   if (!assignments) return project.generation?.model;
   const models = new Set(Object.values(assignments).map((assignment) => `${assignment.provider}:${assignment.model}`));
-  return models.size > 1 ? `${models.size}-model team` : [...models][0]?.split(":").slice(1).join(":");
-}
-
-function count(value: number, noun: string) {
-  return `${value} ${noun}${value === 1 ? "" : "s"}`;
+  return models.size > 1 ? t.modelTeam(models.size) : [...models][0]?.split(":").slice(1).join(":");
 }
 
 export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onModelRecord, onReview, onConcepts, onReadingList, onContinue, onProgress, onDelete, pendingDeletion, onUndoDelete, onConfirmDelete, deleteError, onDismissDeleteError, onHome, onNew, onImport, onCompare }: LibraryViewProps) {
+  const { language, t: messages } = useUiLanguage();
+  const t = messages.studio.library;
+  const dateFormat = useMemo(() => new Intl.DateTimeFormat(uiLocale(language), { day: "numeric", month: "short", year: "numeric" }), [language]);
   const reading = useReadingList();
   const positions = useReadingPositions();
   const review = useReviewForecast(projects);
@@ -126,13 +123,20 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
    * silerdi.
    */
   const tagSaves = useRef<Promise<unknown>>(Promise.resolve());
+  // Yedek hata metinleri açılışta bir kez çalışan efektlerde; arayüzün o anki dili.
+  const tagsUnreadable = useRef(t.tagsUnreadable);
+  const notesUnreadable = useRef(t.notesUnreadable);
+  useEffect(() => {
+    tagsUnreadable.current = t.tagsUnreadable;
+    notesUnreadable.current = t.notesUnreadable;
+  });
 
   useEffect(() => {
     let active = true;
     listLibraryTags()
       .then((loaded) => { if (active) setTags(loaded); })
       .catch((error: unknown) => {
-        if (active) setImportError(error instanceof Error ? error.message : "Could not read the library tags.");
+        if (active) setImportError(error instanceof Error ? error.message : tagsUnreadable.current);
       });
     return () => { active = false; };
   }, []);
@@ -173,11 +177,11 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
     fetch("/api/library/notes", { cache: "no-store" })
       .then(async (response) => {
         const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-        if (!response.ok) throw new Error(data?.error ?? "Your notes could not be read.");
+        if (!response.ok) throw new Error(data?.error ?? notesUnreadable.current);
         if (!cancelled) setReaderNotes({ status: "ready", notes: parseNotesFile(data) });
       })
       .catch((error: unknown) => {
-        if (!cancelled) setReaderNotes({ status: "failed", message: error instanceof Error ? error.message : "Your notes could not be read." });
+        if (!cancelled) setReaderNotes({ status: "failed", message: error instanceof Error ? error.message : notesUnreadable.current });
       });
     return () => {
       cancelled = true;
@@ -197,7 +201,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
     tagSaves.current = tagSaves.current
       .then(() => saveProjectTags(projectId, next))
       .catch(async (error: unknown) => {
-        setImportError(error instanceof Error ? error.message : "Could not save the tags.");
+        setImportError(error instanceof Error ? error.message : t.tagsUnsaved);
         // Ekrandaki hâl kaydedilmemiş olabilir; sunucudakine dön.
         const loaded = await listLibraryTags().catch(() => undefined);
         if (loaded) setTags(loaded);
@@ -206,7 +210,7 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
 
   function submitTag(projectId: string) {
     const current = tags.get(projectId) ?? [];
-    const result = addTag(current, tagDraft, knownTags);
+    const result = addTag(current, tagDraft, knownTags, t.tagWords);
     if (!result.ok) {
       setTagError(result.error);
       return;
@@ -223,95 +227,95 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
   }
 
   const toolbarCount = scope === "papers"
-    ? count(filtered.length, "result")
+    ? t.results(filtered.length)
     : scope === "notes"
       ? noteSearch.terms.length
-        ? `${count(noteSearch.total, "note")} in ${count(noteSearch.papers, "paper")}`
-        : count(noteIndex.length, "note")
+        ? t.notesInPapers(noteSearch.total, noteSearch.papers)
+        : t.notes(noteIndex.length)
       : claimSearch.terms.length
-        ? `${count(claimSearch.total, "claim")} in ${count(claimSearch.papers, "paper")}`
-        : count(claimIndex.length, "claim");
+        ? t.claimsInPapers(claimSearch.total, claimSearch.papers)
+        : t.claims(claimIndex.length);
 
   return (
     <main className="library-page">
       <header className="library-header">
-        <button className="brand" onClick={onHome} aria-label="Trace home">
+        <button className="brand" onClick={onHome} aria-label={messages.studio.brand.home}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{messages.studio.brand.tagline}</small></span>
         </button>
         <div className="library-header-actions">
-          <button className="text-button" onClick={onHome}><ArrowLeft size={15} /> Home</button>
+          <button className="text-button" onClick={onHome}><ArrowLeft size={15} /> {t.home}</button>
           <input ref={importRef} type="file" accept=".json,.trace.json,application/json" hidden onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = "";
             if (!file) return;
             setImportError(undefined);
-            void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : "Could not import the Trace project."));
+            void onImport(file).catch((error) => setImportError(error instanceof Error ? error.message : t.importFailed));
           }} />
           <DisplayControl />
-          <button className="library-import-button" title="What you studied, remembered and have to review" onClick={onProgress}><BarChart3 size={15} /> Progress</button>
-          <button className="library-import-button" title="Concepts more than one paper explains" onClick={onConcepts}><Waypoints size={15} /> Concepts</button>
+          <button className="library-import-button" title={t.progressTitle} onClick={onProgress}><BarChart3 size={15} /> {t.progress}</button>
+          <button className="library-import-button" title={t.conceptsTitle} onClick={onConcepts}><Waypoints size={15} /> {t.concepts}</button>
           {/* Boşken de: Zotero'dan ya da bir .bib dosyasından içe aktarma oradan başlıyor. */}
           {onReadingList && reading?.ready ? (
-            <button className="library-import-button" title="Papers you saved to read later, in your reading order, and an import from Zotero" onClick={onReadingList}><BookmarkCheck size={15} /> Reading list{reading.items.length ? ` (${reading.items.length})` : ""}</button>
+            <button className="library-import-button" title={t.readingListTitle} onClick={onReadingList}><BookmarkCheck size={15} /> {t.readingList}{reading.items.length ? ` (${reading.items.length})` : ""}</button>
           ) : null}
-          <button className="library-import-button" title="How each model’s quotes held up" onClick={onModelRecord}><Gauge size={15} /> Model record</button>
+          <button className="library-import-button" title={t.modelRecordTitle} onClick={onModelRecord}><Gauge size={15} /> {t.modelRecord}</button>
           <button className="library-import-button" onClick={() => importRef.current?.click()}><FileUp size={15} /> Trace JSON</button>
-          <button className="library-new-button" onClick={onNew}><Plus size={16} /> New paper</button>
+          <button className="library-new-button" onClick={onNew}><Plus size={16} /> {t.newPaper}</button>
           <StudioNav />
         </div>
       </header>
 
-      {importError && <div className="library-import-error">{importError}<button onClick={() => setImportError(undefined)}>Close</button></div>}
-      {deleteError && <div className="library-import-error" role="alert">{deleteError} The project is back in the library.<button onClick={onDismissDeleteError}>Close</button></div>}
+      {importError && <div className="library-import-error">{importError}<button onClick={() => setImportError(undefined)}>{messages.common.close}</button></div>}
+      {deleteError && <div className="library-import-error" role="alert">{deleteError} {t.deleteRestored}<button onClick={onDismissDeleteError}>{messages.common.close}</button></div>}
 
       <section className="library-hero">
         <div>
-          <p className="landing-eyebrow"><span /> Personal research archive</p>
-          <h1>Your paper library.</h1>
-          <p>Every evidence map, deep report and interactive explanation you have produced, in one place.</p>
+          <p className="landing-eyebrow"><span /> {t.eyebrow}</p>
+          <h1>{t.title}</h1>
+          <p>{t.lead}</p>
         </div>
         <div className="library-stats">
           {review?.total ? (
-            <button className="library-stat library-review" onClick={onReview} title="Review what you studied, across the library">
+            <button className="library-stat library-review" onClick={onReview} title={t.reviewTitle}>
               <strong>{review.due}</strong>
               <span>
                 {review.due
-                  ? `${review.due === 1 ? "card" : "cards"} to review`
-                  : `to review · next ${review.nextDue ? describeDue(review.nextDue, review.now) : "later"}`}
+                  ? t.cardsToReview(review.due)
+                  : t.nothingDue(review.nextDue ? describeDue(review.nextDue, review.now, messages.learning.words.due) : undefined)}
                 {" "}<ArrowRight size={12} />
               </span>
             </button>
           ) : null}
-          <div className="library-stat"><strong>{projects.length}</strong><span>saved projects</span></div>
+          <div className="library-stat"><strong>{projects.length}</strong><span>{t.savedProjects}</span></div>
         </div>
       </section>
 
       <section className="library-toolbar">
-        <div className="library-scope" role="group" aria-label="Search in">
-          <button aria-pressed={scope === "papers"} onClick={() => setScope("papers")}>Papers</button>
-          <button aria-pressed={scope === "claims"} onClick={() => setScope("claims")}>Claims</button>
-          <button aria-pressed={scope === "notes"} onClick={() => setScope("notes")}>Your notes</button>
+        <div className="library-scope" role="group" aria-label={t.searchIn}>
+          <button aria-pressed={scope === "papers"} onClick={() => setScope("papers")}>{t.scopes.papers}</button>
+          <button aria-pressed={scope === "claims"} onClick={() => setScope("claims")}>{t.scopes.claims}</button>
+          <button aria-pressed={scope === "notes"} onClick={() => setScope("notes")}>{t.scopes.notes}</button>
         </div>
         <label>
           <Search size={17} />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label={scope === "papers" ? "Search papers" : scope === "notes" ? "Search your notes" : "Search claims"}
-            placeholder={scope === "papers" ? "Search title, author, venue or tag" : scope === "notes" ? "Search your notes and highlights" : "Search what your papers claim"}
+            aria-label={t.searchLabels[scope]}
+            placeholder={t.searchPlaceholders[scope]}
           />
         </label>
         {scope === "papers" && (
           <div className="library-arrange">
             <label>
-              <span>Sort</span>
+              <span>{t.sort}</span>
               <select value={sort} onChange={(event) => { const next = parseLibrarySort(event.target.value); setSort(next); writeStored(LIBRARY_SORT_KEY, next); }}>
-                {librarySorts.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                {librarySorts.map((option) => <option key={option.id} value={option.id}>{t.sorts[option.id]}</option>)}
               </select>
             </label>
-            <div className="library-layout" role="group" aria-label="Layout">
-              {([["grid", "Grid", LayoutGrid], ["list", "List", List]] as const).map(([id, label, Icon]) => (
+            <div className="library-layout" role="group" aria-label={t.layout}>
+              {([["grid", t.grid, LayoutGrid], ["list", t.list, List]] as const).map(([id, label, Icon]) => (
                 <button key={id} aria-pressed={layout === id} aria-label={label} title={label} onClick={() => { setLayout(id); writeStored(LIBRARY_LAYOUT_KEY, id); }}>
                   <Icon size={15} />
                 </button>
@@ -323,8 +327,8 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
       </section>
 
       {tagSummary.length > 0 && (
-        <nav className="library-tags" aria-label="Collections">
-          <button aria-pressed={!collection} onClick={() => setActiveTag(undefined)}>All papers <i>{projects.length}</i></button>
+        <nav className="library-tags" aria-label={t.collections}>
+          <button aria-pressed={!collection} onClick={() => setActiveTag(undefined)}>{t.allPapers} <i>{projects.length}</i></button>
           {tagSummary.map((entry) => (
             <button
               key={tagKey(entry.tag)}
@@ -336,11 +340,11 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
           ))}
           {collection && inCollection.length >= 2 && inCollection.length <= MAX_MAP_PAPERS && (
             <button className="library-open library-collection-action" onClick={() => onCompare(inCollection)}>
-              {inCollection.length > 2 ? `Map these ${inCollection.length} papers` : "Compare these two"} <ArrowRight size={14} />
+              {inCollection.length > 2 ? t.mapThese(inCollection.length) : t.compareTheseTwo} <ArrowRight size={14} />
             </button>
           )}
           {collection && inCollection.length > MAX_MAP_PAPERS && (
-            <small>Select up to {MAX_MAP_PAPERS} of these to map them.</small>
+            <small>{t.selectUpTo(MAX_MAP_PAPERS)}</small>
           )}
         </nav>
       )}
@@ -353,12 +357,12 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
           <Columns2 size={16} />
           <span>
             {chosen.map((project) => project.evidence.paper.title).join("  ·  ")}
-            {chosen.length === 1 ? "  ·  pick one more" : chosen.length < MAX_MAP_PAPERS ? `  ·  add up to ${MAX_MAP_PAPERS} for a literature map` : ""}
+            {chosen.length === 1 ? t.pickOneMore : chosen.length < MAX_MAP_PAPERS ? t.addUpTo(MAX_MAP_PAPERS) : ""}
           </span>
           <div>
-            <button className="text-button" onClick={() => setSelected([])}>Clear</button>
+            <button className="text-button" onClick={() => setSelected([])}>{t.clear}</button>
             <button className="library-open" disabled={chosen.length < 2} onClick={() => chosen.length >= 2 && onCompare(chosen)}>
-              {chosen.length > 2 ? `Map ${chosen.length} papers` : "Compare"} <ArrowRight size={15} />
+              {chosen.length > 2 ? t.mapPapers(chosen.length) : t.compare} <ArrowRight size={15} />
             </button>
           </div>
         </div>
@@ -376,13 +380,13 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
       ) : projects.length > 0 && scope === "claims" ? (
         <ClaimResults search={claimSearch} claimCount={claimIndex.length} paperCount={inCollection.length} collection={collection} onOpenClaim={onOpenClaim} />
       ) : filtered.length ? (
-        <section className={layout === "list" ? "library-grid is-list" : "library-grid"} aria-label="Papers">
+        <section className={layout === "list" ? "library-grid is-list" : "library-grid"} aria-label={t.scopes.papers}>
           {filtered.map((project, index) => {
             const projectTags = tags.get(project.id) ?? [];
             const editing = editingTags === project.id;
             return (
               <article className={selected.includes(project.id) ? "library-card is-selected" : "library-card"} key={project.id} style={{ "--card-accent": project.story.accent } as React.CSSProperties}>
-                <label className="library-select" title="Select for comparison">
+                <label className="library-select" title={t.selectForComparison}>
                   <input type="checkbox" checked={selected.includes(project.id)} onChange={() => toggleSelected(project.id)} />
                   <span aria-hidden="true" />
                 </label>
@@ -393,14 +397,14 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
                     <i />
                   </div>
                   <div className="library-card-copy">
-                    <span>{project.evidence.paper.venue || "Research paper"} · {project.evidence.paper.year}</span>
+                    <span>{project.evidence.paper.venue || t.researchPaper} · {project.evidence.paper.year}</span>
                     <h2>{project.evidence.paper.title}</h2>
                     <p>{project.evidence.plainSummary}</p>
                     <div className="library-card-meta">
-                      <span>{project.story.sections.length} story</span>
-                      <span>{project.evidence.claims.length} claim</span>
-                      {project.deepReport && <span>{project.deepReport.sections.length} report</span>}
-                      {project.technicalAppendix && <span>technical appendix</span>}
+                      <span>{t.storyCount(project.story.sections.length)}</span>
+                      <span>{t.claimCount(project.evidence.claims.length)}</span>
+                      {project.deepReport && <span>{t.reportCount(project.deepReport.sections.length)}</span>}
+                      {project.technicalAppendix && <span>{t.technicalAppendix}</span>}
                     </div>
                   </div>
                 </button>
@@ -408,10 +412,10 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
                   {projectTags.map((tag) => editing ? (
                     <span className="library-tag" key={tagKey(tag)}>
                       {tag}
-                      <button aria-label={`Remove the tag ${tag}`} onClick={() => persistTags(project.id, removeTag(projectTags, tag))}><X size={11} /></button>
+                      <button aria-label={t.removeTag(tag)} onClick={() => persistTags(project.id, removeTag(projectTags, tag))}><X size={11} /></button>
                     </span>
                   ) : (
-                    <button className="library-tag" key={tagKey(tag)} title="Show the papers with this tag" onClick={() => setActiveTag(tag)}>{tag}</button>
+                    <button className="library-tag" key={tagKey(tag)} title={t.showTag} onClick={() => setActiveTag(tag)}>{tag}</button>
                   ))}
                   {editing ? (
                     <form onSubmit={(event) => { event.preventDefault(); submitTag(project.id); }}>
@@ -422,37 +426,37 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
                         maxLength={MAX_TAG_LENGTH}
                         onChange={(event) => { setTagDraft(event.target.value); setTagError(undefined); }}
                         onKeyDown={(event) => { if (event.key === "Escape") setEditingTags(undefined); }}
-                        placeholder="Add a tag"
-                        aria-label={`Add a tag to ${project.evidence.paper.title}`}
+                        placeholder={t.addTagPlaceholder}
+                        aria-label={t.addTagTo(project.evidence.paper.title)}
                       />
-                      <button type="submit" disabled={!tagDraft.trim()}>Add</button>
-                      <button type="button" onClick={() => setEditingTags(undefined)}>Done</button>
+                      <button type="submit" disabled={!tagDraft.trim()}>{messages.common.add}</button>
+                      <button type="button" onClick={() => setEditingTags(undefined)}>{messages.common.done}</button>
                       {tagError && <small className="library-tag-error" role="alert">{tagError}</small>}
                     </form>
                   ) : (
                     <button className="library-tag-edit" onClick={() => startEditingTags(project.id)}>
-                      <Tag size={11} /> {projectTags.length ? "Edit tags" : "Add tags"}
+                      <Tag size={11} /> {projectTags.length ? t.editTags : t.addTags}
                     </button>
                   )}
                 </div>
                 <footer>
-                  <span>{formatDate(project.updatedAt)}{generationLabel(project) ? ` · ${generationLabel(project)}` : ""}</span>
+                  <span>{dateFormat.format(new Date(project.updatedAt))}{generationLabel(project, t) ? ` · ${generationLabel(project, t)}` : ""}</span>
                   <div>
-                    <button className="library-delete" title="Delete from library" aria-label={`Delete ${project.evidence.paper.title} from the library`} onClick={() => {
+                    <button className="library-delete" title={t.deleteTitle} aria-label={t.deletePaper(project.evidence.paper.title)} onClick={() => {
                       setImportError(undefined);
                       onDelete(project.id);
                     }}><Trash2 size={15} /></button>
                     {onContinue && worthContinuing(positions[project.id]) ? (
                       <button
                         className="library-continue"
-                        title={`You stopped at ${positionLabel(positions[project.id])}`}
-                        aria-label={`Continue reading ${project.evidence.paper.title} at ${positionLabel(positions[project.id])}`}
+                        title={t.stoppedAt(positionLabel(positions[project.id], messages.learning.words.positionLabel))}
+                        aria-label={t.continueReading(project.evidence.paper.title, positionLabel(positions[project.id], messages.learning.words.positionLabel))}
                         onClick={() => onContinue(project, positions[project.id])}
                       >
-                        <BookMarked size={14} /> Continue {positions[project.id].index + 1}/{positions[project.id].total}
+                        <BookMarked size={14} /> {t.continueAt(positions[project.id].index + 1, positions[project.id].total)}
                       </button>
                     ) : null}
-                    <button className="library-open" onClick={() => onOpen(project)}>Open <ArrowRight size={15} /></button>
+                    <button className="library-open" onClick={() => onOpen(project)}>{messages.common.open} <ArrowRight size={15} /></button>
                   </div>
                 </footer>
               </article>
@@ -462,9 +466,9 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
       ) : (
         <section className="library-empty">
           <BookOpen size={30} />
-          <h2>{projects.length ? "No paper matches your search." : "Your library is waiting for its first paper."}</h2>
-          <p>Add a PDF, or import a Trace JSON produced by Codex, Claude Code or Antigravity CLI.</p>
-          <button onClick={onNew}>Add a paper <ArrowRight size={16} /></button>
+          <h2>{projects.length ? t.noMatch : t.empty}</h2>
+          <p>{t.emptyHint}</p>
+          <button onClick={onNew}>{t.addPaper} <ArrowRight size={16} /></button>
         </section>
       )}
       {pendingDeletion && <UndoToast key={pendingDeletion.id} project={pendingDeletion} onUndo={onUndoDelete} onConfirm={onConfirmDelete} />}
@@ -477,6 +481,8 @@ export function LibraryView({ projects, onOpen, onOpenClaim, onOpenNotes, onMode
  * içindeyken değil, orada kullanıcının kendi yazısını geri alıyor.
  */
 function UndoToast({ project, onUndo, onConfirm }: { project: ResearchProject; onUndo: () => void; onConfirm: () => void }) {
+  const messages = useUiLanguage().t;
+  const t = messages.studio.library;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -493,9 +499,9 @@ function UndoToast({ project, onUndo, onConfirm }: { project: ResearchProject; o
   return (
     <div className="undo-toast" role="status" aria-live="polite">
       <i className="undo-toast-timer" style={{ animationDuration: `${UNDO_WINDOW_MS}ms` }} aria-hidden="true" />
-      <span>Deleted “{project.evidence.paper.title}” with its history.</span>
-      <button className="undo-action" onClick={onUndo}>Undo</button>
-      <button className="undo-dismiss" aria-label="Delete now" title="Delete now" onClick={onConfirm}><X size={15} /></button>
+      <span>{t.deleted(project.evidence.paper.title)}</span>
+      <button className="undo-action" onClick={onUndo}>{messages.common.undo}</button>
+      <button className="undo-dismiss" aria-label={t.deleteNow} title={t.deleteNow} onClick={onConfirm}><X size={15} /></button>
     </div>
   );
 }
@@ -521,17 +527,17 @@ type NoteResultsProps = {
 
 /** Okuyucunun notları ve vurguları; sonuç kartı iddia kartının düzeninde. */
 function NoteResults({ state, search, noteCount, paperCount, collection, onOpen }: NoteResultsProps) {
+  const messages = useUiLanguage().t;
+  const t = messages.studio.library;
   if (state.status === "failed") return <p className="regen-error" role="alert">{state.message}</p>;
-  if (state.status !== "ready") return <p className="review-status" role="status">Reading your notes…</p>;
+  if (state.status !== "ready") return <p className="review-status" role="status">{t.readingNotes}</p>;
   if (!search.terms.length) {
     return (
       <section className="library-empty">
         <NotebookPen size={30} />
-        <h2>Search what you noted.</h2>
+        <h2>{t.searchNotesTitle}</h2>
         <p>
-          {noteCount
-            ? `Type a word or two to search your ${count(noteCount, "note")} and highlights across ${count(paperCount, "paper")}${collection ? ` tagged “${collection}”` : ""}.`
-            : "Highlight a passage or write a note in a paper's Lab, and it can be found here."}
+          {noteCount ? t.searchNotesIntro(noteCount, paperCount, collection) : t.noNotesYet}
         </p>
       </section>
     );
@@ -540,28 +546,29 @@ function NoteResults({ state, search, noteCount, paperCount, collection, onOpen 
     return (
       <section className="library-empty">
         <NotebookPen size={30} />
-        <h2>No note or highlight mentions every word you typed.</h2>
-        <p>The search reads your notes, your highlights and where they are.</p>
+        <h2>{t.noNoteMatch}</h2>
+        <p>{t.noteSearchScope}</p>
       </section>
     );
   }
+  const openTitle = (hit: NoteHit) => (hit.note.target.kind === "claim" ? t.openClaim : t.openNotes);
   return (
-    <section className="claim-results" aria-label="Matching notes">
+    <section className="claim-results" aria-label={t.matchingNotes}>
       {search.hits.map((hit) => (
         <article key={JSON.stringify([hit.project.id, hit.note.id])} className="claim-hit note-hit" style={{ "--card-accent": hit.project.story.accent } as React.CSSProperties}>
-          <button onClick={() => onOpen(hit)} title={hit.note.target.kind === "claim" ? "Open this claim in its project" : "Open your notes on this paper"}>
+          <button onClick={() => onOpen(hit)} title={openTitle(hit)}>
             <span className="claim-hit-source">
               <b>{hit.project.evidence.paper.title}</b>
-              <small>{hit.place}</small>
+              <small>{t.notePlaces[hit.place]}</small>
             </span>
-            <span className="note-hit-where">{hit.heading}</span>
+            <span className="note-hit-where">{hit.heading === ORPHAN_HEADING ? messages.learning.readerNotes.orphans : hit.heading}</span>
             {hit.note.quote ? <span className={`claim-hit-quote note-hit-quote is-${hit.note.color}`}>“<Highlighted text={excerptAround(hit.note.quote, search.terms)} terms={search.terms} />”</span> : null}
             {hit.note.text ? <span className="note-hit-text"><Highlighted text={excerptAround(hit.note.text, search.terms)} terms={search.terms} /></span> : null}
           </button>
         </article>
       ))}
       {search.total > search.hits.length && (
-        <p className="claim-results-more">Showing the first {search.hits.length} of {search.total} notes. Add a word to narrow the search.</p>
+        <p className="claim-results-more">{t.moreNotes(search.hits.length, search.total)}</p>
       )}
     </section>
   );
@@ -576,15 +583,13 @@ type ClaimResultsProps = {
 };
 
 function ClaimResults({ search, claimCount, paperCount, collection, onOpenClaim }: ClaimResultsProps) {
+  const t = useUiLanguage().t.studio.library;
   if (!search.terms.length) {
     return (
       <section className="library-empty">
         <Quote size={30} />
-        <h2>Search what your papers claim.</h2>
-        <p>
-          Type a word or two to search the {count(claimCount, "claim")} of {count(paperCount, "paper")}
-          {collection ? ` tagged “${collection}”` : ""}. Every match opens on its quote and page.
-        </p>
+        <h2>{t.searchClaimsTitle}</h2>
+        <p>{t.searchClaimsIntro(claimCount, paperCount, collection)}</p>
       </section>
     );
   }
@@ -592,32 +597,32 @@ function ClaimResults({ search, claimCount, paperCount, collection, onOpenClaim 
     return (
       <section className="library-empty">
         <Quote size={30} />
-        <h2>No claim mentions every word you typed.</h2>
-        <p>The search reads the claims and their quotes, not the full text of the papers.</p>
+        <h2>{t.noClaimMatch}</h2>
+        <p>{t.claimSearchScope}</p>
       </section>
     );
   }
   return (
-    <section className="claim-results" aria-label="Matching claims">
+    <section className="claim-results" aria-label={t.matchingClaims}>
       {search.hits.map((hit) => (
         <ClaimResult key={JSON.stringify([hit.project.id, hit.claim.id])} hit={hit} terms={search.terms} onOpen={onOpenClaim} />
       ))}
       {search.total > search.hits.length && (
-        <p className="claim-results-more">
-          Showing the first {search.hits.length} of {search.total} claims. Add a word to narrow the search.
-        </p>
+        <p className="claim-results-more">{t.moreClaims(search.hits.length, search.total)}</p>
       )}
     </section>
   );
 }
 
 function ClaimResult({ hit, terms, onOpen }: { hit: ClaimHit; terms: readonly string[]; onOpen: ClaimResultsProps["onOpenClaim"] }) {
+  const messages = useUiLanguage().t;
+  const t = messages.studio.library;
   const { project, claim, reference, review } = hit;
   const source = project.evidence.sources.find((item) => item.id === reference.sourceId);
-  const location = reference.page ? `p. ${reference.page}` : source?.type === "web" ? "web source" : undefined;
+  const location = reference.page ? messages.common.page(reference.page) : source?.type === "web" ? t.webSource : undefined;
   return (
     <article className="claim-hit" style={{ "--card-accent": project.story.accent } as React.CSSProperties}>
-      <button onClick={() => onOpen(project, claim.id)} title="Open this claim in its project">
+      <button onClick={() => onOpen(project, claim.id)} title={t.openClaim}>
         <span className="claim-hit-source">
           <b>{project.evidence.paper.title}</b>
           <small>{[project.evidence.paper.year, location].filter(Boolean).join(" · ")}</small>
@@ -625,14 +630,14 @@ function ClaimResult({ hit, terms, onOpen }: { hit: ClaimHit; terms: readonly st
         <span className="claim-hit-statement"><Highlighted text={claim.statement} terms={terms} /></span>
         <span className="claim-hit-quote">“<Highlighted text={excerptAround(reference.excerpt, terms)} terms={terms} />”</span>
         <span className="claim-hit-marks">
-          <span>{claimKindLabels[claim.kind]}</span>
+          <span>{t.claimKinds[claim.kind]}</span>
           <span className={claim.confidence === "verified" ? "is-good" : "is-warn"}>
-            {claim.confidence === "verified" ? "Verified" : "Needs review"}
+            {claim.confidence === "verified" ? t.verified : t.needsReview}
           </span>
-          {hit.quoteMissing && <span className="is-warn">Quote not found on its page</span>}
+          {hit.quoteMissing && <span className="is-warn">{t.quoteMissing}</span>}
           {review && (
             <span className={review.status === "approved" ? "is-good" : "is-bad"}>
-              {review.status === "approved" ? "Approved" : "Rejected"} by {review.by}
+              {review.status === "approved" ? t.approvedBy(review.by) : t.rejectedBy(review.by)}
             </span>
           )}
         </span>

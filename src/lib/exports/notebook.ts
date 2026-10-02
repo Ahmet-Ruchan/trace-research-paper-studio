@@ -1,3 +1,4 @@
+import { stringsFor, type Strings } from "../../visuals/i18n";
 import { FormulaError, parseFormula, type FormulaNode } from "../formula";
 import type { Interactive, ResearchProject } from "../schema";
 
@@ -11,6 +12,9 @@ import type { Interactive, ResearchProject } from "../schema";
  * ve sabit bir NumPy fonksiyon tablosundan oluşuyor.
  *
  * Çevrilemeyen bir formül tahmin edilmez; atlanır ve defter bunu söyler.
+ *
+ * Defterin kendi metni (açıklama, yorum satırları) makalenin dilini izliyor
+ * (`stringsFor`); formülden üretilen kod her dilde aynı.
  */
 
 type Playground = Extract<Interactive, { kind: "formula-playground" }>;
@@ -75,12 +79,12 @@ type Cell = { cell_type: "markdown" | "code"; source: string };
 const pythonString = (value: string) => JSON.stringify(value.replace(/\s+/g, " ").trim());
 const comment = (value: string) => value.replace(/\s+/g, " ").trim();
 
-function playgroundCells(project: ResearchProject, playground: Playground): { cells: Cell[]; skipped: string[] } {
+function playgroundCells(project: ResearchProject, playground: Playground, t: Strings): { cells: Cell[]; skipped: string[] } {
   const skipped: string[] = [];
   const quotes = playground.claimIds
     .map((id) => project.evidence.claims.find((claim) => claim.id === id))
     .filter((claim) => claim !== undefined)
-    .map((claim) => `> “${claim.sourceRefs[0].excerpt.replace(/\s+/g, " ")}” — ${claim.sourceRefs[0].page ? `p. ${claim.sourceRefs[0].page}` : claim.sourceRefs[0].sourceId}`);
+    .map((claim) => `> “${claim.sourceRefs[0].excerpt.replace(/\s+/g, " ")}” — ${claim.sourceRefs[0].page ? t.page(claim.sourceRefs[0].page) : claim.sourceRefs[0].sourceId}`);
 
   const parameters = playground.parameters.map((parameter) => pythonName(parameter.name));
   const signature = parameters.join(", ");
@@ -93,7 +97,7 @@ function playgroundCells(project: ResearchProject, playground: Playground): { ce
       functions.push(`def ${fn}(${signature}):\n    # ${comment(output.label)}${output.unit ? ` [${comment(output.unit)}]` : ""}\n    return ${expression}`);
       outputs.push({ id: output.id, fn, label: output.label, unit: output.unit });
     } catch (error) {
-      skipped.push(`${playground.title} · ${output.label}: ${error instanceof Error ? error.message : "could not be translated"}`);
+      skipped.push(`${playground.title} · ${output.label}: ${error instanceof Error ? error.message : t.notebookUntranslatable}`);
     }
   });
   if (!outputs.length) return { cells: [], skipped };
@@ -102,12 +106,12 @@ function playgroundCells(project: ResearchProject, playground: Playground): { ce
   const cells: Cell[] = [
     {
       cell_type: "markdown",
-      source: [`## ${playground.title}`, "", playground.description, "", `*In the paper: ${playground.paperAnchor}*`, "", ...quotes].join("\n"),
+      source: [`## ${playground.title}`, "", playground.description, "", `*${t.notebookInPaper(playground.paperAnchor)}*`, "", ...quotes].join("\n"),
     },
     {
       cell_type: "code",
       source: [
-        "# The paper's own configuration",
+        `# ${t.notebookConfigComment}`,
         paper,
         "",
         ...functions.flatMap((fn) => [fn, ""]),
@@ -125,12 +129,12 @@ function playgroundCells(project: ResearchProject, playground: Playground): { ce
       cells.push({
         cell_type: "code",
         source: [
-          `# Sweep ${comment(axis.label)} over the range the playground uses; everything else stays at the paper's value.`,
+          `# ${t.notebookSweepComment(comment(axis.label))}`,
           `${x}_values = np.linspace(${axis.min}, ${axis.max}, ${chart.samples})`,
           `sweep = {**paper, ${pythonString(x)}: ${x}_values}`,
           "fig, ax = plt.subplots(figsize=(7, 4))",
           ...series.map(({ item, output }) => `ax.plot(${x}_values, np.broadcast_to(${output!.fn}(**sweep), ${x}_values.shape), label=${pythonString(item.label)})`),
-          `ax.axvline(paper[${pythonString(x)}], linestyle="--", linewidth=1, color="gray", label="paper's value")`,
+          `ax.axvline(paper[${pythonString(x)}], linestyle="--", linewidth=1, color="gray", label=${pythonString(t.chartPaperKey)})`,
           ...(chart.yScale === "log" ? ['ax.set_yscale("log")'] : []),
           `ax.set_xlabel(${pythonString(axis.label + (axis.unit ? ` [${axis.unit}]` : ""))})`,
           "ax.legend()",
@@ -148,7 +152,8 @@ export function notebookPlaygrounds(project: ResearchProject): Playground[] {
 
 export function buildNotebook(project: ResearchProject): string {
   const playgrounds = notebookPlaygrounds(project);
-  const built = playgrounds.map((playground) => playgroundCells(project, playground));
+  const t = stringsFor(project.language);
+  const built = playgrounds.map((playground) => playgroundCells(project, playground, t));
   const skipped = built.flatMap((item) => item.skipped);
   const { paper } = project.evidence;
 
@@ -160,8 +165,8 @@ export function buildNotebook(project: ResearchProject): string {
         "",
         `${paper.authors.join(", ")} · ${paper.venue} · ${paper.year}`,
         "",
-        "The equations below were generated by Trace from the paper's interactive playgrounds. Each one is translated from a parsed formula, not pasted as text, and starts at the value the paper itself uses. Moving away from that value leaves the region the paper verified.",
-        ...(skipped.length ? ["", "**Left out because they could not be translated exactly:**", ...skipped.map((item) => `- ${item}`)] : []),
+        t.notebookIntro,
+        ...(skipped.length ? ["", `**${t.notebookLeftOut}**`, ...skipped.map((item) => `- ${item}`)] : []),
       ].join("\n"),
     },
     { cell_type: "code", source: "import numpy as np\nimport matplotlib.pyplot as plt" },

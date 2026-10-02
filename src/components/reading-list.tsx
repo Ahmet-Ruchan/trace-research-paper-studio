@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BookmarkCheck, BookmarkPlus, ExternalLink, Trash2 } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { savedFrom, savedReason, workKey, type ReadingItem, type ReadingSource, type SavedPlace } from "@/lib/reading-list";
 import type { ResearchProject } from "@/lib/schema";
 
@@ -31,10 +32,11 @@ export function useReadingList() {
   return useContext(ReadingContext);
 }
 
-async function send(request: Promise<Response>) {
+/** `failed`: sunucu bir hata yazmadığında. */
+async function send(request: Promise<Response>, failed: string) {
   const response = await request;
   const data = (await response.json().catch(() => undefined)) as { items?: ReadingItem[]; error?: string } | undefined;
-  if (!response.ok || !data?.items) throw new Error(data?.error ?? "The reading list could not be saved.");
+  if (!response.ok || !data?.items) throw new Error(data?.error ?? failed);
   return data.items;
 }
 
@@ -42,17 +44,23 @@ export function ReadingListProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ReadingItem[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string>();
+  // Hata metinleri ref'te: liste dil değişince yeniden okunmasın.
+  const t = useT().learning.readingList;
+  const text = useRef(t);
+  useEffect(() => {
+    text.current = t;
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;
-    send(fetch("/api/library/reading-list", { cache: "no-store" }))
+    send(fetch("/api/library/reading-list", { cache: "no-store" }), text.current.saveFailed)
       .then((next) => {
         if (cancelled) return;
         setItems(next);
         setReady(true);
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "The reading list could not be read.");
+        if (!cancelled) setError(reason instanceof Error ? reason.message : text.current.readFailed);
       });
     return () => {
       cancelled = true;
@@ -61,10 +69,10 @@ export function ReadingListProvider({ children }: { children: ReactNode }) {
 
   const run = useCallback(async (request: Promise<Response>) => {
     try {
-      setItems(await send(request));
+      setItems(await send(request, text.current.saveFailed));
       setError(undefined);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The reading list could not be saved.");
+      setError(reason instanceof Error ? reason.message : text.current.saveFailed);
     }
   }, []);
 
@@ -76,7 +84,7 @@ export function ReadingListProvider({ children }: { children: ReactNode }) {
     add: (item) => run(fetch("/api/library/reading-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item }) })),
     remove: (id) => run(fetch(`/api/library/reading-list?id=${encodeURIComponent(id)}`, { method: "DELETE" })),
     addAll: async (incoming) => {
-      setItems(await send(fetch("/api/library/reading-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: incoming }) })));
+      setItems(await send(fetch("/api/library/reading-list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: incoming }) }), text.current.saveFailed));
       setError(undefined);
     },
     reload: () => run(fetch("/api/library/reading-list", { cache: "no-store" })),
@@ -106,6 +114,7 @@ export function readingItemFor(work: Work, from: ReadingSource): ReadingItem {
 
 /** "Read later": listede değilse ekler, listedeyse çıkarır. */
 export function ReadLaterButton({ work, from }: { work: Work; from: ReadingSource }) {
+  const t = useT().learning.readingList;
   const list = useReadingList();
   const [busy, setBusy] = useState(false);
   if (!list?.ready) return null;
@@ -117,23 +126,26 @@ export function ReadLaterButton({ work, from }: { work: Work; from: ReadingSourc
       className={`read-later${saved ? " is-saved" : ""}`}
       aria-pressed={saved}
       disabled={busy}
-      title={saved ? "On your reading list; press to remove it" : "Save it to read later; it takes its place in your reading order"}
+      title={saved ? t.onListTitle : t.saveTitle}
       onClick={async () => {
         setBusy(true);
         await (saved ? list.remove(id) : list.add(readingItemFor(work, from)));
         setBusy(false);
       }}
     >
-      {saved ? <BookmarkCheck size={13} /> : <BookmarkPlus size={13} />} {saved ? "On your list" : "Read later"}
+      {saved ? <BookmarkCheck size={13} /> : <BookmarkPlus size={13} />} {saved ? t.onList : t.readLater}
     </button>
   );
 }
 
 /** Okuma listesindeki bir çalışma: başlık, bilgi, neden burada, analiz et / aç / çıkar. */
 export function SavedWork({ place, inOrder, onOpen, onAnalyse }: { place: SavedPlace; inOrder: boolean; onOpen: (project: ResearchProject) => void; onAnalyse?: (work: { identifier: string; title: string }) => void }) {
+  const messages = useT();
+  const learning = messages.learning;
+  const t = learning.readingList;
   const list = useReadingList();
   const { item, owned, why } = place;
-  const meta = [item.authors.length ? `${item.authors.slice(0, 3).join(", ")}${item.authors.length > 3 ? " et al." : ""}` : "", item.year, item.venue].filter(Boolean).join(" · ");
+  const meta = [item.authors.length ? `${item.authors.slice(0, 3).join(", ")}${item.authors.length > 3 ? t.etAl : ""}` : "", item.year, item.venue].filter(Boolean).join(" · ");
   return (
     <>
       <div className="reading-head">
@@ -142,17 +154,17 @@ export function SavedWork({ place, inOrder, onOpen, onAnalyse }: { place: SavedP
         ) : (
           <span className="reading-title">{item.title}</span>
         )}
-        <strong className="reading-saved">Read later</strong>
+        <strong className="reading-saved">{t.readLater}</strong>
       </div>
       {meta ? <p className="reading-meta">{meta}</p> : null}
-      <p className="reading-why">{owned ? "Now in your library." : why ? (inOrder ? savedReason(why) : savedFrom(why)) : item.from.length ? "Saved from a paper no longer in your library." : "Saved on its own."}</p>
+      <p className="reading-why">{owned ? t.nowOwned : why ? (inOrder ? savedReason(why, learning.words.savedReason) : savedFrom(why, learning.words.savedReason)) : item.from.length ? t.orphan : t.alone}</p>
       <div className="reading-actions">
         {owned ? (
-          <button type="button" onClick={() => onOpen(owned)}>Open it</button>
+          <button type="button" onClick={() => onOpen(owned)}>{t.openIt}</button>
         ) : onAnalyse ? (
-          <button type="button" onClick={() => onAnalyse({ identifier: item.identifier ?? item.title, title: item.title })}>{item.pdfAvailable === false ? "Look it up" : "Analyze it"}</button>
+          <button type="button" onClick={() => onAnalyse({ identifier: item.identifier ?? item.title, title: item.title })}>{item.pdfAvailable === false ? t.lookUp : t.analyze}</button>
         ) : null}
-        <button type="button" className="reading-remove" onClick={() => void list?.remove(item.id)} aria-label={`Remove ${item.title} from your reading list`}><Trash2 size={13} /> Remove</button>
+        <button type="button" className="reading-remove" onClick={() => void list?.remove(item.id)} aria-label={t.removeLabel(item.title)}><Trash2 size={13} /> {messages.common.remove}</button>
       </div>
     </>
   );

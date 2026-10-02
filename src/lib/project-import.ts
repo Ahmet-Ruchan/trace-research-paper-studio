@@ -7,20 +7,46 @@ import { researchProjectSchema, type ResearchProject } from "./schema";
  */
 
 export const MAX_PROJECT_BYTES = 5 * 1024 * 1024;
-export const PROJECT_TOO_LARGE = "The Trace JSON exceeds the 5 MB limit.";
 
-export function parseTraceProject(text: string): ResearchProject {
-  if (text.length > MAX_PROJECT_BYTES) throw new Error(PROJECT_TOO_LARGE);
+/**
+ * Kullanıcıya gösterilen hata iletileri; stüdyo arayüzün dilindekini veriyor
+ * (`src/i18n/messages`), verilmezse İngilizce.
+ */
+export type ProjectImportWords = {
+  tooLarge: string;
+  notJson: string;
+  invalidSchema: (path: string, message: string) => string;
+  /** Şema hatasının yeri yoksa (belgenin kendisi) ve iletisi yoksa. */
+  root: string;
+  unknownError: string;
+  badAddress: string;
+  notThisMachine: string;
+};
+
+export const ENGLISH_PROJECT_IMPORT_WORDS: ProjectImportWords = {
+  tooLarge: "The Trace JSON exceeds the 5 MB limit.",
+  notJson: "The file is not valid JSON.",
+  invalidSchema: (path, message) => `Invalid Trace project schema: ${path} · ${message}`,
+  root: "root",
+  unknownError: "unknown error",
+  badAddress: "The import address is not valid.",
+  notThisMachine: "Imports are only accepted from an address on this machine.",
+};
+
+export const PROJECT_TOO_LARGE = ENGLISH_PROJECT_IMPORT_WORDS.tooLarge;
+
+export function parseTraceProject(text: string, words: ProjectImportWords = ENGLISH_PROJECT_IMPORT_WORDS): ResearchProject {
+  if (text.length > MAX_PROJECT_BYTES) throw new Error(words.tooLarge);
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error("The file is not valid JSON.");
+    throw new Error(words.notJson);
   }
   const parsed = researchProjectSchema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    throw new Error(`Invalid Trace project schema: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`);
+    throw new Error(words.invalidSchema(issue?.path.join(".") || words.root, issue?.message ?? words.unknownError));
   }
   return parsed.data;
 }
@@ -34,14 +60,14 @@ export function parseTraceProject(text: string): ResearchProject {
  * kullanıcının kütüphanesine yabancı içerik yazdırabilirdi. Şema doğrulaması
  * bu kontrolün yerine geçmez: geçerli bir Trace projesi de kötü niyetli olabilir.
  */
-export function handoffAddress(raw: string, origin: string): URL {
+export function handoffAddress(raw: string, origin: string, words: ProjectImportWords = ENGLISH_PROJECT_IMPORT_WORDS): URL {
   let url: URL;
   try {
     url = new URL(raw, origin);
   } catch {
-    throw new Error("The import address is not valid.");
+    throw new Error(words.badAddress);
   }
   const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-  if (!loopback || !/^https?:$/.test(url.protocol)) throw new Error("Imports are only accepted from an address on this machine.");
+  if (!loopback || !/^https?:$/.test(url.protocol)) throw new Error(words.notThisMachine);
   return url;
 }

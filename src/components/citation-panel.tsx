@@ -7,6 +7,7 @@ import { loadCitationGraph, type CitationGraph, type GraphNode } from "@/lib/pap
 import type { ResearchProject } from "@/lib/schema";
 import type { ReadingSource } from "@/lib/reading-list";
 import { ReadLaterButton } from "./reading-list";
+import { useT } from "@/i18n/client";
 
 /**
  * Atıf grafiği: makalenin dayandığı çalışmalar solda, onu izleyenler sağda.
@@ -29,6 +30,9 @@ export function CitationPanel({
   const [graph, setGraph] = useState<CitationGraph>();
   const [error, setError] = useState<string>();
   const [focused, setFocused] = useState<string>();
+  const messages = useT();
+  const t = messages.paper.citations;
+  const { locale } = messages.common;
   const { title, doi } = project.evidence.paper;
   // Dizi her kayıtta yeni bir kimlik alıyor; içerik aynıyken yeniden sorulmasın.
   const authorKey = project.evidence.paper.authors.join("|");
@@ -38,9 +42,11 @@ export function CitationPanel({
     loadCitationGraph({ title, authors: authorKey ? authorKey.split("|") : [], doi })
       .then((value) => { if (active) setGraph(value); })
       .catch((caught: unknown) => {
-        if (active) setError(caught instanceof Error ? caught.message : "The citation graph could not be loaded.");
+        if (active) setError(caught instanceof Error ? caught.message : t.loadFailed);
       });
     return () => { active = false; };
+    // Dil değişince yeniden sorulmasın; hata metni o anki dilde kalır.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, authorKey, doi]);
 
   return (
@@ -48,41 +54,35 @@ export function CitationPanel({
       <div className="regen-panel wide citation-panel">
         <header className="regen-header">
           <div>
-            <span><Network size={13} /> Citation graph</span>
-            <h2 id="citation-title">What this paper builds on, and what built on it</h2>
-            <p>
-              The most-cited works on each side, from OpenAlex. This is context, not evidence: none of it comes from the
-              paper&apos;s pages, the counts change over time, and it is not saved into the project.
-            </p>
+            <span><Network size={13} /> {t.kicker}</span>
+            <h2 id="citation-title">{t.title}</h2>
+            <p>{t.intro}</p>
           </div>
-          <button className="regen-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
+          <button className="regen-close" onClick={onClose} aria-label={messages.common.close}><X size={16} /></button>
         </header>
 
         <div className="regen-body">
           {error && <p className="regen-error" role="alert">{error}</p>}
-          {!graph && !error && <p className="history-empty">Looking the paper up in OpenAlex…</p>}
+          {!graph && !error && <p className="history-empty">{t.looking}</p>}
           {graph && !graph.ok && (
-            <p className="history-empty">
-              No citation graph for this paper: {graph.skipped ?? graph.error ?? "OpenAlex did not answer"}. Trace only
-              accepts an exact title match, because a graph for the wrong paper is worse than none.
-            </p>
+            <p className="history-empty">{t.noGraph(graph.skipped ?? graph.error ?? t.noAnswer)}</p>
           )}
           {graph?.ok && (
             <>
               <p className="citation-summary">
-                <strong>{graph.referenceCount.toLocaleString("en")}</strong> references ·{" "}
-                <strong>{graph.citedByCount.toLocaleString("en")}</strong> citing works · retrieved{" "}
-                {new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(graph.retrievedAt))}{" "}
-                · <a href={graph.openAlexUrl} target="_blank" rel="noreferrer">full record on OpenAlex <ExternalLink size={10} /></a>
+                <strong>{graph.referenceCount.toLocaleString(locale)}</strong> {t.references} ·{" "}
+                <strong>{graph.citedByCount.toLocaleString(locale)}</strong> {t.citingWorks} · {t.retrieved}{" "}
+                {new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(new Date(graph.retrievedAt))}{" "}
+                · <a href={graph.openAlexUrl} target="_blank" rel="noreferrer">{t.fullRecord} <ExternalLink size={10} /></a>
                 {" · "}
                 <button className="citation-bibtex" onClick={() => downloadBibtex(project, [...graph.references, ...graph.citedBy])}>
-                  <Download size={10} /> BibTeX for the paper and these works
+                  <Download size={10} /> {t.bibtex}
                 </button>
               </p>
               <GraphMap graph={graph} focused={focused} onFocus={setFocused} />
               <div className="citation-columns">
-                <NodeList heading="Builds on" empty="OpenAlex lists no references for this record." nodes={graph.references} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} from={{ projectId: project.id, relation: "reference" }} />
-                <NodeList heading="Cited by" empty="No citing works are indexed yet." nodes={graph.citedBy} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} from={{ projectId: project.id, relation: "cited-by" }} />
+                <NodeList heading={t.buildsOn} empty={t.buildsOnEmpty} nodes={graph.references} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} from={{ projectId: project.id, relation: "reference" }} />
+                <NodeList heading={t.citedBy} empty={t.citedByEmpty} nodes={graph.citedBy} focused={focused} onFocus={setFocused} onAnalyse={onAnalyse} from={{ projectId: project.id, relation: "cited-by" }} />
               </div>
             </>
           )}
@@ -116,6 +116,7 @@ function GraphMap({
   focused?: string;
   onFocus: (id?: string) => void;
 }) {
+  const t = useT().paper.citations;
   const layout = useMemo(() => {
     const left = byYear(graph.references);
     const right = byYear(graph.citedBy);
@@ -128,7 +129,7 @@ function GraphMap({
 
   const { center } = layout;
   return (
-    <svg className="citation-map" viewBox={`0 0 760 ${layout.height}`} role="img" aria-label="Citation map: references on the left, citing works on the right">
+    <svg className="citation-map" viewBox={`0 0 760 ${layout.height}`} role="img" aria-label={t.mapAria}>
       {[...layout.left, ...layout.right].map(({ node, x, y }) => (
         <path
           key={`edge-${node.openAlexId}`}
@@ -173,6 +174,8 @@ function NodeList({
   /** Okuma listesine eklenirse nereden geldiği: bu makalenin kaynağı mı, ona atıf mı. */
   from: ReadingSource;
 }) {
+  const messages = useT();
+  const t = messages.paper.citations;
   return (
     <section>
       <h3>{heading}</h3>
@@ -188,18 +191,18 @@ function NodeList({
               <div>
                 <a href={node.url} target="_blank" rel="noreferrer">{node.title}</a>
                 <small>
-                  {[node.authors.join(", ") + (node.authorCount > node.authors.length ? " et al." : ""), node.year, node.venue]
+                  {[node.authors.join(", ") + (node.authorCount > node.authors.length ? t.etAl : ""), node.year, node.venue]
                     .filter(Boolean)
                     .join(" · ")}
                 </small>
-                <small>{node.citationCount.toLocaleString("en")} citations</small>
+                <small>{t.citationCount(node.citationCount.toLocaleString(messages.common.locale))}</small>
               </div>
               <span className="citation-actions">
                 <button
-                  title={node.pdfAvailable ? "Find this paper and analyse it" : "No open-access copy on a source Trace downloads from; you can still look it up"}
+                  title={node.pdfAvailable ? t.analyseTitle : t.lookUpTitle}
                   onClick={() => onAnalyse(node)}
                 >
-                  {node.pdfAvailable ? "Analyse" : "Look up"} <ArrowRight size={12} />
+                  {node.pdfAvailable ? t.analyse : t.lookUp} <ArrowRight size={12} />
                 </button>
                 <ReadLaterButton work={node} from={from} />
               </span>

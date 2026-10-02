@@ -1,3 +1,4 @@
+import { browserMessages } from "./browser-messages";
 import { narrativeTemplateSchema, type NarrativeTemplate } from "./schema";
 
 const ENDPOINT = "/api/templates";
@@ -5,8 +6,8 @@ const ENDPOINT = "/api/templates";
 async function request<T>(input: string, init?: RequestInit) {
   const response = await fetch(input, { cache: "no-store", ...init });
   const body = await response.json().catch(() => undefined) as ({ error?: string } & T) | undefined;
-  if (!response.ok) throw new Error(body?.error ?? `The template request failed (HTTP ${response.status}).`);
-  if (!body) throw new Error("The template library returned an empty response.");
+  if (!response.ok) throw new Error(body?.error ?? browserMessages().server.client.templateRequestFailed(response.status));
+  if (!body) throw new Error(browserMessages().server.client.templateEmpty);
   return body;
 }
 

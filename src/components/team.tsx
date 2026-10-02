@@ -2,7 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { LogOut, Trash2, UserPlus, Users } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { MAX_APPROVALS, MIN_PASSWORD, type TeamMember } from "@/lib/team";
+import { LanguageToggle } from "./language-toggle";
 
 /**
  * Ekip kipi istemcide (`team.ts`): durum, giriş ekranı ve profildeki ekip
@@ -55,10 +57,11 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   return <TeamContext.Provider value={{ state, refresh }}>{children}</TeamContext.Provider>;
 }
 
-async function send(path: string, method: string, body?: unknown) {
+/** `fallback`: sunucu bir hata metni vermezse gösterilen, arayüzün dilinde. */
+async function send(fallback: string, path: string, method: string, body?: unknown) {
   const response = await fetch(path, { method, cache: "no-store", headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-  if (!response.ok) throw new Error(data?.error ?? "The team could not be changed.");
+  if (!response.ok) throw new Error(data?.error ?? fallback);
   return data;
 }
 
@@ -71,38 +74,41 @@ export function TeamGate({ children }: { children: ReactNode }) {
 }
 
 function SignInView() {
+  const t = useT().studio.team;
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   return (
     <main className="team-sign-in">
+      {/* Giriş ekranında üst menü yok; oturum açmamış biri de dili buradan değiştirebiliyor. */}
+      <LanguageToggle className="studio-nav-language team-sign-in-language" />
       <form
-        aria-label="Sign in"
+        aria-label={t.signIn}
         onSubmit={(event) => {
           event.preventDefault();
           setBusy(true);
           setError(undefined);
-          send("/api/team/session", "POST", { name, password })
+          send(t.couldNotChange, "/api/team/session", "POST", { name, password })
             .then(() => window.location.reload())
             .catch((reason: unknown) => {
-              setError(reason instanceof Error ? reason.message : "Signing in failed.");
+              setError(reason instanceof Error ? reason.message : t.signInFailed);
               setBusy(false);
             });
         }}
       >
         <span className="brand-glyph" aria-hidden="true">t</span>
-        <h1>Sign in to Trace</h1>
-        <p>This studio is shared by a team. Sign in with the name and password the team&rsquo;s owner gave you.</p>
+        <h1>{t.signInTitle}</h1>
+        <p>{t.signInIntro}</p>
         <label>
-          <span>Name</span>
+          <span>{t.name}</span>
           <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="username" required maxLength={60} />
         </label>
         <label>
-          <span>Password</span>
+          <span>{t.password}</span>
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required maxLength={200} />
         </label>
-        <button type="submit" disabled={busy || !name.trim() || !password}>{busy ? "Signing in…" : "Sign in"}</button>
+        <button type="submit" disabled={busy || !name.trim() || !password}>{busy ? t.signingIn : t.signIn}</button>
         {error ? <p className="regen-error" role="alert">{error}</p> : null}
       </form>
     </main>
@@ -111,6 +117,7 @@ function SignInView() {
 
 /** Profil'de: ekip kipini açmak, kim olduğun, üyeler, onay kuralı, parola, çıkış. */
 export function TeamCard() {
+  const t = useT().studio.team;
   const { state, refresh } = useTeam();
   const [message, setMessage] = useState<{ text: string; error?: boolean }>();
   const [busy, setBusy] = useState(false);
@@ -130,7 +137,7 @@ export function TeamCard() {
       setMessage({ text: done });
       setForm({ name: "", password: "", confirm: "" });
     } catch (error) {
-      setMessage({ text: error instanceof Error ? error.message : "The team could not be changed.", error: true });
+      setMessage({ text: error instanceof Error ? error.message : t.couldNotChange, error: true });
     } finally {
       setBusy(false);
     }
@@ -140,45 +147,38 @@ export function TeamCard() {
   const mismatch = form.confirm && form.confirm !== form.password;
 
   return (
-    <section className="stats-block profile-team" aria-label="Team">
-      <h2><Users size={16} aria-hidden="true" /> Team</h2>
+    <section className="stats-block profile-team" aria-label={t.team}>
+      <h2><Users size={16} aria-hidden="true" /> {t.team}</h2>
       {state.status === "off" ? (
         <>
-          <p>
-            Share this studio with a team: everyone signs in with their own name, approving a claim can take more than one
-            person, and notes stay with whoever wrote them unless they share them. Create the first account to turn it on; you
-            become its owner, and from then on the studio asks everyone to sign in. Turn it on only where the studio is reached
-            over HTTPS.
-          </p>
+          <p>{t.offIntro}</p>
           <form
             className="team-form"
-            aria-label="Create the first account"
+            aria-label={t.createFirst}
             onSubmit={(event) => {
               event.preventDefault();
-              void run(() => send("/api/team", "POST", { name: form.name, password: form.password }), "", true);
+              void run(() => send(t.couldNotChange, "/api/team", "POST", { name: form.name, password: form.password }), "", true);
             }}
           >
-            <label><span>Your name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} maxLength={60} autoComplete="username" /></label>
-            <label><span>Password ({MIN_PASSWORD}+ characters)</span><input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="new-password" /></label>
-            <label><span>Password again</span><input type="password" value={form.confirm} onChange={(event) => setForm({ ...form, confirm: event.target.value })} autoComplete="new-password" /></label>
-            <button type="submit" className="focus-secondary" disabled={busy || !form.name.trim() || form.password.length < MIN_PASSWORD || form.confirm !== form.password}>Turn on team review</button>
+            <label><span>{t.yourName}</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} maxLength={60} autoComplete="username" /></label>
+            <label><span>{t.passwordMin(MIN_PASSWORD)}</span><input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="new-password" /></label>
+            <label><span>{t.passwordAgain}</span><input type="password" value={form.confirm} onChange={(event) => setForm({ ...form, confirm: event.target.value })} autoComplete="new-password" /></label>
+            <button type="submit" className="focus-secondary" disabled={busy || !form.name.trim() || form.password.length < MIN_PASSWORD || form.confirm !== form.password}>{t.turnOn}</button>
           </form>
-          {mismatch ? <p className="stats-note">The two passwords differ.</p> : null}
+          {mismatch ? <p className="stats-note">{t.mismatch}</p> : null}
         </>
       ) : (
         <>
           <p>
-            Signed in as <strong>{state.me.name}</strong>{state.me.role === "owner" ? " (owner)" : ""}. A claim is approved when{" "}
-            {state.approvalsNeeded === 1 ? "one member approves it" : `${state.approvalsNeeded} members approve it`} and nobody rejects it. Notes are
-            yours unless you share them with the team. Study progress, the work timer and this profile are still one for the whole studio.
+            {t.signedInAs}<strong>{state.me.name}</strong>{state.me.role === "owner" ? t.ownerMark : ""}{t.signedInRule(state.approvalsNeeded)}
           </p>
           <ul className="team-members">
             {state.members.map((member) => (
               <li key={member.id}>
                 <span>{member.name}</span>
-                <small>{member.role === "owner" ? "owner" : "member"}{member.id === state.me.id ? " · you" : ""}</small>
+                <small>{member.role === "owner" ? t.owner : t.member}{member.id === state.me.id ? t.you : ""}</small>
                 {state.me.role === "owner" && member.id !== state.me.id ? (
-                  <button type="button" className="focus-icon-button" aria-label={`Remove ${member.name} from the team`} disabled={busy} onClick={() => void run(() => send(`/api/team/members?id=${encodeURIComponent(member.id)}`, "DELETE"), `${member.name} was removed. Their notes and votes stay.`)}>
+                  <button type="button" className="focus-icon-button" aria-label={t.removeMember(member.name)} disabled={busy} onClick={() => void run(() => send(t.couldNotChange, `/api/team/members?id=${encodeURIComponent(member.id)}`, "DELETE"), t.removed(member.name))}>
                     <Trash2 size={14} />
                   </button>
                 ) : null}
@@ -189,20 +189,20 @@ export function TeamCard() {
             <>
               <form
                 className="team-form"
-                aria-label="Add a member"
+                aria-label={t.addMember}
                 onSubmit={(event) => {
                   event.preventDefault();
                   const name = form.name.trim();
-                  void run(() => send("/api/team/members", "POST", { name, password: form.password }), `${name} can sign in now. Give them the password; they can change it on their profile.`);
+                  void run(() => send(t.couldNotChange, "/api/team/members", "POST", { name, password: form.password }), t.added(name));
                 }}
               >
-                <label><span>Name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} maxLength={60} autoComplete="off" /></label>
-                <label><span>First password</span><input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="new-password" /></label>
-                <button type="submit" className="focus-secondary" disabled={busy || !form.name.trim() || form.password.length < MIN_PASSWORD}><UserPlus size={14} /> Add a member</button>
+                <label><span>{t.name}</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} maxLength={60} autoComplete="off" /></label>
+                <label><span>{t.firstPassword}</span><input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="new-password" /></label>
+                <button type="submit" className="focus-secondary" disabled={busy || !form.name.trim() || form.password.length < MIN_PASSWORD}><UserPlus size={14} /> {t.addMember}</button>
               </form>
               <label className="team-approvals">
-                <span>Approvals a claim needs</span>
-                <select value={state.approvalsNeeded} disabled={busy} onChange={(event) => void run(() => send("/api/team", "PUT", { approvalsNeeded: Number(event.target.value) }), "Saved. Decisions already taken stay until someone votes again.")}>
+                <span>{t.approvalsNeeded}</span>
+                <select value={state.approvalsNeeded} disabled={busy} onChange={(event) => void run(() => send(t.couldNotChange, "/api/team", "PUT", { approvalsNeeded: Number(event.target.value) }), t.approvalsSaved)}>
                   {Array.from({ length: MAX_APPROVALS }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}</option>)}
                 </select>
               </label>
@@ -210,18 +210,18 @@ export function TeamCard() {
           ) : null}
           <form
             className="team-form"
-            aria-label="Change your password"
+            aria-label={t.changePassword}
             onSubmit={(event) => {
               event.preventDefault();
               void run(async () => {
-                await send("/api/team/members", "PATCH", { current: passwords.current, next: passwords.next });
+                await send(t.couldNotChange, "/api/team/members", "PATCH", { current: passwords.current, next: passwords.next });
                 setPasswords({ current: "", next: "" });
-              }, "Your password was changed; your other devices were signed out.");
+              }, t.passwordChanged);
             }}
           >
-            <label><span>Current password</span><input type="password" value={passwords.current} onChange={(event) => setPasswords({ ...passwords, current: event.target.value })} autoComplete="current-password" /></label>
-            <label><span>New password</span><input type="password" value={passwords.next} onChange={(event) => setPasswords({ ...passwords, next: event.target.value })} autoComplete="new-password" /></label>
-            <button type="submit" className="focus-secondary" disabled={busy || !passwords.current || passwords.next.length < MIN_PASSWORD}>Change your password</button>
+            <label><span>{t.currentPassword}</span><input type="password" value={passwords.current} onChange={(event) => setPasswords({ ...passwords, current: event.target.value })} autoComplete="current-password" /></label>
+            <label><span>{t.newPassword}</span><input type="password" value={passwords.next} onChange={(event) => setPasswords({ ...passwords, next: event.target.value })} autoComplete="new-password" /></label>
+            <button type="submit" className="focus-secondary" disabled={busy || !passwords.current || passwords.next.length < MIN_PASSWORD}>{t.changePassword}</button>
           </form>
           <div className="profile-form-actions">
             <button
@@ -230,13 +230,13 @@ export function TeamCard() {
               disabled={busy}
               onClick={() =>
                 void run(async () => {
-                  await send("/api/team/session", "DELETE");
+                  await send(t.couldNotChange, "/api/team/session", "DELETE");
                   // Ortak bir cihazda sonraki kişi çevrimdışıyken bu üyenin notlarını görmesin (`public/sw.js`).
                   if ("caches" in window) for (const name of await caches.keys()) if (name.startsWith("trace-data-") || name.startsWith("trace-shell-")) await caches.delete(name);
                 }, "", true)
               }
             >
-              <LogOut size={14} /> Sign out
+              <LogOut size={14} /> {t.signOut}
             </button>
           </div>
         </>

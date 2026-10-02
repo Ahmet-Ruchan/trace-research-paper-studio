@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { MAX_QUESTION_LENGTH } from "@/lib/evidence-qa";
-import { getProvider } from "@/lib/model-providers";
+import { getProvider, localizedProvider } from "@/lib/model-providers";
 import type { ResearchProject } from "@/lib/schema";
 import { ModelKeyFields, useRememberedAssignment } from "./model-key-fields";
+import { useT } from "@/i18n/client";
 
 type Exchange = { question: string; answerable: boolean; answer: string; claimIds: string[]; model: string };
 
@@ -25,11 +26,14 @@ export function AskPanel({ project, onClaimSelect }: { project: ResearchProject;
   const [error, setError] = useState<string>();
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const provider = getProvider(assignment.provider)!;
+  const messages = useT();
+  const t = messages.paper.ask;
+  const { claimStatus } = messages.paper;
 
   async function ask() {
     const text = question.trim();
     if (text.length < 3 || busy) return;
-    if (!provider.local && !apiKey.trim()) return setError(`${provider.keyLabel} is required.`);
+    if (!provider.local && !apiKey.trim()) return setError(messages.paper.modelRequest.keyRequired(localizedProvider(provider, messages.studio.models.providers).keyLabel));
     setBusy(true);
     setError(undefined);
     try {
@@ -39,11 +43,11 @@ export function AskPanel({ project, onClaimSelect }: { project: ResearchProject;
         body: JSON.stringify({ project, question: text, assignment, apiKey: apiKey.trim() }),
       });
       const data = (await response.json().catch(() => undefined)) as (Omit<Exchange, "question"> & { error?: string }) | undefined;
-      if (!response.ok || !data?.answer) throw new Error(data?.error ?? "The question could not be answered.");
+      if (!response.ok || !data?.answer) throw new Error(data?.error ?? t.failed);
       setExchanges((current) => [{ question: text, answerable: data.answerable, answer: data.answer, claimIds: data.claimIds ?? [], model: data.model }, ...current]);
       setQuestion("");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The question could not be answered.");
+      setError(caught instanceof Error ? caught.message : t.failed);
     } finally {
       setBusy(false);
     }
@@ -58,8 +62,8 @@ export function AskPanel({ project, onClaimSelect }: { project: ResearchProject;
           value={question}
           maxLength={MAX_QUESTION_LENGTH}
           rows={2}
-          aria-label="Your question about the paper"
-          placeholder="Ask what the paper says — for example: how was the big model trained?"
+          aria-label={t.aria}
+          placeholder={t.placeholder}
           onChange={(event) => setQuestion(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -69,7 +73,7 @@ export function AskPanel({ project, onClaimSelect }: { project: ResearchProject;
           }}
         />
         <button className="regen-primary" disabled={busy || question.trim().length < 3} onClick={() => { void ask(); }}>
-          <Send size={14} /> {busy ? "Reading the evidence…" : "Ask"}
+          <Send size={14} /> {busy ? t.reading : t.ask}
         </button>
       </div>
       {error && <p className="regen-error" role="alert">{error}</p>}
@@ -78,7 +82,7 @@ export function AskPanel({ project, onClaimSelect }: { project: ResearchProject;
         {exchanges.map((exchange, index) => (
           <li key={exchanges.length - index} className={exchange.answerable ? "" : "is-unanswered"}>
             <h4>{exchange.question}</h4>
-            {!exchange.answerable && <span className="ask-flag">Not covered by the collected evidence</span>}
+            {!exchange.answerable && <span className="ask-flag">{t.notCovered}</span>}
             <p lang={project.language}>{exchange.answer}</p>
             {exchange.claimIds.length ? (
               <ul className="ask-claims">
@@ -87,9 +91,9 @@ export function AskPanel({ project, onClaimSelect }: { project: ResearchProject;
                   if (!claim) return null;
                   return (
                     <li key={id}>
-                      <button onClick={() => onClaimSelect(id)} lang={project.language} title="Open the evidence for this claim">
+                      <button onClick={() => onClaimSelect(id)} lang={project.language} title={claimStatus.openEvidence}>
                         {claim.statement}
-                        <small>{claim.sourceRefs[0]?.page ? `p. ${claim.sourceRefs[0].page}` : "web"} · {claim.confidence === "verified" ? "verified" : "needs review"}</small>
+                        <small lang={messages.common.locale}>{claim.sourceRefs[0]?.page ? messages.common.page(claim.sourceRefs[0].page) : "web"} · {claim.confidence === "verified" ? claimStatus.verifiedInline : claimStatus.needsReviewInline}</small>
                       </button>
                     </li>
                   );

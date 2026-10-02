@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FileUp } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { formatLabel, importPlan, MAX_REFERENCE_FILE, parseReferenceFile, type ImportPlan } from "@/lib/reference-import";
 import type { ResearchProject } from "@/lib/schema";
 import { useReadingList } from "./reading-list";
@@ -12,11 +13,12 @@ import { useReadingList } from "./reading-list";
  * hepsi birden ekleniyor.
  */
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-
 type Preview = { file: string; format: string; found: number; skipped: number; plan: ImportPlan };
 
 export function ReadingImportPanel({ projects }: { projects: ResearchProject[] }) {
+  const messages = useT();
+  const t = messages.learning.readingImport;
+  const words = messages.learning.words.referenceImport;
   const reading = useReadingList();
   const [preview, setPreview] = useState<Preview>();
   const [message, setMessage] = useState<{ text: string; error?: boolean }>();
@@ -27,12 +29,12 @@ export function ReadingImportPanel({ projects }: { projects: ResearchProject[] }
     setMessage(undefined);
     setPreview(undefined);
     try {
-      if (file.size > MAX_REFERENCE_FILE) throw new Error("The file is larger than 5 MB.");
-      const parsed = parseReferenceFile(file.name, await file.text());
-      if (!parsed.works.length) throw new Error(`No work with a title was found in this ${formatLabel(parsed.format)} file.`);
+      if (file.size > MAX_REFERENCE_FILE) throw new Error(words.tooLarge);
+      const parsed = parseReferenceFile(file.name, await file.text(), words);
+      if (!parsed.works.length) throw new Error(t.noWorks(formatLabel(parsed.format)));
       setPreview({ file: file.name, format: formatLabel(parsed.format), found: parsed.works.length, skipped: parsed.skipped, plan: importPlan(parsed.works, reading!.items, projects, new Date().toISOString()) });
     } catch (error) {
-      setMessage({ text: error instanceof Error ? error.message : "The file could not be read.", error: true });
+      setMessage({ text: error instanceof Error ? error.message : t.readFailed, error: true });
     }
   }
 
@@ -40,10 +42,10 @@ export function ReadingImportPanel({ projects }: { projects: ResearchProject[] }
     setBusy(true);
     try {
       await reading!.addAll(plan.fresh);
-      setMessage({ text: `${plural(plan.fresh.length, "work")} added to your reading list.` });
+      setMessage({ text: t.added(plan.fresh.length) });
       setPreview(undefined);
     } catch (error) {
-      setMessage({ text: error instanceof Error ? error.message : "The works could not be added.", error: true });
+      setMessage({ text: error instanceof Error ? error.message : t.addFailed, error: true });
     } finally {
       setBusy(false);
     }
@@ -52,57 +54,53 @@ export function ReadingImportPanel({ projects }: { projects: ResearchProject[] }
   const plan = preview?.plan;
   const notes = plan
     ? [
-        plan.onList ? `${plural(plan.onList, "work")} already on your list` : "",
-        plan.inLibrary ? `${plan.inLibrary} already in your library` : "",
-        plan.repeated ? `${plan.repeated} listed twice in the file` : "",
-        preview.skipped ? `${preview.skipped} without a title` : "",
-        plan.overLimit ? `${plan.overLimit} that no longer fit (the list holds 500)` : "",
+        plan.onList ? t.onList(plan.onList) : "",
+        plan.inLibrary ? t.inLibrary(plan.inLibrary) : "",
+        plan.repeated ? t.repeated(plan.repeated) : "",
+        preview.skipped ? t.untitled(preview.skipped) : "",
+        plan.overLimit ? t.overLimit(plan.overLimit) : "",
       ].filter(Boolean)
     : [];
 
   return (
-    <section className="reading-import" aria-label="Import from Zotero or BibTeX">
-      <h3><FileUp size={15} aria-hidden="true" /> Import from Zotero or a .bib file</h3>
+    <section className="reading-import" aria-label={t.title}>
+      <h3><FileUp size={15} aria-hidden="true" /> {t.heading}</h3>
       <p>
-        In Zotero, right-click a collection, choose <strong>Export Collection…</strong> and pick BibTeX, RIS or CSL JSON; Mendeley,
-        EndNote and a LaTeX project&rsquo;s <code>.bib</code> work too. The works join this list, each with its arXiv number or DOI
-        when the file has one. The file is read in this browser and nothing else leaves it.
+        {t.howTo.before}<strong>{t.howTo.action}</strong>{t.howTo.middle}<code>.bib</code>{t.howTo.after}
       </p>
       <label className="reading-import-file">
         <input
           type="file"
           accept=".bib,.bibtex,.ris,.json,application/x-bibtex,application/x-research-info-systems,application/json"
-          aria-label="Choose a BibTeX, RIS or CSL JSON file"
+          aria-label={t.chooseLabel}
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = "";
             if (file) void read(file);
           }}
         />
-        <span>Choose a file</span>
+        <span>{t.choose}</span>
       </label>
       {preview && plan ? (
         <div className="reading-import-preview" role="status">
           <p>
-            <strong>{plural(preview.found, "work")}</strong> in {preview.file} ({preview.format}):{" "}
-            {plan.fresh.length ? `${plan.fresh.length} new` : "nothing new"}
-            {notes.length ? `; ${notes.join(", ")}` : ""}.
+            <strong>{t.found(preview.found)}</strong>{t.foundRest(preview.file, preview.format, plan.fresh.length, notes)}
           </p>
           {plan.fresh.length ? (
             <ul>
               {plan.fresh.slice(0, 5).map((item) => (
                 <li key={item.id}>{item.title}{item.year ? ` (${item.year})` : ""}</li>
               ))}
-              {plan.fresh.length > 5 ? <li className="reading-import-more">and {plural(plan.fresh.length - 5, "more work")}</li> : null}
+              {plan.fresh.length > 5 ? <li className="reading-import-more">{t.more(plan.fresh.length - 5)}</li> : null}
             </ul>
           ) : null}
           <div className="reading-import-actions">
             {plan.fresh.length ? (
               <button type="button" className="regen-primary" disabled={busy} onClick={() => void add(plan)}>
-                Add {plural(plan.fresh.length, "work")} to the reading list
+                {t.add(plan.fresh.length)}
               </button>
             ) : null}
-            <button type="button" onClick={() => setPreview(undefined)} disabled={busy}>Cancel</button>
+            <button type="button" onClick={() => setPreview(undefined)} disabled={busy}>{messages.common.cancel}</button>
           </div>
         </div>
       ) : null}

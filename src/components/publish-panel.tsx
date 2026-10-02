@@ -17,50 +17,47 @@ import {
   type PublicationInclude,
   type PublicationSummary,
 } from "@/lib/publications";
-import { groupNotes, type ReaderNote } from "@/lib/reader-notes";
+import { groupNotes, ORPHAN_HEADING, type ReaderNote } from "@/lib/reader-notes";
 import type { ResearchProject } from "@/lib/schema";
-
-const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
-
-const stateLabels: Record<PublicationSummary["state"], string> = {
-  live: "Live",
-  unpublished: "Unpublished",
-  expired: "Expired",
-};
+import { useT } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
 
 type PublishPanelProps = {
   project: ResearchProject;
   onClose: () => void;
 };
 
-function availableBlocks(project: ResearchProject) {
+function availableBlocks(project: ResearchProject, labels: Messages["paper"]["publish"]["blocks"]) {
   return [
-    { key: "deepReport", label: "Deep report", present: Boolean(project.deepReport) },
-    { key: "technicalAppendix", label: "Technical appendix", present: Boolean(project.technicalAppendix) },
+    { key: "deepReport", label: labels.deepReport, present: Boolean(project.deepReport) },
+    { key: "technicalAppendix", label: labels.technicalAppendix, present: Boolean(project.technicalAppendix) },
     {
       key: "learning",
-      label: "Learning layer",
+      label: labels.learning,
       present: Boolean(project.primer || project.derivations?.length || project.quiz || project.misreadings || project.interactives?.length || project.applicationGuide),
     },
-    { key: "figures", label: "The paper's own figures", present: Boolean(project.figures?.length) },
+    { key: "figures", label: labels.figures, present: Boolean(project.figures?.length) },
   ] as const;
 }
 
 export function PublishPanel({ project, onClose }: PublishPanelProps) {
+  const messages = useT();
+  const t = messages.paper.publish;
+  const dateFormat = useMemo(() => new Intl.DateTimeFormat(messages.common.locale, { dateStyle: "medium", timeStyle: "short" }), [messages.common.locale]);
   const [publications, setPublications] = useState<PublicationSummary[]>();
   const [include, setInclude] = useState<PublicationInclude>(defaultPublicationInclude);
   // Okuyucunun notları: yalnızca seçtikleri, yalnızca istenirse (varsayılan kapalı).
   const [notes, setNotes] = useState<ReaderNote[]>([]);
   const [noteIds, setNoteIds] = useState<string[]>([]);
   const noteGroups = useMemo(
-    () => groupNotes(project, notes).filter((group) => group.heading !== "No longer in the paper").map((group) => ({ ...group, notes: group.notes.filter((note) => note.text || note.quote) })).filter((group) => group.notes.length),
+    () => groupNotes(project, notes).filter((group) => group.heading !== ORPHAN_HEADING).map((group) => ({ ...group, notes: group.notes.filter((note) => note.text || note.quote) })).filter((group) => group.notes.length),
     [notes, project],
   );
   const [expiryDays, setExpiryDays] = useState<(typeof EXPIRY_CHOICES)[number]>(null);
   const [busy, setBusy] = useState<string>();
   const [copied, setCopied] = useState<string>();
   const [error, setError] = useState<string>();
-  const blocks = availableBlocks(project);
+  const blocks = availableBlocks(project, t.blocks);
   const currentFingerprint = useMemo(() => projectContentFingerprint(project), [project]);
 
   useEffect(() => {
@@ -70,9 +67,11 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
       .catch((caught: unknown) => {
         if (!active) return;
         setPublications([]);
-        setError(caught instanceof Error ? caught.message : "The publications could not be loaded.");
+        setError(caught instanceof Error ? caught.message : t.loadFailed);
       });
     return () => { active = false; };
+    // Dil değişince yeniden yüklenmesin; hata metni o anki dilde kalır.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
   useEffect(() => {
@@ -100,7 +99,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
     try {
       await work();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Something went wrong.");
+      setError(caught instanceof Error ? caught.message : messages.common.somethingWentWrong);
     } finally {
       setBusy(undefined);
     }
@@ -113,18 +112,18 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
       <div className="regen-panel wide">
         <header className="regen-header">
           <div>
-            <span><Globe size={13} /> Share</span>
-            <h2 id="publish-title">Publish this story</h2>
-            <p>A publication is a frozen copy with its own link. Later edits stay private until you update it. Anyone who can reach this Trace server and has the link can read it: on this machine that is only you, on a deployed studio it is everyone with the link. Search engines are asked not to index it.</p>
+            <span><Globe size={13} /> {t.kicker}</span>
+            <h2 id="publish-title">{t.title}</h2>
+            <p>{t.intro}</p>
           </div>
-          <button className="regen-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
+          <button className="regen-close" onClick={onClose} aria-label={messages.common.close}><X size={16} /></button>
         </header>
 
         <div className="regen-body">
           <section className="publish-new">
             <fieldset className="publish-include">
-              <legend>Include</legend>
-              <label className="publish-fixed"><input type="checkbox" checked disabled /> Story and evidence, with every quote and page</label>
+              <legend>{t.include}</legend>
+              <label className="publish-fixed"><input type="checkbox" checked disabled /> {t.storyAndEvidence}</label>
               {blocks.map((block) => (
                 <label key={block.key} className={block.present ? "" : "publish-absent"}>
                   <input
@@ -133,20 +132,20 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                     checked={block.present && include[block.key]}
                     onChange={(event) => setInclude((current) => ({ ...current, [block.key]: event.target.checked }))}
                   />
-                  {block.label}{block.present ? "" : " · not in this project"}
+                  {block.label}{block.present ? "" : t.notInProject}
                 </label>
               ))}
               {noteGroups.length ? (
                 <>
                   <label>
                     <input type="checkbox" checked={include.notes} onChange={(event) => setInclude((current) => ({ ...current, notes: event.target.checked }))} />
-                    Notes I choose, as the author&rsquo;s notes at the end
+                    {t.notes}
                   </label>
                   {include.notes ? (
-                    <div className="publish-notes" role="group" aria-label="Notes to publish">
+                    <div className="publish-notes" role="group" aria-label={t.notesAria}>
                       {noteGroups.map((group) => (
                         <div key={`${group.place}-${group.heading}`}>
-                          <span>{group.place} · {group.heading}</span>
+                          <span>{t.places[group.place]} · {group.heading}</span>
                           {group.notes.map((note) => (
                             <label key={note.id}>
                               <input
@@ -159,7 +158,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                           ))}
                         </div>
                       ))}
-                      <small>Only the notes ticked here go out, as they are now; Update takes their latest wording. Nothing else from your notes is published.</small>
+                      <small>{t.notesNote}</small>
                     </div>
                   ) : null}
                 </>
@@ -167,9 +166,9 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
             </fieldset>
             <div className="publish-actions">
               <label className="publish-expiry">
-                Link stops working
+                {t.expiry}
                 <select value={expiryDays ?? ""} onChange={(event) => setExpiryDays(event.target.value ? Number(event.target.value) as 7 | 30 | 90 : null)}>
-                  {EXPIRY_CHOICES.map((days) => <option key={days ?? "never"} value={days ?? ""}>{days ? `After ${days} days` : "Never"}</option>)}
+                  {EXPIRY_CHOICES.map((days) => <option key={days ?? "never"} value={days ?? ""}>{days ? t.afterDays(days) : t.never}</option>)}
                 </select>
               </label>
               <button
@@ -188,7 +187,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                   });
                 }}
               >
-                <Globe size={14} /> {busy === "create" ? "Publishing…" : "Publish a new link"}
+                <Globe size={14} /> {busy === "create" ? t.publishing : t.publishNew}
               </button>
             </div>
           </section>
@@ -196,8 +195,8 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
           {error && <p className="regen-error" role="alert">{error}</p>}
 
           <ul className="publish-list">
-            {publications === undefined && <li className="history-empty">Loading…</li>}
-            {publications?.length === 0 && <li className="history-empty">This project has not been published yet.</li>}
+            {publications === undefined && <li className="history-empty">{messages.common.loading}</li>}
+            {publications?.length === 0 && <li className="history-empty">{t.empty}</li>}
             {publications?.map((publication) => {
               // Eski kayıtlarda parmak izi yok; onlar için uyarı gösterilmiyor,
               // çünkü zaman damgası açılışta değiştiği için yanlış alarm verirdi.
@@ -206,16 +205,16 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
               return (
                 <li key={publication.id} className={`publish-item state-${publication.state}`}>
                   <div className="publish-item-head">
-                    <b>{stateLabels[publication.state]}</b>
+                    <b>{t.states[publication.state]}</b>
                     <code>{publication.path}</code>
                   </div>
                   <small>
-                    Published {dateFormat.format(new Date(publication.createdAt))}
-                    {publication.settings.expiresAt ? ` · ${publication.state === "expired" ? "expired" : "expires"} ${dateFormat.format(new Date(publication.settings.expiresAt))}` : ""}
-                    {excluded.length ? ` · without ${excluded.join(", ").toLowerCase()}` : ""}
-                    {publication.noteCount ? ` · with ${publication.noteCount} of your notes` : ""}
+                    {t.publishedAt(dateFormat.format(new Date(publication.createdAt)))}
+                    {publication.settings.expiresAt ? t.expires(publication.state === "expired", dateFormat.format(new Date(publication.settings.expiresAt))) : ""}
+                    {excluded.length ? t.without(excluded) : ""}
+                    {publication.noteCount ? t.withNotes(publication.noteCount) : ""}
                   </small>
-                  {stale && publication.state !== "expired" && <small className="publish-stale">The project has changed since this copy was taken.</small>}
+                  {stale && publication.state !== "expired" && <small className="publish-stale">{t.stale}</small>}
                   <div className="publish-item-actions">
                     <button
                       disabled={publication.state !== "live"}
@@ -223,13 +222,13 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                         void navigator.clipboard?.writeText(urlFor(publication)).then(() => {
                           setCopied(publication.id);
                           window.setTimeout(() => setCopied(undefined), 1600);
-                        }).catch(() => setError("The link could not be copied; open it and copy it from the address bar."));
+                        }).catch(() => setError(t.copyFailed));
                       }}
                     >
-                      {copied === publication.id ? <Check size={13} /> : <Copy size={13} />} {copied === publication.id ? "Copied" : "Copy link"}
+                      {copied === publication.id ? <Check size={13} /> : <Copy size={13} />} {copied === publication.id ? messages.common.copied : t.copyLink}
                     </button>
                     <a aria-disabled={publication.state !== "live"} href={publication.state === "live" ? publication.path : undefined} target="_blank" rel="noreferrer">
-                      <ExternalLink size={13} /> Open
+                      <ExternalLink size={13} /> {messages.common.open}
                     </a>
                     <button
                       disabled={Boolean(busy)}
@@ -240,7 +239,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                         });
                       }}
                     >
-                      <RefreshCw size={13} /> Update to current version
+                      <RefreshCw size={13} /> {t.update}
                     </button>
                     {publication.state === "expired" ? (
                       <button
@@ -251,7 +250,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                           });
                         }}
                       >
-                        Remove expiry
+                        {t.removeExpiry}
                       </button>
                     ) : (
                       <button
@@ -262,7 +261,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                           });
                         }}
                       >
-                        {publication.status === "live" ? "Unpublish" : "Publish again"}
+                        {publication.status === "live" ? t.unpublish : t.publishAgain}
                       </button>
                     )}
                     <button
@@ -275,7 +274,7 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
                         });
                       }}
                     >
-                      <Trash2 size={13} /> Delete link
+                      <Trash2 size={13} /> {t.deleteLink}
                     </button>
                   </div>
                 </li>

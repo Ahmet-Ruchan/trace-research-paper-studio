@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from "react";
 import { Pause, Search, Timer } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { countdownRemaining, elapsedOf } from "@/lib/focus-timer";
 import { displayName } from "@/lib/profile";
@@ -9,6 +10,7 @@ import { formatClock } from "@/lib/work-log";
 import { focusDisplay, useFocus, useFocusClock } from "./focus-provider";
 import { Avatar } from "./focus-parts";
 import { openCommandPalette } from "../command-palette";
+import { LanguageToggle } from "../language-toggle";
 
 /**
  * Üst menüdeki iki düğme: çalışma saati ve profil. Her ekranın başlığında
@@ -27,9 +29,8 @@ export function useStudioNav() {
   return useContext(StudioNavContext);
 }
 
-const phaseWord = { work: "focus", short: "short break", long: "long break" } as const;
-
 export function StudioNav() {
+  const t = useT().focus.nav;
   const nav = useContext(StudioNavContext);
   const { profile, store } = useFocus();
   const now = useFocusClock();
@@ -44,23 +45,24 @@ export function StudioNav() {
       clock: formatClock(shown.remaining, "up"),
       running: shown.running,
       color: profile.preferences.colors.focus,
-      spoken: `${formatClock(shown.remaining, "up")} left in ${phaseWord[shown.phase]}${shown.running ? "" : ", paused"}`,
+      spoken: t.focusLeft(formatClock(shown.remaining, "up"), shown.phase, shown.running),
     };
   } else if (timer && !timer.done) {
-    status = { clock: formatClock(countdownRemaining(timer, now), "up"), running: timer.clock.running, color: profile.preferences.colors.timer, spoken: `${formatClock(countdownRemaining(timer, now), "up")} left on the timer` };
+    status = { clock: formatClock(countdownRemaining(timer, now), "up"), running: timer.clock.running, color: profile.preferences.colors.timer, spoken: t.timerLeft(formatClock(countdownRemaining(timer, now), "up")) };
   } else if (stopwatch) {
-    status = { clock: formatClock(elapsedOf(stopwatch.clock, now)), running: stopwatch.clock.running, color: profile.preferences.colors.stopwatch, spoken: `stopwatch at ${formatClock(elapsedOf(stopwatch.clock, now))}` };
+    status = { clock: formatClock(elapsedOf(stopwatch.clock, now)), running: stopwatch.clock.running, color: profile.preferences.colors.stopwatch, spoken: t.stopwatchAt(formatClock(elapsedOf(stopwatch.clock, now))) };
   }
   const name = displayName(profile);
 
   return (
-    <nav className="studio-nav" aria-label="Your work">
+    <nav className="studio-nav" aria-label={t.label}>
+      <LanguageToggle />
       <button
         type="button"
         className="studio-nav-palette"
-        aria-label="Go to a paper, section or action"
+        aria-label={t.palette}
         aria-keyshortcuts="Control+K Meta+K"
-        title="Go to a paper, section or action (Ctrl+K)"
+        title={t.paletteTitle}
         onClick={openCommandPalette}
       >
         <Search size={15} aria-hidden="true" />
@@ -70,19 +72,19 @@ export function StudioNav() {
         className={`studio-nav-focus${status ? " has-timer" : ""}${status?.running ? " is-running" : ""}`}
         style={status ? focusColorStyle(status.color) : undefined}
         aria-current={nav.current === "focus" ? "page" : undefined}
-        aria-label={status ? `Focus timer: ${status.spoken}` : "Focus timer"}
-        title={status ? `Focus timer: ${status.spoken}` : "Focus timer, stopwatch and alarms"}
+        aria-label={status ? t.timerButton(status.spoken) : t.timerIdle}
+        title={status ? t.timerButton(status.spoken) : t.timerIdleTitle}
         onClick={() => nav.open("focus")}
       >
         {status && !status.running ? <Pause size={14} aria-hidden="true" /> : status ? <i aria-hidden="true" /> : <Timer size={15} aria-hidden="true" />}
-        <span>{status ? status.clock : "Focus"}</span>
+        <span>{status ? status.clock : t.focus}</span>
       </button>
       <button
         type="button"
         className="studio-nav-profile"
         aria-current={nav.current === "profile" ? "page" : undefined}
-        aria-label={name ? `Profile: ${name}` : "Profile"}
-        title={name ? `${name}: profile and work calendar` : "Profile and work calendar"}
+        aria-label={t.profile(name)}
+        title={t.profileTitle(name)}
         onClick={() => nav.open("profile")}
       >
         <Avatar profile={profile} />

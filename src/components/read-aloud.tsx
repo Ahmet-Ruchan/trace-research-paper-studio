@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pause, Play, SkipForward, Square, Volume2 } from "lucide-react";
+import { useT, useUiLanguage } from "@/i18n/client";
+import { uiLocale } from "@/i18n/languages";
 import { READ_RATES, readingQueue, type SpeechSection } from "@/lib/read-aloud";
 import { sectionMark, type NotePlace } from "@/lib/reader-notes";
 
@@ -36,6 +38,9 @@ function storedRate() {
 }
 
 export function ReadAloudProvider({ place, language, sections, children }: { place: NotePlace; language: string; sections: readonly SpeechSection[]; children: ReactNode }) {
+  // `language` makalenin dili: metin o dilde okunuyor. Çubuğun yazıları arayüzün dilinde.
+  const { language: ui, t: messages } = useUiLanguage();
+  const t = messages.learning.readAloud;
   const [available, setAvailable] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [sectionId, setSectionId] = useState<string>();
@@ -140,21 +145,21 @@ export function ReadAloudProvider({ place, language, sections, children }: { pla
     <ReadAloudContext.Provider value={available ? value : undefined}>
       {children}
       {available && status !== "idle" && current >= 0 ? (
-        <section className="read-aloud-bar" role="region" aria-label="Read aloud">
+        <section className="read-aloud-bar" role="region" aria-label={t.region}>
           <Volume2 size={16} aria-hidden="true" />
           <p role="status">
-            <span>Reading {current + 1} of {sections.length}</span>
-            <strong>{sections[current].title}</strong>
+            <span>{t.progress(current + 1, sections.length)}</span>
+            <strong lang={language}>{sections[current].title}</strong>
           </p>
           {status === "playing" ? (
-            <button type="button" onClick={() => { synth()?.pause(); setStatus("paused"); }} aria-label="Pause"><Pause size={15} /></button>
+            <button type="button" onClick={() => { synth()?.pause(); setStatus("paused"); }} aria-label={t.pause}><Pause size={15} /></button>
           ) : (
-            <button type="button" onClick={() => { synth()?.resume(); setStatus("playing"); }} aria-label="Resume"><Play size={15} /></button>
+            <button type="button" onClick={() => { synth()?.resume(); setStatus("playing"); }} aria-label={t.resume}><Play size={15} /></button>
           )}
-          <button type="button" onClick={next} aria-label="Next section"><SkipForward size={15} /></button>
-          <button type="button" onClick={stop} aria-label="Stop reading"><Square size={14} /></button>
+          <button type="button" onClick={next} aria-label={t.nextSection}><SkipForward size={15} /></button>
+          <button type="button" onClick={stop} aria-label={t.stop}><Square size={14} /></button>
           <select
-              aria-label="Speed"
+              aria-label={t.speed}
               value={rate}
               onChange={(event) => {
                 const value = Number(event.target.value);
@@ -167,7 +172,7 @@ export function ReadAloudProvider({ place, language, sections, children }: { pla
                 }
               }}
             >
-              {READ_RATES.map((option) => <option key={option} value={option}>{option}×</option>)}
+              {READ_RATES.map((option) => <option key={option} value={option}>{option.toLocaleString(uiLocale(ui))}×</option>)}
             </select>
         </section>
       ) : null}
@@ -178,11 +183,12 @@ export function ReadAloudProvider({ place, language, sections, children }: { pla
 /** Bölümün başında: buradan itibaren dinle. Konuşma sentezi yoksa görünmüyor. */
 export function ListenButton({ sectionId, title }: { sectionId: string; title: string }) {
   const context = useContext(ReadAloudContext);
+  const t = useT().learning.readAloud;
   if (!context) return null;
   const reading = context.status !== "idle" && context.sectionId === sectionId;
   return (
-    <button type="button" className={`listen-button${reading ? " is-on" : ""}`} onClick={() => context.start(sectionId)} aria-label={`Listen from “${title}”`} title="Read aloud from here">
-      <Volume2 size={13} aria-hidden="true" /> {reading ? "Reading" : "Listen"}
+    <button type="button" className={`listen-button${reading ? " is-on" : ""}`} onClick={() => context.start(sectionId)} aria-label={t.listenFrom(title)} title={t.fromHere}>
+      <Volume2 size={13} aria-hidden="true" /> {reading ? t.reading : t.listen}
     </button>
   );
 }

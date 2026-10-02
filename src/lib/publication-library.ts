@@ -1,3 +1,4 @@
+import { browserMessages } from "./browser-messages";
 import type { PublicationSettingsInput as PublicationSettings, PublicationSummary } from "./publications";
 
 const ENDPOINT = "/api/publications";
@@ -5,8 +6,8 @@ const ENDPOINT = "/api/publications";
 async function request<T>(input: string, init?: RequestInit) {
   const response = await fetch(input, { cache: "no-store", ...init });
   const body = await response.json().catch(() => undefined) as ({ error?: string } & T) | undefined;
-  if (!response.ok) throw new Error(body?.error ?? `The publication request failed (HTTP ${response.status}).`);
-  if (!body) throw new Error("The publication service returned an empty response.");
+  if (!response.ok) throw new Error(body?.error ?? browserMessages().server.client.publicationRequestFailed(response.status));
+  if (!body) throw new Error(browserMessages().server.client.publicationEmpty);
   return body;
 }
 

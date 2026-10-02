@@ -21,7 +21,7 @@ import { claimSearchTool, LIBRARY_MCP_TOOLS, libraryTool, notesTool, paperTool, 
 import { readingListReport, readLibrary, todayReport } from "./trace-agent.mjs";
 
 // Eklentinin sürümü; `scripts/set-version.mjs` manifestlerle birlikte yazıyor.
-const SERVER_VERSION = "0.40.0";
+const SERVER_VERSION = "0.41.0";
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };

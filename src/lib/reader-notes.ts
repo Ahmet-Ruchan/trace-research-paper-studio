@@ -94,6 +94,9 @@ export function cleanQuote(text: string) {
   return text.replace(/\s+/g, " ").trim().slice(0, MAX_NOTE_QUOTE);
 }
 
+/** Artık projede olmayan hedeflerin notlarının başlığı; ekranlar bunu kendi dillerinde gösteriyor. */
+export const ORPHAN_HEADING = "No longer in the paper";
+
 export type NoteGroup = { target: NoteTarget; heading: string; place: "Story" | "Deep report" | "Primer" | "Claim"; page?: number; excerpt?: string; notes: ReaderNote[] };
 
 /**
@@ -118,7 +121,7 @@ export function groupNotes(project: ResearchProject, notes: readonly ReaderNote[
     take({ kind: "claim", claimId: claim.id }, claim.statement, "Claim", { ...(reference?.page ? { page: reference.page } : {}), ...(reference?.excerpt ? { excerpt: reference.excerpt } : {}) });
   }
   const orphans = notes.filter((note) => !used.has(note.id));
-  if (orphans.length) groups.push({ target: orphans[0].target, heading: "No longer in the paper", place: orphans[0].target.kind === "claim" ? "Claim" : "Story", notes: orphans });
+  if (orphans.length) groups.push({ target: orphans[0].target, heading: ORPHAN_HEADING, place: orphans[0].target.kind === "claim" ? "Claim" : "Story", notes: orphans });
   return groups;
 }
 

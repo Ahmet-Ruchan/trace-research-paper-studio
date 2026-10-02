@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useT } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
 import { claimHash, parseDeepLink, sectionHash } from "@/lib/deep-link";
 import { handoffAddress, parseTraceProject } from "@/lib/project-import";
 import { listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
@@ -32,21 +34,24 @@ export type StartupActions = {
 };
 
 /** Ajanın devri: `deliver` tarayıcıyı `?import=<adres>` ile açıyor (`project-import.ts`). */
-async function adoptHandoff(rawUrl: string) {
+async function adoptHandoff(rawUrl: string, t: Messages["studio"]) {
   window.history.replaceState(null, "", window.location.pathname);
-  const url = handoffAddress(rawUrl, window.location.origin);
+  const url = handoffAddress(rawUrl, window.location.origin, t.projectImport);
   const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error(`The project could not be downloaded (HTTP ${response.status}).`);
-  const project = parseTraceProject(await response.text());
+  if (!response.ok) throw new Error(t.startup.downloadFailed(response.status));
+  const project = parseTraceProject(await response.text(), t.projectImport);
   await saveLibraryProject(project, { reason: "agent" });
   return project;
 }
 
 /** Açılışta bir kez: adresteki ekran, proje, kip, çapa ve ajanın devri; sonra kütüphane. */
 export function useStudioStartup(actions: StartupActions) {
+  const t = useT().studio;
   const latest = useRef(actions);
+  const words = useRef(t);
   useEffect(() => {
     latest.current = actions;
+    words.current = t;
   });
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -62,8 +67,8 @@ export function useStudioStartup(actions: StartupActions) {
         }
         const handoff = search.get("import");
         if (handoff) {
-          await adoptHandoff(handoff).then(act.adopted, (caught: unknown) => {
-            act.importFailed(caught instanceof Error ? caught.message : "The project could not be imported.");
+          await adoptHandoff(handoff, words.current).then(act.adopted, (caught: unknown) => {
+            act.importFailed(caught instanceof Error ? caught.message : words.current.startup.importFailed);
           });
         }
         for (const [param, screen] of SCREEN_PARAMS) if (search.get(param) === "1") act.setScreen(screen);

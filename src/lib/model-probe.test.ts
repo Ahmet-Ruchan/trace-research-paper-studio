@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { POST } from "@/app/api/models/probe/route";
+import { messagesFor } from "@/i18n/messages";
 import {
+  ENGLISH_PROBE_WORDS,
   EXPECTED_SECTION_CHARACTERS,
   PDF_PROMPT_CHARACTERS,
   describeProbe,
@@ -130,5 +132,36 @@ describe("model test endpoint", () => {
     expect((await post({ assignment, apiKey: "k", stages: [{ id: "visual", label: "x", promptCharacters: 1, outputCharacters: 0 }] })).status).toBe(400);
     const tooMany = Array.from({ length: 9 }, () => ({ id: "visual", label: "x", promptCharacters: 1, outputCharacters: 1 }));
     expect((await post({ assignment, apiKey: "k", stages: tooMany })).status).toBe(400);
+  });
+});
+
+describe("the model test in the reader's language", () => {
+  const results = [
+    { firstChunkMs: 800, estimateSeconds: 35, limitSeconds: 120, verdict: "fast" as const },
+    { firstChunkMs: 2_300, estimateSeconds: 100, limitSeconds: 120, verdict: "slow" as const },
+    { firstChunkMs: 45_000, estimateSeconds: 4_200, limitSeconds: 900, verdict: "too-slow" as const },
+    { firstChunkMs: 45_000, estimateSeconds: 400_000, limitSeconds: 900, verdict: "too-slow" as const },
+  ];
+
+  it("keeps the studio's English words identical to the module's own", () => {
+    const english = messagesFor("en").studio.models.probe;
+    for (const result of results) {
+      expect(describeProbe(result, undefined, english)).toBe(describeProbe(result));
+      expect(describeProbe(result, "The deep report", english)).toBe(describeProbe(result, "The deep report"));
+    }
+    expect(english.stages).toEqual(ENGLISH_PROBE_WORDS.stages);
+    expect(generationStageProfiles({ depth: "standard" }, english.stages)).toEqual(generationStageProfiles({ depth: "standard" }));
+  });
+
+  it("speaks Turkish when the interface does", () => {
+    const turkish = messagesFor("tr").studio.models.probe;
+    expect(formatDuration(42, turkish)).toBe("42 sn");
+    expect(formatDuration(600, turkish)).toBe("10 dk");
+    expect(formatDuration(8_000, turkish)).toBe("2 sa");
+    expect(describeProbe(results[0], undefined, turkish)).toBe("0,8 sn içinde yanıt verdi. Bir bölüm yaklaşık 35 sn sürmeli.");
+    expect(describeProbe(results[2], turkish.stages.report, turkish)).toBe(
+      "45,0 sn içinde yanıt verdi. Ayrıntılı rapor yaklaşık 70 dk sürer; bu, 15 dk sınırından uzun. Daha hızlı bir model seç.",
+    );
+    expect(generationStageProfiles({ depth: "deep" }, turkish.stages).evidence.label).toBe("Makalenin okunması");
   });
 });

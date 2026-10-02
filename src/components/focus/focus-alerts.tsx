@@ -2,19 +2,10 @@
 
 import { useState } from "react";
 import { AlarmClock, BarChart3, BellRing, Coffee, PartyPopper, PauseCircle } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { MAX_SESSION_NOTE } from "@/lib/work-log";
-import { useFocus, useFocusClock, type FocusAlert } from "./focus-provider";
-
-const actionLabel: Record<NonNullable<FocusAlert["action"]>, string> = {
-  "start-next": "Start",
-  "skip-break": "Skip the break",
-  restart: "Start again",
-  extend: "One more minute",
-  snooze: "Snooze 5 minutes",
-  resume: "Resume",
-  report: "See the report",
-};
+import { alertCopy, useFocus, useFocusClock } from "./focus-provider";
 
 const icons = { phase: Coffee, done: PartyPopper, timer: BellRing, alarm: AlarmClock, notice: PauseCircle, summary: BarChart3 } as const;
 
@@ -23,10 +14,12 @@ const icons = { phase: Coffee, done: PartyPopper, timer: BellRing, alarm: AlarmC
  * oturumuna gidiyor ve takvimde, haftalık raporda görünüyor.
  */
 function RoundNote({ endAt }: { endAt: number }) {
+  const messages = useT();
+  const t = messages.focus.alerts;
   const { noteRound } = useFocus();
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState<string>();
-  if (saved) return <p className="focus-alert-note-saved" role="status">Noted: {saved}</p>;
+  if (saved) return <p className="focus-alert-note-saved" role="status">{t.noted(saved)}</p>;
   return (
     <form
       className="focus-alert-note"
@@ -35,8 +28,8 @@ function RoundNote({ endAt }: { endAt: number }) {
         if (noteRound(endAt, draft)) setSaved(draft.trim());
       }}
     >
-      <input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={MAX_SESSION_NOTE} placeholder="What did you do? (optional)" aria-label="What did you do in this round?" />
-      <button type="submit" disabled={!draft.trim()}>Save</button>
+      <input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={MAX_SESSION_NOTE} placeholder={t.notePlaceholder} aria-label={t.noteLabel} />
+      <button type="submit" disabled={!draft.trim()}>{messages.common.save}</button>
     </form>
   );
 }
@@ -46,6 +39,8 @@ function RoundNote({ endAt }: { endAt: number }) {
  * doldu, alarm çalıyor. Zil çalarken "Stop" hem zili hem bildirimi kapatıyor.
  */
 export function FocusAlerts({ onOpen, onReport }: { onOpen: () => void; onReport?: () => void }) {
+  const messages = useT();
+  const t = messages.focus.alerts;
   const { store, dismissAlert, runAlert } = useFocus();
   const now = useFocusClock();
   if (!store.alerts.length) return null;
@@ -54,18 +49,20 @@ export function FocusAlerts({ onOpen, onReport }: { onOpen: () => void; onReport
       {store.alerts.map((alert) => {
         const Icon = icons[alert.kind];
         const ringing = alert.ringUntil > now;
+        // Saklanan metin çaldığı anın dilinde; ileti varsa bugünkü dille yeniden yazılıyor.
+        const copy = alert.message ? alertCopy(alert.message, messages) : alert;
         return (
           <section
             key={alert.id}
             className={`focus-alert${ringing ? " is-ringing" : ""}`}
             style={focusColorStyle(alert.color)}
             role={ringing ? "alert" : "status"}
-            aria-label={alert.title}
+            aria-label={copy.title}
           >
             <span className="focus-alert-icon" aria-hidden="true"><Icon size={18} /></span>
             <div className="focus-alert-copy">
-              <strong>{alert.title}</strong>
-              {alert.body ? <p>{alert.body}</p> : null}
+              <strong>{copy.title}</strong>
+              {copy.body ? <p>{copy.body}</p> : null}
               {alert.roundEnd ? <RoundNote endAt={alert.roundEnd} /> : null}
               <div className="focus-alert-actions">
                 {alert.action ? (
@@ -79,11 +76,11 @@ export function FocusAlerts({ onOpen, onReport }: { onOpen: () => void; onReport
                       } else runAlert(alert);
                     }}
                   >
-                    {alert.actionLabel ?? actionLabel[alert.action]}
+                    {copy.actionLabel ?? t.actions[alert.action]}
                   </button>
                 ) : null}
-                <button type="button" onClick={() => dismissAlert(alert.id)}>{ringing ? "Stop" : "Dismiss"}</button>
-                {alert.kind !== "summary" ? <button type="button" className="focus-alert-open" onClick={() => { dismissAlert(alert.id); onOpen(); }}>Open the timer</button> : null}
+                <button type="button" onClick={() => dismissAlert(alert.id)}>{ringing ? t.stop : t.dismiss}</button>
+                {alert.kind !== "summary" ? <button type="button" className="focus-alert-open" onClick={() => { dismissAlert(alert.id); onOpen(); }}>{t.openTimer}</button> : null}
               </div>
             </div>
           </section>

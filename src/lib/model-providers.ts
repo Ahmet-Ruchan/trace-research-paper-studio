@@ -230,3 +230,45 @@ export function resolveProviderModel(providerId: string, modelId: string) {
   if (!model) return undefined;
   return { provider: provider.id, model: model.id };
 }
+
+/**
+ * Kataloğun ekranda görünen metinleri, arayüzün dilinde. Sağlayıcıya giden
+ * hiçbir şey (model kimliği, istek) bundan etkilenmiyor; marka adları
+ * ("Google Gemini", "OpenAI") her dilde aynı olduğu için yalnızca çevrilen
+ * adlar (`providerLabels`) burada. Sözlük (`src/i18n/messages`) kendi dilini
+ * veriyor; verilmezse İngilizce.
+ */
+export type ModelProviderWords = {
+  providerLabels: Partial<Record<ProviderId, string>>;
+  keyLabels: Record<ProviderId, string>;
+  hints: Partial<Record<ProviderId, string>>;
+  /** Modelin kısa notu, İngilizcesine göre ("Fast" → …). */
+  modelNotes: Record<string, string>;
+  tasks: Record<GenerationTaskRole, { label: string; shortLabel: string; description: string; recommendation: string }>;
+};
+
+export const ENGLISH_MODEL_PROVIDER_WORDS: ModelProviderWords = {
+  providerLabels: { local: getProvider("local")!.label },
+  keyLabels: Object.fromEntries(providerCatalog.map((provider) => [provider.id, provider.keyLabel])) as Record<ProviderId, string>,
+  hints: Object.fromEntries(providerCatalog.flatMap((provider) => (provider.hint ? [[provider.id, provider.hint]] : []))),
+  modelNotes: Object.fromEntries(providerCatalog.flatMap((provider) => provider.models.map((model) => [model.note, model.note]))),
+  tasks: Object.fromEntries(
+    generationTaskCatalog.map(({ id, label, shortLabel, description, recommendation }) => [id, { label, shortLabel, description, recommendation }]),
+  ) as ModelProviderWords["tasks"],
+};
+
+/** Sağlayıcının ekranda görünen hâli: ad, anahtarın adı, ipucu ve model notları arayüzün dilinde. */
+export function localizedProvider(provider: ProviderDefinition, words: ModelProviderWords = ENGLISH_MODEL_PROVIDER_WORDS): ProviderDefinition {
+  return {
+    ...provider,
+    label: words.providerLabels[provider.id] ?? provider.label,
+    keyLabel: words.keyLabels[provider.id] ?? provider.keyLabel,
+    hint: provider.hint === undefined ? undefined : words.hints[provider.id] ?? provider.hint,
+    models: provider.models.map((model) => ({ ...model, note: words.modelNotes[model.note] ?? model.note })),
+  };
+}
+
+/** Görev kataloğu arayüzün dilinde; sıra ve kimlikler aynı. */
+export function localizedTaskCatalog(words: ModelProviderWords = ENGLISH_MODEL_PROVIDER_WORDS): typeof generationTaskCatalog {
+  return generationTaskCatalog.map((task) => ({ ...task, ...words.tasks[task.id] }));
+}

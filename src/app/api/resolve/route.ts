@@ -9,6 +9,7 @@ import {
   searchPapers,
 } from "../../../../plugins/trace-paper-studio/skills/trace-paper-studio/scripts/lib/paper-source.mjs";
 import type { PaperCandidate } from "@/lib/paper-lookup";
+import { serverText } from "@/lib/server/server-text";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -35,10 +36,10 @@ type SourceEntry = {
   blockedPdfUrls?: string[];
 };
 
-function toCandidate(entry: SourceEntry): PaperCandidate {
+function toCandidate(entry: SourceEntry, untitled: string): PaperCandidate {
   return {
     origin: entry.origin ?? "arxiv",
-    title: entry.title ?? "Untitled paper",
+    title: entry.title ?? untitled,
     authors: (entry.authors ?? []).slice(0, 4),
     year: entry.published ? String(entry.published).slice(0, 4) : undefined,
     venue: entry.venue,
@@ -49,22 +50,27 @@ function toCandidate(entry: SourceEntry): PaperCandidate {
   };
 }
 
-function failure(error: unknown) {
-  // SourceError kullanıcının düzeltebileceği bir şeydir; gerisi üst kaynak hatası.
-  const message = error instanceof Error ? error.message : "The paper could not be looked up.";
+/**
+ * SourceError kullanıcının düzeltebileceği bir şeydir; gerisi üst kaynak
+ * hatası. Mesajlar plugin köprüsünün (`paper-source.mjs`) kendi İngilizcesi.
+ */
+function failure(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
   return Response.json({ error: message }, { status: error instanceof SourceError ? 422 : 502 });
 }
 
 export async function GET(request: NextRequest) {
+  const t = serverText(request).resolve;
+  const candidate = (entry: SourceEntry) => toCandidate(entry, t.untitled);
   const query = (request.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 400);
   const expect = (request.nextUrl.searchParams.get("expect") ?? "").trim().slice(0, 400);
-  if (query.length < 3) return Response.json({ error: "Enter a paper title, DOI, arXiv id or link." }, { status: 400 });
+  if (query.length < 3) return Response.json({ error: t.queryTooShort }, { status: 400 });
 
   try {
     const parsed = parseIdentifier(query);
     if (parsed.kind === "title") {
       const results = (await searchPapers(parsed.id, 6)) as SourceEntry[];
-      return Response.json({ candidates: results.slice(0, 6).map(toCandidate) }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ candidates: results.slice(0, 6).map(candidate) }, { headers: { "Cache-Control": "no-store" } });
     }
 
     const entry = (await resolveIdentifier(parsed)) as SourceEntry;
@@ -75,11 +81,11 @@ export async function GET(request: NextRequest) {
      */
     if (expect && (rankByTitle([entry], expect)[0]?.matchScore ?? 0) < 0.6) {
       const results = (await searchPapers(expect, 6)) as SourceEntry[];
-      return Response.json({ candidates: results.slice(0, 6).map(toCandidate) }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ candidates: results.slice(0, 6).map(candidate) }, { headers: { "Cache-Control": "no-store" } });
     }
-    return Response.json({ candidates: [toCandidate(entry)] }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ candidates: [candidate(entry)] }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return failure(error);
+    return failure(error, t.lookupFailed);
   }
 }
 
@@ -90,8 +96,9 @@ const downloadSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const t = serverText(request).resolve;
   const parsed = downloadSchema.safeParse(await request.json().catch(() => undefined));
-  if (!parsed.success) return Response.json({ error: "No downloadable PDF address was given." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: t.noPdfAddress }, { status: 400 });
 
   try {
     // Adresler istemciden geliyor; her biri indirme sırasında izin listesinden geçiyor.
@@ -108,6 +115,6 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    return failure(error);
+    return failure(error, t.lookupFailed);
   }
 }

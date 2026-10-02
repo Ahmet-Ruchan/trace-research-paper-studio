@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowRight, BookOpen, Check, ChevronDown, Eye, EyeOff, FileText, Link2, LockKeyhole, Plus, Search, Sparkles, Upload, Users, X } from "lucide-react";
+import { useUiLanguage } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
+import { uiLocale } from "@/i18n/languages";
 import {
   createSingleModelTeam,
   defaultModelByProvider,
   documentTaskRoles,
-  generationTaskCatalog,
   getProvider,
+  localizedProvider,
+  localizedTaskCatalog,
   providerCatalog,
   providerReadsDocuments,
   recommendedModelTeam,
@@ -46,6 +50,35 @@ const subscribeNever = () => () => {};
 const readBrowserLanguage = () => preferredLanguage();
 const readServerLanguage = (): ProjectLanguage => "en";
 
+/**
+ * Analiz dilinin seçicisi arayüzün dilinde: adlar `Intl.DisplayNames` ile o
+ * dilde yazılıp o dilin sırasıyla diziliyor ("Almanca", "İngilizce" …).
+ */
+function languageChoicesIn(choices: Array<{ tag: string; label: string }>, locale: string) {
+  let names: Intl.DisplayNames | undefined;
+  try {
+    names = new Intl.DisplayNames([locale], { type: "language" });
+  } catch {
+    return choices;
+  }
+  const named = choices.map((choice) => {
+    let label = choice.label;
+    try {
+      label = names.of(choice.tag) ?? choice.label;
+    } catch {
+      // Tanınmayan etiket: İngilizce ad (ya da etiketin kendisi) kalıyor.
+    }
+    return { tag: choice.tag, label };
+  });
+  return named.sort((a, b) => a.label.localeCompare(b.label, locale));
+}
+
+/** Hazır şablonun ekrandaki adı ve açıklaması arayüzün dilinde; şablonun kendisi (istem) değişmiyor. */
+function templateText(template: NarrativeTemplate, t: Messages["studio"]["templates"]) {
+  const shown = template.builtIn ? t.builtIn[template.id] : undefined;
+  return { name: shown?.name ?? template.name, description: shown?.description ?? template.description };
+}
+
 type OnboardingProps = {
   onGenerate: (options: GenerationOptions) => void;
   onSample: () => void;
@@ -59,6 +92,11 @@ type OnboardingProps = {
 };
 
 export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, initialTeam = false, sampleBusy = false, initialLookup }: OnboardingProps) {
+  const { language: uiLanguage, t: messages } = useUiLanguage();
+  const t = messages.studio.onboarding;
+  const providerWords = messages.studio.models.providers;
+  const taskCatalog = useMemo(() => localizedTaskCatalog(providerWords), [providerWords]);
+  const providerOptions = useMemo(() => providerCatalog.map((item) => localizedProvider(item, providerWords)), [providerWords]);
   const libraryCount = libraryProjects.length;
   const quoteRecord = useMemo(() => modelRecord(libraryProjects), [libraryProjects]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -84,7 +122,10 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
   const [chosenLanguage, setLanguage] = useState<ProjectLanguage | undefined>(remembered.language);
   const language = chosenLanguage ?? detectedLanguage;
   // Liste kullanıcının kendi dilini de içerir; yaygın diller yalnızca kısayol.
-  const languageChoices = useMemo(() => languageOptions(detectedLanguage, remembered.language), [detectedLanguage, remembered.language]);
+  const languageChoices = useMemo(
+    () => languageChoicesIn(languageOptions(detectedLanguage, remembered.language), uiLocale(uiLanguage)),
+    [detectedLanguage, remembered.language, uiLanguage],
+  );
   const [audience, setAudience] = useState<"general" | "student" | "expert">(remembered.audience ?? "student");
   const [depth, setDepth] = useState<"concise" | "standard" | "deep">(remembered.depth ?? "standard");
   const [provider, setProvider] = useState<ProviderId>(remembered.single?.provider ?? "gemini");
@@ -130,13 +171,13 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
       setTemplates((current) => current.filter((item) => item.id !== id));
       setTemplateId("");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The template could not be removed.");
+      setError(caught instanceof Error ? caught.message : t.errors.templateNotRemoved);
     }
   }
   const assignments = orchestration === "single"
     ? createSingleModelTeam({ provider, model })
     : team;
-  const usedProviders = providerCatalog.filter((item) =>
+  const usedProviders = providerOptions.filter((item) =>
     Object.values(assignments).some((assignment) => assignment.provider === item.id),
   );
 
@@ -144,11 +185,11 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
     setError(undefined);
     if (!nextFile) return;
     if (nextFile.type !== "application/pdf") {
-      setError("Only PDF files can be uploaded.");
+      setError(t.errors.onlyPdf);
       return;
     }
     if (nextFile.size > 35 * 1024 * 1024) {
-      setError("The PDF exceeds the 35 MB limit.");
+      setError(t.errors.tooLarge);
       return;
     }
     setFile(nextFile);
@@ -162,17 +203,17 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
    */
   async function runLookup(query = lookup, expectTitle?: string) {
     const value = query.trim();
-    if (value.length < 3) return setError("Enter a paper title, DOI, arXiv id or link.");
+    if (value.length < 3) return setError(t.errors.lookupTooShort);
     setError(undefined);
     setCandidates(undefined);
     setLookupBusy("search");
     try {
       const found = await findPapers(value, expectTitle);
-      if (!found.length) throw new Error("No paper was found for that. Try the full title or a DOI.");
+      if (!found.length) throw new Error(t.errors.notFound);
       if (found.length === 1 && found[0].pdfUrls.length) return await takeCandidate(found[0]);
       setCandidates(found);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The paper could not be looked up.");
+      setError(caught instanceof Error ? caught.message : t.errors.lookupFailed);
     } finally {
       setLookupBusy(undefined);
     }
@@ -185,7 +226,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
       acceptFile(await downloadCandidate(candidate));
       setCandidates(undefined);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The PDF could not be downloaded.");
+      setError(caught instanceof Error ? caught.message : t.errors.downloadFailed);
     } finally {
       setLookupBusy(undefined);
     }
@@ -208,32 +249,31 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
       const url = new URL(value);
       if (!["http:", "https:"].includes(url.protocol)) throw new Error();
       if (sources.length >= 3) {
-        setError("You can add at most 3 supporting sources.");
+        setError(t.errors.tooManySources);
         return;
       }
       setSources((current) => [...current, url.toString()]);
       setSourceInput("");
       setError(undefined);
     } catch {
-      setError("Enter a valid HTTP or HTTPS address.");
+      setError(t.errors.badSource);
     }
   }
 
   function submit() {
-    if (!file) return setError("Upload a paper PDF first.");
+    if (!file) return setError(t.errors.needPdf);
     // Yerel sağlayıcıda "anahtar" bir adres ve boş bırakılabilir: boşsa
     // sunucu tarafı Ollama'nın varsayılan adresini kullanıyor.
     const missingProvider = usedProviders.find((item) => !item.local && !apiKeys[item.id]?.trim());
-    if (missingProvider) return setError(`${missingProvider.label} needs its ${missingProvider.keyLabel}.`);
+    if (missingProvider) return setError(t.errors.needsKey(missingProvider.label, missingProvider.keyLabel));
     const unreadable = documentTaskRoles.find((role) => !providerReadsDocuments(assignments[role].provider));
     if (unreadable) {
-      const task = generationTaskCatalog.find((item) => item.id === unreadable);
-      return setError(
-        `${getProvider(assignments[unreadable].provider)?.label} cannot be given the PDF, so it cannot run “${task?.shortLabel ?? unreadable}”. That stage reads the paper itself — assign a cloud provider to it.`,
-      );
+      const task = taskCatalog.find((item) => item.id === unreadable);
+      const unreadableProvider = getProvider(assignments[unreadable].provider);
+      return setError(t.errors.cannotReadPdf(unreadableProvider ? localizedProvider(unreadableProvider, providerWords).label : assignments[unreadable].provider, task?.shortLabel ?? unreadable));
     }
     const invalidAssignment = Object.entries(assignments).find(([, assignment]) => !assignment.model.trim());
-    if (invalidAssignment) return setError(`${generationTaskCatalog.find((task) => task.id === invalidAssignment[0])?.label ?? "Task"} needs a model.`);
+    if (invalidAssignment) return setError(t.errors.needsModel(taskCatalog.find((task) => task.id === invalidAssignment[0])?.label ?? t.errors.task));
     setError(undefined);
     onGenerate({
       file,
@@ -259,7 +299,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
 
   async function loadOpenRouterModels() {
     const openRouterKey = apiKeys.openrouter?.trim();
-    if (!openRouterKey) return setError("Enter your OpenRouter API key before loading the model catalogue.");
+    if (!openRouterKey) return setError(t.errors.needOpenRouterKey);
     setModelsLoading(true);
     setError(undefined);
     try {
@@ -269,10 +309,10 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
         body: JSON.stringify({ apiKey: openRouterKey }),
       });
       const data = await response.json() as { models?: typeof openRouterModels; error?: string };
-      if (!response.ok || !data.models) throw new Error(data.error ?? "The model catalogue could not be loaded.");
+      if (!response.ok || !data.models) throw new Error(data.error ?? t.errors.catalogueFailed);
       setOpenRouterModels(data.models);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The model catalogue could not be loaded.");
+      setError(caught instanceof Error ? caught.message : t.errors.catalogueFailed);
     } finally {
       setModelsLoading(false);
     }
@@ -281,36 +321,34 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
   return (
     <main className="onboarding-page">
       <header className="landing-header">
-        <a className="brand" href="#top" aria-label="Trace home">
+        <a className="brand" href="#top" aria-label={messages.studio.brand.home}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{messages.studio.brand.tagline}</small></span>
         </a>
         <div className="landing-header-actions">
           <DisplayControl />
-          <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> Library <span className="nav-count">{libraryCount}</span></button>
-          <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? "Loading example…" : "Open the example project"} <ArrowRight size={15} /></button>
+          <button className="text-button" onClick={onLibrary}><BookOpen size={15} /> {t.library} <span className="nav-count">{libraryCount}</span></button>
+          <button className="text-button" onClick={onSample} disabled={sampleBusy}>{sampleBusy ? t.loadingExample : t.openExample} <ArrowRight size={15} /></button>
           <StudioNav />
         </div>
       </header>
 
       <section className="landing-hero" id="top">
         <div className="landing-copy">
-          <p className="landing-eyebrow"><span /> Evidence-first paper studio</p>
-          <h1>Reading a paper is one thing. <em>Actually seeing it</em> is another.</h1>
-          <p className="landing-lead">
-            Break your PDF down into its evidence, inspect the method, and turn it into an interactive account where every claim points back to its source.
-          </p>
+          <p className="landing-eyebrow"><span /> {t.eyebrow}</p>
+          <h1>{t.headlineStart}<em>{t.headlineEmphasis}</em>{t.headlineEnd}</h1>
+          <p className="landing-lead">{t.lead}</p>
           <div className="principle-row">
-            <span><Check size={14} /> Source-linked</span>
-            <span><Check size={14} /> Editable</span>
-            <span><Check size={14} /> Static export</span>
+            <span><Check size={14} /> {t.principles.sourceLinked}</span>
+            <span><Check size={14} /> {t.principles.editable}</span>
+            <span><Check size={14} /> {t.principles.staticExport}</span>
           </div>
         </div>
 
         <div className="ingest-panel">
           <div className="panel-heading">
-            <div><span>01</span><strong>Add your paper</strong></div>
-            <small>PDF · max. 35 MB</small>
+            <div><span>01</span><strong>{t.addPaper}</strong></div>
+            <small>{t.pdfLimit}</small>
           </div>
 
           <div
@@ -328,14 +366,14 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
             {file ? (
               <>
                 <span className="file-icon"><FileText size={22} /></span>
-                <div className="file-copy"><strong>{file.name}</strong><small>{(file.size / 1024 / 1024).toFixed(1)} MB · PDF ready</small></div>
-                <button className="icon-button" onClick={() => setFile(undefined)} aria-label="Remove the PDF"><X size={17} /></button>
+                <div className="file-copy"><strong>{file.name}</strong><small>{t.fileReady(file.size / 1024 / 1024)}</small></div>
+                <button className="icon-button" onClick={() => setFile(undefined)} aria-label={t.removePdf}><X size={17} /></button>
               </>
             ) : (
               <>
                 <span className="upload-icon"><Upload size={21} /></span>
-                <div><strong>Drop the PDF here</strong><small>or pick one from your computer</small></div>
-                <button onClick={() => inputRef.current?.click()}>Choose file</button>
+                <div><strong>{t.dropHere}</strong><small>{t.orPick}</small></div>
+                <button onClick={() => inputRef.current?.click()}>{t.chooseFile}</button>
               </>
             )}
           </div>
@@ -348,12 +386,12 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
                   value={lookup}
                   onChange={(event) => setLookup(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && !lookupBusy && void runLookup()}
-                  placeholder="No PDF? Paper title, DOI, arXiv id or link"
-                  aria-label="Find a paper by title, DOI, arXiv id or link"
+                  placeholder={t.finderPlaceholder}
+                  aria-label={t.finderLabel}
                 />
-                <button onClick={() => { void runLookup(); }} disabled={Boolean(lookupBusy)} aria-label="Find the paper"><ArrowRight size={16} /></button>
+                <button onClick={() => { void runLookup(); }} disabled={Boolean(lookupBusy)} aria-label={t.findPaper}><ArrowRight size={16} /></button>
               </div>
-              {lookupBusy && <p className="paper-finder-status">{lookupBusy === "search" ? "Searching arXiv and the open-access repositories…" : "Downloading the open-access PDF…"}</p>}
+              {lookupBusy && <p className="paper-finder-status">{lookupBusy === "search" ? t.searching : t.downloading}</p>}
               {candidates && (
                 <ul className="paper-candidates">
                   {candidates.map((candidate, index) => (
@@ -365,12 +403,12 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
                         </small>
                         {!candidate.pdfUrls.length && (
                           <small className="paper-candidate-note">
-                            No open-access copy on a source Trace downloads from.{" "}
-                            {(candidate.blockedPdfUrls[0] ?? candidate.url) && <a href={candidate.blockedPdfUrls[0] ?? candidate.url} target="_blank" rel="noreferrer">Get the PDF yourself</a>} and drop it above.
+                            {t.noOpenCopy}{" "}
+                            {(candidate.blockedPdfUrls[0] ?? candidate.url) && <a href={candidate.blockedPdfUrls[0] ?? candidate.url} target="_blank" rel="noreferrer">{t.getItYourself}</a>}{t.dropAbove}
                           </small>
                         )}
                       </div>
-                      <button disabled={!candidate.pdfUrls.length || Boolean(lookupBusy)} onClick={() => { void takeCandidate(candidate); }}>Use this</button>
+                      <button disabled={!candidate.pdfUrls.length || Boolean(lookupBusy)} onClick={() => { void takeCandidate(candidate); }}>{t.useThis}</button>
                     </li>
                   ))}
                 </ul>
@@ -379,58 +417,58 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
           )}
 
           <div className="config-grid">
-            <label>Reader<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="general">General reader</option><option value="student">Student</option><option value="expert">Expert</option></select></label>
-            <label>Depth<select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}><option value="concise">Concise · 5 sections</option><option value="standard">Standard · 6 sections</option><option value="deep">Deep · 8 sections</option></select></label>
-            <label>Language<select value={language} onChange={(event) => setLanguage(event.target.value)}>{languageChoices.map((choice) => <option key={choice.tag} value={choice.tag}>{choice.label}</option>)}</select></label>
+            <label>{t.reader}<select value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="general">{t.audiences.general}</option><option value="student">{t.audiences.student}</option><option value="expert">{t.audiences.expert}</option></select></label>
+            <label>{t.depth}<select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}><option value="concise">{t.depths.concise}</option><option value="standard">{t.depths.standard}</option><option value="deep">{t.depths.deep}</option></select></label>
+            <label>{t.language}<select value={language} onChange={(event) => setLanguage(event.target.value)}>{languageChoices.map((choice) => <option key={choice.tag} value={choice.tag}>{choice.label}</option>)}</select></label>
           </div>
 
           {/* Çoğu analizde gerekmeyen seçimler kapalı başlıyor; biri seçiliyse
               (ya da hatırlanıyorsa) açık, özet satırı da ne seçildiğini söylüyor. */}
           <details className="setup-more" open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
             <summary>
-              <span>More options</span>
+              <span>{t.moreOptions}</span>
               <small>{[
-                sources.length ? `${sources.length} supporting source${sources.length === 1 ? "" : "s"}` : "Supporting sources",
-                template ? template.name : "narrative template",
+                t.supportingSources(sources.length),
+                template ? templateText(template, messages.studio.templates).name : t.narrativeTemplateShort,
               ].join(" · ")}</small>
               <ChevronDown size={15} aria-hidden="true" />
             </summary>
             <div className="source-entry">
               <div className="input-with-icon">
                 <Link2 size={16} />
-                <input value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSource()} placeholder="Optional supporting source URL" />
-                <button onClick={addSource} aria-label="Add source"><Plus size={16} /></button>
+                <input value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addSource()} placeholder={t.sourcePlaceholder} />
+                <button onClick={addSource} aria-label={t.addSource}><Plus size={16} /></button>
               </div>
               {sources.map((source) => (
                 <div className="source-chip" key={source}>
                   <span>{new URL(source).hostname}</span>
-                  <button onClick={() => setSources((current) => current.filter((item) => item !== source))} aria-label={`Remove ${new URL(source).hostname}`}><X size={13} /></button>
+                  <button onClick={() => setSources((current) => current.filter((item) => item !== source))} aria-label={t.removeSource(new URL(source).hostname)}><X size={13} /></button>
                 </div>
               ))}
             </div>
 
             <div className="config-grid">
               <label className="template-field">
-                Narrative template
+                {t.narrativeTemplate}
                 <select value={selectedTemplateId} onChange={(event) => setTemplateId(event.target.value)}>
-                  <option value="">None · structure follows the depth</option>
+                  <option value="">{t.noTemplate}</option>
                   {templates.map((item) => (
-                    <option key={item.id} value={item.id}>{item.name}{item.builtIn ? " · built in" : ""} · {item.story.length} sections</option>
+                    <option key={item.id} value={item.id}>{t.templateOption(templateText(item, messages.studio.templates).name, Boolean(item.builtIn), item.story.length)}</option>
                   ))}
                 </select>
               </label>
             </div>
             {template && (
               <p className="template-note">
-                <span>{template.description || `Saved from ${template.source?.title ?? "a project"}.`}</span>
+                <span>{templateText(template, messages.studio.templates).description || t.savedFrom(template.source?.title)}</span>
                 <span>
-                  The template sets {template.story.length} story sections{template.report ? ` and ${template.report.length} report sections` : ""}; depth still decides the learning material.
+                  {t.templateSets(template.story.length, template.report?.length)}
                   {template.builtIn
-                    ? <button onClick={() => setEditing({ template, copy: true })}>Customize a copy</button>
+                    ? <button onClick={() => setEditing({ template, copy: true })}>{t.customizeCopy}</button>
                     : (
                       <>
-                        <button onClick={() => setEditing({ template, copy: false })}>Edit template</button>
-                        <button onClick={() => { void removeTemplate(template.id); }}>Remove template</button>
+                        <button onClick={() => setEditing({ template, copy: false })}>{t.editTemplate}</button>
+                        <button onClick={() => { void removeTemplate(template.id); }}>{t.removeTemplate}</button>
                       </>
                     )}
                 </span>
@@ -440,48 +478,48 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
 
           <section className="orchestration-config">
             <div className="orchestration-heading">
-              <div><Sparkles size={15} /><span>Model orchestration</span></div>
+              <div><Sparkles size={15} /><span>{t.orchestration}</span></div>
               <div className="orchestration-toggle">
-                <button className={orchestration === "single" ? "active" : ""} onClick={() => setOrchestration("single")}>Single model</button>
-                <button className={orchestration === "team" ? "active" : ""} onClick={() => setOrchestration("team")}><Users size={13} /> Model team</button>
+                <button className={orchestration === "single" ? "active" : ""} onClick={() => setOrchestration("single")}>{t.singleModel}</button>
+                <button className={orchestration === "team" ? "active" : ""} onClick={() => setOrchestration("team")}><Users size={13} /> {t.modelTeam}</button>
               </div>
             </div>
 
             {orchestration === "single" ? (
               <div className="single-model-row">
-                <div className="model-select provider-select"><select aria-label="Model provider" value={provider} onChange={(event) => changeProvider(event.target.value as ProviderId)}>{providerCatalog.map((item) => (
+                <div className="model-select provider-select"><select aria-label={t.modelProvider} value={provider} onChange={(event) => changeProvider(event.target.value as ProviderId)}>{providerOptions.map((item) => (
                   /* Tek model dört işi birden yapıyor; biri makaleyi okumak.
                      PDF'i alamayan sağlayıcı burada seçilemez — ama model
                      ekibinde yazı ve görsel işlerine atanabilir. */
                   <option key={item.id} value={item.id} disabled={!providerReadsDocuments(item.id)}>
-                    {item.label}{!providerReadsDocuments(item.id) ? " · model team only" : item.readsPaperAsText ? " · reads the paper as text" : ""}
+                    {item.label}{!providerReadsDocuments(item.id) ? t.teamOnly : item.readsPaperAsText ? t.readsAsText : ""}
                   </option>
                 ))}</select></div>
                 <ModelPicker assignment={{ provider, model }} onChange={(assignment) => { setProvider(assignment.provider); setModel(assignment.model); }} openRouterModels={openRouterModels} inputId="single" />
-                <p>This model runs all five tasks.</p>
+                <p>{t.runsAll}</p>
               </div>
             ) : (
               <>
                 <div className="team-preset-row">
-                  <div><strong>Task assignment</strong><span>Each specialist produces only the structured task assigned to it.</span></div>
-                  <button onClick={() => setTeam(structuredClone(recommendedModelTeam))}>Recommended model team</button>
+                  <div><strong>{t.taskAssignment}</strong><span>{t.taskAssignmentNote}</span></div>
+                  <button onClick={() => setTeam(structuredClone(recommendedModelTeam))}>{t.recommendedTeam}</button>
                 </div>
                 <div className="task-assignment-grid">
-                  {generationTaskCatalog.map((task, index) => (
+                  {taskCatalog.map((task, index) => (
                     <article className="task-assignment-card" key={task.id}>
                       <header><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{task.label}</strong><small>{task.recommendation}</small></div></header>
                       <p>{task.description}</p>
                       <div className="task-model-controls">
-                        <select aria-label={`${task.label} provider`} value={team[task.id].provider} onChange={(event) => {
+                        <select aria-label={t.taskProvider(task.label)} value={team[task.id].provider} onChange={(event) => {
                           const nextProvider = event.target.value as ProviderId;
                           updateTeamAssignment(task.id, { provider: nextProvider, model: defaultModelByProvider[nextProvider] });
-                        }}>{providerCatalog.map((item) => {
+                        }}>{providerOptions.map((item) => {
                           const needsDocument = documentTaskRoles.includes(task.id);
                           const blocked = needsDocument && !providerReadsDocuments(item.id);
                           const asText = needsDocument && item.readsPaperAsText;
                           return (
                             <option key={item.id} value={item.id} disabled={blocked}>
-                              {item.label}{blocked ? " · cannot read the PDF" : asText ? " · reads the paper as text" : ""}
+                              {item.label}{blocked ? t.cannotReadPdf : asText ? t.readsAsText : ""}
                             </option>
                           );
                         })}</select>
@@ -495,7 +533,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
 
             {libraryCount > 0 && <QuoteTrackRecord assignments={assignments} record={quoteRecord} />}
 
-            <div className="credential-heading"><LockKeyhole size={14} /><div><strong>Provider keys in use</strong><span>Only required for the providers you selected.</span></div></div>
+            <div className="credential-heading"><LockKeyhole size={14} /><div><strong>{t.keysHeading}</strong><span>{t.keysNote}</span></div></div>
             <div className="credential-grid">
               {usedProviders.map((item) => (
                 /* Yerel sunucuda gizlenecek bir sır yok: istenen şey adres.
@@ -510,7 +548,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
                 <label className="key-input" key={item.id}>
                   <span>{item.label}</span>
                   <input type={visibleKeys[item.id] ? "text" : "password"} value={apiKeys[item.id] ?? ""} onChange={(event) => setApiKeys((current) => ({ ...current, [item.id]: event.target.value }))} placeholder={item.keyLabel} autoComplete="off" />
-                  <button type="button" onClick={() => setVisibleKeys((current) => ({ ...current, [item.id]: !current[item.id] }))} aria-label={`Toggle ${item.label} API key visibility`}>{visibleKeys[item.id] ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                  <button type="button" onClick={() => setVisibleKeys((current) => ({ ...current, [item.id]: !current[item.id] }))} aria-label={t.toggleKey(item.label)}>{visibleKeys[item.id] ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                 </label>
                 )
               ))}
@@ -518,24 +556,22 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
             {usedProviders.filter((item) => item.hint).map((item) => (
               <p className="provider-hint" key={item.id}><strong>{item.label}.</strong> {item.hint}</p>
             ))}
-            {usedProviders.some((item) => item.id === "openrouter") && <div className="openrouter-catalog-row"><span>The catalogue lists only <code>text-only output + structured output</code> models, which are the ones safe for the Trace canvas. Image input may be supported; image-output models are excluded from StorySpec generation.</span><button onClick={loadOpenRouterModels} disabled={modelsLoading}>{modelsLoading ? "Loading…" : "Load compatible models"}</button></div>}
+            {usedProviders.some((item) => item.id === "openrouter") && <div className="openrouter-catalog-row"><span>{t.catalogueBefore}<code>{t.catalogueFilter}</code>{t.catalogueAfter}</span><button onClick={loadOpenRouterModels} disabled={modelsLoading}>{modelsLoading ? messages.common.loading : t.loadModels}</button></div>}
             <TeamProbe assignments={assignments} apiKeys={apiKeys} depth={depth} template={template} />
-            <p className="key-note">Keys are sent to the backend proxy for this generation request only and are never stored, in the browser or in the project. Your other choices here are remembered in this browser for the next paper.</p>
+            <p className="key-note">{t.keyNote}</p>
           </section>
           {error && <p className="form-error">{error}</p>}
-          <button className="primary-action" onClick={submit}>Analyse paper <ArrowRight size={17} /></button>
+          <button className="primary-action" onClick={submit}>{t.analyse} <ArrowRight size={17} /></button>
         </div>
       </section>
 
       {editing && (
         <TemplateEditor
-          initial={editing.template}
-          initialName={editing.copy ? `${editing.template.name} (copy)` : editing.template.name}
+          initial={editing.copy ? { ...editing.template, description: templateText(editing.template, messages.studio.templates).description } : editing.template}
+          initialName={editing.copy ? t.copyName(templateText(editing.template, messages.studio.templates).name) : editing.template.name}
           mode={editing.copy ? "create" : "edit"}
-          heading={editing.copy ? `Customize ${editing.template.name}` : `Edit ${editing.template.name}`}
-          intro={editing.copy
-            ? "Built-in templates stay as they are. Your copy is saved next to your own templates."
-            : "Change the order, purpose, visual and claim kinds of each section. Projects already analysed with this template keep their own copy."}
+          heading={editing.copy ? t.customizeHeading(templateText(editing.template, messages.studio.templates).name) : t.editHeading(editing.template.name)}
+          intro={editing.copy ? t.copyIntro : t.editIntro}
           onSaved={(saved) => {
             setTemplates((current) => [...current.filter((item) => item.id !== saved.id), saved]);
             setTemplateId(saved.id);
@@ -544,7 +580,7 @@ export function Onboarding({ onGenerate, onSample, onLibrary, libraryProjects, i
         />
       )}
 
-      <section className="landing-proof"><span>PDF</span><i /><span>Evidence graph</span><i /><span>StorySpec</span><i /><span>Interactive web</span></section>
+      <section className="landing-proof"><span>PDF</span><i /><span>{t.proof.evidenceGraph}</span><i /><span>{t.proof.storySpec}</span><i /><span>{t.proof.interactiveWeb}</span></section>
     </main>
   );
 }
@@ -562,12 +598,14 @@ function ModelPicker({
   inputId: string;
   compact?: boolean;
 }) {
-  const provider = getProvider(assignment.provider)!;
+  const messages = useUiLanguage().t;
+  const t = messages.studio.onboarding;
+  const provider = localizedProvider(getProvider(assignment.provider)!, messages.studio.models.providers);
   if (assignment.provider === "openrouter") {
     const listId = `openrouter-models-${inputId}`;
     return (
       <div className={`model-select openrouter-model-select ${compact ? "compact" : ""}`}>
-        <input aria-label="OpenRouter model id" list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder="provider/model" />
+        <input aria-label={t.openRouterModelId} list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder={t.openRouterPlaceholder} />
         <datalist id={listId}>{openRouterModels.map((item) => <option key={item.id} value={item.id}>{item.label}{item.contextLength ? ` · ${Math.round(item.contextLength / 1000)}k` : ""}</option>)}</datalist>
       </div>
     );
@@ -579,14 +617,14 @@ function ModelPicker({
     const listId = `${provider.id}-models-${inputId}`;
     return (
       <div className={`model-select openrouter-model-select ${compact ? "compact" : ""}`}>
-        <input aria-label={`${provider.label} model name`} list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder="model name" spellCheck={false} />
+        <input aria-label={t.modelName(provider.label)} list={listId} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })} placeholder={t.modelNamePlaceholder} spellCheck={false} />
         <datalist id={listId}>{provider.models.map((item) => <option key={item.id} value={item.id}>{item.note}</option>)}</datalist>
       </div>
     );
   }
   return (
     <div className={`model-select ${compact ? "compact" : ""}`}>
-      <select aria-label={`${provider.label} model`} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })}>{provider.models.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.note}</option>)}</select>
+      <select aria-label={t.modelSelect(provider.label)} value={assignment.model} onChange={(event) => onChange({ ...assignment, model: event.target.value })}>{provider.models.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.note}</option>)}</select>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { serverText } from "@/lib/server/server-text";
 import { fetchCitationGraph } from "../../../../plugins/trace-paper-studio/skills/trace-paper-studio/scripts/lib/citation-graph.mjs";
 
 export const runtime = "nodejs";
@@ -22,7 +23,7 @@ const inputSchema = z.object({
 
 export async function POST(request: Request) {
   const parsed = inputSchema.safeParse(await request.json().catch(() => undefined));
-  if (!parsed.success) return Response.json({ error: "A paper title is required." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: serverText(request).citations.titleRequired }, { status: 400 });
   const { limit, abstracts, ...paper } = parsed.data;
   const graph = await fetchCitationGraph(paper, { limit: limit ?? 12, abstracts: abstracts ?? false });
   return Response.json(graph, { headers: { "Cache-Control": "no-store" } });

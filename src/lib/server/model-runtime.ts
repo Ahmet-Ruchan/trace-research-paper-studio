@@ -13,6 +13,8 @@ import {
   type ProviderId,
 } from "@/lib/model-providers";
 import { omitNullObjectFields, openAiJsonSchema } from "@/lib/openai-structured";
+import { UserFacingError, userErrorMessage, userErrorText, type UserErrorArgs, type UserErrorText } from "@/lib/user-error";
+import { providerProgressText, type ProviderProgressText } from "./provider-progress-text";
 
 /**
  * Sağlayıcı çalışma zamanı: bir model atamasını, yapılandırılmış JSON üreten
@@ -52,6 +54,8 @@ export type ProviderPreparationInput = {
   model: string;
   needsDocument: boolean;
   taskRole: GenerationTaskRole;
+  /** İlerleme metinleri isteği yapanın dilinde; verilmezse İngilizce. */
+  progressText?: ProviderProgressText;
 };
 
 export type StructuredGeneration = {
@@ -95,18 +99,18 @@ export type TaggedProviderError = Error & {
 
 export type ProgressWriter = (progress: GenerationProgress) => void;
 
-/** Kullanıcıya olduğu gibi gösterilen, "başka model seç" diyen hata. */
-function incompatibleModelError(message: string): TaggedProviderError {
-  return Object.assign(new Error(message), { incompatibleModel: true });
+/** Kullanıcıya olduğu gibi (kendi dilinde) gösterilen, "başka model seç" diyen hata. */
+function incompatibleModelError(...args: UserErrorArgs): TaggedProviderError {
+  return Object.assign(new UserFacingError(...args), { incompatibleModel: true });
 }
 
 export function parseJsonResponse(text: string | undefined, stage: string) {
-  if (!text) throw new Error(`The ${stage} stage returned an empty response.`);
+  if (!text) throw new UserFacingError("stageEmptyResponse", stage);
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
     return omitNullObjectFields(JSON.parse(cleaned));
   } catch {
-    throw new Error(`The ${stage} stage did not return valid JSON.`);
+    throw new UserFacingError("stageInvalidJson", stage);
   }
 }
 
@@ -259,24 +263,25 @@ async function waitUntilActive(
   name: string,
   signal: AbortSignal,
   progress: ProgressWriter,
+  text: ProviderProgressText,
 ) {
   for (let attempt = 0; attempt < 90; attempt += 1) {
     throwIfAborted(signal);
     const file = await ai.files.get({ name, config: { abortSignal: signal } });
     const state = String(file.state ?? "ACTIVE");
     if (state === "ACTIVE") return file;
-    if (state === "FAILED") throw new Error("The model could not process the PDF.");
+    if (state === "FAILED") throw new UserFacingError("modelCouldNotProcessPdf");
     if (attempt > 0 && attempt % 8 === 0) {
       progress({
         stage: "document",
         progress: Math.min(25, 18 + attempt / 5),
-        title: "Preparing the PDF for the model.",
-        detail: "Parsing the document pages and their visual layers.",
+        title: text.pdfProcessing,
+        detail: text.pdfProcessingDetail,
       });
     }
     await abortableDelay(1_000, signal);
   }
-  throw new Error("Processing the PDF timed out.");
+  throw new UserFacingError("pdfProcessingTimedOut");
 }
 
 /**
@@ -394,14 +399,10 @@ async function assertOpenRouterModelCompatible(
   const outputModalities = payload.data?.architecture?.output_modalities ?? [];
   const supportedParameters = payload.data?.supported_parameters ?? [];
   if (!outputModalities.includes("text")) {
-    throw incompatibleModelError(
-      `The OpenRouter model ${model} does not produce text/JSON output. Pick a model whose output modality is “text” for Trace tasks.`,
-    );
+    throw incompatibleModelError("openRouterNoText", model);
   }
   if (!supportedParameters.includes("structured_outputs")) {
-    throw incompatibleModelError(
-      `The OpenRouter model ${model} does not support strict structured output. Pick another model from the compatible catalogue.`,
-    );
+    throw incompatibleModelError("openRouterNoStructured", model);
   }
   return { outputModalities };
 }
@@ -422,12 +423,10 @@ async function assertLocalServerReachable(endpoint: string, model: string, signa
       signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
     });
   } catch {
-    throw incompatibleModelError(
-      `No local model server answered at ${endpoint}. Start one — \`ollama serve\`, or LM Studio's local server — or point Trace at the address it is listening on.`,
-    );
+    throw incompatibleModelError("localServerUnreachable", endpoint);
   }
   if (!response.ok) {
-    throw incompatibleModelError(`The local model server at ${endpoint} answered with ${response.status}.`);
+    throw incompatibleModelError("localServerStatus", endpoint, response.status);
   }
   const payload = await response.json().catch(() => undefined) as { data?: Array<{ id?: unknown }> } | undefined;
   const installed = (payload?.data ?? [])
@@ -436,9 +435,7 @@ async function assertLocalServerReachable(endpoint: string, model: string, signa
   // Liste boş dönebiliyor (bazı sunucular /models'i doldurmuyor); boş liste
   // "model yok" demek değil, o yüzden yalnızca dolu listede karar veriyoruz.
   if (installed.length && !installed.includes(model)) {
-    throw incompatibleModelError(
-      `The local server at ${endpoint} does not have "${model}". Installed: ${installed.slice(0, 8).join(", ")}${installed.length > 8 ? "…" : ""}. Pull it first, for example \`ollama pull ${model}\`.`,
-    );
+    throw incompatibleModelError("localModelMissing", endpoint, model, `${installed.slice(0, 8).join(", ")}${installed.length > 8 ? "…" : ""}`);
   }
 }
 
@@ -454,6 +451,7 @@ export async function prepareProviderRuntime(
   progress: ProgressWriter,
   markProviderActivity: () => void,
 ): Promise<ProviderRuntime> {
+  const words = input.progressText ?? providerProgressText;
   const requireFile = () => {
     if (!input.file) throw new Error("This stage needs the PDF, but none was supplied.");
     return input.file;
@@ -484,10 +482,10 @@ export async function prepareProviderRuntime(
         progress({
           stage: "document",
           progress: 18,
-          title: "PDF received; resolving its pages.",
+          title: words.geminiReceived,
           detail: `${requireFile().name} · ${(requireFile().size / 1024 / 1024).toFixed(1)} MB · Gemini`,
         });
-        const readyFile = await waitUntilActive(ai, uploaded.name, signal, progress);
+        const readyFile = await waitUntilActive(ai, uploaded.name, signal, progress, words);
         markProviderActivity();
         if (!readyFile.uri || !readyFile.mimeType) throw new Error("The PDF model URI is missing.");
         activeFile = { uri: readyFile.uri, mimeType: readyFile.mimeType };
@@ -554,7 +552,7 @@ export async function prepareProviderRuntime(
       progress({
         stage: "document",
         progress: 22,
-        title: "The PDF was split into visual and text layers for Claude.",
+        title: words.claudeSplit,
         detail: `${requireFile().name} · ${(requireFile().size / 1024 / 1024).toFixed(1)} MB · Messages API`,
       });
     }
@@ -628,8 +626,8 @@ export async function prepareProviderRuntime(
     progress({
       stage: input.taskRole === "visual" ? "story" : "evidence",
       progress: input.taskRole === "visual" ? 76 : 62,
-      title: "The local model is answering.",
-      detail: `${input.model} · ${endpoint} · nothing leaves this machine`,
+      title: words.localAnswering,
+      detail: words.localAnsweringDetail(input.model, endpoint),
     });
 
     return {
@@ -692,8 +690,8 @@ export async function prepareProviderRuntime(
       progress({
         stage: input.taskRole === "visual" ? "story" : "document",
         progress: input.taskRole === "visual" ? 78 : 12,
-        title: "Redirected to an OpenRouter structured model.",
-        detail: `${input.model} is an image-output model; the Trace canvas JSON will be produced with ${effectiveModel}.`,
+        title: words.openRouterRedirected,
+        detail: words.openRouterRedirectedDetail(input.model, effectiveModel),
       });
     }
     const documentData = input.needsDocument
@@ -704,7 +702,7 @@ export async function prepareProviderRuntime(
       progress({
         stage: "document",
         progress: 22,
-        title: "The PDF is ready for the OpenRouter request.",
+        title: words.openRouterPdfReady,
         detail: `${requireFile().name} · ${(requireFile().size / 1024 / 1024).toFixed(1)} MB · ${input.model}`,
       });
     }
@@ -771,8 +769,8 @@ export async function prepareProviderRuntime(
           progress({
             stage: input.taskRole === "visual" ? "story" : "evidence",
             progress: input.taskRole === "visual" ? 80 : 36,
-            title: "Redirecting the OpenRouter endpoint.",
-            detail: `${effectiveModel} returned an upstream error; retrying safely with ${OPENROUTER_STRUCTURED_FALLBACK_MODEL}.`,
+            title: words.openRouterFallback,
+            detail: words.openRouterFallbackDetail(effectiveModel, OPENROUTER_STRUCTURED_FALLBACK_MODEL),
           });
           await assertOpenRouterModelCompatible(input.apiKey, OPENROUTER_STRUCTURED_FALLBACK_MODEL, requestSignal);
           return requestModel(OPENROUTER_STRUCTURED_FALLBACK_MODEL);
@@ -802,7 +800,7 @@ export async function prepareProviderRuntime(
     progress({
       stage: "document",
       progress: 22,
-      title: "The PDF was taken into the OpenAI workspace.",
+      title: words.openAiReceived,
       detail: `${requireFile().name} · ${(requireFile().size / 1024 / 1024).toFixed(1)} MB · Responses API`,
     });
   }
@@ -876,16 +874,21 @@ export async function prepareProviderRuntime(
   };
 }
 
-export function publicError(error: unknown, callerAborted: boolean, fallbackProvider: ProviderId) {
-  if (callerAborted) return "Generation cancelled.";
+/**
+ * Sağlayıcı hatasının okuyucuya söylenişi. `text` isteği yapanın dilindeki
+ * hata metinleri; verilmezse İngilizce. Sınıflandırma her zaman İngilizce
+ * `.message` üzerinden: sağlayıcıların ham metni İngilizce geliyor.
+ */
+export function publicError(error: unknown, callerAborted: boolean, fallbackProvider: ProviderId, text: UserErrorText = userErrorText) {
+  if (callerAborted) return text.generationCancelled();
   const message = error instanceof Error ? error.message : String(error);
   const tagged = error as TaggedProviderError;
   const provider = tagged.providerId ?? fallbackProvider;
-  const providerLabel = getProvider(provider)?.label ?? "Model provider";
-  const modelLabel = tagged.modelId ? ` (${tagged.modelId})` : "";
-  const taskLabel = tagged.taskRole ? ` · ${tagged.taskRole} task` : "";
+  const local = Boolean(getProvider(provider)?.local);
+  const providerLabel = text.providerName(getProvider(provider)?.label, local);
+  const who = text.providerTask(providerLabel, tagged.modelId, tagged.taskRole);
   if (tagged.incompatibleModel) {
-    return message;
+    return userErrorMessage(error, text) ?? message;
   }
   /**
    * `AbortSignal.timeout` bir `TimeoutError` fırlatıyor, `AbortError` değil.
@@ -894,36 +897,30 @@ export function publicError(error: unknown, callerAborted: boolean, fallbackProv
    * modelin sınırı ayrı (15 dakika), dolayısıyla süre sağlayıcıya göre.
    */
   if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) {
-    const limit = getProvider(provider)?.local ? "15 minutes" : "120 seconds";
-    const advice = getProvider(provider)?.local
-      ? " A smaller or non-thinking local model, or a cloud provider, will finish sooner."
-      : "";
-    return `${providerLabel}${modelLabel}${taskLabel} did not finish within ${limit}. Completed stages were kept; you can try again.${advice}`;
+    return text.providerTimedOut(who, local);
   }
   if (/API_KEY_INVALID|API key not valid|invalid api key|incorrect api key|authentication|permission_denied|401/i.test(message)) {
-    return `The ${providerLabel} API key is invalid, or not authorised for this model.`;
+    return text.apiKeyInvalid(providerLabel);
   }
   if (/RESOURCE_EXHAUSTED|quota|rate limit|429/i.test(message)) {
-    return `The ${providerLabel} quota is exhausted, or its rate limit was reached. Completed stages were kept.`;
+    return text.quotaExhausted(providerLabel);
   }
   if (/insufficient credits|402/i.test(message)) {
-    return `The ${providerLabel} account does not have enough credit for this request.${modelLabel}`;
+    return text.insufficientCredit(providerLabel, tagged.modelId);
   }
   if (/NOT_FOUND|model.*not found|404/i.test(message)) {
-    return `The selected ${providerLabel} model is not available to this API key. Pick another model and try again.`;
+    return text.modelUnavailable(providerLabel);
   }
   if (/UNAVAILABLE|503|504|fetch failed|ECONNRESET|ETIMEDOUT|terminated/i.test(message)) {
-    return `${providerLabel} cannot be reached right now. Completed stages were kept; you can try again.`;
+    return text.providerUnreachable(providerLabel);
   }
   if (/Provider returned error/i.test(message)) {
     const diagnostic = [tagged.errorType, tagged.providerCode].filter(Boolean).join(" / ");
-    const attempted = tagged.attemptedModel && tagged.attemptedModel !== tagged.modelId
-      ? ` The compatible fallback ${tagged.attemptedModel} failed as well.`
-      : "";
-    return `${providerLabel}${modelLabel}${taskLabel} failed at the upstream provider${diagnostic ? ` (${diagnostic})` : ""}.${attempted} Pick another text-only output + structured-output model from the compatible catalogue.`;
+    const fallback = tagged.attemptedModel && tagged.attemptedModel !== tagged.modelId ? tagged.attemptedModel : undefined;
+    return text.upstreamFailed(who, diagnostic, fallback);
   }
   if (error instanceof z.ZodError || error instanceof Error && error.name === "IntegrityError") {
-    return "The model output failed the evidence schema on both attempts. No invented data was published; completed stages were kept.";
+    return text.schemaFailedTwice();
   }
-  return message || "Something went wrong while processing the paper.";
+  return userErrorMessage(error, text) ?? (message || text.processingFailed());
 }

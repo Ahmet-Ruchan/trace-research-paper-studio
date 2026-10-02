@@ -11,6 +11,13 @@ describe("standalone story export", () => {
     expect(html).toContain("prefers-reduced-motion");
   });
 
+  it("kök dili sayfanın etiketlerinin dili: Türkçe makale Türkçe, öteki İngilizce", () => {
+    expect(exampleProject.language).toBe("tr");
+    expect(buildStandaloneStory(exampleProject)).toContain('<html lang="tr">');
+    expect(buildStandaloneStory({ ...exampleProject, language: "en" })).toContain('<html lang="en">');
+    expect(buildStandaloneStory({ ...exampleProject, language: "de" })).toContain('<html lang="en">');
+  });
+
   it("leaves no unfilled placeholder", () => {
     const html = buildStandaloneStory(exampleProject);
     // Tek tek saymak yerine deseni tarıyoruz: şablona yeni bir yer tutucu

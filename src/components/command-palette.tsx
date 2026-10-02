@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CornerDownLeft, Search } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { PALETTE_GROUPS, rankPaletteCommands, type PaletteCommand, type PaletteTarget } from "@/lib/command-palette";
 
 /**
@@ -21,6 +22,7 @@ export function openCommandPalette() {
 }
 
 export function CommandPalette({ build, onRun }: { build: () => PaletteCommand[]; onRun: (target: PaletteTarget) => void }) {
+  const t = useT().studio.commandPalette;
   const [open, setOpen] = useState(false);
   const [commands, setCommands] = useState<PaletteCommand[]>([]);
   const [query, setQuery] = useState("");
@@ -67,7 +69,8 @@ export function CommandPalette({ build, onRun }: { build: () => PaletteCommand[]
     return () => clearTimeout(focus);
   }, [open]);
 
-  const results = useMemo(() => rankPaletteCommands(commands, query), [commands, query]);
+  const words = t.words;
+  const results = useMemo(() => rankPaletteCommands(commands, query, undefined, words), [commands, query, words]);
   // Sorgu boşken gruplar sırayla; bir sorguda en iyi eşleşme önce, grup başlığı her değişimde.
   const rows = useMemo(() => {
     const ordered = query.trim() ? results : PALETTE_GROUPS.flatMap((group) => results.filter((command) => command.group === group));
@@ -101,7 +104,7 @@ export function CommandPalette({ build, onRun }: { build: () => PaletteCommand[]
 
   return (
     <div className="palette-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label="Go to a paper, section or action">
+      <div className="palette" role="dialog" aria-modal="true" aria-label={t.dialog}>
         <div className="palette-field">
           <Search size={16} aria-hidden="true" />
           <input
@@ -111,8 +114,8 @@ export function CommandPalette({ build, onRun }: { build: () => PaletteCommand[]
             aria-controls="palette-list"
             aria-activedescendant={activeRow ? `palette-${activeRow.index}` : undefined}
             aria-autocomplete="list"
-            aria-label="Go to"
-            placeholder="Go to a paper, a section or an action…"
+            aria-label={t.input}
+            placeholder={t.placeholder}
             value={query}
             spellCheck={false}
             autoComplete="off"
@@ -146,10 +149,10 @@ export function CommandPalette({ build, onRun }: { build: () => PaletteCommand[]
           />
           <kbd>Esc</kbd>
         </div>
-        <ul className="palette-list" id="palette-list" role="listbox" aria-label="Results" ref={list}>
+        <ul className="palette-list" id="palette-list" role="listbox" aria-label={t.results} ref={list}>
           {rows.map(({ command, index, heading }) => (
             <li key={command.id} role="none">
-              {heading ? <span className="palette-group" aria-hidden="true">{heading}</span> : null}
+              {heading ? <span className="palette-group" aria-hidden="true">{words.groups[heading]}</span> : null}
               <div
                 id={`palette-${index}`}
                 role="option"
@@ -166,8 +169,8 @@ export function CommandPalette({ build, onRun }: { build: () => PaletteCommand[]
             </li>
           ))}
         </ul>
-        {!rows.length ? <p className="palette-empty" role="status">Nothing matches “{query.trim()}”.</p> : null}
-        <p className="palette-hint" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> to choose · <kbd>Enter</kbd> to open · <kbd>Ctrl</kbd> <kbd>K</kbd> anywhere</p>
+        {!rows.length ? <p className="palette-empty" role="status">{t.nothingMatches(query.trim())}</p> : null}
+        <p className="palette-hint" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd>{t.hintChoose}<kbd>Enter</kbd>{t.hintOpen}<kbd>Ctrl</kbd> <kbd>K</kbd>{t.hintAnywhere}</p>
       </div>
     </div>
   );

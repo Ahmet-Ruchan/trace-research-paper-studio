@@ -78,14 +78,24 @@ export function workKey(work: { identifier?: string; doi?: string; title: string
 
 const sameSource = (left: ReadingSource, right: ReadingSource) => left.projectId === right.projectId && left.relation === right.relation && (left.concept ?? "") === (right.concept ?? "");
 
+/** Liste dolu: rota bunu mesajından değil türünden tanıyabilsin (mesaj dile göre değişebiliyor). */
+export class ReadingListFullError extends Error {}
+
+/** Listenin sınır hataları; Türkçesi arayüz sözlüğünde (`learning`). */
+export type ReadingListLimitWords = { full: (max: number) => string; tooMany: (max: number, room: number) => string };
+export const READING_LIST_LIMIT_WORDS: ReadingListLimitWords = {
+  full: (max) => `The reading list holds at most ${max} papers.`,
+  tooMany: (max, room) => `The reading list holds at most ${max} papers; ${room} more fit.`,
+};
+
 /**
  * Listeye ekler; çalışma zaten listedeyse nereden geldiği birleşiyor ve
  * bilgileri tazeleniyor, eklenme zamanı ve sırası korunuyor.
  */
-export function addToReadingList(list: readonly ReadingItem[], incoming: ReadingItem): ReadingItem[] {
+export function addToReadingList(list: readonly ReadingItem[], incoming: ReadingItem, words: ReadingListLimitWords = READING_LIST_LIMIT_WORDS): ReadingItem[] {
   const existing = list.find((item) => item.id === incoming.id);
   if (!existing) {
-    if (list.length >= MAX_READING_ITEMS) throw new Error(`The reading list holds at most ${MAX_READING_ITEMS} papers.`);
+    if (list.length >= MAX_READING_ITEMS) throw new ReadingListFullError(words.full(MAX_READING_ITEMS));
     return [...list, incoming];
   }
   const from = [...existing.from, ...incoming.from.filter((source) => !existing.from.some((item) => sameSource(item, source)))].slice(0, 20);
@@ -97,12 +107,12 @@ export function addToReadingList(list: readonly ReadingItem[], incoming: Reading
  * Birçok çalışmayı birden (Zotero ya da .bib içe aktarımı): ya hepsi sığıyor
  * ya hiçbiri eklenmiyor; yarısı eklenmiş bir içe aktarma kafa karıştırırdı.
  */
-export function addAllToReadingList(list: readonly ReadingItem[], incoming: readonly ReadingItem[]): ReadingItem[] {
+export function addAllToReadingList(list: readonly ReadingItem[], incoming: readonly ReadingItem[], words: ReadingListLimitWords = READING_LIST_LIMIT_WORDS): ReadingItem[] {
   const fresh = new Set(incoming.map((item) => item.id).filter((id) => !list.some((item) => item.id === id)));
   if (list.length + fresh.size > MAX_READING_ITEMS) {
-    throw new Error(`The reading list holds at most ${MAX_READING_ITEMS} papers; ${MAX_READING_ITEMS - list.length} more fit.`);
+    throw new ReadingListFullError(words.tooMany(MAX_READING_ITEMS, MAX_READING_ITEMS - list.length));
   }
-  return incoming.reduce<ReadingItem[]>((current, item) => addToReadingList(current, item), [...list]);
+  return incoming.reduce<ReadingItem[]>((current, item) => addToReadingList(current, item, words), [...list]);
 }
 
 export function removeFromReadingList(list: readonly ReadingItem[], id: string) {
@@ -163,18 +173,39 @@ export function mergeReadingOrder(order: ReadingOrder, list: readonly ReadingIte
   return { entries, others };
 }
 
+/**
+ * `savedReason` ve `savedFrom` cümleleri; Türkçesi arayüz sözlüğünde
+ * (`learning`). Kavramın adı yoksa (`concept` tanımsız) cümle "a concept" diyor.
+ */
+export type SavedReasonWords = {
+  beforeConcept: (title: string, concept: string | undefined) => string;
+  beforeReference: (title: string) => string;
+  afterCitedBy: (title: string) => string;
+  explainsConcept: (title: string, concept: string | undefined) => string;
+  buildsOn: (title: string) => string;
+  cites: (title: string) => string;
+};
+export const SAVED_REASON_WORDS: SavedReasonWords = {
+  beforeConcept: (title, concept) => `Before ${title}: it explains ${concept ?? "a concept"}, which that paper assumes.`,
+  beforeReference: (title) => `Before ${title}: that paper builds on it.`,
+  afterCitedBy: (title) => `After ${title}: it cites that paper.`,
+  explainsConcept: (title, concept) => `It explains ${concept ?? "a concept"}, which ${title} assumes.`,
+  buildsOn: (title) => `${title} builds on it.`,
+  cites: (title) => `It cites ${title}.`,
+};
+
 /** Okuyucuya "neden burada": kavramı anlatıyor, makale ona dayanıyor ya da ona atıf yapıyor. */
-export function savedReason(why: NonNullable<SavedPlace["why"]>) {
+export function savedReason(why: NonNullable<SavedPlace["why"]>, words: SavedReasonWords = SAVED_REASON_WORDS) {
   const title = why.project.evidence.paper.title;
-  if (why.relation === "concept") return `Before ${title}: it explains ${why.concept ?? "a concept"}, which that paper assumes.`;
-  if (why.relation === "reference") return `Before ${title}: that paper builds on it.`;
-  return `After ${title}: it cites that paper.`;
+  if (why.relation === "concept") return words.beforeConcept(title, why.concept);
+  if (why.relation === "reference") return words.beforeReference(title);
+  return words.afterCitedBy(title);
 }
 
 /** Sırada yeri olmayan bir çalışma için: nereden kaydedildiği. */
-export function savedFrom(why: NonNullable<SavedPlace["why"]>) {
+export function savedFrom(why: NonNullable<SavedPlace["why"]>, words: SavedReasonWords = SAVED_REASON_WORDS) {
   const title = why.project.evidence.paper.title;
-  if (why.relation === "concept") return `It explains ${why.concept ?? "a concept"}, which ${title} assumes.`;
-  if (why.relation === "reference") return `${title} builds on it.`;
-  return `It cites ${title}.`;
+  if (why.relation === "concept") return words.explainsConcept(title, why.concept);
+  if (why.relation === "reference") return words.buildsOn(title);
+  return words.cites(title);
 }

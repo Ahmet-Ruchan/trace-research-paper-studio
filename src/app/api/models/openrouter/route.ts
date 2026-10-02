@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { serverText } from "@/lib/server/server-text";
 
 export const runtime = "nodejs";
 
@@ -16,8 +17,9 @@ const modelSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const t = serverText(request);
   const parsed = inputSchema.safeParse(await request.json().catch(() => undefined));
-  if (!parsed.success) return Response.json({ error: "OpenRouter API key gerekli." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: t.openRouter.keyRequired }, { status: 400 });
 
   const url = new URL("https://openrouter.ai/api/v1/models/user");
   url.searchParams.set("supported_parameters", "structured_outputs");
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
   });
   if (!response.ok) {
     return Response.json(
-      { error: response.status === 401 ? "The OpenRouter API key is not valid." : "The OpenRouter model catalogue could not be loaded." },
+      { error: response.status === 401 ? t.openRouter.keyInvalid : t.openRouter.catalogueFailed },
       { status: response.status === 401 ? 401 : 502 },
     );
   }

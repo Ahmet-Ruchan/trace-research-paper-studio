@@ -1225,6 +1225,9 @@ html[data-text-size="larger"] { font-size: 125%; }
 .team-sign-in input, .team-form input, .team-approvals select { min-height: 38px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); color: var(--ink); font-size: var(--text-md); }
 .team-sign-in button { min-height: 40px; border: 0; border-radius: 9px; background: var(--ink); color: var(--on-ink); cursor: pointer; font-size: var(--text-md); font-weight: 600; }
 .team-sign-in button:disabled { opacity: .45; cursor: default; }
+/* Giriş ekranında üst menü yok: dil düğmesi köşede, kendi yuvarlak görünümüyle (focus.css). */
+.team-sign-in .team-sign-in-language { position: fixed; top: 16px; right: 16px; min-height: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); font-size: var(--text-2xs); font-weight: 600; }
+.team-sign-in .team-sign-in-language:hover { border-color: var(--line-dark); }
 .profile-team h2 { display: flex; align-items: center; gap: 8px; }
 .team-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 12px; }
 .team-form label { flex: 1 1 160px; }

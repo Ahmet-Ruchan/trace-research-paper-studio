@@ -52,6 +52,26 @@ export const initialGenerationProgress: GenerationProgress = {
   detail: "The API key stays in memory for this request only.",
 };
 
+/**
+ * Analiz ekranının kendi metinleri (aşama adları ve ilk mesaj), arayüzün
+ * dilinde. Akıştan gelen ilerleme metni sunucunun; bu yalnızca istemcinin
+ * yazdığı. Sözlük (`src/i18n/messages`) kendi dilini veriyor.
+ */
+export type GenerationEventWords = {
+  stages: Record<GenerationStageId, { label: string; description: string }>;
+  sending: { title: string; detail: string };
+};
+
+export const ENGLISH_GENERATION_WORDS: GenerationEventWords = {
+  stages: Object.fromEntries(generationStages.map(({ id, label, description }) => [id, { label, description }])) as GenerationEventWords["stages"],
+  sending: { title: initialGenerationProgress.title, detail: initialGenerationProgress.detail },
+};
+
+/** Analizin başındaki ilerleme, arayüzün dilinde. */
+export function initialProgressIn(words: GenerationEventWords = ENGLISH_GENERATION_WORDS): GenerationProgress {
+  return { ...initialGenerationProgress, ...words.sending };
+}
+
 export function isGenerationStreamEvent(value: unknown): value is GenerationStreamEvent {
   if (!value || typeof value !== "object" || !("type" in value)) return false;
   const type = (value as { type?: unknown }).type;

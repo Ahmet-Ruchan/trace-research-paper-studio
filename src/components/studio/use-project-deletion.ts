@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/i18n/client";
 import { PendingDeletion } from "@/lib/pending-deletion";
 import type { ResearchProject } from "@/lib/schema";
 
@@ -24,13 +25,16 @@ export function useProjectDeletion({
   /** Sunucudan silmek; `keepalive` sayfa kapanırken giden istek için. */
   remove: (projectId: string, keepalive: boolean) => Promise<void>;
 }) {
+  const failedText = useT().studio.deletion.failed;
   const [pending, setPending] = useState<ResearchProject>();
   const [error, setError] = useState<string>();
   const queue = useRef<PendingDeletion<ResearchProject> | undefined>(undefined);
-  // Silme süre dolunca, eski bir çizimin kapanışından çalışıyor; en son `remove` kullanılsın.
+  // Silme süre dolunca, eski bir çizimin kapanışından çalışıyor; en son `remove` ve arayüz dili kullanılsın.
   const removeRef = useRef(remove);
+  const failedRef = useRef(failedText);
   useEffect(() => {
     removeRef.current = remove;
+    failedRef.current = failedText;
   });
 
   /** Silinen proje listedeki yerine, güncellenme sırasına göre geri konuyor. */
@@ -44,7 +48,7 @@ export function useProjectDeletion({
     queue.current ??= new PendingDeletion<ResearchProject>(
       (target, reason) => {
         void removeRef.current(target.id, reason === "pagehide").catch((caught: unknown) => {
-          setError(caught instanceof Error ? caught.message : "Could not delete the Trace project.");
+          setError(caught instanceof Error ? caught.message : failedRef.current);
           restore(target);
         });
       },

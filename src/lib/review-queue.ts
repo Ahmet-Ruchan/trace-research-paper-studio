@@ -1,4 +1,4 @@
-import { readingDrillFor } from "./reading-drill";
+import { readingDrillFor, type ReadingDrillWords } from "./reading-drill";
 import { applyReview, isDue, type Cloze, type StudyReview } from "./review-schedule";
 import type { PrimerConcept, QuizQuestion, ResearchProject } from "./schema";
 import { emptyStudyProgress, MAX_REVIEW_DAYS, questionSignature, type ReviewDay, type StudyProgress } from "./study-path";
@@ -37,12 +37,13 @@ export const REVIEW_SESSION_SIZE = 20;
 /** Kısa molada önerilen en fazla kart: birkaç dakikalık molaya sığacak kadar. */
 export const BREAK_REVIEW_SIZE = 3;
 
-export function reviewCards(projects: readonly ResearchProject[], progress: ReadonlyMap<string, StudyProgress>): ReviewCard[] {
+/** `drillWords`: okuma alıştırmasının soruları arayüzün dilinde; mühürleri dilden bağımsız. */
+export function reviewCards(projects: readonly ResearchProject[], progress: ReadonlyMap<string, StudyProgress>, drillWords?: ReadingDrillWords): ReviewCard[] {
   const cards: ReviewCard[] = [];
   for (const project of projects) {
     const reviews = progress.get(project.id)?.reviews ?? [];
     if (!reviews.length) continue;
-    const questions = new Map([...(project.quiz?.questions ?? []), ...(readingDrillFor(project)?.questions ?? [])].map((question) => [question.id, question]));
+    const questions = new Map([...(project.quiz?.questions ?? []), ...(readingDrillFor(project, drillWords)?.questions ?? [])].map((question) => [question.id, question]));
     const concepts = new Map((project.primer?.concepts ?? []).map((concept) => [concept.id, concept]));
     const base = { projectId: project.id, paperTitle: project.evidence.paper.title, language: project.language };
     for (const review of reviews) {

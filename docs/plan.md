@@ -14,7 +14,7 @@ yapıldığı ve nasıl test edildiği yazıyor.
 5. Kalan hızlı ve orta işler: **3 → 4 → 19 → 17 → 9 → 26 → 14 → 15 → 8 → 25 → 20 → 23**
 6. Bakım ve kontrol: **27 → 28 → 29 → 30**
 7. Büyük işler: **10 → 11 → 12**
-8. Karar bekleyen: **13** (arayüz dili; başlamadan önce sorulacak)
+8. Karar bekleyen: **13** (arayüz dili; karar: Türkçe ve İngilizce, tek tuşla)
 
 ## Veri güvenliği
 
@@ -405,5 +405,29 @@ yapıldığı ve nasıl test edildiği yazıyor.
     parola değişimi, proxy kapısı ve bozuk dosya, notlar ve oylar API'den); e2e "team review"
     (ekip kipini açmak, üye eklemek, iki onay, çıkış ve giriş, paylaşılan/özel not, ikinci
     onayla karar, üye için tam dışa aktarım yasak).
-- [ ] **13. Arayüz dili.** Arayüz şu an bilinçli olarak İngilizce; başlamadan önce karar
-  gerekiyor.
+- [x] **13. Arayüz dili.** Karar: arayüz İngilizce ve Türkçe, tek tuşla değişiyor.
+  - *Yapıldı:* Çeviri katmanı `src/i18n`: dil seçimi (`languages.ts`; çerez `trace_ui_language`,
+    yoksa tarayıcının dil sırası), istemci sağlayıcısı (`client.tsx`, `useT()`; yeniden yükleme
+    yok, açık sekmeler de geçiyor), sunucu (`server.ts`; yerleşim ilk sayfayı ve `<html lang>`'i
+    doğru dilde çiziyor, API'ler hatalarını isteği yapanın dilinde yazıyor) ve bölümlere ayrılmış
+    sözlükler (`messages/`: common, studio, paper, focus, learning, server; `tr: typeof en` eksik
+    anahtarı derlemede yakalıyor). Terim listesi `src/i18n/glossary.md`. Üst menüde **TR / EN**
+    düğmesi (makale başlığında 1240 px altında komut paletinde), ekip giriş ekranında ve komut
+    paletinde ("dil", "Türkçe", "English"). Görsellerin etiketleri (`stringsFor(dil, arayüz)`)
+    stüdyoda arayüzün dilinde; stüdyodan çıkan sayfalar (görüntüleyici, yayın, dışa aktarımlar)
+    makalenin dilinde, paylaşılan okuma listesi paylaşanın dilinde. Tarih, saat, süre ("1 sa 5
+    dk"), bildirimler ve alarmlar seçilen dilde. Okuma alıştırması Türkçe soruyor ama soruların
+    mührü İngilizce metinden (`signatureBasis`): dil değişince kayıtlı yanıtlar ve tekrar kartları
+    düşmüyor. Kütüphane kodu sözlüğü içe aktarmıyor (eklentinin paketi): metinler isteğe bağlı bir
+    parametreyle geliyor; ajan, köprü ve MCP İngilizce. Yan düzeltme: çalışma kaydında istek
+    yoldayken uzayan bir oturum gönderilmeden listeden düşüyordu (`focus-provider.tsx`, `flush`).
+    Eklenti 0.41.0.
+  - *Test:* `languages.test.ts` (dil sırası, çerez önceliği, istek), `messages.test.ts` (iki dil
+    aynı biçimde, Türkçede kopyalanmış İngilizce yok), `interface-language.test.ts` (Türkçe metin
+    yalnızca sözlüklerde, bileşenlerde sözlüğe uğramayan metin yok — TypeScript sözdizimi
+    ağacıyla —, stüdyo görsellere arayüzün dilini veriyor), bölüm testleri (`focus`, `learning`,
+    `paper`), `server-language.test.ts` (API hataları Türkçe/İngilizce, çerez önceliği),
+    dışa aktarım ve paylaşım testleri (Türkçe makale → Türkçe etiket); e2e "interface language"
+    (tek tuşla geçiş ve hatırlama, sunucunun ilk çizimi ve API hatası, komut paleti, Türkçe
+    tarayıcı, telefonda en büyük yazıda taşma yok, makale başlığında çakışma yok); Türkçe arayüzün
+    ekran ekran taranması (kalan İngilizce yalnızca makalenin kendi alıntıları).

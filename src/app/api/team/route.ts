@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createFirstOwner, currentMember, listMembers, readTeam, sessionCookie, setApprovalsNeeded } from "@/lib/server/team-store";
 import { teamBody, teamFailure, teamJson } from "@/lib/server/team-http";
+import { serverText } from "@/lib/server/server-text";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     if (!me) return teamJson({ enabled: true });
     return teamJson({ enabled: true, me, ...listMembers() });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }
 
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     const { token, member } = createFirstOwner(body.name, body.password);
     return teamJson({ ok: true, me: member, ...listMembers() }, { cookie: sessionCookie(token, request) });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }
 
@@ -40,6 +41,6 @@ export async function PUT(request: Request) {
     setApprovalsNeeded(currentMember(request), body.approvalsNeeded);
     return teamJson({ ok: true, ...listMembers() });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }

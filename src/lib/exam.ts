@@ -1,4 +1,4 @@
-import { readingDrillFor } from "./reading-drill";
+import { readingDrillFor, type ReadingDrillWords } from "./reading-drill";
 import { applyReview, questionCardId, scheduleFirst } from "./review-schedule";
 import type { QuizQuestion, ResearchProject } from "./schema";
 import { countReviewDay } from "./review-queue";
@@ -22,11 +22,11 @@ export type ExamAnswer = readonly number[];
 export const EXAM_SIZES = [10, 20, 30] as const;
 export const EXAM_MINUTES = [0, 10, 20, 30] as const;
 
-/** Bütün sorular: quiz ve kanıttan üretilen okuma alıştırması; aynı soru bir kez. */
-export function examPool(projects: readonly ResearchProject[]): ExamQuestion[] {
+/** Bütün sorular: quiz ve kanıttan üretilen okuma alıştırması (`drillWords` dilinde); aynı soru bir kez. */
+export function examPool(projects: readonly ResearchProject[], drillWords?: ReadingDrillWords): ExamQuestion[] {
   return projects.flatMap((project) => {
     const seen = new Set<string>();
-    return [...(project.quiz?.questions ?? []), ...(readingDrillFor(project)?.questions ?? [])].flatMap((question) => {
+    return [...(project.quiz?.questions ?? []), ...(readingDrillFor(project, drillWords)?.questions ?? [])].flatMap((question) => {
       if (seen.has(question.id)) return [];
       seen.add(question.id);
       return [{ key: `${project.id}\u0000${question.id}`, projectId: project.id, paperTitle: project.evidence.paper.title, language: project.language, question }];

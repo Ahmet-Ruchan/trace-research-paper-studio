@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useT } from "@/i18n/client";
+import { messagesFor, type Messages } from "@/i18n/messages";
 import { reviewCards, reviewForecast } from "@/lib/review-queue";
 import type { ResearchProject } from "@/lib/schema";
 import { parseStudyFile, parseStudyProgress, type StudyProgress } from "@/lib/study-path";
@@ -12,6 +14,23 @@ export type StudyState =
   | { status: "failed"; message: string };
 
 const endpoint = (projectId: string) => `/api/library/study?id=${encodeURIComponent(projectId)}`;
+
+/** Sunucu bir hata yazmadığında gösterilen metinler; çağıran arayüzün dilinde verir. */
+export type StudyProgressText = Messages["learning"]["studyProgress"];
+const ENGLISH_TEXT: StudyProgressText = messagesFor("en").learning.studyProgress;
+
+/**
+ * Hata metinleri bir ref'te: okuma açılışta bir kez yapılıyor ve dil
+ * değişince yeniden yapılmamalı; hata anında seçili dil kullanılıyor.
+ */
+export function useStudyProgressText() {
+  const t = useT().learning.studyProgress;
+  const text = useRef(t);
+  useEffect(() => {
+    text.current = t;
+  }, [t]);
+  return text;
+}
 
 /**
  * Stüdyoda çalışma ilerlemesi kütüphanede (`/api/library/study`). Okuma
@@ -31,22 +50,23 @@ export function useStudyProgress(projectId: string) {
   const pending = useRef<{ progress?: StudyProgress } | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  const text = useStudyProgressText();
 
   useEffect(() => {
     let cancelled = false;
     fetch(endpoint(projectId), { cache: "no-store" })
       .then(async (response) => {
         const data = (await response.json().catch(() => undefined)) as { progress?: unknown; error?: string } | undefined;
-        if (!response.ok) throw new Error(data?.error ?? "Your study progress could not be read.");
+        if (!response.ok) throw new Error(data?.error ?? text.current.readFailed);
         if (!cancelled) setLoaded({ projectId, state: { status: "ready", progress: parseStudyProgress(data?.progress) } });
       })
       .catch((error: unknown) => {
-        if (!cancelled) setLoaded({ projectId, state: { status: "failed", message: error instanceof Error ? error.message : "Your study progress could not be read." } });
+        if (!cancelled) setLoaded({ projectId, state: { status: "failed", message: error instanceof Error ? error.message : text.current.readFailed } });
       });
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, text]);
 
   const flush = useCallback((keepalive = false) => {
     const item = pending.current;
@@ -59,14 +79,14 @@ export function useStudyProgress(projectId: string) {
         const response = await fetch(endpoint(projectId), { method: "PUT", keepalive, headers: { "Content-Type": "application/json" }, body });
         if (!response.ok) {
           const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-          throw new Error(data?.error ?? "Your study progress could not be saved.");
+          throw new Error(data?.error ?? text.current.saveFailed);
         }
         setSaveError(undefined);
       } catch (error) {
-        setSaveError(error instanceof Error ? error.message : "Your study progress could not be saved.");
+        setSaveError(error instanceof Error ? error.message : text.current.saveFailed);
       }
     });
-  }, [projectId]);
+  }, [projectId, text]);
 
   const save = useCallback((progress: StudyProgress | undefined) => {
     setLoaded({ projectId, state: { status: "ready", progress } });
@@ -80,20 +100,23 @@ export function useStudyProgress(projectId: string) {
   return { state, save, saveError };
 }
 
-/** Bir makalenin çalışma kaydını yazar; tekrar ekranı ve moladaki tekrar için. Hata olursa fırlatıyor. */
-export async function putStudyProgress(projectId: string, progress: StudyProgress) {
+/**
+ * Bir makalenin çalışma kaydını yazar; tekrar ekranı ve moladaki tekrar için.
+ * Hata olursa fırlatıyor. `text`: `useT().learning.studyProgress`.
+ */
+export async function putStudyProgress(projectId: string, progress: StudyProgress, text: StudyProgressText = ENGLISH_TEXT) {
   const response = await fetch(endpoint(projectId), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ progress }) });
   if (!response.ok) {
     const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-    throw new Error(data?.error ?? "The review could not be saved.");
+    throw new Error(data?.error ?? text.reviewSaveFailed);
   }
 }
 
 /** Kütüphanenin bütün çalışma kayıtları; tekrar kuyruğu ve kütüphane özeti için. */
-export async function readLibraryStudy(): Promise<Map<string, StudyProgress>> {
+export async function readLibraryStudy(text: StudyProgressText = ENGLISH_TEXT): Promise<Map<string, StudyProgress>> {
   const response = await fetch("/api/library/study", { cache: "no-store" });
   const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-  if (!response.ok) throw new Error(data?.error ?? "The review cards could not be read.");
+  if (!response.ok) throw new Error(data?.error ?? text.cardsReadFailed);
   return parseStudyFile(data);
 }
 
@@ -119,19 +142,20 @@ export function useLibraryStudy() {
 /** Kütüphanenin çalışma kaydı, okuma durumuyla: okunamazsa bunu söyleyebilmek için. */
 export function useLibraryStudyState() {
   const [state, setState] = useState<{ status: "loading" } | { status: "ready"; study: Map<string, StudyProgress> } | { status: "failed"; message: string }>({ status: "loading" });
+  const text = useStudyProgressText();
   useEffect(() => {
     let cancelled = false;
-    readLibraryStudy()
+    readLibraryStudy(text.current)
       .then((study) => {
         if (!cancelled) setState({ status: "ready", study });
       })
       .catch((error: unknown) => {
-        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : "Your study progress could not be read." });
+        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : text.current.readFailed });
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [text]);
   return state;
 }
 
@@ -154,21 +178,22 @@ export type ConceptAliasesState =
  */
 export function useConceptAliases() {
   const [state, setState] = useState<ConceptAliasesState>({ status: "loading" });
+  const text = useStudyProgressText();
   useEffect(() => {
     let cancelled = false;
     fetch("/api/library/aliases", { cache: "no-store" })
       .then(async (response) => {
         const data = (await response.json().catch(() => undefined)) as (AliasFile & { names?: string[]; error?: string }) | undefined;
-        if (!response.ok || !data) throw new Error(data?.error ?? "The concept links could not be read.");
+        if (!response.ok || !data) throw new Error(data?.error ?? text.current.aliasesReadFailed);
         if (!cancelled) setState({ status: "ready", file: parseAliasFile(data), names: data.names ?? [] });
       })
       .catch((error: unknown) => {
-        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : "The concept links could not be read." });
+        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : text.current.aliasesReadFailed });
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [text]);
 
   const decide = useCallback(async (a: string, b: string, decision: "same" | "different" | "forget", proposedBy: "reader" | "model" = "reader", reason?: string) => {
     const response = await fetch("/api/library/aliases", {
@@ -177,9 +202,9 @@ export function useConceptAliases() {
       body: JSON.stringify({ a, b, decision, proposedBy, reason }),
     });
     const data = (await response.json().catch(() => undefined)) as (AliasFile & { error?: string }) | undefined;
-    if (!response.ok || !data) throw new Error(data?.error ?? "The concept link could not be saved.");
+    if (!response.ok || !data) throw new Error(data?.error ?? text.current.aliasSaveFailed);
     setState((current) => (current.status === "ready" ? { ...current, file: parseAliasFile(data) } : current));
-  }, []);
+  }, [text]);
 
   const map = useMemo(() => (state.status === "ready" ? aliasMap(state.file) : undefined), [state]);
   return { state, map, decide };

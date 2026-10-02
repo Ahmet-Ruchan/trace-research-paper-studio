@@ -27,7 +27,7 @@ export const MAX_SESSION_SECONDS = 12 * 3600;
 export const ACTIVE_DAY_SECONDS = 60;
 export const SESSION_KINDS = ["focus", "timer", "stopwatch", "manual", "review", "study"] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
-/** Oturum listelerinde adı olmayan bir oturumun adı. */
+/** Oturum listelerinde adı olmayan bir oturumun adı (takvim dosyasında da); arayüzde dile göre `t.focus.sessionKinds`. */
 export const SESSION_KIND_LABELS: Record<SessionKind, string> = { focus: "Focus", timer: "Timer", stopwatch: "Stopwatch", manual: "Added by hand", review: "Review", study: "Study" };
 
 /** Tekrarda bir kartın en çok sayılan süresi: açık kalıp unutulan bir kart geceyi çalışma saymasın. */
@@ -363,9 +363,17 @@ export type Heatmap = {
   activeDays: number;
 };
 
-const monthFormat = new Intl.DateTimeFormat("en", { month: "short" });
+/** Ay adlarının biçimleyicisi, dile göre bir kez kuruluyor; İngilizcesi modül yüklenirken (önceden olduğu gibi). */
+const monthFormats = new Map([["en", new Intl.DateTimeFormat("en", { month: "short" })]]);
+function monthName(date: Date, locale: string) {
+  let format = monthFormats.get(locale);
+  if (!format) monthFormats.set(locale, (format = new Intl.DateTimeFormat(locale, { month: "short" })));
+  return format.format(date);
+}
 
-export function heatmap(totals: ReadonlyMap<string, number>, options: { from: Date; to: Date; today: Date; weekStart: 0 | 1; goalMinutes: number }): Heatmap {
+/** `locale`: ay adlarının dili (arayüzün dili, "en" ya da "tr"). */
+export function heatmap(totals: ReadonlyMap<string, number>, options: { from: Date; to: Date; today: Date; weekStart: 0 | 1; goalMinutes: number; locale?: string }): Heatmap {
+  const locale = options.locale ?? "en";
   const from = dayKey(options.from);
   const to = dayKey(options.to);
   const today = dayKey(options.today);
@@ -385,12 +393,12 @@ export function heatmap(totals: ReadonlyMap<string, number>, options: { from: Da
       total += seconds;
       if (seconds >= ACTIVE_DAY_SECONDS) activeDays += 1;
       column.push({ day, seconds, level: heatLevel(seconds, options.goalMinutes), future: day > today });
-      if (cursor.getDate() === 1) months.push({ week: weeks.length, label: monthFormat.format(cursor) });
+      if (cursor.getDate() === 1) months.push({ week: weeks.length, label: monthName(cursor, locale) });
     }
     weeks.push(column);
   }
   // İlk sütun başlangıç ayının adını alıyor; bir sonraki ay üç haftadan yakınsa adlar üst üste binerdi.
-  if (!months.length || months[0].week >= 3) months.unshift({ week: 0, label: monthFormat.format(options.from) });
+  if (!months.length || months[0].week >= 3) months.unshift({ week: 0, label: monthName(options.from, locale) });
   return { weeks, months, total, activeDays };
 }
 
@@ -401,14 +409,31 @@ export function calendarYears(totals: ReadonlyMap<string, number>, now: Date) {
   return [...years].filter((year) => year <= now.getFullYear()).sort((left, right) => right - left);
 }
 
+/**
+ * Sürenin kelimeleri. Ajanın ve eklentinin gördüğü metin İngilizce
+ * (`DURATION_WORDS`); stüdyo arayüzün diliyle çağırıyor, Türkçesi
+ * `src/i18n/messages/focus.ts`'te.
+ */
+export type DurationWords = { underAMinute: string; hours: (hours: number) => string; minutes: (minutes: number) => string };
+export const DURATION_WORDS: DurationWords = { underAMinute: "under a minute", hours: (hours) => `${hours}h`, minutes: (minutes) => `${minutes}m` };
+
 /** "2h 15m", "45m", "under a minute". */
 export function formatDuration(seconds: number) {
+  return formatDurationIn(seconds, DURATION_WORDS);
+}
+
+/**
+ * `formatDuration` başka kelimelerle ("2 sa 15 dk"). Ayrı işlev, çünkü
+ * `formatDuration` `.map(formatDuration)` ile de çağrılıyor: ikinci
+ * parametre dizinin sırasını alırdı.
+ */
+export function formatDurationIn(seconds: number, words: DurationWords) {
   const whole = Math.max(0, Math.round(seconds));
-  if (whole > 0 && whole < 60) return "under a minute";
+  if (whole > 0 && whole < 60) return words.underAMinute;
   const hours = Math.floor(whole / 3600);
   const minutes = Math.floor((whole % 3600) / 60);
-  if (!hours) return `${minutes}m`;
-  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+  if (!hours) return words.minutes(minutes);
+  return minutes ? `${words.hours(hours)} ${words.minutes(minutes)}` : words.hours(hours);
 }
 
 /** Zamanlayıcının göstergesi: "25:00", "1:02:03". Geri sayımda saniye yukarı yuvarlanıyor: 0,4 s kala "0:01". */

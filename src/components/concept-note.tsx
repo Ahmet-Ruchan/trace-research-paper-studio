@@ -1,6 +1,7 @@
 "use client";
 
 import { Waypoints } from "lucide-react";
+import { useT } from "@/i18n/client";
 import type { ConceptLink } from "@/lib/concept-links";
 
 /** Kütüphanedeki bir makalenin adresi: tam sayfa yükleme, stüdyo o projeyle açılıyor. */
@@ -16,6 +17,7 @@ export function PaperLink({ projectId, title }: { projectId: string; title: stri
  * anlatıyorsa onları söylüyor. Bağ yoksa hiçbir şey çizilmiyor.
  */
 export function ConceptNote({ link }: { link?: ConceptLink }) {
+  const t = useT().learning.conceptNote;
   if (!link || (!link.studiedIn && !link.elsewhere.length)) return null;
   const others = link.elsewhere.filter((source) => source.projectId !== link.studiedIn?.projectId);
   return (
@@ -23,20 +25,19 @@ export function ConceptNote({ link }: { link?: ConceptLink }) {
       <Waypoints size={13} aria-hidden="true" />
       {link.studiedIn ? (
         <span>
-          You studied this in <PaperLink projectId={link.studiedIn.projectId} title={link.studiedIn.paperTitle} />
-          {others.length ? <>; {others.length === 1 ? "another paper" : `${others.length} other papers`} in your library explain it too</> : null}.
-          {" "}Skim it here, or move on.
+          {t.studiedIn}<PaperLink projectId={link.studiedIn.projectId} title={link.studiedIn.paperTitle} />
+          {others.length ? t.othersToo(others.length) : null}{t.moveOn}
         </span>
       ) : (
         <span>
-          Also explained in{" "}
+          {t.alsoIn}
           {others.slice(0, 2).map((source, index) => (
             <span key={source.projectId}>
-              {index ? " and " : ""}
+              {index ? t.and : ""}
               <PaperLink projectId={source.projectId} title={source.paperTitle} />
             </span>
           ))}
-          {others.length > 2 ? <> and {others.length - 2} more</> : null}.
+          {others.length > 2 ? t.more(others.length - 2) : null}{t.end}
         </span>
       )}
     </p>

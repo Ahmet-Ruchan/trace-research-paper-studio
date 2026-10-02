@@ -139,7 +139,7 @@ export type TextChange = {
 
 export type ProjectChange = {
   area: "evidence" | "story" | "report" | "technical" | "learning" | "settings";
-  /** Sabit, İngilizce, kısa: arayüzde doğrudan gösteriliyor. */
+  /** Kısa, arayüzün dilinde (`RevisionWords`, varsayılan İngilizce): doğrudan gösteriliyor. */
   summary: string;
   /** İçerik dilindeki başlık; varsa okuyucu hangi bölüm olduğunu tanısın diye. */
   subject?: string;
@@ -151,21 +151,141 @@ export type ProjectChange = {
   texts?: TextChange[];
 };
 
+/** Farkı anlatan blok ve öğe adları. */
+export type RevisionNoun =
+  | "story" | "storySection" | "deepReport" | "report" | "reportSection" | "technicalAppendix" | "equation"
+  | "primer" | "primerConcept" | "derivations" | "derivation" | "quiz" | "quizQuestion" | "misreadings" | "misreading"
+  | "interactives" | "applicationGuide" | "figures";
+
+/** Karşılaştırılan alanlar; `TextChange.field` bunlardan biri. */
+export type RevisionField =
+  | "title" | "dek" | "readingTime" | "accent" | "closing" | "kicker" | "text" | "visual" | "claims"
+  | "openQuestions" | "kind" | "summary" | "analysis" | "label" | "expression" | "latex" | "explanation" | "variables"
+  | "overview" | "term" | "level" | "intuition" | "formal" | "whyItMatters" | "prerequisites" | "goal" | "equation"
+  | "steps" | "example" | "intro" | "prompt" | "options" | "misreading" | "trap" | "correction"
+  | "language" | "audience" | "depth";
+
+/**
+ * Fark özetinin cümleleri. Varsayılan İngilizce; stüdyo arayüzün dilindekini
+ * veriyor (Türkçesi `src/i18n/messages`). Cümleler bütün halinde: dillerin
+ * kelime sırası farklı.
+ */
+export type RevisionWords = {
+  nouns: Record<RevisionNoun, string>;
+  /** Alanın ekrandaki adı; `TextChange.field` anahtar olarak kalıyor. */
+  fields: Record<RevisionField, string>;
+  /** "a, b and c" */
+  list: (items: readonly string[]) => string;
+  added: (noun: string) => string;
+  removed: (noun: string) => string;
+  /** Bir bölümün ya da başlığın alanları: "Story section text and claims changed". */
+  fieldsChanged: (noun: string, fields: string) => string;
+  /** Bütün bir blok: "Interactives changed". */
+  changed: (noun: string) => string;
+  reordered: (noun: string) => string;
+  /** Projenin dil, kitle, derinlik ayarları. */
+  settingsChanged: (fields: string) => string;
+  evidence: (counts: { added: number; removed: number; edited: number }) => string;
+};
+
+export const REVISION_WORDS: RevisionWords = {
+  nouns: {
+    story: "Story",
+    storySection: "Story section",
+    deepReport: "Deep report",
+    report: "Report",
+    reportSection: "Report section",
+    technicalAppendix: "Technical appendix",
+    equation: "Equation",
+    primer: "Primer",
+    primerConcept: "Primer concept",
+    derivations: "Derivations",
+    derivation: "Derivation",
+    quiz: "Quiz",
+    quizQuestion: "Quiz question",
+    misreadings: "Common misreadings",
+    misreading: "Misreading",
+    interactives: "Interactives",
+    applicationGuide: "Application guide",
+    figures: "Figures",
+  },
+  fields: {
+    title: "title",
+    dek: "dek",
+    readingTime: "readingTime",
+    accent: "accent",
+    closing: "closing",
+    kicker: "kicker",
+    text: "text",
+    visual: "visual",
+    claims: "claims",
+    openQuestions: "openQuestions",
+    kind: "kind",
+    summary: "summary",
+    analysis: "analysis",
+    label: "label",
+    expression: "expression",
+    latex: "latex",
+    explanation: "explanation",
+    variables: "variables",
+    overview: "overview",
+    term: "term",
+    level: "level",
+    intuition: "intuition",
+    formal: "formal",
+    whyItMatters: "whyItMatters",
+    prerequisites: "prerequisites",
+    goal: "goal",
+    equation: "equation",
+    steps: "steps",
+    example: "example",
+    intro: "intro",
+    prompt: "prompt",
+    options: "options",
+    misreading: "misreading",
+    trap: "trap",
+    correction: "correction",
+    language: "language",
+    audience: "audience",
+    depth: "depth",
+  },
+  list: (items) => (items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`),
+  added: (noun) => `${noun} added`,
+  removed: (noun) => `${noun} removed`,
+  fieldsChanged: (noun, fields) => `${noun} ${fields} changed`,
+  changed: (noun) => `${noun} changed`,
+  reordered: (noun) => `${noun}s reordered`,
+  settingsChanged: (fields) => `${fields} changed`,
+  evidence: ({ added, removed, edited }) => {
+    const parts = [
+      added ? `${added} claim${added === 1 ? "" : "s"} added` : "",
+      removed ? `${removed} removed` : "",
+      edited ? `${edited} edited` : "",
+    ].filter(Boolean);
+    return parts.length ? `Evidence: ${parts.join(", ")}` : "Evidence details changed";
+  },
+};
+
 const same = (left: unknown, right: unknown) => canonicalJson(left) === canonicalJson(right);
 
-function describeFields(fields: string[]) {
-  return fields.length === 1 ? fields[0] : `${fields.slice(0, -1).join(", ")} and ${fields[fields.length - 1]}`;
+/** Bir alanın ekrandaki adı; bilinmeyen alan adıyla görünüyor. */
+export function revisionFieldLabel(name: string, words: RevisionWords = REVISION_WORDS) {
+  return Object.hasOwn(words.fields, name) ? words.fields[name as RevisionField] : name;
+}
+
+function describeFields(fields: readonly RevisionField[], words: RevisionWords) {
+  return words.list(fields.map((name) => words.fields[name]));
 }
 
 type Field<T> = {
-  name: string;
+  name: RevisionField;
   read: (item: T) => unknown;
   /** Verilirse alan metin olarak farkı gösterilebilir. */
   text?: (item: T) => string;
 };
 
-const textField = <T,>(name: string, text: (item: T) => string): Field<T> => ({ name, read: text, text });
-const dataField = <T,>(name: string, read: (item: T) => unknown): Field<T> => ({ name, read });
+const textField = <T,>(name: RevisionField, text: (item: T) => string): Field<T> => ({ name, read: text, text });
+const dataField = <T,>(name: RevisionField, read: (item: T) => unknown): Field<T> => ({ name, read });
 const sortedClaims = <T extends { claimIds: readonly string[] }>(): Field<T> => dataField("claims", (item) => [...item.claimIds].sort());
 
 function changedTexts<T>(fields: Field<T>[], before: T, after: T): TextChange[] {
@@ -180,41 +300,43 @@ function withTexts(change: ProjectChange, texts: TextChange[]): ProjectChange {
 
 function compareItems<T extends { id: string }>(
   area: ProjectChange["area"],
-  noun: string,
+  noun: RevisionNoun,
   from: readonly T[],
   to: readonly T[],
   title: (item: T) => string,
   fields: Field<T>[],
   changes: ProjectChange[],
+  words: RevisionWords,
 ) {
+  const name = words.nouns[noun];
   const before = new Map(from.map((item) => [item.id, item]));
   const after = new Map(to.map((item) => [item.id, item]));
   for (const item of to) {
     const previous = before.get(item.id);
     if (!previous) {
-      changes.push({ area, summary: `${noun} added`, subject: title(item) });
+      changes.push({ area, summary: words.added(name), subject: title(item) });
       continue;
     }
     const changed = fields.filter((field) => !same(field.read(previous), field.read(item))).map((field) => field.name);
     if (changed.length) {
       changes.push(withTexts(
-        { area, summary: `${noun} ${describeFields(changed)} changed`, subject: title(item) },
+        { area, summary: words.fieldsChanged(name, describeFields(changed, words)), subject: title(item) },
         changedTexts(fields, previous, item),
       ));
     }
   }
   for (const item of from) {
-    if (!after.has(item.id)) changes.push({ area, summary: `${noun} removed`, subject: title(item) });
+    if (!after.has(item.id)) changes.push({ area, summary: words.removed(name), subject: title(item) });
   }
   const order = (items: readonly T[]) => items.map((item) => item.id).filter((id) => before.has(id) && after.has(id));
-  if (!same(order(from), order(to))) changes.push({ area, summary: `${noun}s reordered` });
+  if (!same(order(from), order(to))) changes.push({ area, summary: words.reordered(name) });
 }
 
 /** Bir bloğun başlık alanları (bölümler dışında kalan metin). */
-function compareHeader<T>(area: ProjectChange["area"], label: string, from: T, to: T, fields: Field<T>[], changes: ProjectChange[]) {
+function compareHeader<T>(area: ProjectChange["area"], noun: RevisionNoun, from: T, to: T, fields: Field<T>[], changes: ProjectChange[], words: RevisionWords) {
   const changed = fields.filter((field) => !same(field.read(from), field.read(to))).map((field) => field.name);
   if (changed.length) {
-    changes.push(withTexts({ area, summary: `${label} ${describeFields(changed)} changed` }, changedTexts(fields, from, to)));
+    changes.push(withTexts({ area, summary: words.fieldsChanged(words.nouns[noun], describeFields(changed, words)) }, changedTexts(fields, from, to)));
   }
 }
 
@@ -223,10 +345,11 @@ const lines = (values: readonly string[]) => values.join("\n\n");
 /**
  * `from` sürümünden `to` sürümüne ne değişti. Geçmiş panelinde "bu sürüme
  * dönersem neyi kaybederim" sorusunu yanıtlıyor: hangi bölüm, hangi alan ve
- * metin alanlarında kelime kelime ne.
+ * metin alanlarında kelime kelime ne. Özetler `words` dilinde (varsayılan İngilizce).
  */
-export function describeProjectChanges(from: ResearchProject, to: ResearchProject): ProjectChange[] {
+export function describeProjectChanges(from: ResearchProject, to: ResearchProject, words: RevisionWords = REVISION_WORDS): ProjectChange[] {
   const changes: ProjectChange[] = [];
+  const { nouns } = words;
 
   if (!same(from.evidence, to.evidence)) {
     const beforeClaims = new Map(from.evidence.claims.map((claim) => [claim.id, claim]));
@@ -234,89 +357,85 @@ export function describeProjectChanges(from: ResearchProject, to: ResearchProjec
     const added = to.evidence.claims.filter((claim) => !beforeClaims.has(claim.id)).length;
     const removed = from.evidence.claims.filter((claim) => !afterIds.has(claim.id)).length;
     const edited = to.evidence.claims.filter((claim) => beforeClaims.has(claim.id) && !same(beforeClaims.get(claim.id), claim)).length;
-    const parts = [
-      added ? `${added} claim${added === 1 ? "" : "s"} added` : "",
-      removed ? `${removed} removed` : "",
-      edited ? `${edited} edited` : "",
-    ].filter(Boolean);
-    changes.push({ area: "evidence", summary: parts.length ? `Evidence: ${parts.join(", ")}` : "Evidence details changed" });
+    changes.push({ area: "evidence", summary: words.evidence({ added, removed, edited }) });
   }
 
   const settings = (["language", "audience", "depth"] as const).filter((key) => from[key] !== to[key]);
-  if (settings.length) changes.push({ area: "settings", summary: `${describeFields(settings)} changed` });
+  if (settings.length) changes.push({ area: "settings", summary: words.settingsChanged(describeFields(settings, words)) });
 
   type Story = ResearchProject["story"];
-  compareHeader<Story>("story", "Story", from.story, to.story, [
+  compareHeader<Story>("story", "story", from.story, to.story, [
     textField("title", (story) => story.title),
     textField("dek", (story) => story.dek),
     dataField("readingTime", (story) => story.readingTime),
     dataField("accent", (story) => story.accent),
     textField("closing", (story) => `${story.closing.title}\n\n${story.closing.body}`),
-  ], changes);
-  compareItems("story", "Story section", from.story.sections, to.story.sections, (section) => section.title, [
+  ], changes, words);
+  compareItems("story", "storySection", from.story.sections, to.story.sections, (section) => section.title, [
     textField("kicker", (section) => section.kicker),
     textField("title", (section) => section.title),
     textField("text", (section) => section.body),
     dataField("visual", (section) => section.visual),
     sortedClaims(),
-  ], changes);
+  ], changes, words);
 
   if (from.deepReport || to.deepReport) {
-    if (!from.deepReport) changes.push({ area: "report", summary: "Deep report added" });
-    else if (!to.deepReport) changes.push({ area: "report", summary: "Deep report removed" });
+    if (!from.deepReport) changes.push({ area: "report", summary: words.added(nouns.deepReport) });
+    else if (!to.deepReport) changes.push({ area: "report", summary: words.removed(nouns.deepReport) });
     else {
       type Report = NonNullable<ResearchProject["deepReport"]>;
-      compareHeader<Report>("report", "Report", from.deepReport, to.deepReport, [
+      compareHeader<Report>("report", "report", from.deepReport, to.deepReport, [
         textField("title", (report) => report.title),
         textField("dek", (report) => report.dek),
         textField("openQuestions", (report) => lines(report.openQuestions)),
-      ], changes);
-      compareItems("report", "Report section", from.deepReport.sections, to.deepReport.sections, (section) => section.title, [
+      ], changes, words);
+      compareItems("report", "reportSection", from.deepReport.sections, to.deepReport.sections, (section) => section.title, [
         dataField("kind", (section) => section.kind),
         textField("title", (section) => section.title),
         textField("summary", (section) => section.summary),
         textField("analysis", (section) => lines(section.analysis)),
         sortedClaims(),
-      ], changes);
+      ], changes, words);
     }
   }
 
   if (!same(from.technicalAppendix, to.technicalAppendix)) {
     if (!from.technicalAppendix || !to.technicalAppendix) {
-      changes.push({ area: "technical", summary: `Technical appendix ${!from.technicalAppendix ? "added" : "removed"}` });
+      const noun = nouns.technicalAppendix;
+      changes.push({ area: "technical", summary: !from.technicalAppendix ? words.added(noun) : words.removed(noun) });
     } else {
       const { equations: beforeEquations, ...beforeRest } = from.technicalAppendix;
       const { equations: afterEquations, ...afterRest } = to.technicalAppendix;
-      if (!same(beforeRest, afterRest)) changes.push({ area: "technical", summary: "Technical appendix changed" });
-      compareItems("technical", "Equation", beforeEquations, afterEquations, (equation) => equation.label, [
+      if (!same(beforeRest, afterRest)) changes.push({ area: "technical", summary: words.changed(nouns.technicalAppendix) });
+      compareItems("technical", "equation", beforeEquations, afterEquations, (equation) => equation.label, [
         textField("label", (equation) => equation.label),
         textField("expression", (equation) => equation.expression),
         dataField("latex", (equation) => equation.latex),
         textField("explanation", (equation) => equation.explanation),
         textField("variables", (equation) => equation.variables.map((variable) => `${variable.symbol}: ${variable.meaning}`).join("\n")),
         sortedClaims(),
-      ], changes);
+      ], changes, words);
     }
   }
 
-  const blockChange = (key: "primer" | "derivations" | "quiz" | "misreadings" | "interactives" | "applicationGuide" | "figures", label: string) => {
+  const blockChange = (key: "primer" | "derivations" | "quiz" | "misreadings" | "interactives" | "applicationGuide" | "figures", noun: RevisionNoun) => {
     const left = from[key];
     const right = to[key];
     if (same(left, right)) return false;
     if (left === undefined || right === undefined) {
-      changes.push({ area: "learning", summary: `${label} ${left === undefined ? "added" : "removed"}` });
+      changes.push({ area: "learning", summary: left === undefined ? words.added(nouns[noun]) : words.removed(nouns[noun]) });
       return false;
     }
     return true;
   };
 
   // Tek tek yeniden üretilebilen öğrenme öğeleri öğe düzeyinde karşılaştırılıyor.
-  if (blockChange("primer", "Primer")) {
-    compareHeader("learning", "Primer", from.primer!, to.primer!, [
+  if (blockChange("primer", "primer")) {
+    compareHeader("learning", "primer", from.primer!, to.primer!, [
       textField("title", (primer) => primer.title),
       textField("overview", (primer) => primer.overview),
-    ], changes);
-    compareItems("learning", "Primer concept", from.primer!.concepts, to.primer!.concepts, (concept) => concept.term, [
+    ], changes, words);
+    compareItems("learning", "primerConcept", from.primer!.concepts, to.primer!.concepts, (concept) => concept.term, [
       textField("term", (concept) => concept.term),
       dataField("level", (concept) => concept.level),
       textField("intuition", (concept) => concept.intuition),
@@ -324,10 +443,10 @@ export function describeProjectChanges(from: ResearchProject, to: ResearchProjec
       textField("whyItMatters", (concept) => concept.whyItMatters),
       dataField("prerequisites", (concept) => [...concept.prerequisiteIds].sort()),
       sortedClaims(),
-    ], changes);
+    ], changes, words);
   }
-  if (blockChange("derivations", "Derivations")) {
-    compareItems("learning", "Derivation", from.derivations!, to.derivations!, (derivation) => derivation.title, [
+  if (blockChange("derivations", "derivations")) {
+    compareItems("learning", "derivation", from.derivations!, to.derivations!, (derivation) => derivation.title, [
       textField("title", (derivation) => derivation.title),
       textField("goal", (derivation) => derivation.goal),
       dataField("equation", (derivation) => derivation.equationId),
@@ -336,36 +455,36 @@ export function describeProjectChanges(from: ResearchProject, to: ResearchProjec
         ? `${derivation.numericExample.setup}\n${derivation.numericExample.walkthrough.join("\n")}\n${derivation.numericExample.result}`
         : ""),
       sortedClaims(),
-    ], changes);
+    ], changes, words);
   }
-  if (blockChange("quiz", "Quiz")) {
-    compareHeader("learning", "Quiz", from.quiz!, to.quiz!, [
+  if (blockChange("quiz", "quiz")) {
+    compareHeader("learning", "quiz", from.quiz!, to.quiz!, [
       textField("title", (quiz) => quiz.title),
       textField("intro", (quiz) => quiz.intro),
-    ], changes);
-    compareItems("learning", "Quiz question", from.quiz!.questions, to.quiz!.questions, (question) => question.prompt, [
+    ], changes, words);
+    compareItems("learning", "quizQuestion", from.quiz!.questions, to.quiz!.questions, (question) => question.prompt, [
       textField("prompt", (question) => question.prompt),
       dataField("kind", (question) => question.kind),
       textField("options", (question) => question.options
         .map((option) => `${option.correct ? "✓" : "✗"} ${option.label} — ${option.explanation}`)
         .join("\n")),
       sortedClaims(),
-    ], changes);
+    ], changes, words);
   }
-  if (blockChange("misreadings", "Common misreadings")) {
-    compareHeader("learning", "Common misreadings", from.misreadings!, to.misreadings!, [
+  if (blockChange("misreadings", "misreadings")) {
+    compareHeader("learning", "misreadings", from.misreadings!, to.misreadings!, [
       textField("title", (block) => block.title),
       textField("intro", (block) => block.intro),
-    ], changes);
-    compareItems("learning", "Misreading", from.misreadings!.items, to.misreadings!.items, (item) => item.misreading, [
+    ], changes, words);
+    compareItems("learning", "misreading", from.misreadings!.items, to.misreadings!.items, (item) => item.misreading, [
       textField("misreading", (item) => item.misreading),
       dataField("trap", (item) => item.trap),
       textField("correction", (item) => item.correction),
       sortedClaims(),
-    ], changes);
+    ], changes, words);
   }
-  for (const [key, label] of [["interactives", "Interactives"], ["applicationGuide", "Application guide"], ["figures", "Figures"]] as const) {
-    if (blockChange(key, label)) changes.push({ area: "learning", summary: `${label} changed` });
+  for (const key of ["interactives", "applicationGuide", "figures"] as const) {
+    if (blockChange(key, key)) changes.push({ area: "learning", summary: words.changed(nouns[key]) });
   }
 
   return changes;

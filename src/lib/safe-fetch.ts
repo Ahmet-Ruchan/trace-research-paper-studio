@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { UserFacingError } from "./user-error";
 
 const MAX_BYTES = 750_000;
 const MAX_REDIRECTS = 3;
@@ -24,21 +25,21 @@ function isPrivateAddress(address: string) {
 async function assertPublicUrl(rawUrl: string) {
   const url = new URL(rawUrl);
   if (!['http:', 'https:'].includes(url.protocol)) {
-    throw new Error("Only HTTP or HTTPS sources are supported.");
+    throw new UserFacingError("sourceProtocol");
   }
   if (url.username || url.password) {
-    throw new Error("URLs carrying credentials are not supported.");
+    throw new UserFacingError("sourceCredentials");
   }
   if (url.hostname === "localhost" || url.hostname.endsWith(".local")) {
-    throw new Error("Local network addresses cannot be used as sources.");
+    throw new UserFacingError("sourceLocalNetwork");
   }
 
   if (isIP(url.hostname)) {
-    if (isPrivateAddress(url.hostname)) throw new Error("Access to private IP addresses is blocked.");
+    if (isPrivateAddress(url.hostname)) throw new UserFacingError("sourcePrivateAddress");
   } else {
     const addresses = await lookup(url.hostname, { all: true });
     if (!addresses.length || addresses.some((item) => isPrivateAddress(item.address))) {
-      throw new Error("The source did not resolve to a safe, public address.");
+      throw new UserFacingError("sourceUnsafeAddress");
     }
   }
   return url;
@@ -92,26 +93,26 @@ export async function fetchPublicSource(rawUrl: string, id: string): Promise<Fet
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location || redirect === MAX_REDIRECTS) throw new Error("The source redirected too many times.");
+      if (!location || redirect === MAX_REDIRECTS) throw new UserFacingError("sourceTooManyRedirects");
       url = await assertPublicUrl(new URL(location, url).toString());
       continue;
     }
 
-    if (!response.ok) throw new Error(`The source responded with ${response.status}.`);
+    if (!response.ok) throw new UserFacingError("sourceStatus", response.status);
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
     if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-      throw new Error("The source is neither HTML nor plain text.");
+      throw new UserFacingError("sourceNotText");
     }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new Error("The source content could not be read.");
+    if (!reader) throw new UserFacingError("sourceUnreadable");
     const chunks: Uint8Array[] = [];
     let total = 0;
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > MAX_BYTES) throw new Error("The source exceeds the content limit.");
+      if (total > MAX_BYTES) throw new UserFacingError("sourceTooLarge");
       chunks.push(value);
     }
 
@@ -134,6 +135,6 @@ export async function fetchPublicSource(rawUrl: string, id: string): Promise<Fet
     };
   }
 
-  throw new Error("The source could not be fetched.");
+  throw new UserFacingError("sourceFetchFailed");
 }
 

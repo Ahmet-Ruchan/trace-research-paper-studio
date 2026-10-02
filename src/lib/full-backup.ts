@@ -95,21 +95,42 @@ export const emptyBackupSummary = (): BackupSummary => ({ papersAdded: 0, papers
 
 const count = (value: number, one: string, many: string) => `${value} ${value === 1 ? one : many}`;
 
-/** İçe aktarmanın okuyucuya söylenişi; yalnızca bir şey değiştiyse. */
-export function describeBackupImport(sessions: number, profileAdopted: boolean, summary?: BackupSummary) {
-  const parts = [`${count(sessions, "session", "sessions")} added`];
-  if (profileAdopted) parts.push("the profile in the file taken over");
+/** İçe aktarma özetinin parçaları; Türkçesi `src/i18n/messages/server.ts`'te. */
+export const backupImportText = {
+  sessionsAdded: (sessions: number) => `${count(sessions, "session", "sessions")} added`,
+  profileAdopted: "the profile in the file taken over",
+  papersAdded: (papers: number) => `${count(papers, "paper", "papers")} added to your library`,
+  papersKept: (papers: number) => `${count(papers, "paper", "papers")} already here kept as they are`,
+  studyMerged: (papers: number) => `study progress merged for ${count(papers, "paper", "papers")}`,
+  notesAdded: (notes: number) => `${count(notes, "note", "notes")} added`,
+  readingAdded: (works: number) => `${count(works, "work", "works")} added to your reading list`,
+  tagsMerged: (papers: number) => `tags merged for ${count(papers, "paper", "papers")}`,
+  aliasesAdded: (links: number) => `${count(links, "concept link", "concept links")} added`,
+  withoutPaper: (records: number) => `${count(records, "record", "records")} left out because the paper is not in your library`,
+  papersUnreadable: (papers: number) => `${count(papers, "paper", "papers")} in the file could not be read`,
+  /** Parçalar tek cümlede: ilk harf büyük, sonda hiçbir şeyin silinmediği. */
+  sentence: (parts: readonly string[]) => {
+    const text = parts.join(", ");
+    return `${text.charAt(0).toUpperCase()}${text.slice(1)}. Nothing was removed.`;
+  },
+};
+
+export type BackupImportText = typeof backupImportText;
+
+/** İçe aktarmanın okuyucuya söylenişi (`text` arayüzün dilinde); yalnızca bir şey değiştiyse. */
+export function describeBackupImport(sessions: number, profileAdopted: boolean, summary?: BackupSummary, text: BackupImportText = backupImportText) {
+  const parts = [text.sessionsAdded(sessions)];
+  if (profileAdopted) parts.push(text.profileAdopted);
   if (summary) {
-    if (summary.papersAdded) parts.push(`${count(summary.papersAdded, "paper", "papers")} added to your library`);
-    if (summary.papersKept) parts.push(`${count(summary.papersKept, "paper", "papers")} already here kept as they are`);
-    if (summary.studyMerged) parts.push(`study progress merged for ${count(summary.studyMerged, "paper", "papers")}`);
-    if (summary.notesAdded) parts.push(`${count(summary.notesAdded, "note", "notes")} added`);
-    if (summary.readingAdded) parts.push(`${count(summary.readingAdded, "work", "works")} added to your reading list`);
-    if (summary.tagsMerged) parts.push(`tags merged for ${count(summary.tagsMerged, "paper", "papers")}`);
-    if (summary.aliasesAdded) parts.push(`${count(summary.aliasesAdded, "concept link", "concept links")} added`);
-    if (summary.withoutPaper) parts.push(`${count(summary.withoutPaper, "record", "records")} left out because the paper is not in your library`);
-    if (summary.papersUnreadable) parts.push(`${count(summary.papersUnreadable, "paper", "papers")} in the file could not be read`);
+    if (summary.papersAdded) parts.push(text.papersAdded(summary.papersAdded));
+    if (summary.papersKept) parts.push(text.papersKept(summary.papersKept));
+    if (summary.studyMerged) parts.push(text.studyMerged(summary.studyMerged));
+    if (summary.notesAdded) parts.push(text.notesAdded(summary.notesAdded));
+    if (summary.readingAdded) parts.push(text.readingAdded(summary.readingAdded));
+    if (summary.tagsMerged) parts.push(text.tagsMerged(summary.tagsMerged));
+    if (summary.aliasesAdded) parts.push(text.aliasesAdded(summary.aliasesAdded));
+    if (summary.withoutPaper) parts.push(text.withoutPaper(summary.withoutPaper));
+    if (summary.papersUnreadable) parts.push(text.papersUnreadable(summary.papersUnreadable));
   }
-  const text = parts.join(", ");
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}. Nothing was removed.`;
+  return text.sentence(parts);
 }

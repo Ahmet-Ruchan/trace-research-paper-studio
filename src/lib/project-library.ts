@@ -1,3 +1,4 @@
+import { browserMessages } from "./browser-messages";
 import { parseLibraryTags } from "./library-tags";
 import type { RevisionReason, RevisionSummary } from "./project-revisions";
 import { researchProjectSchema, type ResearchProject } from "./schema";
@@ -55,8 +56,9 @@ async function clearLegacyProjects() {
 async function libraryRequest<T>(input: string, init?: RequestInit) {
   const response = await fetch(input, { cache: "no-store", ...init });
   const body = await response.json().catch(() => undefined) as ({ error?: string } & T) | undefined;
-  if (!response.ok) throw new Error(body?.error ?? `The Trace library request failed (HTTP ${response.status}).`);
-  if (!body) throw new Error("The Trace library returned an empty response.");
+  // Sunucunun hatası zaten okuyucunun dilinde; yedek metin de öyle.
+  if (!response.ok) throw new Error(body?.error ?? browserMessages().server.client.libraryRequestFailed(response.status));
+  if (!body) throw new Error(browserMessages().server.client.libraryEmpty);
   return body;
 }
 

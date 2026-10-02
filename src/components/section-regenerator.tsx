@@ -9,6 +9,7 @@ import { DEFAULT_LOCAL_ENDPOINT } from "@/lib/local-endpoint";
 import {
   defaultModelByProvider,
   getProvider,
+  localizedProvider,
   providerCatalog,
   resolveProviderModel,
   type ModelAssignment,
@@ -33,6 +34,7 @@ import {
 import { isPresetActive, rewritePresets, togglePreset } from "@/lib/rewrite-presets";
 import { MathText } from "@/visuals";
 import { VisualRenderer } from "./visual-renderer";
+import { useT } from "@/i18n/client";
 
 /**
  * Seçilen model hatırlanıyor, anahtar HİÇBİR ZAMAN. Güven modeli ilk
@@ -88,6 +90,9 @@ type RegeneratorProps = {
 };
 
 export function SectionRegenerator({ project, target, goal = "revise", claimPolicy: initialClaimPolicy, instruction: initialInstruction, onApply, onClose }: RegeneratorProps) {
+  const messages = useT();
+  const t = messages.paper.regenerator;
+  const request = messages.paper.modelRequest;
   const current = useMemo(() => findSection(project, target), [project, target]);
   const [assignment, setAssignment] = useState<ModelAssignment>(() => initialAssignment(project, target));
   const [apiKey, setApiKey] = useState("");
@@ -100,7 +105,9 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
   const [probe, setProbe] = useState<ProbeState>({ name: "idle" });
   const controller = useRef<AbortController | undefined>(undefined);
   const probeController = useRef<AbortController | undefined>(undefined);
-  const provider = getProvider(assignment.provider)!;
+  // Sağlayıcının adı, anahtarın adı ve model notları arayüzün dilinde.
+  const providerWords = messages.studio.models.providers;
+  const provider = localizedProvider(getProvider(assignment.provider)!, providerWords);
 
   useEffect(() => () => {
     controller.current?.abort();
@@ -133,11 +140,11 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
   async function testModel() {
     const selection = resolveProviderModel(assignment.provider, assignment.model);
     if (!selection) {
-      setProbe({ name: "failed", message: "The model name is not valid for this provider." });
+      setProbe({ name: "failed", message: request.invalidModel });
       return;
     }
     if (!provider.local && !apiKey.trim()) {
-      setProbe({ name: "failed", message: `${provider.keyLabel} is required.` });
+      setProbe({ name: "failed", message: request.keyRequired(provider.keyLabel) });
       return;
     }
     probeController.current?.abort();
@@ -150,7 +157,7 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
       setProbe({ name: "done", verdict: answer.verdict, message: answer.message });
     } catch (caught) {
       if (abort.signal.aborted) return;
-      setProbe({ name: "failed", message: caught instanceof Error ? caught.message : "The model could not be tested." });
+      setProbe({ name: "failed", message: caught instanceof Error ? caught.message : t.probeFailed });
     } finally {
       if (probeController.current === abort) probeController.current = undefined;
     }
@@ -159,11 +166,11 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
   async function run() {
     const selection = resolveProviderModel(assignment.provider, assignment.model);
     if (!selection) {
-      setPhase({ name: "failed", message: "The model name is not valid for this provider." });
+      setPhase({ name: "failed", message: request.invalidModel });
       return;
     }
     if (!provider.local && !apiKey.trim()) {
-      setPhase({ name: "failed", message: `${provider.keyLabel} is required.` });
+      setPhase({ name: "failed", message: request.keyRequired(provider.keyLabel) });
       return;
     }
     try {
@@ -177,7 +184,7 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
     setApplyIssues([]);
     setPhase({
       name: "running",
-      progress: { stage: "story", progress: 4, title: "Sending the section request.", detail: "The key stays in memory for this request only." },
+      progress: { stage: "story", progress: 4, title: t.sending, detail: request.keyInMemory },
     });
 
     try {
@@ -189,7 +196,7 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
       });
       if (!response.ok || !response.body) {
         const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-        throw new Error(data?.error ?? "The section could not be regenerated.");
+        throw new Error(data?.error ?? t.requestFailed);
       }
       let result: { section: RegeneratedSection; evidenceFingerprint: string } | undefined;
       await readGenerationStream(response.body, (event) => {
@@ -199,13 +206,13 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
           result = { section: event.section as RegeneratedSection, evidenceFingerprint: event.evidenceFingerprint };
         }
       });
-      if (!result) throw new Error("The request finished but no section came back.");
+      if (!result) throw new Error(t.nothingCameBack);
       setPhase({ name: "review", ...result });
     } catch (caught) {
       const aborted = abort.signal.aborted || (caught instanceof DOMException && caught.name === "AbortError");
       setPhase(aborted
         ? { name: "form" }
-        : { name: "failed", message: caught instanceof Error ? caught.message : "Something unexpected went wrong." });
+        : { name: "failed", message: caught instanceof Error ? caught.message : request.unexpected });
     } finally {
       if (controller.current === abort) controller.current = undefined;
     }
@@ -228,8 +235,7 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
   }
 
   if (!current) return null;
-  const { label, noun } = sectionKindInfo(target.kind);
-  const title = strengthen ? `Strengthen the evidence of a ${label}` : `Regenerate ${label}`;
+  const title = strengthen ? t.strengthenTitle(target.kind) : t.title(target.kind);
   const health = strengthen ? isThinSection(current.claimIds, project.evidence.claims) : undefined;
 
   return (
@@ -237,41 +243,37 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
       <div className={`regen-panel ${phase.name === "review" ? "wide" : ""}`}>
         <header className="regen-header">
           <div>
-            <span>{strengthen ? <><ShieldPlus size={13} /> Evidence health</> : <><Sparkles size={13} /> Evidence locked</>}</span>
+            <span>{strengthen ? <><ShieldPlus size={13} /> {t.evidenceHealth}</> : <><Sparkles size={13} /> {t.evidenceLocked}</>}</span>
             <h2 id="regen-title">{title}</h2>
             <p lang={project.language}>{sectionTitle(target.kind, current)}</p>
           </div>
-          <button className="regen-close" onClick={() => { controller.current?.abort(); onClose(); }} aria-label="Close"><X size={16} /></button>
+          <button className="regen-close" onClick={() => { controller.current?.abort(); onClose(); }} aria-label={messages.common.close}><X size={16} /></button>
         </header>
 
         {(phase.name === "form" || phase.name === "failed") && (
           <div className="regen-body">
             {health && (
               <p className="regen-note regen-strengthen">
-                This section rests on <b>{health.claimCount} claim{health.claimCount === 1 ? "" : "s"}</b>, {health.verifiedCount} verified.
-                The new version must cite at least {MIN_SECTION_CLAIMS} existing claims, one of them verified, or it is rejected.
-                Where the evidence does not back a sentence, the model narrows the sentence instead.
+                {t.thinBefore}<b>{t.thinClaims(health.claimCount)}</b>{t.thinAfter(health.verifiedCount, MIN_SECTION_CLAIMS)}
               </p>
             )}
             <fieldset className="regen-policy">
-              <legend>Claims this {noun} rests on</legend>
+              <legend>{t.claimsLegend(target.kind)}</legend>
               <label className={claimPolicy === "locked" ? "active" : ""}>
                 <input type="radio" name="claim-policy" checked={claimPolicy === "locked"} disabled={strengthen} onChange={() => setClaimPolicy("locked")} />
                 <Lock size={14} />
-                <span><b>Keep the same claims</b><small>{current.claimIds.length
-                  ? `The wording changes; ${current.claimIds.length === 1 ? "the cited claim stays exactly as it is" : `the ${current.claimIds.length} cited claims stay exactly as they are`}.`
-                  : `The wording changes; the ${noun} keeps citing no claims.`}</small></span>
+                <span><b>{t.keepClaims}</b><small>{t.keepClaimsNote(target.kind, current.claimIds.length)}</small></span>
               </label>
               <label className={claimPolicy === "open" ? "active" : ""}>
                 <input type="radio" name="claim-policy" checked={claimPolicy === "open"} onChange={() => setClaimPolicy("open")} />
                 <Unlock size={14} />
-                <span><b>Choose from all evidence</b><small>The model may cite other existing claims. It still cannot add a fact.</small></span>
+                <span><b>{t.openClaims}</b><small>{t.openClaimsNote}</small></span>
               </label>
             </fieldset>
 
-            <div className="regen-presets" role="group" aria-label="Quick requests">
-              <span>Explain it differently</span>
-              {rewritePresets(target.kind).map((preset) => {
+            <div className="regen-presets" role="group" aria-label={t.presetsAria}>
+              <span>{t.presetsLabel}</span>
+              {rewritePresets(target.kind, t.presets).map((preset) => {
                 const active = isPresetActive(instruction, preset);
                 const next = togglePreset(target.kind, instruction, preset.id);
                 return (
@@ -291,27 +293,27 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
             </div>
 
             <label className="regen-field">
-              What should change? <small>Optional</small>
+              {t.instruction} <small>{t.optional}</small>
               <textarea
                 value={instruction}
                 maxLength={MAX_REGENERATION_INSTRUCTION}
                 onChange={(event) => setInstruction(event.target.value)}
-                placeholder={PLACEHOLDERS[target.kind]}
+                placeholder={t.placeholders[target.kind]}
               />
               <small className="regen-count">{instruction.length}/{MAX_REGENERATION_INSTRUCTION}</small>
             </label>
 
             <div className="regen-model">
               <div className="model-select provider-select">
-                <select aria-label="Provider" value={assignment.provider} onChange={(event) => chooseProvider(event.target.value as ProviderId)}>
-                  {providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                <select aria-label={request.provider} value={assignment.provider} onChange={(event) => chooseProvider(event.target.value as ProviderId)}>
+                  {providerCatalog.map((item) => <option key={item.id} value={item.id}>{localizedProvider(item, providerWords).label}</option>)}
                 </select>
               </div>
               <div className="model-select">
                 {provider.freeformModel ? (
                   <>
                     <input
-                      aria-label="Model"
+                      aria-label={request.model}
                       list={`regen-models-${provider.id}`}
                       value={assignment.model}
                       onChange={(event) => chooseModel(event.target.value)}
@@ -322,7 +324,7 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
                     </datalist>
                   </>
                 ) : (
-                  <select aria-label="Model" value={assignment.model} onChange={(event) => chooseModel(event.target.value)}>
+                  <select aria-label={request.model} value={assignment.model} onChange={(event) => chooseModel(event.target.value)}>
                     {provider.models.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.note}</option>)}
                   </select>
                 )}
@@ -343,21 +345,19 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
                 />
               </div>
             </div>
-            <p className="regen-note">
-              Only this {noun} is sent to the model, with the locked evidence as its sole source. The PDF is not needed, so a local model works too. The key is used for this request and never stored.
-            </p>
+            <p className="regen-note">{t.onlyThisSent(target.kind)}</p>
 
-            {probe.name === "running" && <p className="regen-probe" role="status">Testing the model with a short request…</p>}
+            {probe.name === "running" && <p className="regen-probe" role="status">{t.probing}</p>}
             {probe.name === "done" && <p className={`regen-probe probe-${probe.verdict}`} role="status">{probe.message}</p>}
             {probe.name === "failed" && <p className="regen-probe probe-too-slow" role="alert">{probe.message}</p>}
             {phase.name === "failed" && <p className="regen-error" role="alert">{phase.message}</p>}
 
             <footer className="regen-actions">
               <button className="regen-secondary regen-test" disabled={probe.name === "running"} onClick={() => { void testModel(); }}>
-                <Gauge size={14} /> {probe.name === "running" ? "Testing…" : "Test model"}
+                <Gauge size={14} /> {probe.name === "running" ? t.testing : t.testModel}
               </button>
-              <button className="regen-secondary" onClick={onClose}>Cancel</button>
-              <button className="regen-primary" onClick={() => { void run(); }}><RefreshCw size={14} /> Regenerate</button>
+              <button className="regen-secondary" onClick={onClose}>{messages.common.cancel}</button>
+              <button className="regen-primary" onClick={() => { void run(); }}><RefreshCw size={14} /> {t.regenerate}</button>
             </footer>
           </div>
         )}
@@ -368,8 +368,8 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
             <p className="regen-note">{phase.progress.detail}</p>
             <div className="generation-meter"><i style={{ width: `${Math.max(2, Math.min(100, phase.progress.progress))}%` }} /></div>
             <footer className="regen-actions">
-              <span className="regen-count">{Math.round(phase.progress.progress)}%{phase.progress.attempt ? ` · attempt ${phase.progress.attempt}` : ""}</span>
-              <button className="regen-secondary" onClick={() => controller.current?.abort()}>Stop</button>
+              <span className="regen-count">{Math.round(phase.progress.progress)}%{phase.progress.attempt ? ` · ${request.attempt(phase.progress.attempt)}` : ""}</span>
+              <button className="regen-secondary" onClick={() => controller.current?.abort()}>{request.stop}</button>
             </footer>
           </div>
         )}
@@ -377,19 +377,19 @@ export function SectionRegenerator({ project, target, goal = "revise", claimPoli
         {phase.name === "review" && (
           <div className="regen-body">
             <div className="regen-compare">
-              <SectionPreview label="Current" project={project} kind={target.kind} section={current} />
-              <SectionPreview label="Proposed" project={project} kind={target.kind} section={phase.section} baseline={current} />
+              <SectionPreview label={t.current} project={project} kind={target.kind} section={current} />
+              <SectionPreview label={t.proposed} project={project} kind={target.kind} section={phase.section} baseline={current} />
             </div>
             {applyIssues.length > 0 && (
               <div className="regen-error" role="alert">
-                <b>This version can no longer be applied.</b>
+                <b>{t.cannotApply}</b>
                 <ul>{applyIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
               </div>
             )}
             <footer className="regen-actions">
-              <button className="regen-secondary" onClick={onClose}>Discard</button>
-              <button className="regen-secondary" onClick={() => { void run(); }}><RefreshCw size={14} /> Try again</button>
-              <button className="regen-primary" onClick={apply}>Use this version</button>
+              <button className="regen-secondary" onClick={onClose}>{t.discard}</button>
+              <button className="regen-secondary" onClick={() => { void run(); }}><RefreshCw size={14} /> {messages.common.retry}</button>
+              <button className="regen-primary" onClick={apply}>{t.useThis}</button>
             </footer>
           </div>
         )}
@@ -433,21 +433,9 @@ function SectionPreview({
   );
 }
 
-function capitalize(text: string) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-const PLACEHOLDERS: Record<SectionTarget["kind"], string> = {
-  story: "Shorter, with a concrete example from the method. Use a timeline instead of a matrix.",
-  report: "Separate what the authors report from what follows. Name the cost of the design.",
-  primer: "Explain it with an everyday analogy before the formal definition.",
-  quiz: "Make the wrong options plausible misreadings of the result, not obvious mistakes.",
-  derivation: "Smaller steps, and say which assumption each step uses.",
-  equation: "Explain every symbol, and say what would change without this term.",
-};
-
 /** Karşılaştırmada gösterilen içerik; okuyucunun göreceği biçime yakın ama sade. */
 function SectionBody({ project, kind, section }: { project: ResearchProject; kind: SectionTarget["kind"]; section: RegeneratedSection }) {
+  const t = useT().paper.regenerator;
   if (kind === "story") {
     const story = section as StorySection;
     return (
@@ -477,7 +465,7 @@ function SectionBody({ project, kind, section }: { project: ResearchProject; kin
         <h3>{concept.term}</h3>
         <p>{concept.intuition}</p>
         {concept.formal ? <MathText latex={concept.formal} display /> : null}
-        <p><b>Why it matters.</b> {concept.whyItMatters}</p>
+        <p><b>{t.whyItMatters}</b> {concept.whyItMatters}</p>
       </>
     );
   }
@@ -512,7 +500,7 @@ function SectionBody({ project, kind, section }: { project: ResearchProject; kin
             </li>
           ))}
         </ol>
-        {derivation.numericExample ? <p><b>Example.</b> {derivation.numericExample.result}</p> : null}
+        {derivation.numericExample ? <p><b>{t.example}</b> {derivation.numericExample.result}</p> : null}
       </>
     );
   }
@@ -548,6 +536,8 @@ export function useSectionRegeneration(
   const target = request?.target;
   const [undo, setUndo] = useState<{ target: SectionTarget; section: RegeneratedSection }>();
   const [undoError, setUndoError] = useState<string>();
+  const messages = useT();
+  const t = messages.paper.regenerator;
 
   const open = useCallback((next: SectionTarget, options: { goal?: RegenerationGoal; claimPolicy?: ClaimPolicy; instruction?: string } = {}) => {
     setUndoError(undefined);
@@ -572,20 +562,20 @@ export function useSectionRegeneration(
 
   const undoBar = undo && onProjectChange ? (
     <div className="regen-undo" role="status">
-      <span>{undoError ?? `${capitalize(sectionKindInfo(undo.target.kind).label)} regenerated against the locked evidence.`}</span>
+      <span>{undoError ?? t.regenerated(undo.target.kind)}</span>
       <button
         onClick={() => {
           try {
             onProjectChange(spliceSection(project, undo.target, undo.section, { claimPolicy: "open" }), "restore");
             setUndo(undefined);
           } catch (error) {
-            setUndoError(describeValidationError(error)[0] ?? "The previous version could not be restored.");
+            setUndoError(describeValidationError(error)[0] ?? t.restoreFailed);
           }
         }}
       >
-        <Undo2 size={13} /> Undo
+        <Undo2 size={13} /> {messages.common.undo}
       </button>
-      <button aria-label="Dismiss" onClick={() => setUndo(undefined)}><X size={13} /></button>
+      <button aria-label={t.dismiss} onClick={() => setUndo(undefined)}><X size={13} /></button>
     </div>
   ) : null;
 

@@ -1,4 +1,6 @@
 import type { NextRequest } from "next/server";
+import { uiLanguageForRequest } from "@/i18n/languages";
+import serverMessages from "@/i18n/messages/server";
 import { ACCESS_REALM, accessAllowed, isPublicPath } from "@/lib/access-gate";
 import { memberForCookie, readTeam } from "@/lib/server/team-store";
 import { openWithoutSession } from "@/lib/team";
@@ -16,7 +18,7 @@ import { openWithoutSession } from "@/lib/team";
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (!accessAllowed(pathname, request.headers.get("authorization"), process.env.TRACE_ACCESS_PASSWORD)) {
-    return new Response("Authentication required.", {
+    return new Response(serverMessages[uiLanguageForRequest(request)].proxy.authenticationRequired, {
       status: 401,
       headers: { "WWW-Authenticate": `Basic realm="${ACCESS_REALM}", charset="UTF-8"`, "Cache-Control": "no-store" },
     });
@@ -24,7 +26,10 @@ export function proxy(request: NextRequest) {
   if (isPublicPath(pathname) || openWithoutSession(pathname)) return;
   const team = readTeam();
   if (!team.members.length || memberForCookie(request.headers.get("cookie"), team)) return;
+  // Metin isteği yapanın dilinde (çerez, yoksa tarayıcının dili). Yalnızca
+  // `server` bölümü: vekil her istekte çalışıyor, bütün sözlüğü yüklemesin.
   const headers = { "Cache-Control": "no-store" };
-  if (pathname.startsWith("/api/")) return Response.json({ error: "Sign in to the studio first." }, { status: 401, headers });
-  return new Response("Sign in to the studio first.", { status: 401, headers });
+  const signIn = serverMessages[uiLanguageForRequest(request)].errors.signInToStudio();
+  if (pathname.startsWith("/api/")) return Response.json({ error: signIn }, { status: 401, headers });
+  return new Response(signIn, { status: 401, headers });
 }

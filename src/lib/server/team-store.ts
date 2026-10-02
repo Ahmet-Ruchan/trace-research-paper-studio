@@ -2,7 +2,8 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { mkdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { MAX_APPROVALS, memberNameSchema, nameKey, passwordSchema, type MemberRole, type TeamMember } from "../team";
+import { MAX_APPROVALS, MAX_PASSWORD, memberNameSchema, MIN_PASSWORD, nameKey, passwordSchema, type MemberRole, type TeamMember } from "../team";
+import { UserFacingError, type UserErrorArgs } from "../user-error";
 import { traceDataDirectory } from "./data-directory";
 
 /**
@@ -97,7 +98,7 @@ function writeTeam(change: (file: TeamFile) => TeamFile): TeamFile {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
     }
   }
-  if (!locked) throw new Error("The team settings are busy. Please retry in a moment.");
+  if (!locked) throw new UserFacingError("teamBusy");
   try {
     const next = teamFileSchema.parse(change(readTeam()));
     const path = teamFilePath();
@@ -127,15 +128,32 @@ function newSession(file: TeamFile, memberId: string) {
   return { token, sessions };
 }
 
-function newMember(name: string, password: string, role: MemberRole): MemberRecord {
-  const salt = randomBytes(16).toString("hex");
-  return { id: `m_${randomUUID().replace(/-/g, "").slice(0, 16)}`, name: memberNameSchema.parse(name), role, salt, hash: hashPassword(passwordSchema.parse(password), salt), createdAt: new Date().toISOString() };
+export class TeamError extends UserFacingError {
+  constructor(readonly status: number, ...args: UserErrorArgs) {
+    super(...args);
+  }
 }
 
-export class TeamError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-  }
+/**
+ * Ad ve parola kuralları `team.ts`'teki şemalar; kırılan kural okuyucunun
+ * dilinde söylenebilsin diye anahtarlı bir hataya çevriliyor.
+ */
+function validName(name: string) {
+  const parsed = memberNameSchema.safeParse(name);
+  if (parsed.success) return parsed.data;
+  const code = parsed.error.issues[0]?.code;
+  throw code === "too_small" ? new TeamError(400, "nameRequired") : code === "too_big" ? new TeamError(400, "nameTooLong", 60) : new TeamError(400, "nameControlCharacters");
+}
+
+function validPassword(password: string) {
+  const parsed = passwordSchema.safeParse(password);
+  if (parsed.success) return parsed.data;
+  throw parsed.error.issues[0]?.code === "too_big" ? new TeamError(400, "passwordTooLong", MAX_PASSWORD) : new TeamError(400, "passwordTooShort", MIN_PASSWORD);
+}
+
+function newMember(name: string, password: string, role: MemberRole): MemberRecord {
+  const salt = randomBytes(16).toString("hex");
+  return { id: `m_${randomUUID().replace(/-/g, "").slice(0, 16)}`, name: validName(name), role, salt, hash: hashPassword(validPassword(password), salt), createdAt: new Date().toISOString() };
 }
 
 /** İlk hesap: ekip kipini açıyor; açan sahip oluyor ve oturumu açılıyor. */
@@ -143,7 +161,7 @@ export function createFirstOwner(name: string, password: string) {
   let token = "";
   let member: TeamMember | undefined;
   writeTeam((file) => {
-    if (file.members.length) throw new TeamError("The team already has accounts. Sign in instead.", 409);
+    if (file.members.length) throw new TeamError(409, "teamHasAccounts");
     const record = newMember(name, password, "owner");
     const session = newSession(file, record.id);
     token = session.token;
@@ -159,7 +177,7 @@ const failures = new Map<string, { count: number; since: number; until: number }
 export function signIn(name: string, password: string) {
   const key = nameKey(name);
   const pause = failures.get(key);
-  if (pause && pause.until > Date.now()) throw new TeamError("Too many wrong passwords for this name. Try again in fifteen minutes.", 429);
+  if (pause && pause.until > Date.now()) throw new TeamError(429, "tooManyWrongPasswords");
   const file = readTeam();
   const record = file.members.find((member) => nameKey(member.name) === key);
   // Bilinmeyen adda da aynı iş yapılıyor: yanıt süresi adın var olup olmadığını ele vermesin.
@@ -170,7 +188,7 @@ export function signIn(name: string, password: string) {
     const recent = pause && now - pause.since < PAUSE_MS;
     const count = (recent ? pause.count : 0) + 1;
     failures.set(key, { count, since: recent ? pause.since : now, until: count >= FAILURES_BEFORE_PAUSE ? now + PAUSE_MS : 0 });
-    throw new TeamError("The name or the password is wrong.", 401);
+    throw new TeamError(401, "wrongNameOrPassword");
   }
   failures.delete(key);
   let token = "";
@@ -219,8 +237,8 @@ export function sessionCookie(token: string, request: Request) {
 export const clearedSessionCookie = () => `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 
 const requireOwner = (actor: TeamMember | undefined) => {
-  if (!actor) throw new TeamError("Sign in first.", 401);
-  if (actor.role !== "owner") throw new TeamError("Only an owner can change the team.", 403);
+  if (!actor) throw new TeamError(401, "signInFirst");
+  if (actor.role !== "owner") throw new TeamError(403, "ownerOnlyTeam");
 };
 
 export function listMembers() {
@@ -232,7 +250,7 @@ export function addMember(actor: TeamMember | undefined, name: string, password:
   requireOwner(actor);
   let added: TeamMember | undefined;
   writeTeam((file) => {
-    if (file.members.some((member) => nameKey(member.name) === nameKey(name))) throw new TeamError("Someone in the team already has this name.", 409);
+    if (file.members.some((member) => nameKey(member.name) === nameKey(name))) throw new TeamError(409, "nameTaken");
     const record = newMember(name, password, role);
     added = publicMember(record);
     return { ...file, members: [...file.members, record] };
@@ -245,19 +263,19 @@ export function removeMember(actor: TeamMember | undefined, id: string) {
   requireOwner(actor);
   writeTeam((file) => {
     const target = file.members.find((member) => member.id === id);
-    if (!target) throw new TeamError("There is no such member.", 404);
-    if (target.role === "owner" && file.members.filter((member) => member.role === "owner").length === 1) throw new TeamError("The last owner cannot be removed.", 409);
+    if (!target) throw new TeamError(404, "noSuchMember");
+    if (target.role === "owner" && file.members.filter((member) => member.role === "owner").length === 1) throw new TeamError(409, "lastOwner");
     return { ...file, members: file.members.filter((member) => member.id !== id), sessions: file.sessions.filter((session) => session.memberId !== id) };
   });
 }
 
 /** Kendi parolasını değiştirmek: eskisi doğru olmalı; öbür oturumları kapanıyor. */
 export function changePassword(actor: TeamMember | undefined, current: string, next: string, keepToken: string | undefined) {
-  if (!actor) throw new TeamError("Sign in first.", 401);
+  if (!actor) throw new TeamError(401, "signInFirst");
   const record = readTeam().members.find((member) => member.id === actor.id);
-  if (!record || !timingSafeEqual(Buffer.from(record.hash, "hex"), Buffer.from(hashPassword(current.slice(0, 1000), record.salt), "hex"))) throw new TeamError("The current password is wrong.", 403);
+  if (!record || !timingSafeEqual(Buffer.from(record.hash, "hex"), Buffer.from(hashPassword(current.slice(0, 1000), record.salt), "hex"))) throw new TeamError(403, "wrongCurrentPassword");
   const salt = randomBytes(16).toString("hex");
-  const hash = hashPassword(passwordSchema.parse(next), salt);
+  const hash = hashPassword(validPassword(next), salt);
   const keep = keepToken ? tokenHash(keepToken) : undefined;
   writeTeam((file) => ({
     ...file,

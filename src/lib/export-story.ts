@@ -1,4 +1,5 @@
 import { VIEWER_TEMPLATE } from "@/generated/viewer-template";
+import { stringsFor } from "@/visuals/i18n";
 import type { ResearchProject } from "./schema";
 
 /**
@@ -20,6 +21,9 @@ export function buildStandaloneStory(
   // `replace`e fonksiyon verilir; string sürümü "$&" gibi dizileri desen
   // referansı sanıp projeyi bozardı.
   return VIEWER_TEMPLATE
+    // Kök `lang` etiketlerin dili (makale Türkçeyse Türkçe); görüntüleyici
+    // açılınca da aynısını yazıyor, bu yalnızca betik çalışmadan önce için.
+    .replace('<html lang="en">', () => `<html lang="${stringsFor(project.language).chrome}">`)
     .replace("__TRACE_PROJECT_JSON__", () => serialized)
     .replace("__TRACE_VIEW_MODE__", () => "story")
     // Paylaşılabilir çıktı: yerel stüdyo bağlantısı GÖMÜLMEZ. Yazarın

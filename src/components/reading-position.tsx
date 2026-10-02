@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BookMarked, X } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { sectionMark } from "@/lib/reader-notes";
 import { positionLabel, readPositions, savePosition, worthContinuing, type ReadingPosition } from "@/lib/reading-position";
 
@@ -79,6 +80,8 @@ export function useReadingPositions() {
 
 /** Bölümün başında: "4. bölümde kalmıştın" ve devam düğmesi. */
 export function ResumeBar({ projectId, place }: { projectId: string; place: ReadingPosition["place"] }) {
+  const learning = useT().learning;
+  const t = learning.readingPosition;
   const [position, setPosition] = useState<ReadingPosition>();
   useEffect(() => {
     const load = setTimeout(() => {
@@ -89,9 +92,9 @@ export function ResumeBar({ projectId, place }: { projectId: string; place: Read
   }, [place, projectId]);
   if (!worthContinuing(position)) return null;
   return (
-    <div className="resume-bar" role="group" aria-label="Where you stopped">
+    <div className="resume-bar" role="group" aria-label={t.label}>
       <BookMarked size={16} aria-hidden="true" />
-      <p>You stopped at {positionLabel(position)}.</p>
+      <p>{t.stoppedAt(positionLabel(position, learning.words.positionLabel))}</p>
       <button
         type="button"
         className="resume-go"
@@ -100,9 +103,9 @@ export function ResumeBar({ projectId, place }: { projectId: string; place: Read
           setPosition(undefined);
         }}
       >
-        Continue reading
+        {t.continue}
       </button>
-      <button type="button" className="resume-close" aria-label="Start from the top instead" title="Start from the top instead" onClick={() => setPosition(undefined)}>
+      <button type="button" className="resume-close" aria-label={t.fromTop} title={t.fromTop} onClick={() => setPosition(undefined)}>
         <X size={14} />
       </button>
     </div>

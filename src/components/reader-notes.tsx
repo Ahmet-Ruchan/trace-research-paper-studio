@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Download, Highlighter, Layers, NotebookPen, Pencil, Star, Trash2, Users, X } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { addHighlightCard, clozeCandidates, highlightCardOf, removeHighlightCard } from "@/lib/highlight-cards";
 import {
   cleanQuote,
@@ -10,6 +11,7 @@ import {
   NOTE_COLORS,
   NOTE_PLACES,
   notesFileName,
+  ORPHAN_HEADING,
   notesMarkdown,
   sameTarget,
   sectionMark,
@@ -57,7 +59,7 @@ export function useReaderNotes() {
   return useContext(NotesContext);
 }
 
-const colorNames: Record<NoteColor, string> = { yellow: "yellow", green: "green", blue: "blue", pink: "pink", purple: "purple" };
+/** `groupNotes`'un makaleden kalkmış yerlere bağlı notlar için başlığı; ekranda çevirisi gösteriliyor. */
 const endpoint = (projectId: string) => `/api/library/notes?id=${encodeURIComponent(projectId)}`;
 const newId = () => `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -70,20 +72,26 @@ export function ReaderNotesProvider({ projectId, children }: { projectId: string
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const latest = useRef<ReaderNote[]>([]);
+  // Hata metinleri ref'te: notlar dil değişince yeniden okunmasın.
+  const t = useT().learning.readerNotes;
+  const text = useRef(t);
+  useEffect(() => {
+    text.current = t;
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;
     fetch(endpoint(projectId), { cache: "no-store" })
       .then(async (response) => {
         const data = (await response.json().catch(() => undefined)) as { notes?: ReaderNote[]; error?: string } | undefined;
-        if (!response.ok) throw new Error(data?.error ?? "Your notes could not be read.");
+        if (!response.ok) throw new Error(data?.error ?? text.current.readFailed);
         if (cancelled) return;
         latest.current = data?.notes ?? [];
         setNotes(latest.current);
         setState({ status: "ready" });
       })
       .catch((error: unknown) => {
-        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : "Your notes could not be read." });
+        if (!cancelled) setState({ status: "failed", message: error instanceof Error ? error.message : text.current.readFailed });
       });
     return () => {
       cancelled = true;
@@ -101,11 +109,11 @@ export function ReaderNotesProvider({ projectId, children }: { projectId: string
         const response = await fetch(endpoint(projectId), { method: "PUT", keepalive, headers: { "Content-Type": "application/json" }, body });
         if (!response.ok) {
           const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-          throw new Error(data?.error ?? "Your notes could not be saved.");
+          throw new Error(data?.error ?? text.current.saveFailed);
         }
         setSaveError(undefined);
       } catch (error) {
-        setSaveError(error instanceof Error ? error.message : "Your notes could not be saved.");
+        setSaveError(error instanceof Error ? error.message : text.current.saveFailed);
       }
     });
   }, [projectId]);
@@ -311,6 +319,8 @@ const typing = (target: EventTarget | null) =>
  * Klavyeden de: seçim varken H son rengiyle vurguluyor, N not kutusunu açıyor.
  */
 export function SelectionNoteBar() {
+  const messages = useT();
+  const t = messages.learning.readerNotes;
   const context = useReaderNotes();
   const [picked, setPicked] = useState<Picked>();
   const [writing, setWriting] = useState<Picked>();
@@ -396,7 +406,7 @@ export function SelectionNoteBar() {
       <form
         className={`note-bar is-writing${docked}`}
         style={style}
-        aria-label="Note on the highlight"
+        aria-label={t.noteOnHighlight}
         onSubmit={(event) => {
           event.preventDefault();
           context.add({ target: writing.target, quote: writing.quote, text: draft });
@@ -404,25 +414,25 @@ export function SelectionNoteBar() {
         }}
       >
         <blockquote>{writing.quote.length > 140 ? `${writing.quote.slice(0, 140)}…` : writing.quote}</blockquote>
-        <textarea autoFocus rows={3} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Your note" aria-label="Your note" />
+        <textarea autoFocus rows={3} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t.yourNote} aria-label={t.yourNote} />
         <div className="note-bar-actions">
-          <button type="submit" className="note-save">Save</button>
-          <button type="button" onClick={done}>Cancel</button>
+          <button type="submit" className="note-save">{messages.common.save}</button>
+          <button type="button" onClick={done}>{messages.common.cancel}</button>
         </div>
       </form>
     );
   }
 
   return (
-    <div className={`note-bar${docked}`} style={style} role="toolbar" aria-label="Highlight the selected text" onMouseDown={(event) => event.preventDefault()}>
+    <div className={`note-bar${docked}`} style={style} role="toolbar" aria-label={t.highlightSelection} onMouseDown={(event) => event.preventDefault()}>
       <Highlighter size={14} aria-hidden="true" />
       {NOTE_COLORS.map((color) => (
         <button
           key={color}
           type="button"
           className={`note-swatch is-${color}`}
-          aria-label={`Highlight in ${colorNames[color]}`}
-          title={`Highlight in ${colorNames[color]}${color === shortcutColor ? " (H)" : ""}`}
+          aria-label={t.highlightIn(t.colors[color])}
+          title={`${t.highlightIn(t.colors[color])}${color === shortcutColor ? " (H)" : ""}`}
           aria-keyshortcuts={color === shortcutColor ? "H" : undefined}
           onClick={() => {
             context.add({ target: place.target, quote: place.quote, color });
@@ -431,7 +441,7 @@ export function SelectionNoteBar() {
           }}
         />
       ))}
-      <button type="button" className="note-bar-write" onClick={() => setWriting(place)} title="Write a note (N)" aria-keyshortcuts="N"><NotebookPen size={14} /> Note</button>
+      <button type="button" className="note-bar-write" onClick={() => setWriting(place)} title={t.writeNote} aria-keyshortcuts="N"><NotebookPen size={14} /> {t.note}</button>
     </div>
   );
 }
@@ -440,6 +450,7 @@ export function SelectionNoteBar() {
 
 /** Kanıt panelinde: iddiaya okuyucunun notu ve "önemli" işareti. */
 export function ClaimNotes({ claimId }: { claimId: string }) {
+  const t = useT().learning.readerNotes;
   const context = useReaderNotes();
   const [draft, setDraft] = useState("");
   if (!context || context.state.status === "loading") return null;
@@ -450,11 +461,11 @@ export function ClaimNotes({ claimId }: { claimId: string }) {
   const written = mine.filter((note) => note.text || note.quote);
 
   return (
-    <section className="claim-notes" aria-label="Your notes on this claim">
+    <section className="claim-notes" aria-label={t.claimNotes}>
       <div className="claim-notes-head">
-        <h4>Your notes</h4>
+        <h4>{t.yourNotes}</h4>
         <button type="button" className={`claim-mark${mark ? " is-on" : ""}`} aria-pressed={Boolean(mark)} onClick={() => (mark ? context.remove(mark.id) : context.add({ target }))}>
-          <Star size={13} /> {mark ? "Marked as important" : "Mark as important"}
+          <Star size={13} /> {mark ? t.marked : t.mark}
         </button>
       </div>
       {written.map((note) => <NoteItem key={note.id} note={note} />)}
@@ -467,11 +478,11 @@ export function ClaimNotes({ claimId }: { claimId: string }) {
           setDraft("");
         }}
       >
-        <textarea rows={2} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a note on this claim…" aria-label="A note on this claim" />
-        <button type="submit" disabled={!draft.trim()}>Save note</button>
+        <textarea rows={2} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t.claimPlaceholder} aria-label={t.claimNoteLabel} />
+        <button type="submit" disabled={!draft.trim()}>{t.saveNote}</button>
       </form>
-      <small>Kept in your library, never in the project, its exports or published pages.</small>
-      {context.saveError ? <p className="regen-error" role="status">Not saved: {context.saveError}</p> : null}
+      <small>{t.keptPrivate}</small>
+      {context.saveError ? <p className="regen-error" role="status">{t.notSaved(context.saveError)}</p> : null}
     </section>
   );
 }
@@ -485,6 +496,8 @@ type CardSource = { project: ResearchProject; study: NoteStudy; where: string };
  * kart Review'a giriyor. Kart varsa ne gizlediği ve ne zaman döneceği.
  */
 function HighlightCard({ note, source, choosing, onChoosing }: { note: ReaderNote; source: CardSource; choosing: boolean; onChoosing: (open: boolean) => void }) {
+  const messages = useT();
+  const t = messages.learning.readerNotes;
   const quote = note.quote ?? "";
   const candidates = useMemo(() => clozeCandidates(quote, source.project), [quote, source.project]);
   const card = highlightCardOf(source.study.progress, note.id);
@@ -495,20 +508,20 @@ function HighlightCard({ note, source, choosing, onChoosing }: { note: ReaderNot
     if (!card?.cloze) return null;
     return (
       <p className="note-card-status" role="status">
-        <Layers size={13} aria-hidden="true" /> In review, hiding “{card.cloze.answer}”: it comes back {describeDue(card.due, now)}.
+        <Layers size={13} aria-hidden="true" /> {t.inReview(card.cloze.answer, describeDue(card.due, now, messages.learning.words.due))}
       </p>
     );
   }
   const chosen = candidates[pick];
   if (!chosen) return null;
   return (
-    <div className="note-card-maker" role="group" aria-label="A review card from this highlight">
+    <div className="note-card-maker" role="group" aria-label={t.cardMaker}>
       <p className="note-card-preview">
         {quote.slice(0, chosen.at)}
-        <span className="cloze-blank"><span aria-label="blank">_____</span></span>
+        <span className="cloze-blank"><span aria-label={t.blank}>_____</span></span>
         {quote.slice(chosen.at + chosen.answer.length)}
       </p>
-      <div className="note-card-words" role="radiogroup" aria-label="The word to hide">
+      <div className="note-card-words" role="radiogroup" aria-label={t.wordToHide}>
         {candidates.map((item, index) => (
           <button key={`${item.at}-${item.answer}`} type="button" role="radio" aria-checked={index === pick} onClick={() => setPick(index)}>{item.answer}</button>
         ))}
@@ -522,7 +535,7 @@ function HighlightCard({ note, source, choosing, onChoosing }: { note: ReaderNot
             onChoosing(false);
           }}
         >
-          {card ? "Save the card" : "Add to review"}
+          {card ? t.saveCard : t.addToReview}
         </button>
         {card ? (
           <button
@@ -532,10 +545,10 @@ function HighlightCard({ note, source, choosing, onChoosing }: { note: ReaderNot
               onChoosing(false);
             }}
           >
-            Stop reviewing it
+            {t.stopReviewing}
           </button>
         ) : null}
-        <button type="button" onClick={() => onChoosing(false)}>Cancel</button>
+        <button type="button" onClick={() => onChoosing(false)}>{messages.common.cancel}</button>
       </div>
     </div>
   );
@@ -543,6 +556,8 @@ function HighlightCard({ note, source, choosing, onChoosing }: { note: ReaderNot
 
 /** Bir not: vurgu, metin; düzenle, renk, sil; vurgudan tekrar kartı. */
 function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
+  const messages = useT();
+  const t = messages.learning.readerNotes;
   const context = useReaderNotes()!;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.text);
@@ -552,7 +567,7 @@ function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
   if (isOthersNote(note)) {
     return (
       <article className={`note-item is-${note.color} is-shared-by-other`}>
-        <p className="note-author">Shared by {note.authorName}</p>
+        <p className="note-author">{t.sharedBy(note.authorName ?? "")}</p>
         {note.quote ? <blockquote>{note.quote}</blockquote> : null}
         {note.text ? <p>{note.text}</p> : null}
       </article>
@@ -571,10 +586,10 @@ function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
             setEditing(false);
           }}
         >
-          <textarea autoFocus rows={3} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="Edit the note" />
+          <textarea autoFocus rows={3} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} aria-label={t.editNote} />
           <div className="note-bar-actions">
-            <button type="submit" className="note-save">Save</button>
-            <button type="button" onClick={() => { setDraft(note.text); setEditing(false); }}>Cancel</button>
+            <button type="submit" className="note-save">{messages.common.save}</button>
+            <button type="button" onClick={() => { setDraft(note.text); setEditing(false); }}>{messages.common.cancel}</button>
           </div>
         </form>
       ) : note.text ? (
@@ -583,20 +598,20 @@ function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
       {!editing ? (
         <div className="note-item-actions">
           {note.quote ? (
-            <span className="note-colors" role="radiogroup" aria-label="Highlight colour">
+            <span className="note-colors" role="radiogroup" aria-label={t.highlightColour}>
               {NOTE_COLORS.map((color) => (
-                <button key={color} type="button" role="radio" aria-checked={note.color === color} className={`note-swatch is-${color}`} aria-label={colorNames[color]} onClick={() => context.update(note.id, { color })} />
+                <button key={color} type="button" role="radio" aria-checked={note.color === color} className={`note-swatch is-${color}`} aria-label={t.colors[color]} onClick={() => context.update(note.id, { color })} />
               ))}
             </span>
           ) : null}
-          <button type="button" onClick={() => setEditing(true)}><Pencil size={13} /> {note.text ? "Edit" : "Add a note"}</button>
+          <button type="button" onClick={() => setEditing(true)}><Pencil size={13} /> {note.text ? messages.common.edit : t.addNote}</button>
           {context.team && (note.text || note.quote) ? (
-            <button type="button" aria-pressed={Boolean(note.shared)} onClick={() => context.share(note.id, !note.shared)} title={note.shared ? "The team can read this note" : "Only you can read this note"}>
-              <Users size={13} /> {note.shared ? "Shared with the team" : "Share with the team"}
+            <button type="button" aria-pressed={Boolean(note.shared)} onClick={() => context.share(note.id, !note.shared)} title={note.shared ? t.teamCanRead : t.onlyYou}>
+              <Users size={13} /> {note.shared ? t.sharedWithTeam : t.shareWithTeam}
             </button>
           ) : null}
           {canCard && !choosing ? (
-            <button type="button" onClick={() => setChoosing(true)}><Layers size={13} /> {hasCard ? "Change the card" : "Make a review card"}</button>
+            <button type="button" onClick={() => setChoosing(true)}><Layers size={13} /> {hasCard ? t.changeCard : t.makeCard}</button>
           ) : null}
           <button
             type="button"
@@ -605,9 +620,9 @@ function NoteItem({ note, source }: { note: ReaderNote; source?: CardSource }) {
               if (source && hasCard) source.study.save(removeHighlightCard(source.study.progress, note.id, new Date().toISOString()));
               context.remove(note.id);
             }}
-            aria-label="Delete this note"
+            aria-label={t.deleteNote}
           >
-            <Trash2 size={13} /> Delete
+            <Trash2 size={13} /> {messages.common.delete}
           </button>
         </div>
       ) : null}
@@ -640,18 +655,21 @@ export function NotesPanel({
   onClaimSelect: (claimId: string) => void;
   onShowSection: (place: NotePlace, sectionId: string) => void;
 }) {
+  const messages = useT();
+  const t = messages.learning.readerNotes;
+  const places = t.places;
   const context = useReaderNotes();
   const [targetKey, setTargetKey] = useState("");
   const [draft, setDraft] = useState("");
   const groups = useMemo(() => (context ? groupNotes(project, context.notes) : []), [context, project]);
   const targets = useMemo(() => [
-    ...project.story.sections.map((section) => ({ key: `story:${section.id}`, label: `Story · ${section.title}`, target: { kind: "section", place: "story", sectionId: section.id } as NoteTarget })),
-    ...(project.deepReport?.sections ?? []).map((section) => ({ key: `report:${section.id}`, label: `Deep report · ${section.title}`, target: { kind: "section", place: "report", sectionId: section.id } as NoteTarget })),
-    ...(project.primer?.concepts ?? []).map((concept) => ({ key: `concept:${concept.id}`, label: `Primer · ${concept.term}`, target: { kind: "section", place: "concept", sectionId: concept.id } as NoteTarget })),
-    ...project.evidence.claims.map((claim) => ({ key: `claim:${claim.id}`, label: `Claim · ${claim.statement.length > 90 ? `${claim.statement.slice(0, 90)}…` : claim.statement}`, target: { kind: "claim", claimId: claim.id } as NoteTarget })),
-  ], [project]);
+    ...project.story.sections.map((section) => ({ key: `story:${section.id}`, label: `${places.Story} · ${section.title}`, target: { kind: "section", place: "story", sectionId: section.id } as NoteTarget })),
+    ...(project.deepReport?.sections ?? []).map((section) => ({ key: `report:${section.id}`, label: `${places["Deep report"]} · ${section.title}`, target: { kind: "section", place: "report", sectionId: section.id } as NoteTarget })),
+    ...(project.primer?.concepts ?? []).map((concept) => ({ key: `concept:${concept.id}`, label: `${places.Primer} · ${concept.term}`, target: { kind: "section", place: "concept", sectionId: concept.id } as NoteTarget })),
+    ...project.evidence.claims.map((claim) => ({ key: `claim:${claim.id}`, label: `${places.Claim} · ${claim.statement.length > 90 ? `${claim.statement.slice(0, 90)}…` : claim.statement}`, target: { kind: "claim", claimId: claim.id } as NoteTarget })),
+  ], [places, project]);
   if (!context) return null;
-  if (context.state.status === "loading") return <p className="section-intro" role="status">Reading your notes…</p>;
+  if (context.state.status === "loading") return <p className="section-intro" role="status">{t.loading}</p>;
   if (context.state.status === "failed") return <p className="regen-error" role="alert">{context.state.message}</p>;
   const count = context.notes.length;
   const chosen = targets.find((item) => item.key === targetKey) ?? targets[0];
@@ -659,13 +677,12 @@ export function NotesPanel({
   return (
     <div className="notes-panel">
       <p className="section-intro">
-        Select any text in the Deep report, the Story preview, a Study step or a Primer concept to highlight it (or press H, and N for a note), or open a claim to write a note on it. Your notes are
-        kept in your library, never in the project file, so exports and published pages do not carry them.
+        {t.intro}
       </p>
       <div className="notes-export">
         <button type="button" disabled={!count} onClick={() => download(notesFileName(project), notesMarkdown(project, context.notes, { exportedAt: new Date().toISOString() }))}><Download size={14} /> Markdown</button>
-        <button type="button" disabled={!count} onClick={() => download(notesFileName(project), notesMarkdown(project, context.notes, { obsidian: true, exportedAt: new Date().toISOString() }))}><Download size={14} /> For Obsidian</button>
-        <span>{count ? `${count} ${count === 1 ? "note" : "notes and highlights"}` : "No notes yet"}</span>
+        <button type="button" disabled={!count} onClick={() => download(notesFileName(project), notesMarkdown(project, context.notes, { obsidian: true, exportedAt: new Date().toISOString() }))}><Download size={14} /> {t.forObsidian}</button>
+        <span>{count ? t.count(count) : t.none}</span>
       </div>
       <form
         className="notes-add"
@@ -677,33 +694,37 @@ export function NotesPanel({
         }}
       >
         <label className="focus-select">
-          <span>Add a note to</span>
+          <span>{t.addNoteTo}</span>
           <select value={chosen?.key ?? ""} onChange={(event) => setTargetKey(event.target.value)}>
             {targets.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
           </select>
         </label>
-        <textarea rows={3} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Your note" aria-label="Your note" />
-        <button type="submit" disabled={!draft.trim()}>Save note</button>
+        <textarea rows={3} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t.yourNote} aria-label={t.yourNote} />
+        <button type="submit" disabled={!draft.trim()}>{t.saveNote}</button>
       </form>
-      {context.saveError ? <p className="regen-error" role="status">Not saved: {context.saveError}</p> : null}
-      {groups.map((group) => (
-        <section key={`${group.place}-${group.heading}`} className="notes-group" aria-label={`${group.place}: ${group.heading}`}>
-          <header>
-            <span className="notes-place">{group.place}{group.page ? ` · p. ${group.page}` : ""}</span>
-            <h3>{group.heading}</h3>
-            {group.heading !== "No longer in the paper" ? (
-              group.target.kind === "claim" ? (
-                <button type="button" onClick={() => onClaimSelect((group.target as { claimId: string }).claimId)}>Open the claim</button>
-              ) : (
-                <button type="button" onClick={() => onShowSection((group.target as { place: NotePlace }).place, (group.target as { sectionId: string }).sectionId)}>Show it</button>
-              )
-            ) : null}
-          </header>
-          {group.notes.map((note) => (note.text || note.quote ? <NoteItem key={note.id} note={note} source={study ? { project, study, where: group.heading === "No longer in the paper" ? "" : group.heading } : undefined} /> : (
-            <p key={note.id} className="notes-marked"><Star size={13} /> Marked as important <button type="button" onClick={() => context.remove(note.id)} aria-label="Remove the mark"><X size={13} /></button></p>
-          )))}
-        </section>
-      ))}
+      {context.saveError ? <p className="regen-error" role="status">{t.notSaved(context.saveError)}</p> : null}
+      {groups.map((group) => {
+        const orphans = group.heading === ORPHAN_HEADING;
+        const heading = orphans ? t.orphans : group.heading;
+        return (
+          <section key={`${group.place}-${group.heading}`} className="notes-group" aria-label={`${places[group.place]}: ${heading}`}>
+            <header>
+              <span className="notes-place">{places[group.place]}{group.page ? ` · ${messages.common.page(group.page)}` : ""}</span>
+              <h3>{heading}</h3>
+              {!orphans ? (
+                group.target.kind === "claim" ? (
+                  <button type="button" onClick={() => onClaimSelect((group.target as { claimId: string }).claimId)}>{t.openClaim}</button>
+                ) : (
+                  <button type="button" onClick={() => onShowSection((group.target as { place: NotePlace }).place, (group.target as { sectionId: string }).sectionId)}>{t.showIt}</button>
+                )
+              ) : null}
+            </header>
+            {group.notes.map((note) => (note.text || note.quote ? <NoteItem key={note.id} note={note} source={study ? { project, study, where: orphans ? "" : group.heading } : undefined} /> : (
+              <p key={note.id} className="notes-marked"><Star size={13} /> {t.marked} <button type="button" onClick={() => context.remove(note.id)} aria-label={t.removeMark}><X size={13} /></button></p>
+            )))}
+          </section>
+        );
+      })}
     </div>
   );
 }

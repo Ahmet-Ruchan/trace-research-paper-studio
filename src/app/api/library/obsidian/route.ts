@@ -4,6 +4,8 @@ import { listStoredProjects, readAllReaderNotes, readAllStudyProgress, readConce
 import { dayKey } from "@/lib/work-log";
 import { zipFiles } from "@/lib/zip";
 import { notesFilterFor } from "@/lib/server/team-access";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +27,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "The library could not be exported." }, { status: 500, headers: { "Cache-Control": "no-store" } });
+    const t = serverText(request);
+    return Response.json({ error: errorMessage(error, t.errors, t.obsidian.exportFailed) }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }

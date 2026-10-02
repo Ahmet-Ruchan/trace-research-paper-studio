@@ -80,14 +80,18 @@ export function isDue(review: Pick<StudyReview, "due">, now: string) {
   return Date.parse(review.due) <= Date.parse(now);
 }
 
+/** `describeDue`'nun kelimeleri; Türkçesi arayüz sözlüğünde (`learning`). */
+export type DueWords = { now: string; tomorrow: string; inDays: (days: number) => string };
+export const DUE_WORDS: DueWords = { now: "now", tomorrow: "tomorrow", inDays: (days) => `in ${days} days` };
+
 /**
  * "tomorrow", "in 3 days": bir sonraki tekrarın okuyucuya söylenişi. Gün
  * yuvarlanıyor: ekranın açılışıyla yanıt arasında geçen birkaç dakika "3 gün"ü
- * "4 gün" yapmamalı.
+ * "4 gün" yapmamalı. Ajan çıktısı hep İngilizce varsayılanla.
  */
-export function describeDue(due: string, now: string) {
+export function describeDue(due: string, now: string, words: DueWords = DUE_WORDS) {
   const difference = Date.parse(due) - Date.parse(now);
-  if (difference <= 0) return "now";
+  if (difference <= 0) return words.now;
   const days = Math.max(1, Math.round(difference / DAY_MS));
-  return days === 1 ? "tomorrow" : `in ${days} days`;
+  return days === 1 ? words.tomorrow : words.inDays(days);
 }

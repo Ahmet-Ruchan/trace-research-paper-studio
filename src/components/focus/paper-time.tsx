@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import { Timer } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { focusColorStyle } from "@/lib/focus-colors";
 import type { Subject } from "@/lib/focus-timer";
 import type { ResearchProject } from "@/lib/schema";
-import { addDaysLocal, formatDuration, startOfWeek, timeByProject } from "@/lib/work-log";
+import { addDaysLocal, startOfWeek, timeByProject } from "@/lib/work-log";
 import { focusDisplay, liveSessions, useFocus, useFocusClock } from "./focus-provider";
 import { useStudioNav } from "./studio-nav";
 
@@ -14,6 +15,7 @@ import { useStudioNav } from "./studio-nav";
  * makale için başlatan düğme. Süre, oturum bu makaleye bağlandıysa sayılıyor.
  */
 export function PaperFocusOffer({ project }: { project: ResearchProject }) {
+  const { duration, paperTime: t } = useT().focus;
   const { profile, log, store, actions } = useFocus();
   const now = useFocusClock();
   const nav = useStudioNav();
@@ -30,24 +32,20 @@ export function PaperFocusOffer({ project }: { project: ResearchProject }) {
   const shown = focus ? focusDisplay(focus, profile, now) : undefined;
 
   return (
-    <section className="focus-offer" style={focusColorStyle(profile.preferences.colors.focus)} aria-label="Time on this paper">
+    <section className="focus-offer" style={focusColorStyle(profile.preferences.colors.focus)} aria-label={t.region}>
       <Timer size={20} aria-hidden="true" />
       <div>
-        <strong>{total >= 60 ? `${formatDuration(total)} on this paper` : "Time on this paper"}</strong>
-        <p>
-          {total >= 60
-            ? `${week >= 60 ? `${formatDuration(week)} of it this week` : "None of it this week yet"}. Focus rounds you start here, or name this paper on the timer, are counted for it.`
-            : "Start a focus round here and the time you spend on this paper is counted for it, on your profile too."}
-        </p>
+        <strong>{total >= 60 ? t.onPaper(duration(total)) : t.region}</strong>
+        <p>{total >= 60 ? t.offerNote(week >= 60 ? duration(week) : undefined) : t.offerEmpty}</p>
       </div>
       <div className="focus-offer-actions">
         {focus && shown ? (
           <button type="button" className="focus-secondary" onClick={() => nav?.open("focus")}>
-            {here ? "Focus round on this paper" : "A focus round is running"} · {Math.ceil(shown.remaining / 60_000)} min left
+            {t.running(here, Math.ceil(shown.remaining / 60_000))}
           </button>
         ) : (
           <button type="button" className="focus-primary" onClick={() => actions.startFocus({ label: project.evidence.paper.title, projectId: project.id })}>
-            <Timer size={15} /> Start a focus round
+            <Timer size={15} /> {t.start}
           </button>
         )}
       </div>
@@ -55,14 +53,13 @@ export function PaperFocusOffer({ project }: { project: ResearchProject }) {
   );
 }
 
-const phaseName = { work: "Focus round", short: "Short break", long: "Long break" } as const;
-
 /**
  * Çalışma ve tekrar ekranlarında ince bir şerit: buradan bir odak turu
  * başlatılıyor ve süre verilen konuya (makale ya da tekrar) yazılıyor. Tur
  * zaten sürüyorsa kalan süre ve zamanlayıcıya giden bir düğme.
  */
 export function FocusRoundBar({ subject, hint }: { subject: Subject; hint: string }) {
+  const t = useT().focus.paperTime;
   const { profile, store, actions } = useFocus();
   const now = useFocusClock();
   const nav = useStudioNav();
@@ -71,20 +68,20 @@ export function FocusRoundBar({ subject, hint }: { subject: Subject; hint: strin
   const here = Boolean(focus && subject.projectId && focus.projectId === subject.projectId);
 
   return (
-    <div className="focus-bar" style={focusColorStyle(profile.preferences.colors.focus)} role="group" aria-label="Focus round">
+    <div className="focus-bar" style={focusColorStyle(profile.preferences.colors.focus)} role="group" aria-label={t.bar}>
       <Timer size={16} aria-hidden="true" />
       {focus && shown ? (
         <>
           <p role="status">
-            <strong>{phaseName[shown.phase]}</strong> · {Math.ceil(shown.remaining / 60_000)} min left{shown.running ? "" : ", paused"}
-            {here ? " · counted for this paper" : ""}
+            <strong>{t.phases[shown.phase]}</strong> · {t.minutesLeft(Math.ceil(shown.remaining / 60_000))}{shown.running ? "" : t.paused}
+            {here ? t.counted : ""}
           </p>
-          <button type="button" className="focus-secondary" onClick={() => nav?.open("focus")}>Open the timer</button>
+          <button type="button" className="focus-secondary" onClick={() => nav?.open("focus")}>{t.openTimer}</button>
         </>
       ) : (
         <>
           <p>{hint}</p>
-          <button type="button" className="focus-primary" onClick={() => actions.startFocus(subject)}><Timer size={15} /> Start a focus round</button>
+          <button type="button" className="focus-primary" onClick={() => actions.startFocus(subject)}><Timer size={15} /> {t.start}</button>
         </>
       )}
     </div>
@@ -93,6 +90,7 @@ export function FocusRoundBar({ subject, hint }: { subject: Subject; hint: strin
 
 /** Profilde makale başına süre: en çok zaman ayrılan makaleler, bağlanmamış çalışma ayrı. */
 export function PaperTimeCard({ projects, onOpen, range }: { projects: ResearchProject[]; onOpen: (project: ResearchProject) => void; range: { from?: number; to?: number; label: string } }) {
+  const { duration, paperTime: t } = useT().focus;
   const { log, profile, store } = useFocus();
   const now = useFocusClock();
   const rows = useMemo(() => {
@@ -105,28 +103,28 @@ export function PaperTimeCard({ projects, onOpen, range }: { projects: ResearchP
   const most = Math.max(1, ...papers.map(([, seconds]) => seconds), other);
 
   return (
-    <section className="stats-block profile-papers" aria-label="Time by paper">
-      <h2>Time by paper</h2>
-      <p>{range.label}. Name a paper on the timer, or start a round from its Lab, to count the time for it.</p>
+    <section className="stats-block profile-papers" aria-label={t.byPaper}>
+      <h2>{t.byPaper}</h2>
+      <p>{t.byPaperIntro(range.label)}</p>
       {papers.length || other ? (
         <ul className="paper-time">
           {papers.map(([id, seconds]) => (
             <li key={id}>
               <button type="button" onClick={() => onOpen(byId.get(id)!)} title={byId.get(id)!.evidence.paper.title}>{byId.get(id)!.evidence.paper.title}</button>
               <span className="paper-time-bar" aria-hidden="true"><i style={{ width: `${(seconds / most) * 100}%` }} /></span>
-              <strong>{formatDuration(seconds)}</strong>
+              <strong>{duration(seconds)}</strong>
             </li>
           ))}
           {other ? (
             <li>
-              <span>Other work</span>
+              <span>{t.otherWork}</span>
               <span className="paper-time-bar" aria-hidden="true"><i style={{ width: `${(other / most) * 100}%` }} /></span>
-              <strong>{formatDuration(other)}</strong>
+              <strong>{duration(other)}</strong>
             </li>
           ) : null}
         </ul>
       ) : (
-        <p className="focus-note">No time counted yet.</p>
+        <p className="focus-note">{t.empty}</p>
       )}
     </section>
   );

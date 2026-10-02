@@ -46,25 +46,70 @@ const NUMERIC_VISUALS: readonly VisualType[] = ["comparison", "metric"];
  * ------------------------------------------------------------------ */
 
 /**
+ * Şablon sorunlarının metni. Ajan, eklenti ve sunucu İngilizcesini
+ * kullanıyor; stüdyonun şablon düzenleyicisi arayüzün dilindekini veriyor
+ * (`src/i18n/messages`). Görsel ve rapor bölümü türlerinin adı da burada:
+ * İngilizcede kimliğin kendisi.
+ */
+export type TemplateIssueWords = {
+  fewVisuals: string;
+  needsAdvanced: (visuals: string) => string;
+  needsMethod: string;
+  needsLimitation: string;
+  reportMissing: (kinds: string) => string;
+  visualNames: Record<VisualType, string>;
+  reportKindNames: Record<(typeof reportKinds)[number], string>;
+};
+
+export const ENGLISH_TEMPLATE_ISSUE_WORDS: TemplateIssueWords = {
+  fewVisuals: "A template needs at least three different visual types",
+  needsAdvanced: (visuals) => `A template needs at least one of: ${visuals}`,
+  needsMethod: "One section must draw on method claims",
+  needsLimitation: "One section must draw on limitation claims",
+  reportMissing: (kinds) => `The report order must include every section kind; missing ${kinds}`,
+  visualNames: {
+    metric: "metric",
+    flow: "flow",
+    comparison: "comparison",
+    concept: "concept",
+    layers: "layers",
+    quote: "quote",
+    architecture: "architecture",
+    equation: "equation",
+    timeline: "timeline",
+    matrix: "matrix",
+    infographic: "infographic",
+  },
+  reportKindNames: {
+    contribution: "contribution",
+    mechanism: "mechanism",
+    experiment: "experiment",
+    critique: "critique",
+    reproduction: "reproduction",
+    implication: "implication",
+  },
+};
+
+/**
  * Bir şablon, bütünlük denetiminin anlatıya uyguladığı kuralları karşılamak
  * zorunda. Karşılamıyorsa ona göre üretilen her anlatı reddedilir ve kullanıcı
  * sebebini ancak model ücretini ödedikten sonra öğrenir. Bu yüzden şablon
  * kaydedilirken ve kullanılmadan önce denetleniyor.
  */
-export function templateIssues(template: NarrativeTemplate): string[] {
+export function templateIssues(template: NarrativeTemplate, words: TemplateIssueWords = ENGLISH_TEMPLATE_ISSUE_WORDS): string[] {
   const issues: string[] = [];
   const visuals = new Set(template.story.map((slot) => slot.visual));
-  if (visuals.size < 3) issues.push("A template needs at least three different visual types");
+  if (visuals.size < 3) issues.push(words.fewVisuals);
   if (![...visuals].some((visual) => ADVANCED_VISUALS.includes(visual))) {
-    issues.push(`A template needs at least one of: ${ADVANCED_VISUALS.join(", ")}`);
+    issues.push(words.needsAdvanced(ADVANCED_VISUALS.map((visual) => words.visualNames[visual]).join(", ")));
   }
   const kinds = new Set(template.story.flatMap((slot) => slot.claimKinds));
-  if (!kinds.has("method")) issues.push("One section must draw on method claims");
-  if (!kinds.has("limitation")) issues.push("One section must draw on limitation claims");
+  if (!kinds.has("method")) issues.push(words.needsMethod);
+  if (!kinds.has("limitation")) issues.push(words.needsLimitation);
   if (template.report) {
     const present = new Set(template.report);
     const missing = reportKinds.filter((kind) => !present.has(kind));
-    if (missing.length) issues.push(`The report order must include every section kind; missing ${missing.join(", ")}`);
+    if (missing.length) issues.push(words.reportMissing(missing.map((kind) => words.reportKindNames[kind]).join(", ")));
   }
   return issues;
 }

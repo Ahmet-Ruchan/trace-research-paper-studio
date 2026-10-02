@@ -6,6 +6,7 @@ import type { Claim, ClaimReview, PaperEvidence } from "@/lib/schema";
 import { useStrings } from "@/visuals";
 import { ExcerptOnPage } from "./excerpt-on-page";
 import { ClaimNotes } from "./reader-notes";
+import { useT } from "@/i18n/client";
 
 type EvidenceDrawerProps = {
   claim?: Claim;
@@ -17,6 +18,7 @@ type EvidenceDrawerProps = {
   persistent?: boolean;
 };
 
+/** İngilizce adlar; ekranda arayüzün dilindekiler (`paper.claimKinds.long`). */
 export const claimKindLabels: Record<Claim["kind"], string> = {
   "reported-result": "Reported result",
   "author-interpretation": "Author interpretation",
@@ -26,17 +28,20 @@ export const claimKindLabels: Record<Claim["kind"], string> = {
 };
 
 export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, persistent = false }: EvidenceDrawerProps) {
-  const t = useStrings();
+  const strings = useStrings();
+  const messages = useT();
+  const t = messages.paper.evidenceDrawer;
+  const { claimKinds, claimStatus } = messages.paper;
   const [onPage, setOnPage] = useState<{ page: number; excerpt: string }>();
   return (
-    <aside className={`evidence-drawer ${persistent ? "is-persistent" : ""}`} aria-label="Evidence detail">
+    <aside className={`evidence-drawer ${persistent ? "is-persistent" : ""}`} aria-label={t.aria}>
       <div className="drawer-header">
         <div>
-          <span>Evidence</span>
-          <strong>{claim ? claimKindLabels[claim.kind] : t.pickAClaim}</strong>
+          <span>{t.kicker}</span>
+          <strong>{claim ? claimKinds.long[claim.kind] : strings.pickAClaim}</strong>
         </div>
         {onClose && (
-          <button className="icon-button" onClick={onClose} aria-label="Close evidence panel">
+          <button className="icon-button" onClick={onClose} aria-label={t.close}>
             <X size={17} />
           </button>
         )}
@@ -45,19 +50,19 @@ export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, pers
       {!claim ? (
         <div className="drawer-empty">
           <FileText size={22} />
-          <p>{t.pickAClaimHint}</p>
+          <p>{strings.pickAClaimHint}</p>
         </div>
       ) : (
         <div className="drawer-content">
           <div className="claim-status">
             <span className={claim.confidence === "verified" ? "verified" : "review"}>
-              <Check size={13} /> {claim.confidence === "verified" ? "Verified" : "Needs review"}
+              <Check size={13} /> {claim.confidence === "verified" ? claimStatus.verified : claimStatus.needsReview}
             </span>
-            <small>{claimKindLabels[claim.kind]}</small>
+            <small>{claimKinds.long[claim.kind]}</small>
           </div>
           {review && (
             <p className={`claim-reviewed is-${review.status}`}>
-              {review.status === "approved" ? "Approved" : "Rejected"} by {review.by}
+              {claimStatus.reviewedBy(review.status === "approved", review.by)}
               {review.note ? ` — ${review.note}` : ""}
             </p>
           )}
@@ -75,7 +80,7 @@ export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, pers
                 <article className="reference-card" key={`${reference.sourceId}-${index}`}>
                   <div className="reference-meta">
                     <span>{source?.type === "paper" ? "PDF" : "WEB"}</span>
-                    <span>{reference.page ? `Page ${reference.page}` : reference.locator ?? "Source"}</span>
+                    <span>{reference.page ? t.page(reference.page) : reference.locator ?? t.source}</span>
                   </div>
                   <blockquote>“{reference.excerpt}”</blockquote>
                   <div className="reference-source">
@@ -84,13 +89,13 @@ export function EvidenceDrawer({ claim, evidence, review, fileUrl, onClose, pers
                       <button
                         className="reference-locate"
                         onClick={() => setOnPage({ page: reference.page!, excerpt: reference.excerpt })}
-                        title="Show this quote on the page"
+                        title={t.showOnPageTitle}
                       >
-                        <ScanSearch size={13} /> Show on the page
+                        <ScanSearch size={13} /> {t.showOnPage}
                       </button>
                     )}
                     {href && (
-                      <a href={href} target="_blank" rel="noreferrer" aria-label="Open source">
+                      <a href={href} target="_blank" rel="noreferrer" aria-label={t.openSource}>
                         <ExternalLink size={14} />
                       </a>
                     )}

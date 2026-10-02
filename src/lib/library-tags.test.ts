@@ -49,6 +49,10 @@ describe("editing a paper's tags", () => {
     const full = Array.from({ length: MAX_TAGS_PER_PROJECT }, (_, index) => `tag ${index}`);
     expect(addTag(full, "one more")).toEqual({ ok: false, error: "A paper can carry at most 12 tags." });
     expect(addTag([], "y".repeat(41))).toEqual({ ok: false, error: "A tag can be at most 40 characters." });
+    // Arayüzün dilinde: sözlüğün Türkçesi.
+    const words = { tooLong: (max: number) => `en çok ${max}`, tooMany: (max: number) => `en fazla ${max} etiket`, failed: "olmadı" };
+    expect(addTag(full, "one more", [], words)).toEqual({ ok: false, error: "en fazla 12 etiket" });
+    expect(addTag([], "y".repeat(41), [], words)).toEqual({ ok: false, error: "en çok 40" });
   });
 
   it("removes a tag whatever its case", () => {

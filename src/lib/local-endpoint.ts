@@ -14,6 +14,8 @@
  * sunucunun yetkisiyle olurdu.
  */
 
+import { UserFacingError } from "./user-error";
+
 /** Ollama'nın varsayılanı; en yaygın kurulum bu. */
 export const DEFAULT_LOCAL_ENDPOINT = "http://127.0.0.1:11434/v1";
 
@@ -36,16 +38,14 @@ export function resolveLocalEndpoint(raw: string | undefined): string {
     // `URL` için geçersiz değil — protokolü "localhost:" sanır.
     url = new URL(/^https?:\/\//i.test(value) ? value : `http://${value}`);
   } catch {
-    throw new Error(`"${value}" is not a valid address. Use something like ${DEFAULT_LOCAL_ENDPOINT}.`);
+    throw new UserFacingError("localAddressInvalid", value, DEFAULT_LOCAL_ENDPOINT);
   }
 
   if (url.username || url.password) {
-    throw new Error("The local model address must not carry credentials.");
+    throw new UserFacingError("localAddressCredentials");
   }
   if (!isLoopback(url.hostname)) {
-    throw new Error(
-      `Only an address on this machine is accepted (127.0.0.1, localhost or ::1); "${url.hostname}" is not one. The request leaves the Trace server, so any other address would let it reach hosts you never asked for.`,
-    );
+    throw new UserFacingError("localAddressNotLoopback", url.hostname);
   }
 
   // Sondaki eğik çizgi temizleniyor, `/v1` ise korunuyor: LM Studio kökü

@@ -1,0 +1,83 @@
+/** Ekip kipi: giriş ekranı ve profildeki ekip kartı. */
+const en = {
+  couldNotChange: "The team could not be changed.",
+  signIn: "Sign in",
+  signInTitle: "Sign in to Trace",
+  signInIntro: "This studio is shared by a team. Sign in with the name and password the team’s owner gave you.",
+  name: "Name",
+  password: "Password",
+  signingIn: "Signing in…",
+  signInFailed: "Signing in failed.",
+  team: "Team",
+  offIntro:
+    "Share this studio with a team: everyone signs in with their own name, approving a claim can take more than one person, and notes stay with whoever wrote them unless they share them. Create the first account to turn it on; you become its owner, and from then on the studio asks everyone to sign in. Turn it on only where the studio is reached over HTTPS.",
+  createFirst: "Create the first account",
+  yourName: "Your name",
+  passwordMin: (count: number) => `Password (${count}+ characters)`,
+  passwordAgain: "Password again",
+  turnOn: "Turn on team review",
+  mismatch: "The two passwords differ.",
+  /** "Signed in as <ad> (owner). …": ad kalın, aradaki parçalar sırayla. */
+  signedInAs: "Signed in as ",
+  ownerMark: " (owner)",
+  signedInRule: (approvals: number) =>
+    `. A claim is approved when ${approvals === 1 ? "one member approves it" : `${approvals} members approve it`} and nobody rejects it. Notes are yours unless you share them with the team. Study progress, the work timer and this profile are still one for the whole studio.`,
+  owner: "owner",
+  member: "member",
+  you: " · you",
+  removeMember: (name: string) => `Remove ${name} from the team`,
+  removed: (name: string) => `${name} was removed. Their notes and votes stay.`,
+  addMember: "Add a member",
+  added: (name: string) => `${name} can sign in now. Give them the password; they can change it on their profile.`,
+  firstPassword: "First password",
+  approvalsNeeded: "Approvals a claim needs",
+  approvalsSaved: "Saved. Decisions already taken stay until someone votes again.",
+  changePassword: "Change your password",
+  passwordChanged: "Your password was changed; your other devices were signed out.",
+  currentPassword: "Current password",
+  newPassword: "New password",
+  signOut: "Sign out",
+};
+
+const tr: typeof en = {
+  couldNotChange: "Ekip değiştirilemedi.",
+  signIn: "Giriş yap",
+  signInTitle: "Trace'e giriş yap",
+  signInIntro: "Bu stüdyoyu bir ekip paylaşıyor. Ekibin sahibinin sana verdiği ad ve parolayla giriş yap.",
+  name: "Ad",
+  password: "Parola",
+  signingIn: "Giriş yapılıyor…",
+  signInFailed: "Giriş yapılamadı.",
+  team: "Ekip",
+  offIntro:
+    "Bu stüdyoyu bir ekiple paylaş: herkes kendi adıyla giriş yapar, bir iddiayı onaylamak birden çok kişi gerektirebilir ve notlar paylaşılmadıkça yazanında kalır. Açmak için ilk hesabı oluştur; ekibin sahibi sen olursun ve stüdyo o andan itibaren herkesten giriş ister. Yalnızca stüdyoya HTTPS üzerinden ulaşılıyorsa aç.",
+  createFirst: "İlk hesabı oluştur",
+  yourName: "Adın",
+  passwordMin: (count) => `Parola (en az ${count} karakter)`,
+  passwordAgain: "Parola (tekrar)",
+  turnOn: "Ekip incelemesini aç",
+  mismatch: "İki parola birbirinden farklı.",
+  signedInAs: "Giriş yapan: ",
+  ownerMark: " (sahip)",
+  signedInRule: (approvals) =>
+    `. Bir iddia ${approvals === 1 ? "bir üye" : `${approvals} üye`} onayladığında ve kimse reddetmediğinde onaylanır. Notların, ekiple paylaşmadıkça yalnızca senin. Çalışma ilerlemesi, çalışma saati ve bu profil bütün stüdyo için hâlâ ortak.`,
+  owner: "sahip",
+  member: "üye",
+  you: " · sen",
+  removeMember: (name) => `${name} adlı üyeyi ekipten çıkar`,
+  removed: (name) => `${name} ekipten çıkarıldı. Notları ve oyları kalıyor.`,
+  addMember: "Üye ekle",
+  added: (name) => `${name} artık giriş yapabilir. Parolayı ona ilet; profilinden değiştirebilir.`,
+  firstPassword: "İlk parola",
+  approvalsNeeded: "Bir iddia için gereken onay",
+  approvalsSaved: "Kaydedildi. Alınmış kararlar biri yeniden oy verene kadar geçerli.",
+  changePassword: "Parolanı değiştir",
+  passwordChanged: "Parolan değiştirildi; diğer cihazlarındaki oturumlar kapatıldı.",
+  currentPassword: "Şu anki parola",
+  newPassword: "Yeni parola",
+  signOut: "Çıkış yap",
+};
+
+const team = { en, tr };
+
+export default team;

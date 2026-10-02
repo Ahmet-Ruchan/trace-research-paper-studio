@@ -1,0 +1,88 @@
+/**
+ * Her ekranda geçen kısa kelimeler. Ekrana özgü metin burada değil, kendi
+ * bölümünde (`studio`, `paper`, `learning`, `server`).
+ */
+const en = {
+  /** `Intl` biçimlemesi için ("en" / "tr"). */
+  locale: "en",
+  languageName: "English",
+  /** Dil düğmesinde görünen: geçilecek dilin kısaltması. */
+  switchToOtherShort: "TR",
+  /** Dil düğmesinin adı ve komut paletindeki eylem. */
+  switchLanguageAction: "Switch the interface to Turkish",
+  cancel: "Cancel",
+  save: "Save",
+  saving: "Saving…",
+  saved: "Saved",
+  close: "Close",
+  delete: "Delete",
+  remove: "Remove",
+  add: "Add",
+  edit: "Edit",
+  open: "Open",
+  back: "Back",
+  next: "Next",
+  done: "Done",
+  undo: "Undo",
+  retry: "Try again",
+  copy: "Copy",
+  copied: "Copied",
+  download: "Download",
+  search: "Search",
+  loading: "Loading…",
+  show: "Show",
+  hide: "Hide",
+  yes: "Yes",
+  no: "No",
+  on: "On",
+  off: "Off",
+  page: (page: number) => `p. ${page}`,
+  pages: (from: number, to: number) => `pp. ${from}–${to}`,
+  minutes: (count: number) => `${count} min`,
+  papers: (count: number) => `${count} paper${count === 1 ? "" : "s"}`,
+  somethingWentWrong: "Something went wrong.",
+  offline: "You are offline.",
+};
+
+const tr: typeof en = {
+  locale: "tr",
+  languageName: "Türkçe",
+  switchToOtherShort: "EN",
+  switchLanguageAction: "Arayüzü İngilizce yap",
+  cancel: "Vazgeç",
+  save: "Kaydet",
+  saving: "Kaydediliyor…",
+  saved: "Kaydedildi",
+  close: "Kapat",
+  delete: "Sil",
+  remove: "Kaldır",
+  add: "Ekle",
+  edit: "Düzenle",
+  open: "Aç",
+  back: "Geri",
+  next: "İleri",
+  done: "Tamam",
+  undo: "Geri al",
+  retry: "Tekrar dene",
+  copy: "Kopyala",
+  copied: "Kopyalandı",
+  download: "İndir",
+  search: "Ara",
+  loading: "Yükleniyor…",
+  show: "Göster",
+  hide: "Gizle",
+  yes: "Evet",
+  no: "Hayır",
+  on: "Açık",
+  off: "Kapalı",
+  page: (page) => `s. ${page}`,
+  pages: (from, to) => `s. ${from}–${to}`,
+  minutes: (count) => `${count} dk`,
+  papers: (count) => `${count} makale`,
+  somethingWentWrong: "Bir şeyler ters gitti.",
+  offline: "Çevrimdışısın.",
+};
+
+const common = { en, tr };
+
+export default common;

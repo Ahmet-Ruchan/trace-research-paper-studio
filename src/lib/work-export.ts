@@ -91,16 +91,40 @@ export function lastWeekSummary(log: WorkLog, now: Date, weekStart: 0 | 1): Week
   };
 }
 
-/** Gün adı tarihin kendi (yerel) gününden; biçimleyici oluşturulduğu anın saat dilimine bağlı kalmıyor. */
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+/**
+ * Haftalık özetin cümlesi. Varsayılanı İngilizce; stüdyo arayüzün diliyle
+ * çağırıyor, Türkçesi `src/i18n/messages/focus.ts`'te. Gün adı tarihin kendi
+ * (yerel) gününden, listeden; biçimleyici oluşturulduğu anın saat dilimine
+ * bağlı kalmıyor.
+ */
+export type WeekSummaryWords = {
+  duration: (seconds: number) => string;
+  /** Pazardan cumartesiye. */
+  weekdays: readonly string[];
+  sentence: (parts: {
+    worked: string;
+    days: number;
+    /** Önceki haftayla fark: yoksa önceki hafta boştu. */
+    change?: "same" | { more: boolean; by: string };
+    best?: { weekday: string; worked: string };
+  }) => string;
+};
 
-export function weekSummaryText(summary: WeekSummary) {
+export const WEEK_SUMMARY_WORDS: WeekSummaryWords = {
+  duration: formatDuration,
+  weekdays: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  sentence: ({ worked, days, change, best }) => {
+    const compared = !change ? "" : change === "same" ? ", about the same as the week before" : `, ${change.by} ${change.more ? "more" : "less"} than the week before`;
+    return `Last week you worked ${worked} on ${days} ${days === 1 ? "day" : "days"}${compared}.${best ? ` Your best day was ${best.weekday} (${best.worked}).` : ""}`;
+  },
+};
+
+export function weekSummaryText(summary: WeekSummary, words: WeekSummaryWords = WEEK_SUMMARY_WORDS) {
   const change = summary.seconds - summary.previous;
-  const compared = !summary.previous
-    ? ""
-    : Math.abs(change) < 15 * 60
-      ? ", about the same as the week before"
-      : `, ${formatDuration(Math.abs(change))} ${change > 0 ? "more" : "less"} than the week before`;
-  const best = summary.best && summary.daysWorked > 1 ? ` Your best day was ${WEEKDAYS[dayDate(summary.best.day).getDay()]} (${formatDuration(summary.best.seconds)}).` : "";
-  return `Last week you worked ${formatDuration(summary.seconds)} on ${summary.daysWorked} ${summary.daysWorked === 1 ? "day" : "days"}${compared}.${best}`;
+  return words.sentence({
+    worked: words.duration(summary.seconds),
+    days: summary.daysWorked,
+    ...(summary.previous ? { change: Math.abs(change) < 15 * 60 ? ("same" as const) : { more: change > 0, by: words.duration(Math.abs(change)) } } : {}),
+    ...(summary.best && summary.daysWorked > 1 ? { best: { weekday: words.weekdays[dayDate(summary.best.day).getDay()], worked: words.duration(summary.best.seconds) } } : {}),
+  });
 }

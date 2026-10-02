@@ -25,7 +25,46 @@ export function crossClaims(left: ResearchProject, right: ResearchProject): Clai
 }
 
 const short = (text: string, max = 180) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
-const page = (claim: Claim) => (claim.sourceRefs[0]?.page ? `p. ${claim.sourceRefs[0].page}` : "its sources");
+
+/**
+ * Soruların ve açıklamaların cümleleri; Türkçesi arayüz sözlüğünde
+ * (`learning`). Makalelerin başlıkları, iddiaları ve tanımları olduğu gibi
+ * giriyor; `where` "p. 4" ya da sayfa yoksa "its sources".
+ */
+export type CrossQuestionWords = {
+  page: (page: number) => string;
+  itsSources: string;
+  whoSays: (statement: string) => string;
+  yesHere: (where: string, excerpt: string) => string;
+  notHere: string;
+  whichFirst: string;
+  isFrom: (title: string, year: number) => string;
+  whichHigher: (metric: string, unit: string) => string;
+  higherValue: (title: string, value: string) => string;
+  valueOnPage: (value: string, page: number) => string;
+  whoDefines: (term: string) => string;
+  definesIt: (term: string) => string;
+  doesNotDefine: (term: string) => string;
+  whoseDefinition: (term: string, title: string) => string;
+  definedBy: (title: string) => string;
+};
+export const CROSS_QUESTION_WORDS: CrossQuestionWords = {
+  page: (page) => `p. ${page}`,
+  itsSources: "its sources",
+  whoSays: (statement) => `Which paper says this? “${statement}”`,
+  yesHere: (where, excerpt) => `Yes: ${where} of this paper, “${excerpt}”`,
+  notHere: "Not in this paper's evidence.",
+  whichFirst: "Which of the two papers came out first?",
+  isFrom: (title, year) => `${title} is from ${year}.`,
+  whichHigher: (metric, unit) => `Both papers report ${metric}${unit ? ` (${unit})` : ""}. Which reports the higher value?`,
+  higherValue: (title, value) => `${title}: ${value}. Higher is not always better; the paper says which way is good.`,
+  valueOnPage: (value, page) => `${value} (p. ${page})`,
+  whoDefines: (term) => `Which paper defines “${term}” in its glossary?`,
+  definesIt: (term) => `It does; the other paper's glossary has no “${term}”.`,
+  doesNotDefine: (term) => `Its glossary has no “${term}”.`,
+  whoseDefinition: (term, title) => `Both papers define “${term}”. Which definition is from ${title}?`,
+  definedBy: (title) => `This is how ${title} defines it.`,
+};
 
 /** Bir makalenin, öbüründe aynısı olmayan, sayfası doğrulanmış iddiaları (sonuç ve yöntem önce). */
 function distinctClaims(own: ResearchProject, other: ResearchProject, count: number) {
@@ -37,7 +76,8 @@ function distinctClaims(own: ResearchProject, other: ResearchProject, count: num
     .slice(0, count);
 }
 
-export function crossPaperQuestions(left: ResearchProject, right: ResearchProject): QuizQuestion[] {
+export function crossPaperQuestions(left: ResearchProject, right: ResearchProject, words: CrossQuestionWords = CROSS_QUESTION_WORDS): QuizQuestion[] {
+  const page = (claim: Claim) => (claim.sourceRefs[0]?.page ? words.page(claim.sourceRefs[0].page) : words.itsSources);
   const a = left.evidence.paper.title;
   const b = right.evidence.paper.title;
   // Aynı başlıklı iki analizde (aynı makale) "hangisi" sorusu anlamsız.
@@ -54,11 +94,11 @@ export function crossPaperQuestions(left: ResearchProject, right: ResearchProjec
     questions.push({
       id: `cross-claim-${side}-${claim.id}`,
       kind: "single",
-      prompt: `Which paper says this? “${short(claim.statement, 260)}”`,
+      prompt: words.whoSays(short(claim.statement, 260)),
       options: papers.map((option, index) => ({
         ...option,
         correct: index === owner,
-        explanation: index === owner ? `Yes: ${page(claim)} of this paper, “${short(claim.sourceRefs[0]?.excerpt ?? claim.statement)}”` : "Not in this paper's evidence.",
+        explanation: index === owner ? words.yesHere(page(claim), short(claim.sourceRefs[0]?.excerpt ?? claim.statement)) : words.notHere,
       })),
       claimIds: [sideId(side, claim.id)],
       ...(claim.sourceRefs[0]?.page ? { page: claim.sourceRefs[0].page } : {}),
@@ -73,8 +113,8 @@ export function crossPaperQuestions(left: ResearchProject, right: ResearchProjec
     questions.push({
       id: "cross-year",
       kind: "single",
-      prompt: "Which of the two papers came out first?",
-      options: papers.map((option, index) => ({ ...option, correct: index === earlier, explanation: `${index === 0 ? a : b} is from ${index === 0 ? yearA : yearB}.` })),
+      prompt: words.whichFirst,
+      options: papers.map((option, index) => ({ ...option, correct: index === earlier, explanation: words.isFrom(index === 0 ? a : b, index === 0 ? yearA : yearB) })),
       claimIds: [],
     });
   }
@@ -83,12 +123,12 @@ export function crossPaperQuestions(left: ResearchProject, right: ResearchProjec
   const comparison = compareProjects(left, right);
   for (const metric of comparison.sharedMetrics.filter((item) => item.left.value !== item.right.value).slice(0, 2)) {
     const higher = metric.left.value > metric.right.value ? 0 : 1;
-    const where = (side: typeof metric.left) => `${side.displayValue}${side.page ? ` (p. ${side.page})` : ""}`;
+    const where = (side: typeof metric.left) => (side.page ? words.valueOnPage(side.displayValue, side.page) : side.displayValue);
     questions.push({
       id: `cross-metric-${metric.key}`,
       kind: "single",
-      prompt: `Both papers report ${metric.label}${metric.unit ? ` (${metric.unit})` : ""}. Which reports the higher value?`,
-      options: papers.map((option, index) => ({ ...option, correct: index === higher, explanation: `${index === 0 ? a : b}: ${where(index === 0 ? metric.left : metric.right)}. Higher is not always better; the paper says which way is good.` })),
+      prompt: words.whichHigher(metric.label, metric.unit),
+      options: papers.map((option, index) => ({ ...option, correct: index === higher, explanation: words.higherValue(index === 0 ? a : b, where(index === 0 ? metric.left : metric.right)) })),
       claimIds: [],
     });
   }
@@ -101,8 +141,8 @@ export function crossPaperQuestions(left: ResearchProject, right: ResearchProjec
     questions.push({
       id: `cross-term-${owner}-${foldForSearch(term)}`,
       kind: "single",
-      prompt: `Which paper defines “${term}” in its glossary?`,
-      options: papers.map((option, index) => ({ ...option, correct: index === owner, explanation: index === owner ? `It does; the other paper's glossary has no “${term}”.` : `Its glossary has no “${term}”.` })),
+      prompt: words.whoDefines(term),
+      options: papers.map((option, index) => ({ ...option, correct: index === owner, explanation: index === owner ? words.definesIt(term) : words.doesNotDefine(term) })),
       claimIds: [],
     });
   }
@@ -111,12 +151,12 @@ export function crossPaperQuestions(left: ResearchProject, right: ResearchProjec
     questions.push({
       id: `cross-definition-${foldForSearch(differing.term)}`,
       kind: "single",
-      prompt: `Both papers define “${differing.term}”. Which definition is from ${a}?`,
+      prompt: words.whoseDefinition(differing.term, a),
       // A'nın tanımı hep ilk sırada olsaydı yanıt ezberlenirdi; sıra terime göre değişiyor.
       options: (() => {
         const options = [
-          { label: short(differing.left, 220), correct: true, explanation: `This is how ${a} defines it.` },
-          { label: short(differing.right, 220), correct: false, explanation: `This is how ${b} defines it.` },
+          { label: short(differing.left, 220), correct: true, explanation: words.definedBy(a) },
+          { label: short(differing.right, 220), correct: false, explanation: words.definedBy(b) },
         ];
         return [...differing.term].reduce((sum, character) => sum + character.charCodeAt(0), 0) % 2 ? options.reverse() : options;
       })(),

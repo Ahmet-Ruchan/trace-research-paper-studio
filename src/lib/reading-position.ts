@@ -62,4 +62,8 @@ export function savePosition(store: Store | undefined, projectId: string, positi
 /** Devam etmeye değer mi: ilk bölümdeyse yeniden başlamak aynı şey. */
 export const worthContinuing = (position: ReadingPosition | undefined): position is ReadingPosition => Boolean(position && position.index > 0);
 
-export const positionLabel = (position: ReadingPosition) => `${position.index + 1} of ${position.total}: ${position.title}`;
+/** "4 of 8: Başlık"; Türkçesi arayüz sözlüğünde (`learning`). `at` 1'den başlıyor. */
+export type PositionLabelWords = { label: (at: number, total: number, title: string) => string };
+export const POSITION_LABEL_WORDS: PositionLabelWords = { label: (at, total, title) => `${at} of ${total}: ${title}` };
+
+export const positionLabel = (position: ReadingPosition, words: PositionLabelWords = POSITION_LABEL_WORDS) => words.label(position.index + 1, position.total, position.title);

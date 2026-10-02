@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { devices, type APIRequestContext, type Page } from "@playwright/test";
+import { devices, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { evidenceFingerprint } from "../src/lib/section-regeneration";
 import type { ResearchProject } from "../src/lib/schema";
@@ -14,6 +14,7 @@ import { completeStep, questionSignature, recordAnswer, studyPath, visitStep, ty
 import { emptyTestLibrary } from "./fresh-library";
 import type { Profile } from "../src/lib/profile";
 import { dayKey as dayKeyOf, type WorkLog } from "../src/lib/work-log";
+import { messagesFor } from "../src/i18n/messages";
 
 /**
  * Stüdyonun paneller arası akışları. Model çağrısı gereken iki uç
@@ -494,7 +495,8 @@ test.describe("narrative templates", () => {
     await dialog.getByRole("button", { name: "Add a section" }).click();
     await dialog.getByLabel("Purpose of section 7").fill("Close with what to try next");
     await dialog.getByRole("button", { name: "Save template" }).click();
-    await expect(dialog).toContainText("is saved");
+    // Kopyanın açıklaması da "Your copy is saved next to…" diyor; kaydın bittiğini adıyla gelen cümle söylüyor.
+    await expect(dialog).toContainText("Method walkthrough (copy) is saved");
 
     const { templates } = (await (await request.get("/api/templates")).json()) as { templates: Array<{ id: string; name: string; builtIn?: boolean; story: unknown[] }> };
     const builtIn = templates.find((item) => item.id === "method-walkthrough")!;
@@ -3973,5 +3975,124 @@ test.describe("focus on a paper", () => {
     await expect(review).toHaveCount(0);
     await expect(page.locator(".focus-phase-chip")).toHaveText("Focus");
     await expect.poll(async () => (await sessions(request)).map((session) => Date.parse(session.end) - Date.parse(session.start))).toEqual([60_000, 60_000]);
+  });
+});
+
+test.describe("interface language", () => {
+  const en = messagesFor("en");
+  const tr = messagesFor("tr");
+
+  /** Seçimi bu cihaza yazar (çerez), tıpkı düğmenin yaptığı gibi. */
+  async function chooseTurkish(context: BrowserContext, baseURL: string | undefined) {
+    await context.addCookies([{ name: "trace_ui_language", value: "tr", url: baseURL! }]);
+  }
+
+  test("switches every screen between English and Turkish with one button, and remembers it", async ({ page, request, context }) => {
+    const project = await seed(request, projectNamed("e2e-language"));
+    await page.goto("/?library=1");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    const nav = page.locator(".studio-nav").first();
+    const toTurkish = nav.getByRole("button", { name: en.common.switchLanguageAction });
+    await expect(toTurkish).toHaveText("TR");
+    await expect(nav.locator(".studio-nav-focus")).toHaveText(en.focus.nav.focus);
+
+    // Tek tuş: yeniden yükleme yok, bütün ekran birden.
+    await toTurkish.click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "tr");
+    await expect(nav.locator(".studio-nav-focus")).toHaveText(tr.focus.nav.focus);
+    await expect(nav.getByRole("button", { name: tr.common.switchLanguageAction })).toHaveText("EN");
+    await expect(page.locator(".brand small").first()).toHaveText(tr.studio.brand.tagline);
+    expect((await context.cookies()).find((cookie) => cookie.name === "trace_ui_language")?.value).toBe("tr");
+
+    // Sunucu da biliyor: sayfa ilk çizimden Türkçe, API'nin hataları da.
+    const html = await (await page.request.get("/?library=1")).text();
+    expect(html).toContain('<html lang="tr"');
+    const missing = await page.request.put("/api/library/tags?id=e2e-language-missing", { data: { tags: ["x"] } });
+    expect(missing.status()).toBe(404);
+    expect((await missing.json()).error).toBe(tr.server.request.notInLibrary);
+    await page.reload();
+    await expect(page).toHaveTitle(tr.studio.documentTitle);
+    await expect(page.locator("html")).toHaveAttribute("lang", "tr");
+
+    // Makale ekranı: arayüz Türkçe, makalenin kendisi kendi dilinde.
+    await page.goto(`/?project=${project.id}`);
+    await expect(page.locator(".lab-nav > button", { hasText: tr.paper.lab.nav.claims })).toBeVisible();
+    await expect(page.locator(".lab-nav > button", { hasText: en.paper.lab.nav.claims })).toHaveCount(0);
+    await expect(page.locator(".project-identity strong")).toHaveText(project.evidence.paper.title);
+
+    // Geri: yine tek tuş.
+    await page.locator(".studio-nav").first().getByRole("button", { name: tr.common.switchLanguageAction }).click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.locator(".lab-nav > button", { hasText: en.paper.lab.nav.claims })).toBeVisible();
+    expect((await context.cookies()).find((cookie) => cookie.name === "trace_ui_language")?.value).toBe("en");
+  });
+
+  test("is in the command palette too", async ({ page }) => {
+    await page.goto("/?library=1");
+    await expect(page.locator(".boot-screen")).toHaveCount(0);
+    await expect(page.locator(".studio-nav").first()).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: en.focus.nav.palette });
+    await palette.getByRole("combobox").fill("dil");
+    await expect(palette.getByRole("option").first()).toContainText(en.common.switchLanguageAction);
+    await page.keyboard.press("Enter");
+    await expect(page.locator("html")).toHaveAttribute("lang", "tr");
+    await page.keyboard.press("ControlOrMeta+k");
+    const turkish = page.getByRole("dialog", { name: tr.focus.nav.palette });
+    await turkish.getByRole("combobox").fill("english");
+    await expect(turkish.getByRole("option").first()).toContainText(tr.common.switchLanguageAction);
+    await page.keyboard.press("Enter");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  });
+
+  test.describe("in a Turkish browser", () => {
+    test.use({ locale: "tr-TR" });
+
+    test("opens in Turkish until English is chosen", async ({ page }) => {
+      await page.goto("/?library=1");
+      await expect(page.locator("html")).toHaveAttribute("lang", "tr");
+      await expect(page).toHaveTitle(tr.studio.documentTitle);
+      await page.locator(".studio-nav").first().getByRole("button", { name: tr.common.switchLanguageAction }).click();
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      // Seçim tarayıcının dilinden önce geliyor.
+      await page.reload();
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      await expect(page).toHaveTitle(en.studio.documentTitle);
+    });
+  });
+
+  test("fits a phone in Turkish at the largest text size", async ({ page, request, context, baseURL }) => {
+    const project = await seed(request, projectNamed("e2e-language-phone"));
+    await chooseTurkish(context, baseURL);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => window.localStorage.setItem("trace-text-size", "larger"));
+    for (const url of ["/", "/?library=1", `/?project=${project.id}`, `/?project=${project.id}&mode=preview`, "/?focus=1", "/?profile=1", "/?review=1"]) {
+      await page.goto(url);
+      await expect(page.locator(".boot-screen")).toHaveCount(0);
+      await expect(page.locator("html")).toHaveAttribute("lang", "tr");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), url).toBe(0);
+    }
+  });
+
+  test("keeps the paper header's buttons clear of the mode tabs in Turkish", async ({ page, request, context, baseURL }) => {
+    test.setTimeout(75_000);
+    const project = await seed(request, projectNamed("e2e-language-header"));
+    await chooseTurkish(context, baseURL);
+    const measure = () =>
+      page.evaluate(() => {
+        const box = (element: Element) => element.getBoundingClientRect();
+        const tabs = box(document.querySelector(".mode-tabs")!);
+        const buttons = [...document.querySelectorAll(".workspace-actions > *, .workspace-actions .studio-nav > *")].map(box).filter((item) => item.width > 0);
+        const beside = buttons.filter((item) => Math.abs(item.top - tabs.top) < 30);
+        return { overlap: beside.some((item) => item.left < tabs.right - 1 && item.right > tabs.left + 1), overflow: document.documentElement.scrollWidth - window.innerWidth };
+      });
+    for (const [width, size] of [[390, "larger"], [761, "normal"], [900, "larger"], [1000, "normal"], [1100, "larger"], [1300, "normal"], [1480, "larger"]] as const) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/?project=${project.id}`);
+      await page.evaluate((value) => window.localStorage.setItem("trace-text-size", value), size);
+      await page.reload();
+      await expect(page.locator(".workspace-actions")).toBeVisible();
+      expect(await measure(), `${width}px, ${size} text`).toEqual({ overlap: false, overflow: 0 });
+    }
   });
 });

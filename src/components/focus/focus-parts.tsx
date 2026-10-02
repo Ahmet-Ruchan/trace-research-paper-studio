@@ -2,11 +2,13 @@
 
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import { Check, Minus, Plus, UserRound } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { FOCUS_COLORS, focusColorStyle, type FocusColorId } from "@/lib/focus-colors";
 import { initials, type Profile } from "@/lib/profile";
 
 /** Renk seçimi: on bir renk, radyo grubu; oklarla da geziliyor. */
 export function ColorPicker({ value, onChange, label }: { value: FocusColorId; onChange: (color: FocusColorId) => void; label: string }) {
+  const names = useT().focus.colors;
   const move = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
     if (!step) return;
@@ -25,8 +27,8 @@ export function ColorPicker({ value, onChange, label }: { value: FocusColorId; o
           role="radio"
           data-color={color.id}
           aria-checked={value === color.id}
-          aria-label={color.label}
-          title={color.label}
+          aria-label={names[color.id]}
+          title={names[color.id]}
           tabIndex={value === color.id ? 0 : -1}
           style={focusColorStyle(color.id)}
           onClick={() => onChange(color.id)}
@@ -80,13 +82,14 @@ export function Toggle({ checked, onChange, label, hint }: { checked: boolean; o
 
 /** Sayı alanı, − ve + ile; değer sınırlar içinde kalıyor. */
 export function NumberField({ label, value, min, max, unit, onChange }: { label: string; value: number; min: number; max: number; unit?: string; onChange: (value: number) => void }) {
+  const t = useT().focus.parts;
   const id = useId();
   const set = (next: number) => onChange(Math.min(max, Math.max(min, Math.round(next))));
   return (
     <div className="focus-number">
       <label htmlFor={id}>{label}</label>
       <div>
-        <button type="button" aria-label={`Less ${label.toLowerCase()}`} onClick={() => set(value - 1)} disabled={value <= min}>
+        <button type="button" aria-label={t.less(label)} onClick={() => set(value - 1)} disabled={value <= min}>
           <Minus size={14} />
         </button>
         <input
@@ -102,7 +105,7 @@ export function NumberField({ label, value, min, max, unit, onChange }: { label:
           }}
         />
         {unit ? <span aria-hidden="true">{unit}</span> : null}
-        <button type="button" aria-label={`More ${label.toLowerCase()}`} onClick={() => set(value + 1)} disabled={value >= max}>
+        <button type="button" aria-label={t.more(label)} onClick={() => set(value + 1)} disabled={value >= max}>
           <Plus size={14} />
         </button>
       </div>

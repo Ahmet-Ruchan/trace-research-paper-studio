@@ -18,9 +18,9 @@ function run(command: string, args: string[], signal?: AbortSignal) {
     execFile(command, args, { timeout: TIMEOUT_MS, signal, maxBuffer: 32 * 1024 * 1024 }, (error) => {
       if (!error) return resolve();
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return reject(new PaperTextError("Showing a quote on its page needs Poppler (pdftotext and pdftoppm), which was not found.", "missing-tool"));
+        return reject(new PaperTextError("missing-tool", "popplerMissing"));
       }
-      reject(new PaperTextError(`The page could not be read: ${error.message}`, "failed"));
+      reject(new PaperTextError("failed", "pageUnreadable", error.message));
     });
   });
 }
@@ -37,7 +37,7 @@ export async function locateExcerpt(file: File, page: number, excerpt: string, s
     const boxesPath = join(directory, "boxes.html");
     await run("pdftotext", ["-bbox", "-f", String(first), "-l", String(page + 1), pdfPath, boxesPath], signal);
     const pages = parseBboxPages(await readFile(boxesPath, "utf8"));
-    if (!pages.length) throw new PaperTextError(`The PDF has no page ${page}.`, "failed");
+    if (!pages.length) throw new PaperTextError("failed", "pdfNoPage", page);
 
     const order = [page, page - 1, page + 1].filter((number) => number >= first && number - first < pages.length);
     let chosen = order[0];

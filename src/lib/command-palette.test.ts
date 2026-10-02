@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildPaletteCommands, foldPalette, hasPractice, MAX_PALETTE_RESULTS, rankPaletteCommands, type PaletteCommand } from "./command-palette";
+import { messagesFor } from "@/i18n/messages";
+import { buildPaletteCommands, ENGLISH_PALETTE_WORDS, foldPalette, hasPractice, MAX_PALETTE_RESULTS, PALETTE_GROUPS, rankPaletteCommands, type PaletteCommand } from "./command-palette";
 import { loadExampleProject } from "./example-fixture";
 import type { ResearchProject } from "./schema";
 
@@ -85,5 +86,75 @@ describe("the command palette", () => {
     // Bir sorguda bölümler de geliyor.
     const section = attention.deepReport!.sections[0];
     expect(rankPaletteCommands(commands, section.title).some((command) => command.id === `report:${section.id}`)).toBe(true);
+  });
+});
+
+describe("the command palette in the reader's language", () => {
+  const english = messagesFor("en");
+  const turkish = messagesFor("tr");
+  /** Stüdyonun kurduğu gibi: dil komutu dahil, metinler arayüzün dilinde. */
+  const build = (messages: typeof english, screen?: string) =>
+    buildPaletteCommands({
+      projects: [attention, other],
+      current: attention,
+      screen,
+      exports,
+      words: messages.studio.commandPalette.words,
+      switchLanguage: {
+        label: messages.common.switchLanguageAction,
+        detail: messages.studio.appShell.languageDetail,
+        keywords: messages.studio.appShell.languageKeywords,
+      },
+    });
+
+  it("keeps the English palette exactly as it was", () => {
+    expect(english.studio.commandPalette.words).toBe(ENGLISH_PALETTE_WORDS);
+    const plain = buildPaletteCommands({ projects: [attention, other], current: attention, exports });
+    const worded = buildPaletteCommands({ projects: [attention, other], current: attention, exports, words: ENGLISH_PALETTE_WORDS });
+    expect(worded).toEqual(plain);
+  });
+
+  it("names the commands in Turkish and finds them by their Turkish names", () => {
+    const words = turkish.studio.commandPalette.words;
+    const commands = build(turkish);
+    expect(labels(commands)).toContain("Kütüphane");
+    expect(labels(commands)).toContain("Ayrıntılı rapor");
+    expect(labels(commands)).toContain("Dışa aktar: Slides");
+    expect(commands.find((command) => command.id === "paper:turkish")?.detail).toBe("Ayşe Yılmaz vd., 2021");
+    expect(commands.find((command) => command.id === `paper:${attention.id}`)?.detail).toContain("şu an açık");
+    expect(rankPaletteCommands(commands, "kütüp", undefined, words)[0].label).toBe("Kütüphane");
+    // Aksansız da: "kutuphane", "ayrintili".
+    expect(rankPaletteCommands(commands, "kutuphane", undefined, words)[0].label).toBe("Kütüphane");
+    expect(rankPaletteCommands(commands, "ayrintili", undefined, words)[0].label).toBe("Ayrıntılı rapor");
+    // Türkçe anahtar kelime: "pomodoro" iki dilde de, "kronometre" Türkçede.
+    expect(rankPaletteCommands(commands, "kronometre", undefined, words)[0].label).toBe("Odak zamanlayıcısı");
+    // Bu makalede arama satırı da Türkçe.
+    expect(rankPaletteCommands(commands, "zzzz", undefined, words).map((command) => command.label)).toEqual(["Bu makalede “zzzz” ara"]);
+  });
+
+  it("still finds commands by their English names in the Turkish interface", () => {
+    const words = turkish.studio.commandPalette.words;
+    const commands = build(turkish);
+    expect(rankPaletteCommands(commands, "library", undefined, words)[0].label).toBe("Kütüphane");
+    expect(rankPaletteCommands(commands, "deep report", undefined, words)[0].label).toBe("Ayrıntılı rapor");
+    expect(rankPaletteCommands(commands, "pomodoro", undefined, words)[0].label).toBe("Odak zamanlayıcısı");
+    // Grup adı da iki dilde aranıyor.
+    expect(rankPaletteCommands(commands, "eylemler", undefined, words).some((command) => command.group === "Actions")).toBe(true);
+  });
+
+  it("switches the interface language from either language, by either language's words", () => {
+    for (const messages of [english, turkish]) {
+      const words = messages.studio.commandPalette.words;
+      const commands = build(messages, "library");
+      const command = commands.find((item) => item.id === "ui:language");
+      expect(command).toMatchObject({ label: messages.common.switchLanguageAction, group: "Settings", target: { type: "language" } });
+      for (const query of ["language", "dil", "Türkçe", "turkce", "English", "Turkish", "İngilizce", "ingilizce"]) {
+        expect(rankPaletteCommands(commands, query, undefined, words).map((item) => item.id), query).toContain("ui:language");
+      }
+      // Boş sorguda da listede: makalelerden önce geliyor.
+      expect(rankPaletteCommands(commands, "", undefined, words).map((item) => item.id)).toContain("ui:language");
+    }
+    expect(PALETTE_GROUPS).toContain("Settings");
+    expect(turkish.studio.commandPalette.words.groups.Settings).toBe("Ayarlar");
   });
 });

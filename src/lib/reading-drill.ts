@@ -14,30 +14,7 @@ import { seededRandom, seededShuffle } from "./seeded";
  * soruları gösteriyor, tekrar eden okuyucu kaldığı yerden devam edebiliyor.
  */
 
-const KIND_TEXT: Record<Claim["kind"], { option: string; meaning: string }> = {
-  "reported-result": {
-    option: "A reported result: something the authors measured",
-    meaning: "A reported result is something the authors measured, usually a number or a comparison.",
-  },
-  "author-interpretation": {
-    option: "The authors' interpretation of what a result means",
-    meaning: "An interpretation is the authors' reading of a result; it goes beyond what was measured.",
-  },
-  method: {
-    option: "The method: what the authors built or did",
-    meaning: "The method is what the authors built or did, not what came out of it.",
-  },
-  background: {
-    option: "Background the paper builds on",
-    meaning: "Background is earlier work or prior knowledge the paper relies on, not its own finding.",
-  },
-  limitation: {
-    option: "A limitation the paper concedes",
-    meaning: "A limitation is a boundary the paper concedes: what it did not test, or where it may not hold.",
-  },
-};
-
-const KINDS = Object.keys(KIND_TEXT) as Array<Claim["kind"]>;
+const KINDS: Array<Claim["kind"]> = ["reported-result", "author-interpretation", "method", "background", "limitation"];
 
 const random = seededRandom;
 const shuffle = seededShuffle;
@@ -46,18 +23,81 @@ const quoted = (text: string) => `“${text.trim()}”`;
 const pageOf = (claim: Claim) => claim.sourceRefs.find((reference) => reference.page)?.page;
 const onPage = (page?: number) => (page ? ` (p. ${page})` : "");
 
-function kindQuestion(claim: Claim, next: () => number): QuizQuestion {
+/**
+ * Drilin bütün metni: başlık, giriş ve soruların cümleleri. Türkçesi
+ * görsellerin sözlüğünde (`src/visuals/i18n.ts`, `drill`): stüdyo arayüzün
+ * dilini, bağımsız görüntüleyici makalenin dilini veriyor. Ajan çıktısı
+ * İngilizce varsayılanla.
+ *
+ * Sorunun mührü (`questionSignature`) dilden bağımsız: çevrilmiş bir soru,
+ * İngilizcesinin metniyle mühürleniyor (`signatureBasis`). Dil değişince
+ * kayıtlı yanıtlar ve tekrar kartları düşmüyor.
+ */
+export type ReadingDrillWords = {
+  title: string;
+  intro: string;
+  kinds: Record<Claim["kind"], { option: string; meaning: string }>;
+  /** `statement` tırnaklı geliyor. */
+  kindPrompt: (statement: string) => string;
+  kindRight: (meaning: string, page?: number) => string;
+  kindWrong: (meaning: string) => string;
+  quotePrompt: (statement: string) => string;
+  quoteRight: (page?: number) => string;
+  quoteOther: (statement: string) => string;
+  numberPrompt: (label: string) => string;
+  /** `excerpt` tırnaklı geliyor. */
+  numberRight: (context: string, excerpt: string, page?: number) => string;
+  numberOther: (label: string) => string;
+};
+
+export const READING_DRILL_TITLE = "Read it like a reviewer";
+
+export const READING_DRILL_WORDS: ReadingDrillWords = {
+  title: READING_DRILL_TITLE,
+  intro: "Questions made from the evidence itself, not by a model: what kind of statement a claim is, which sentence of the paper it rests on, and which number the paper reports. Every answer can be checked on its page.",
+  kinds: {
+    "reported-result": {
+      option: "A reported result: something the authors measured",
+      meaning: "A reported result is something the authors measured, usually a number or a comparison.",
+    },
+    "author-interpretation": {
+      option: "The authors' interpretation of what a result means",
+      meaning: "An interpretation is the authors' reading of a result; it goes beyond what was measured.",
+    },
+    method: {
+      option: "The method: what the authors built or did",
+      meaning: "The method is what the authors built or did, not what came out of it.",
+    },
+    background: {
+      option: "Background the paper builds on",
+      meaning: "Background is earlier work or prior knowledge the paper relies on, not its own finding.",
+    },
+    limitation: {
+      option: "A limitation the paper concedes",
+      meaning: "A limitation is a boundary the paper concedes: what it did not test, or where it may not hold.",
+    },
+  },
+  kindPrompt: (statement) => `What kind of statement is this? ${statement}`,
+  kindRight: (meaning, page) => `${meaning} That is what this sentence is${onPage(page)}.`,
+  kindWrong: (meaning) => `${meaning} That is not what this sentence does.`,
+  quotePrompt: (statement) => `Which sentence from the paper supports this claim? ${statement}`,
+  quoteRight: (page) => `This is the sentence the claim rests on${onPage(page)}.`,
+  quoteOther: (statement) => `This sentence supports a different claim: ${statement}`,
+  numberPrompt: (label) => `Which number does the paper report for ${label}?`,
+  numberRight: (context, excerpt, page) => `${context}. The paper: ${excerpt}${onPage(page)}`,
+  numberOther: (label) => `That is the paper's figure for ${label}.`,
+};
+
+function kindQuestion(claim: Claim, next: () => number, words: ReadingDrillWords): QuizQuestion {
   const others = shuffle(KINDS.filter((kind) => kind !== claim.kind), next).slice(0, 3);
   const options = shuffle([claim.kind, ...others], next).map((kind) => ({
-    label: KIND_TEXT[kind].option,
+    label: words.kinds[kind].option,
     correct: kind === claim.kind,
-    explanation: kind === claim.kind
-      ? `${KIND_TEXT[kind].meaning} That is what this sentence is${onPage(pageOf(claim))}.`
-      : `${KIND_TEXT[kind].meaning} That is not what this sentence does.`,
+    explanation: kind === claim.kind ? words.kindRight(words.kinds[kind].meaning, pageOf(claim)) : words.kindWrong(words.kinds[kind].meaning),
   }));
   return {
     id: `drill-kind-${claim.id}`,
-    prompt: `What kind of statement is this? ${quoted(claim.statement)}`,
+    prompt: words.kindPrompt(quoted(claim.statement)),
     kind: "single",
     options,
     claimIds: [claim.id],
@@ -65,7 +105,7 @@ function kindQuestion(claim: Claim, next: () => number): QuizQuestion {
   };
 }
 
-function quoteQuestion(claim: Claim, pool: readonly Claim[], next: () => number): QuizQuestion | undefined {
+function quoteQuestion(claim: Claim, pool: readonly Claim[], next: () => number, words: ReadingDrillWords): QuizQuestion | undefined {
   const own = claim.sourceRefs.find((reference) => reference.sourceId === "paper" && reference.excerpt.trim().length >= 20);
   if (!own) return undefined;
   const excerpt = own.excerpt.trim();
@@ -83,16 +123,16 @@ function quoteQuestion(claim: Claim, pool: readonly Claim[], next: () => number)
     .slice(0, 3);
   if (distractors.length < 2) return undefined;
   const options = shuffle([
-    { label: quoted(excerpt), correct: true, explanation: `This is the sentence the claim rests on${onPage(own.page)}.` },
+    { label: quoted(excerpt), correct: true, explanation: words.quoteRight(own.page) },
     ...distractors.map(({ claim: other, excerpt: text }) => ({
       label: quoted(text),
       correct: false,
-      explanation: `This sentence supports a different claim: ${quoted(other.statement)}`,
+      explanation: words.quoteOther(quoted(other.statement)),
     })),
   ], next);
   return {
     id: `drill-quote-${claim.id}`,
-    prompt: `Which sentence from the paper supports this claim? ${quoted(claim.statement)}`,
+    prompt: words.quotePrompt(quoted(claim.statement)),
     kind: "single",
     options,
     claimIds: [claim.id],
@@ -100,7 +140,7 @@ function quoteQuestion(claim: Claim, pool: readonly Claim[], next: () => number)
   };
 }
 
-function numberQuestion(metric: Metric, metrics: readonly Metric[], claims: readonly Claim[], next: () => number): QuizQuestion | undefined {
+function numberQuestion(metric: Metric, metrics: readonly Metric[], claims: readonly Claim[], next: () => number, words: ReadingDrillWords): QuizQuestion | undefined {
   const unit = metric.unit.trim().toLowerCase();
   const alternatives = shuffle(
     metrics.filter((other) => other.id !== metric.id && other.unit.trim().toLowerCase() === unit && other.value !== metric.value),
@@ -108,18 +148,18 @@ function numberQuestion(metric: Metric, metrics: readonly Metric[], claims: read
   ).filter((item, index, all) => all.findIndex((entry) => entry.displayValue === item.displayValue) === index && item.displayValue !== metric.displayValue);
   if (alternatives.length < 2) return undefined;
   const options = shuffle([
-    { label: metric.displayValue, correct: true, explanation: `${metric.context}. The paper: ${quoted(metric.sourceRef.excerpt)}${onPage(metric.sourceRef.page)}` },
+    { label: metric.displayValue, correct: true, explanation: words.numberRight(metric.context, quoted(metric.sourceRef.excerpt), metric.sourceRef.page) },
     ...alternatives.slice(0, 3).map((other) => ({
       label: other.displayValue,
       correct: false,
-      explanation: `That is the paper's figure for ${other.label}.`,
+      explanation: words.numberOther(other.label),
     })),
   ], next);
   // Sayıyı taşıyan bir iddia varsa kanıt olarak o gösteriliyor.
   const carrier = claims.find((claim) => claim.statement.includes(metric.displayValue) || claim.sourceRefs.some((reference) => reference.excerpt.includes(metric.displayValue)));
   return {
     id: `drill-number-${metric.id}`,
-    prompt: `Which number does the paper report for ${metric.label}?`,
+    prompt: words.numberPrompt(metric.label),
     kind: "single",
     options,
     claimIds: carrier ? [carrier.id] : [],
@@ -127,16 +167,29 @@ function numberQuestion(metric: Metric, metrics: readonly Metric[], claims: read
   };
 }
 
-export const READING_DRILL_TITLE = "Read it like a reviewer";
-
 /**
  * En fazla `limit` soru: tür, alıntı ve sayı soruları sırayla. Soru
  * üretilecek kadar kanıt yoksa (üçten az soru) hiç gösterilmiyor.
  */
 export function readingDrill(
   evidence: PaperEvidence,
-  options: { seed: string; rejectedClaimIds?: readonly string[]; limit?: number },
+  options: { seed: string; rejectedClaimIds?: readonly string[]; limit?: number; words?: ReadingDrillWords },
 ): Quiz | undefined {
+  const words = options.words ?? READING_DRILL_WORDS;
+  const drill = buildDrill(evidence, options, words);
+  if (!drill || words === READING_DRILL_WORDS) return drill;
+  // Aynı tohum, aynı sıra: İngilizcesi soru soru aynı yerde; mühür ondan.
+  const english = buildDrill(evidence, options, READING_DRILL_WORDS)!;
+  return {
+    ...drill,
+    questions: drill.questions.map((question, index) => {
+      const basis = english.questions[index];
+      return basis?.id === question.id ? { ...question, signatureBasis: { prompt: basis.prompt, options: basis.options } } : question;
+    }),
+  };
+}
+
+function buildDrill(evidence: PaperEvidence, options: { seed: string; rejectedClaimIds?: readonly string[]; limit?: number }, words: ReadingDrillWords): Quiz | undefined {
   const next = random(options.seed);
   const rejected = new Set(options.rejectedClaimIds ?? []);
   const usable = evidence.claims.filter((claim) => !rejected.has(claim.id));
@@ -146,13 +199,13 @@ export function readingDrill(
   // Tür sorularında en öğretici ayrım ölçüm ile yorum arasında; ikisi önce.
   const kindOrder: Array<Claim["kind"]> = ["author-interpretation", "reported-result", "limitation", "method", "background"];
   const byKind = kindOrder.flatMap((kind) => ordered.filter((claim) => claim.kind === kind).slice(0, 1));
-  const kindQuestions = byKind.map((claim) => kindQuestion(claim, next));
+  const kindQuestions = byKind.map((claim) => kindQuestion(claim, next, words));
   const quoteQuestions = ordered
     .filter((claim) => !byKind.slice(0, 2).includes(claim))
-    .map((claim) => quoteQuestion(claim, usable, next))
+    .map((claim) => quoteQuestion(claim, usable, next, words))
     .filter((question): question is QuizQuestion => Boolean(question));
   const numberQuestions = shuffle(evidence.metrics, next)
-    .map((metric) => numberQuestion(metric, evidence.metrics, usable, next))
+    .map((metric) => numberQuestion(metric, evidence.metrics, usable, next, words))
     .filter((question): question is QuizQuestion => Boolean(question));
 
   const limit = options.limit ?? 6;
@@ -164,14 +217,14 @@ export function readingDrill(
   }
   if (questions.length < 3) return undefined;
   return {
-    title: READING_DRILL_TITLE,
-    intro: "Questions made from the evidence itself, not by a model: what kind of statement a claim is, which sentence of the paper it rests on, and which number the paper reports. Every answer can be checked on its page.",
+    title: words.title,
+    intro: words.intro,
     questions,
   };
 }
 
 /** Projenin kendi drili: kimliğiyle tohumlanmış, bir insanın reddettiği iddialar hariç. */
-export function readingDrillFor(project: Pick<ResearchProject, "id" | "evidence" | "claimReviews">) {
+export function readingDrillFor(project: Pick<ResearchProject, "id" | "evidence" | "claimReviews">, words?: ReadingDrillWords) {
   const rejected = Object.entries(project.claimReviews ?? {}).filter(([, review]) => review.status === "rejected").map(([id]) => id);
-  return readingDrill(project.evidence, { seed: project.id, rejectedClaimIds: rejected });
+  return readingDrill(project.evidence, { seed: project.id, rejectedClaimIds: rejected, words });
 }

@@ -20,6 +20,7 @@ import {
   stringsFor,
 } from "@/visuals";
 import { sectionPrerequisites, termIndex } from "@/lib/term-index";
+import { useUiLanguage } from "@/i18n/client";
 
 type StoryViewProps = {
   project: ResearchProject;
@@ -28,6 +29,8 @@ type StoryViewProps = {
 };
 
 export function StoryView({ project, embedded = false, onClaimSelect }: StoryViewProps) {
+  const { language, t: messages } = useUiLanguage();
+  const t = messages.paper.story;
   const [activeId, setActiveId] = useState(project.story.sections[0]?.id ?? "");
   const speech = useMemo(() => storySpeech(project), [project]);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -89,7 +92,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
   );
 
   return (
-    <LanguageProvider language={project.language}>
+    <LanguageProvider language={project.language} ui={language}>
     <article
       className={`story-page ${embedded ? "is-embedded" : ""}`}
       style={{ "--story-accent": project.story.accent } as React.CSSProperties}
@@ -100,7 +103,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
 
       <header className="story-hero">
         <div className="story-masthead">
-          <span className="story-mark"><BookOpen size={15} /> Trace story</span>
+          <span className="story-mark"><BookOpen size={15} /> {t.mark}</span>
           <span>{project.story.readingTime}</span>
         </div>
         <div className="story-hero-copy">
@@ -109,14 +112,14 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
           <p className="story-dek">{project.story.dek}</p>
           <div className="story-authors">
             {project.evidence.paper.authors.slice(0, 4).join(", ")}
-            {project.evidence.paper.authors.length > 4 && " et al."}
+            {project.evidence.paper.authors.length > 4 && t.etAl}
           </div>
         </div>
         <button
           className="story-scroll-cue"
           onClick={() => sectionRefs.current[project.story.sections[0]?.id]?.scrollIntoView({ behavior: "smooth" })}
         >
-          Start the story <ArrowDown size={15} />
+          {t.start} <ArrowDown size={15} />
         </button>
       </header>
 
@@ -148,7 +151,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
                   return (
                     <button key={claimId} onClick={() => onClaimSelect?.(claimId)}>
                       <span className={claim?.confidence === "verified" ? "verified-dot" : "review-dot"} />
-                      Source {page ? `· p. ${page}` : ""}
+                      {t.source(page)}
                     </button>
                   );
                 })}
@@ -172,7 +175,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
               active
             />
           )}
-          <nav className="story-section-dots" aria-label="Story sections">
+          <nav className="story-section-dots" aria-label={t.sectionsAria}>
             {project.story.sections.map((section) => (
               <button
                 key={section.id}
@@ -188,7 +191,7 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
 
       {project.interactives?.length ? (
         <section className="story-practice">
-          <p className="story-overline">{stringsFor(project.language).tryItHeading}</p>
+          <p className="story-overline">{stringsFor(project.language, language).tryItHeading}</p>
           {project.interactives.map((interactive) => (
             <InteractiveRenderer interactive={interactive} key={interactive.id} />
           ))}
@@ -196,12 +199,12 @@ export function StoryView({ project, embedded = false, onClaimSelect }: StoryVie
       ) : null}
 
       <footer className="story-closing">
-        <p className="story-overline">Closing</p>
+        <p className="story-overline">{t.closing}</p>
         <h2>{project.story.closing.title}</h2>
         <p>{project.story.closing.body}</p>
         <div className="story-source-card">
           <div>
-            <span>Primary source</span>
+            <span>{t.primarySource}</span>
             <strong>{project.evidence.paper.title}</strong>
           </div>
           {project.evidence.paper.doi && (

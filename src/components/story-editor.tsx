@@ -9,6 +9,7 @@ import { VisualRenderer } from "./visual-renderer";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { useSectionRegeneration } from "./section-regenerator";
 import { TemplateDialog } from "./template-dialog";
+import { useUiLanguage } from "@/i18n/client";
 
 type StoryEditorProps = {
   project: ResearchProject;
@@ -18,6 +19,8 @@ type StoryEditorProps = {
 };
 
 export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: StoryEditorProps) {
+  const { language, t: messages } = useUiLanguage();
+  const t = messages.paper.storyEditor;
   const [selectedId, setSelectedId] = useState(project.story.sections[0]?.id ?? "");
   const [claimId, setClaimId] = useState<string | undefined>();
   const selected = useMemo(
@@ -45,12 +48,12 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
   // Görseller dili bağlamdan okuyor; sağlayıcı olmadan Türkçeye düşüp
   // İngilizce bir projede "DESIGN" yerine "DESİGN" yazıyordu.
   return (
-    <LanguageProvider language={project.language}>
+    <LanguageProvider language={project.language} ui={language}>
     <div className="editor-layout">
       <aside className="story-outline">
         <div className="outline-header">
-          <span>Story outline</span>
-          <strong>{project.story.sections.length} sections</strong>
+          <span>{t.outline}</span>
+          <strong>{t.sections(project.story.sections.length)}</strong>
         </div>
         {project.story.sections.map((section) => (
           <button
@@ -64,10 +67,10 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
           </button>
         ))}
         <button className="preview-shortcut" onClick={onPreview}>
-          <Eye size={15} /> Full-screen preview
+          <Eye size={15} /> {t.preview}
         </button>
         <button className="preview-shortcut template-shortcut" onClick={() => setTemplateOpen(true)}>
-          <LayoutTemplate size={15} /> Save as template
+          <LayoutTemplate size={15} /> {t.saveTemplate}
         </button>
       </aside>
 
@@ -75,24 +78,24 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
         {selected && (
           <>
             <div className="editor-section-meta">
-              <span><PencilLine size={14} /> Section {selected.indexLabel}</span>
-              <span>{selected.visual.type} visual</span>
+              <span><PencilLine size={14} /> {t.section(selected.indexLabel)}</span>
+              <span>{t.visual(selected.visual.type)}</span>
               <button
                 className="regen-trigger"
                 onClick={() => regeneration.open({ kind: "story", sectionId: selected.id })}
-                title="Rewrite this section with a model; the evidence stays locked"
+                title={messages.paper.lab.regenerateTitle("section")}
               >
-                <RefreshCw size={13} /> Regenerate
+                <RefreshCw size={13} /> {messages.paper.lab.regenerate}
               </button>
             </div>
             {regeneration.undoBar}
             <div className="editor-fields">
               <label>
-                Kicker
+                {t.kicker}
                 <input value={selected.kicker} onChange={(event) => updateSection({ kicker: event.target.value })} />
               </label>
               <label>
-                Title
+                {t.title}
                 <textarea
                   className="title-input"
                   value={selected.title}
@@ -100,7 +103,7 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
                 />
               </label>
               <label>
-                Narrative
+                {t.narrative}
                 <textarea
                   className="body-input"
                   value={selected.body}
@@ -109,13 +112,13 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
               </label>
             </div>
             <div className="editor-evidence-links">
-              <span><Link2 size={14} /> Linked claims</span>
+              <span><Link2 size={14} /> {t.linkedClaims}</span>
               <div>
                 {selected.claimIds.map((id) => {
                   const linked = project.evidence.claims.find((item) => item.id === id);
                   return (
                     <button key={id} onClick={() => setClaimId(id)}>
-                      {linked?.sourceRefs[0]?.page ? `p. ${linked.sourceRefs[0].page}` : "web"} · {linked?.statement.slice(0, 72)}
+                      {linked?.sourceRefs[0]?.page ? messages.common.page(linked.sourceRefs[0].page) : "web"} · {linked?.statement.slice(0, 72)}
                     </button>
                   );
                 })}
@@ -128,8 +131,8 @@ export function StoryEditor({ project, fileUrl, onProjectChange, onPreview }: St
       <aside className="editor-preview">
         {selected && <VisualRenderer visual={selected.visual} accent={project.story.accent} />}
         <div className="preview-note">
-          <span>Renderer output</span>
-          <p>The visual is generated from validated StorySpec data; no free-form model code runs here.</p>
+          <span>{t.rendererOutput}</span>
+          <p>{t.rendererNote}</p>
         </div>
       </aside>
 

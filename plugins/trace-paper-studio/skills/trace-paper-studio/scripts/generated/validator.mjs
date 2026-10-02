@@ -6134,24 +6134,52 @@ const ADVANCED_VISUALS$1 = [
 ];
 /** Makalenin sayılarına dayanan görseller. Kanıtta metrik yoksa bu yuvalar başka bir görsel kullanabilir. */
 const NUMERIC_VISUALS = ["comparison", "metric"];
+const ENGLISH_TEMPLATE_ISSUE_WORDS = {
+	fewVisuals: "A template needs at least three different visual types",
+	needsAdvanced: (visuals) => `A template needs at least one of: ${visuals}`,
+	needsMethod: "One section must draw on method claims",
+	needsLimitation: "One section must draw on limitation claims",
+	reportMissing: (kinds) => `The report order must include every section kind; missing ${kinds}`,
+	visualNames: {
+		metric: "metric",
+		flow: "flow",
+		comparison: "comparison",
+		concept: "concept",
+		layers: "layers",
+		quote: "quote",
+		architecture: "architecture",
+		equation: "equation",
+		timeline: "timeline",
+		matrix: "matrix",
+		infographic: "infographic"
+	},
+	reportKindNames: {
+		contribution: "contribution",
+		mechanism: "mechanism",
+		experiment: "experiment",
+		critique: "critique",
+		reproduction: "reproduction",
+		implication: "implication"
+	}
+};
 /**
 * Bir şablon, bütünlük denetiminin anlatıya uyguladığı kuralları karşılamak
 * zorunda. Karşılamıyorsa ona göre üretilen her anlatı reddedilir ve kullanıcı
 * sebebini ancak model ücretini ödedikten sonra öğrenir. Bu yüzden şablon
 * kaydedilirken ve kullanılmadan önce denetleniyor.
 */
-function templateIssues(template) {
+function templateIssues(template, words = ENGLISH_TEMPLATE_ISSUE_WORDS) {
 	const issues = [];
 	const visuals = new Set(template.story.map((slot) => slot.visual));
-	if (visuals.size < 3) issues.push("A template needs at least three different visual types");
-	if (![...visuals].some((visual) => ADVANCED_VISUALS$1.includes(visual))) issues.push(`A template needs at least one of: ${ADVANCED_VISUALS$1.join(", ")}`);
+	if (visuals.size < 3) issues.push(words.fewVisuals);
+	if (![...visuals].some((visual) => ADVANCED_VISUALS$1.includes(visual))) issues.push(words.needsAdvanced(ADVANCED_VISUALS$1.map((visual) => words.visualNames[visual]).join(", ")));
 	const kinds = new Set(template.story.flatMap((slot) => slot.claimKinds));
-	if (!kinds.has("method")) issues.push("One section must draw on method claims");
-	if (!kinds.has("limitation")) issues.push("One section must draw on limitation claims");
+	if (!kinds.has("method")) issues.push(words.needsMethod);
+	if (!kinds.has("limitation")) issues.push(words.needsLimitation);
 	if (template.report) {
 		const present = new Set(template.report);
 		const missing = reportKinds.filter((kind) => !present.has(kind));
-		if (missing.length) issues.push(`The report order must include every section kind; missing ${missing.join(", ")}`);
+		if (missing.length) issues.push(words.reportMissing(missing.map((kind) => words.reportKindNames[kind]).join(", ")));
 	}
 	return issues;
 }
@@ -6765,39 +6793,913 @@ function buildRis(project, related = []) {
 }
 
 //#endregion
-//#region src/lib/misreadings.ts
+//#region src/lib/seeded.ts
 /**
-* Yanlış okuma türlerinin okuyucuya söylenişi. Arayüz, rapor ve Anki aynı
-* adları kullanıyor: bir tür, okuyucuya hangi ayrımı kaçırdığını söylüyor.
+* Tohumlu sözde rastgelelik. Aynı proje her açılışta aynı soruları aynı
+* sırayla soruyor: okuyucu yeniden baktığında bir önceki denemesini
+* tanıyabilmeli, testler de sonucu sabitleyebilmeli.
 */
-const misreadingTrapLabels = {
-	"interpretation-as-result": "An interpretation read as a result",
-	"beyond-tested": "Beyond what was tested",
-	number: "A misread number",
-	mechanism: "How the method works"
+/** Küçük, tohumlanabilir bir sözde rastgele üreteç (mulberry32). */
+function seededRandom(seed) {
+	let state = 0;
+	for (const character of seed) state = Math.imul(state, 31) + character.charCodeAt(0) | 0;
+	return () => {
+		state = state + 1831565813 | 0;
+		let value = Math.imul(state ^ state >>> 15, 1 | state);
+		value = value + Math.imul(value ^ value >>> 7, 61 | value) ^ value;
+		return ((value ^ value >>> 14) >>> 0) / 4294967296;
+	};
+}
+function seededShuffle(items, next) {
+	const copy = [...items];
+	for (let index = copy.length - 1; index > 0; index -= 1) {
+		const other = Math.floor(next() * (index + 1));
+		[copy[index], copy[other]] = [copy[other], copy[index]];
+	}
+	return copy;
+}
+
+//#endregion
+//#region src/lib/reading-drill.ts
+/**
+* "Hakem gibi oku": kanıtın kendisinden üretilen sorular.
+*
+* Trace'in öğrettiği asıl beceri bir makaleyi kanıtıyla okumak: bir cümle
+* ölçülmüş bir sonuç mu yoksa yazarların yorumu mu, hangi cümleye dayanıyor,
+* makale tam olarak hangi sayıyı veriyor. Bu sorular model yazmıyor; iddia
+* türünden, alıntılardan ve metriklerden kod üretiyor. Doğru yanıt bu yüzden
+* tanım gereği doğru ve her proje (öğrenme katmanı olmayan da) bunları alıyor.
+*
+* Seçim projenin kimliğiyle tohumlanıyor: aynı proje her açılışta aynı
+* soruları gösteriyor, tekrar eden okuyucu kaldığı yerden devam edebiliyor.
+*/
+const KINDS$1 = [
+	"reported-result",
+	"author-interpretation",
+	"method",
+	"background",
+	"limitation"
+];
+const random = seededRandom;
+const shuffle = seededShuffle;
+const quoted$1 = (text) => `“${text.trim()}”`;
+const pageOf = (claim) => claim.sourceRefs.find((reference) => reference.page)?.page;
+const onPage = (page) => page ? ` (p. ${page})` : "";
+const READING_DRILL_TITLE = "Read it like a reviewer";
+const READING_DRILL_WORDS = {
+	title: READING_DRILL_TITLE,
+	intro: "Questions made from the evidence itself, not by a model: what kind of statement a claim is, which sentence of the paper it rests on, and which number the paper reports. Every answer can be checked on its page.",
+	kinds: {
+		"reported-result": {
+			option: "A reported result: something the authors measured",
+			meaning: "A reported result is something the authors measured, usually a number or a comparison."
+		},
+		"author-interpretation": {
+			option: "The authors' interpretation of what a result means",
+			meaning: "An interpretation is the authors' reading of a result; it goes beyond what was measured."
+		},
+		method: {
+			option: "The method: what the authors built or did",
+			meaning: "The method is what the authors built or did, not what came out of it."
+		},
+		background: {
+			option: "Background the paper builds on",
+			meaning: "Background is earlier work or prior knowledge the paper relies on, not its own finding."
+		},
+		limitation: {
+			option: "A limitation the paper concedes",
+			meaning: "A limitation is a boundary the paper concedes: what it did not test, or where it may not hold."
+		}
+	},
+	kindPrompt: (statement) => `What kind of statement is this? ${statement}`,
+	kindRight: (meaning, page) => `${meaning} That is what this sentence is${onPage(page)}.`,
+	kindWrong: (meaning) => `${meaning} That is not what this sentence does.`,
+	quotePrompt: (statement) => `Which sentence from the paper supports this claim? ${statement}`,
+	quoteRight: (page) => `This is the sentence the claim rests on${onPage(page)}.`,
+	quoteOther: (statement) => `This sentence supports a different claim: ${statement}`,
+	numberPrompt: (label) => `Which number does the paper report for ${label}?`,
+	numberRight: (context, excerpt, page) => `${context}. The paper: ${excerpt}${onPage(page)}`,
+	numberOther: (label) => `That is the paper's figure for ${label}.`
 };
+function kindQuestion(claim, next, words) {
+	const others = shuffle(KINDS$1.filter((kind) => kind !== claim.kind), next).slice(0, 3);
+	const options = shuffle([claim.kind, ...others], next).map((kind) => ({
+		label: words.kinds[kind].option,
+		correct: kind === claim.kind,
+		explanation: kind === claim.kind ? words.kindRight(words.kinds[kind].meaning, pageOf(claim)) : words.kindWrong(words.kinds[kind].meaning)
+	}));
+	return {
+		id: `drill-kind-${claim.id}`,
+		prompt: words.kindPrompt(quoted$1(claim.statement)),
+		kind: "single",
+		options,
+		claimIds: [claim.id],
+		page: pageOf(claim)
+	};
+}
+function quoteQuestion(claim, pool, next, words) {
+	const own = claim.sourceRefs.find((reference) => reference.sourceId === "paper" && reference.excerpt.trim().length >= 20);
+	if (!own) return void 0;
+	const excerpt = own.excerpt.trim();
+	const distractors = shuffle(pool.filter((other) => other.id !== claim.id && other.sourceRefs.every((reference) => reference.excerpt.trim() !== excerpt)), next).sort((left, right) => Number(right.kind === claim.kind) - Number(left.kind === claim.kind)).flatMap((other) => {
+		const reference = other.sourceRefs.find((candidate) => candidate.excerpt.trim().length >= 20);
+		return reference ? [{
+			claim: other,
+			excerpt: reference.excerpt.trim()
+		}] : [];
+	}).filter((item, index, all) => all.findIndex((entry) => entry.excerpt === item.excerpt) === index).slice(0, 3);
+	if (distractors.length < 2) return void 0;
+	const options = shuffle([{
+		label: quoted$1(excerpt),
+		correct: true,
+		explanation: words.quoteRight(own.page)
+	}, ...distractors.map(({ claim: other, excerpt: text }) => ({
+		label: quoted$1(text),
+		correct: false,
+		explanation: words.quoteOther(quoted$1(other.statement))
+	}))], next);
+	return {
+		id: `drill-quote-${claim.id}`,
+		prompt: words.quotePrompt(quoted$1(claim.statement)),
+		kind: "single",
+		options,
+		claimIds: [claim.id],
+		page: own.page
+	};
+}
+function numberQuestion(metric, metrics, claims, next, words) {
+	const unit = metric.unit.trim().toLowerCase();
+	const alternatives = shuffle(metrics.filter((other) => other.id !== metric.id && other.unit.trim().toLowerCase() === unit && other.value !== metric.value), next).filter((item, index, all) => all.findIndex((entry) => entry.displayValue === item.displayValue) === index && item.displayValue !== metric.displayValue);
+	if (alternatives.length < 2) return void 0;
+	const options = shuffle([{
+		label: metric.displayValue,
+		correct: true,
+		explanation: words.numberRight(metric.context, quoted$1(metric.sourceRef.excerpt), metric.sourceRef.page)
+	}, ...alternatives.slice(0, 3).map((other) => ({
+		label: other.displayValue,
+		correct: false,
+		explanation: words.numberOther(other.label)
+	}))], next);
+	const carrier = claims.find((claim) => claim.statement.includes(metric.displayValue) || claim.sourceRefs.some((reference) => reference.excerpt.includes(metric.displayValue)));
+	return {
+		id: `drill-number-${metric.id}`,
+		prompt: words.numberPrompt(metric.label),
+		kind: "single",
+		options,
+		claimIds: carrier ? [carrier.id] : [],
+		page: metric.sourceRef.page
+	};
+}
+/**
+* En fazla `limit` soru: tür, alıntı ve sayı soruları sırayla. Soru
+* üretilecek kadar kanıt yoksa (üçten az soru) hiç gösterilmiyor.
+*/
+function readingDrill(evidence, options) {
+	const words = options.words ?? READING_DRILL_WORDS;
+	const drill = buildDrill(evidence, options, words);
+	if (!drill || words === READING_DRILL_WORDS) return drill;
+	const english = buildDrill(evidence, options, READING_DRILL_WORDS);
+	return {
+		...drill,
+		questions: drill.questions.map((question, index) => {
+			const basis = english.questions[index];
+			return basis?.id === question.id ? {
+				...question,
+				signatureBasis: {
+					prompt: basis.prompt,
+					options: basis.options
+				}
+			} : question;
+		})
+	};
+}
+function buildDrill(evidence, options, words) {
+	const next = random(options.seed);
+	const rejected = new Set(options.rejectedClaimIds ?? []);
+	const usable = evidence.claims.filter((claim) => !rejected.has(claim.id));
+	const ordered = shuffle(usable, next).sort((left, right) => Number(right.confidence === "verified") - Number(left.confidence === "verified"));
+	const byKind = [
+		"author-interpretation",
+		"reported-result",
+		"limitation",
+		"method",
+		"background"
+	].flatMap((kind) => ordered.filter((claim) => claim.kind === kind).slice(0, 1));
+	const kindQuestions = byKind.map((claim) => kindQuestion(claim, next, words));
+	const quoteQuestions = ordered.filter((claim) => !byKind.slice(0, 2).includes(claim)).map((claim) => quoteQuestion(claim, usable, next, words)).filter((question) => Boolean(question));
+	const numberQuestions = shuffle(evidence.metrics, next).map((metric) => numberQuestion(metric, evidence.metrics, usable, next, words)).filter((question) => Boolean(question));
+	const limit = options.limit ?? 6;
+	const questions = [];
+	for (let round = 0; questions.length < limit && round < limit; round += 1) for (const source of [
+		kindQuestions,
+		quoteQuestions,
+		numberQuestions
+	]) if (questions.length < limit && source[round]) questions.push(source[round]);
+	if (questions.length < 3) return void 0;
+	return {
+		title: words.title,
+		intro: words.intro,
+		questions
+	};
+}
+/** Projenin kendi drili: kimliğiyle tohumlanmış, bir insanın reddettiği iddialar hariç. */
+function readingDrillFor(project, words) {
+	const rejected = Object.entries(project.claimReviews ?? {}).filter(([, review]) => review.status === "rejected").map(([id]) => id);
+	return readingDrill(project.evidence, {
+		seed: project.id,
+		rejectedClaimIds: rejected,
+		words
+	});
+}
+
+//#endregion
+//#region src/visuals/i18n.ts
+/**
+* Görsellerin arayüz metinleri, iki dilde: İngilizce ve Türkçe.
+*
+* Makale içeriği onu üreten modelin yazdığı dilde kalıyor; bu dosya yalnızca
+* çevresindeki etiketleri taşıyor. İkisi ayrı: kanıta bağlı metni çevirmek
+* alıntıyı bozar.
+*
+* Bu paket eklentinin bağımsız görüntüleyicisine ve dışa aktarılan dosyalara
+* da giriyor; o yüzden saf TypeScript: `@/i18n/*` kaydını içine çekmiyor.
+* Dışa aktarımların (rapor, slayt, defter) etiketleri de burada, aynı
+* kuralla: makale Türkçeyse Türkçe, değilse İngilizce.
+*/
+const en = {
+	locale: "en",
+	chrome: "en",
+	sourceLabel: "View source",
+	page: (page) => `p. ${page}`,
+	evidenceLabel: "View evidence",
+	percent: (value) => `${value}%`,
+	playgroundKind: "Playground",
+	simulationKind: "Simulation",
+	explorerKind: "Data explorer",
+	resetToPaper: "Reset to the paper's values",
+	paperValueShort: "paper",
+	offPaperWarning: (anchor) => `You are outside the paper's range — these values were not verified. ${anchor}`,
+	notComputable: "undefined here",
+	chartPaperKey: "paper's value",
+	back: "‹ Back",
+	forward: "Next ›",
+	play: "Play",
+	pause: "Pause",
+	replay: "Replay",
+	filterPlaceholder: "Filter…",
+	filterAria: "Filter the table",
+	emptyRows: "No rows match the filter.",
+	architectureConnections: "Architecture connections",
+	levels: {
+		temel: "Basic",
+		orta: "Intermediate",
+		ileri: "Advanced"
+	},
+	whyItMatters: "Why this paper needs it:",
+	readFirst: "Read these first:",
+	predictHeading: "Predict first",
+	predictIntro: (label, min, max) => `Before you see the chart: as ${label} goes from ${min} to ${max}, with everything else at the paper's values, what happens?`,
+	curveShapes: {
+		rises: "It rises",
+		falls: "It falls",
+		flat: "It stays about the same",
+		peak: "It rises, then falls",
+		valley: "It falls, then rises"
+	},
+	predictCross: (left, right) => `Do “${left}” and “${right}” cross?`,
+	predictCrossYes: "Yes, they cross",
+	predictCrossNo: "No, they never meet",
+	predictShow: "Check and show the chart",
+	predictSkip: "Just show the chart",
+	predictRight: "You called it.",
+	predictWrong: "Not quite.",
+	curveActual: (shape, start, end, flat) => flat ? `${shape}: ${start} throughout.` : `${shape}: from ${start} to ${end}.`,
+	crossActual: (xParam, at) => at === void 0 ? "They never cross in this range." : `They cross near ${xParam} = ${at}.`,
+	predictScore: (right, total) => `${right} of ${total} ${total === 1 ? "prediction" : "predictions"} right.`,
+	nextStepQuestion: "Which step comes next?",
+	justShowIt: "Just show it",
+	stepCalled: "You called it.",
+	stepComesAt: (text, position) => `You picked “${text}”: true, but that is step ${position}.`,
+	stepsCalled: (right, total) => `You called ${right} of ${total} ${total === 1 ? "step" : "steps"} before seeing ${total === 1 ? "it" : "them"}.`,
+	goal: "Goal:",
+	nextStep: (shown, total) => `Show the next step (${shown}/${total})`,
+	numericExample: "Worked example",
+	illustrativeValues: "Illustrative values, not from the paper",
+	beforeThisSection: "Before this section:",
+	closeDefinition: "Close the definition",
+	result: "Result:",
+	checkAnswer: "Check answer",
+	checkAgain: "Check again",
+	correct: "Correct",
+	correctAfter: (attempts) => `Correct on attempt ${attempts}`,
+	notQuite: "Not quite",
+	missingOption: "Everything you picked is right, but another option is right too.",
+	tryAgain: "Try again",
+	showAnswer: "Show the answer",
+	answerShown: "The answer",
+	whereToLook: "Where the paper says it:",
+	score: (firstTry, attempted) => `${firstTry} of ${attempted} right on the first try`,
+	misreadingTempting: "Tempting to conclude:",
+	misreadingActually: "What the paper shows",
+	misreadingReveal: "Why this is wrong",
+	misreadingTraps: {
+		"interpretation-as-result": "An interpretation read as a result",
+		"beyond-tested": "Beyond what was tested",
+		number: "A misread number",
+		mechanism: "How the method works"
+	},
+	hyperparameters: "Choosing hyperparameters",
+	pitfalls: "Common pitfalls",
+	pitfallCause: "Cause:",
+	pitfallFix: "Fix:",
+	whenNotToUse: "When not to use it",
+	guideParameter: "Parameter",
+	guidePaperValue: "Paper's value",
+	guideRange: "Range",
+	guideHowToChoose: "How to choose",
+	navPrimer: "Primer",
+	studyHeading: "Study this paper",
+	studyPhases: {
+		prepare: "Prepare",
+		read: "Read",
+		work: "Work it through",
+		check: "Check",
+		apply: "Apply",
+		review: "Review"
+	},
+	studyStepOf: (step, total) => `Step ${step} of ${total}`,
+	studyDoneOf: (done, total) => `${done} of ${total} done`,
+	studyProgress: "Study progress",
+	studyAllSteps: "All steps",
+	studyStartTitle: "What this paper asks",
+	studyAhead: "The path ahead",
+	studyAheadConcepts: (count) => `${count} ${count === 1 ? "concept" : "concepts"} the paper assumes you know`,
+	studyAheadSections: (count, checks) => `${count} ${count === 1 ? "section" : "sections"} of the story${checks ? `, ${checks === count ? "each" : `${checks} of them`} ending in one question` : ""}`,
+	studyAheadWork: (count) => `${count} ${count === 1 ? "derivation or exploration" : "derivations and explorations"} to work through`,
+	studyAheadQuiz: (count) => `a final check of ${count} ${count === 1 ? "question" : "questions"}`,
+	studyAheadGuide: "how to apply it in practice",
+	studyAheadMisreadings: (count) => `${count} common ${count === 1 ? "misreading" : "misreadings"} of this paper to see through`,
+	studyCheckTitle: "Check yourself",
+	studyCheckIntro: "One question on what you just read. Answer from memory before you look back.",
+	studyFinalTitle: "Final check",
+	studyFinalIntro: "The questions no section has asked yet.",
+	studyYourAnswer: (answer) => answer.correct ? answer.attempts === 1 ? "Last time: right on the first try." : `Last time: right after ${answer.attempts} tries.` : "Last time: you asked for the answer.",
+	studyAnswerAgain: "Answer again",
+	studyBack: "Back",
+	studyNext: "Next",
+	studyBegin: "Begin",
+	studySkipCheck: "Skip the question",
+	studyToResults: "See how it went",
+	studyFinishTitle: "How it went",
+	studyFinishSteps: (done, total) => `You worked through ${done} of ${total} steps.`,
+	studyFinishChecks: (firstTry, answered, total) => `${firstTry} of ${answered} ${answered === 1 ? "question" : "questions"} right on the first try${answered < total ? `; ${total - answered} not answered yet` : ""}.`,
+	studyRevisit: "Worth another look",
+	studyRevisitHint: "Where a question took more than one try, these are the steps it rests on.",
+	studyAllClear: "Every question you answered was right on the first try.",
+	studySkipped: "Not done yet",
+	studyMoreSteps: (count) => `and ${count} more ${count === 1 ? "step" : "steps"}, in the list of all steps above.`,
+	studyStartOver: "Start over",
+	studyStartOverConfirm: "Clear your progress and answers?",
+	studyClear: "Clear",
+	studyKeep: "Keep",
+	studyBrowserNote: "Your progress stays in this browser. It is not sent anywhere, and it is not part of the paper.",
+	studySaveFile: "Save progress to a file",
+	studyLoadFile: "Load progress from a file",
+	studyCarryHint: "To continue on another device, save your progress to a file and load it there: on the published page, the exported page or in the studio. It merges with what is there instead of replacing it.",
+	studyLoaded: (steps, answers, cards) => `Progress loaded and merged with what was here: ${steps} ${steps === 1 ? "step" : "steps"} done, ${answers} ${answers === 1 ? "answer" : "answers"}, ${cards} review ${cards === 1 ? "card" : "cards"}.`,
+	studyLoadOtherPaper: (title) => `That file holds progress for another paper: ${title}. Nothing was changed.`,
+	studyLoadInvalid: "That file is not Trace study progress. Nothing was changed.",
+	studyNothingToSave: "There is no progress to save yet.",
+	navPractice: "Learn & Try",
+	tabLab: "Lab",
+	tabStory: "Story",
+	tabPractice: "Learn & Try",
+	tabTechnical: "Technical",
+	tabStudy: "Study",
+	practiceHeading: "Learn & Try",
+	derivationsHeading: "Step-by-step derivations",
+	interactivesHeading: "Interactive exploration",
+	tryItHeading: "Now try it yourself",
+	localStudio: "Local paper studio",
+	exportedCopy: "Standalone copy",
+	publishedStory: "Published story",
+	thesis: "Thesis",
+	plainSummary: "In plain language",
+	researchQuestion: "Research question",
+	methodsFindingsLimits: "Methods, findings, limitations",
+	methods: "Methods",
+	findings: "Findings",
+	limitations: "Limitations",
+	metrics: "Metrics",
+	claims: "Claims",
+	glossary: "Glossary",
+	openQuestions: "Open questions",
+	equations: "Equations",
+	algorithmSteps: "Algorithm steps",
+	codeSketches: "Code sketches",
+	complexity: "Complexity",
+	implementationNotes: "Implementation notes",
+	operation: "Operation",
+	cost: "Cost",
+	context: "Context",
+	sourceFallback: "source",
+	home: "Home",
+	library: "Library",
+	paperMap: "Paper map",
+	linkedSources: "linked sources",
+	pickAClaim: "Select a claim",
+	pickAClaimHint: "Click a finding, or a source tag inside the story, to see where it comes from.",
+	claimKindBadge: {
+		"reported-result": "reported-result",
+		"author-interpretation": "author-interpretation",
+		method: "method",
+		background: "background",
+		limitation: "limitation"
+	},
+	reportKindBadge: {
+		contribution: "contribution",
+		mechanism: "mechanism",
+		experiment: "experiment",
+		critique: "critique",
+		reproduction: "reproduction",
+		implication: "implication"
+	},
+	openInStudio: "Open in Studio",
+	studioOfflineTitle: "Trace Studio is not running",
+	studioOfflineBody: "The studio is the full workspace: a library, editing and side-by-side papers. Start it once with this command, then run the delivery again and the project lands there on its own.",
+	studioOfflineNote: "Everything on this page works without the studio, and the Trace JSON above is yours to keep — import it into any studio later.",
+	studioTryAnyway: "Already running it? Open localhost:3000",
+	studioBanner: "This is the portable copy of your paper. The full studio — library, editing, side-by-side papers — is one command away.",
+	studioBannerAction: "Show me the command",
+	copyCommand: "Copy command",
+	copied: "Copied",
+	close: "Close",
+	labSectionsAria: "Paper review sections",
+	figuresHeading: "Figures from the paper",
+	figureExpand: "View full size",
+	figureCollapse: "Fit to width",
+	figureFromPaper: (page) => `From the paper · p. ${page}`,
+	navHealth: "Evidence health",
+	healthHeading: "Evidence health",
+	healthIntro: "Everything below is computed from this project's own data — no model was asked. It shows where the analysis stands on solid ground and where it does not.",
+	healthVerified: "claims verified",
+	healthVerifiedNote: (needsReview) => needsReview === 0 ? "Every claim's excerpt directly supports its statement." : `${needsReview} still marked needs-review: the excerpt supports them only partly.`,
+	healthPages: "pages reached",
+	healthPagesNote: (first, last, gaps) => gaps === 0 ? `Continuous from p. ${first} to p. ${last}.` : `From p. ${first} to p. ${last}, with ${gaps} page${gaps === 1 ? "" : "s"} never cited.`,
+	healthPagesNone: "No claim carries a page number; this analysis rests on web context alone.",
+	healthInUse: "claims in use",
+	healthInUseNote: (unused) => unused === 0 ? "Every collected claim is used somewhere in the narrative." : `${unused} claim${unused === 1 ? " was" : "s were"} collected but never used.`,
+	healthGrounding: "Where the evidence comes from",
+	healthGroundingNote: (fromPaper, fromWeb) => fromWeb === 0 ? `All ${fromPaper} claims are anchored to the paper itself.` : `${fromPaper} claims come from the paper, ${fromWeb} from published context about it — citation counts, venue, version history. Context is not a paper claim.`,
+	healthCitations: (count) => `${count} citation${count === 1 ? "" : "s"}`,
+	healthNeverCited: "never cited",
+	sourceTypes: {
+		paper: "paper",
+		web: "web"
+	},
+	healthGaps: "Pages the analysis never reaches",
+	healthGapsNote: (first, last) => `The paper's total length is not stored in a Trace project, so only the span between the first and last cited page (p. ${first}–${last}) can be judged. These pages fall inside it and no claim, metric or figure touches them.`,
+	healthThin: "Sections resting on thin evidence",
+	healthThinNote: "A section is thin when it hangs on a single claim, or when none of the claims under it are verified. That is not necessarily wrong — but it is where to look first.",
+	healthSectionClaims: (verified, total) => `${verified}/${total} verified`,
+	healthStrengthen: "Strengthen",
+	healthAreaStory: "Story",
+	healthAreaReport: "Report",
+	healthUnused: "Collected but unused",
+	healthUnusedNote: "These claims are in the evidence ledger and no section, equation or figure refers to them. Often they are the most interesting leftovers.",
+	healthQuotes: "quotes found on their page",
+	healthQuotesNote: (missing) => missing === 0 ? "Every quote was found in the text of the page it cites." : `${missing} quote${missing === 1 ? " was" : "s were"} not found on the cited page.`,
+	healthQuotesUnchecked: "quotes not checked",
+	healthQuotesUncheckedNote: "Nobody has compared the quotes with the PDF's text yet.",
+	healthQuotesMissing: "Quotes that were not found on the cited page",
+	healthQuotesMissingNote: (date) => `Checked on ${date} against the text extracted from the PDF. A quote can be missing because it was paraphrased or invented, or because it sits in a table, an equation or a scanned page that text extraction cannot read. A claim whose quotes are all missing is marked needs-review; open it and look at the page.`,
+	healthOwners: {
+		metric: "metric",
+		glossary: "glossary"
+	},
+	healthQuotesCheck: "Check the quotes against the PDF",
+	healthQuotesRecheck: "Check again with the PDF",
+	healthQuotesPage: (page) => page ? `p. ${page}` : "no page",
+	healthReviewed: "claims reviewed by a person",
+	healthReviewedNote: (approved, rejected, pending) => `${approved} approved, ${rejected} rejected${pending ? `, ${pending} not looked at yet` : ""}. A person's decision is kept apart from the model's own confidence.`,
+	permalinkTitle: "Copy a link to this",
+	drill: READING_DRILL_WORDS,
+	reportIntro: ({ verified, total, quotes, reviews }) => `An evidence-grounded reading made with Trace. ${verified} of ${total} claims are marked verified by the model. ` + (quotes ? `${quotes.located} of ${quotes.total} quotes were found in the text of the page they cite.` : "The quotes were not checked against the PDF.") + (reviews ? ` A person approved ${reviews.approved} claims and rejected ${reviews.rejected}.` : "") + " This is not a substitute for the paper.",
+	reportRestsOn: (references) => `Rests on: ${references}`,
+	reportMethod: "Method",
+	reportNumbers: "Reported numbers",
+	reportTableHead: [
+		"Measurement",
+		"Value",
+		"Context",
+		"Source"
+	],
+	reportMisreading: (misreading) => `Misreading: ${misreading}`,
+	reportLedger: "Evidence ledger",
+	claimKinds: {
+		"reported-result": "Reported result",
+		"author-interpretation": "Author interpretation",
+		method: "Method",
+		background: "Background",
+		limitation: "Limitation"
+	},
+	reportVerifiedByModel: "verified by the model",
+	reportNeedsReview: "needs review",
+	reportQuoteNotFound: "quote not found on its page",
+	reportReview: (status, by) => `${status} by ${by}`,
+	reportReviewerNote: (note) => `Reviewer's note: ${note}`,
+	reportSources: "Sources",
+	printTitle: (title) => `${title} — Trace report`,
+	printHint: "To save this as a PDF, print the page (Ctrl/Cmd + P) and choose “Save as PDF”. This note is not printed.",
+	slidesTitle: (title) => `${title} — slides`,
+	slidesThesisKicker: "The claim of the paper",
+	slidesNumbersHeading: "What the paper measured",
+	slidesLimitsKicker: "Before you build on it",
+	slidesLimitsHeading: "What the paper says it cannot do",
+	slidesHint: "← → to move · N for the full text",
+	notebookIntro: "The equations below were generated by Trace from the paper's interactive playgrounds. Each one is translated from a parsed formula, not pasted as text, and starts at the value the paper itself uses. Moving away from that value leaves the region the paper verified.",
+	notebookLeftOut: "Left out because they could not be translated exactly:",
+	notebookUntranslatable: "could not be translated",
+	notebookInPaper: (anchor) => `In the paper: ${anchor}`,
+	notebookConfigComment: "The paper's own configuration",
+	notebookSweepComment: (label) => `Sweep ${label} over the range the playground uses; everything else stays at the paper's value.`
+};
+/**
+* Türkçe arayüz metinleri. `Strings` ile yazıldığı için eksik anahtar
+* derlemede yakalanıyor. Terimler `src/i18n/glossary.md` ile aynı.
+*/
+const tr = {
+	locale: "tr",
+	chrome: "tr",
+	sourceLabel: "Kaynağı gör",
+	page: (page) => `s. ${page}`,
+	evidenceLabel: "Kanıtı gör",
+	percent: (value) => `%${value}`,
+	playgroundKind: "Deneme alanı",
+	simulationKind: "Simülasyon",
+	explorerKind: "Veri gezgini",
+	resetToPaper: "Makalenin değerlerine dön",
+	paperValueShort: "makalede",
+	offPaperWarning: (anchor) => `Makalenin aralığının dışındasın — bu değerler doğrulanmadı. ${anchor}`,
+	notComputable: "burada tanımsız",
+	chartPaperKey: "makalenin değeri",
+	back: "‹ Geri",
+	forward: "İleri ›",
+	play: "Oynat",
+	pause: "Duraklat",
+	replay: "Yeniden oynat",
+	filterPlaceholder: "Filtrele…",
+	filterAria: "Tabloyu filtrele",
+	emptyRows: "Filtreye uyan satır yok.",
+	architectureConnections: "Mimari bağlantılar",
+	levels: {
+		temel: "Temel",
+		orta: "Orta",
+		ileri: "İleri"
+	},
+	whyItMatters: "Makalede neden gerekli:",
+	readFirst: "Önce bunları oku:",
+	predictHeading: "Önce tahmin et",
+	predictIntro: (label, min, max) => `Grafiği görmeden önce: ${label}, ${min} değerinden ${max} değerine giderken ve geri kalan her şey makalenin değerlerindeyken ne olur?`,
+	curveShapes: {
+		rises: "Artar",
+		falls: "Azalır",
+		flat: "Aşağı yukarı aynı kalır",
+		peak: "Önce artar, sonra azalır",
+		valley: "Önce azalır, sonra artar"
+	},
+	predictCross: (left, right) => `“${left}” ile “${right}” kesişir mi?`,
+	predictCrossYes: "Evet, kesişirler",
+	predictCrossNo: "Hayır, hiç buluşmazlar",
+	predictShow: "Kontrol et ve grafiği göster",
+	predictSkip: "Grafiği doğrudan göster",
+	predictRight: "Bildin.",
+	predictWrong: "Tam değil.",
+	curveActual: (shape, start, end, flat) => flat ? `${shape}: baştan sona ${start}.` : `${shape}: ${start} değerinden ${end} değerine.`,
+	crossActual: (xParam, at) => at === void 0 ? "Bu aralıkta hiç kesişmiyorlar." : `${xParam} = ${at} civarında kesişiyorlar.`,
+	predictScore: (right, total) => `${total} tahminden ${right} tanesi doğru.`,
+	nextStepQuestion: "Sıradaki adım hangisi?",
+	justShowIt: "Doğrudan göster",
+	stepCalled: "Bildin.",
+	stepComesAt: (text, position) => `Seçtiğin: “${text}”. Doğru bir adım, ama sırası ${position}.`,
+	stepsCalled: (right, total) => `${total} adımdan ${right} tanesini görmeden bildin.`,
+	goal: "Amaç:",
+	nextStep: (shown, total) => `Sonraki adımı göster (${shown}/${total})`,
+	numericExample: "Çözümlü örnek",
+	illustrativeValues: "Örnek değerler, makaleden değil",
+	beforeThisSection: "Bu bölümden önce:",
+	closeDefinition: "Tanımı kapat",
+	result: "Sonuç:",
+	checkAnswer: "Cevabı kontrol et",
+	checkAgain: "Yeniden kontrol et",
+	correct: "Doğru",
+	correctAfter: (attempts) => `${attempts}. denemede doğru`,
+	notQuite: "Tam değil",
+	missingOption: "Seçtiklerinin hepsi doğru, ama doğru olan başka bir seçenek daha var.",
+	tryAgain: "Yeniden dene",
+	showAnswer: "Cevabı göster",
+	answerShown: "Cevap",
+	whereToLook: "Makalede nerede geçiyor:",
+	score: (firstTry, attempted) => `${attempted} sorudan ${firstTry} tanesi ilk denemede doğru`,
+	misreadingTempting: "Şu sonuca varmak cazip:",
+	misreadingActually: "Makalenin gösterdiği",
+	misreadingReveal: "Bu neden yanlış",
+	misreadingTraps: {
+		"interpretation-as-result": "Sonuç sanılan bir yorum",
+		"beyond-tested": "Denenenin ötesine geçmek",
+		number: "Yanlış okunan bir sayı",
+		mechanism: "Yöntemin nasıl çalıştığı"
+	},
+	hyperparameters: "Hiperparametre seçimi",
+	pitfalls: "Sık yapılan hatalar",
+	pitfallCause: "Neden:",
+	pitfallFix: "Çözüm:",
+	whenNotToUse: "Ne zaman kullanılmamalı",
+	guideParameter: "Parametre",
+	guidePaperValue: "Makaledeki değer",
+	guideRange: "Aralık",
+	guideHowToChoose: "Nasıl seçilir",
+	navPrimer: "Ön bilgi",
+	studyHeading: "Bu makaleyi çalış",
+	studyPhases: {
+		prepare: "Hazırlık",
+		read: "Okuma",
+		work: "Üzerinde çalışma",
+		check: "Kontrol",
+		apply: "Uygulama",
+		review: "Tekrar"
+	},
+	studyStepOf: (step, total) => `Adım ${step} / ${total}`,
+	studyDoneOf: (done, total) => `${done}/${total} tamamlandı`,
+	studyProgress: "Çalışma ilerlemesi",
+	studyAllSteps: "Tüm adımlar",
+	studyStartTitle: "Bu makale neyi soruyor",
+	studyAhead: "Önündeki yol",
+	studyAheadConcepts: (count) => `makalenin bildiğini varsaydığı ${count} kavram`,
+	studyAheadSections: (count, checks) => `hikâyenin ${count} bölümü${checks ? checks === count ? ", her biri tek bir soruyla bitiyor" : `, ${checks} tanesi tek bir soruyla bitiyor` : ""}`,
+	studyAheadWork: (count) => `üzerinde çalışacağın ${count} ${count === 1 ? "türetim ya da keşif" : "türetim ve keşif"}`,
+	studyAheadQuiz: (count) => `${count} soruluk bir son kontrol`,
+	studyAheadGuide: "uygulamada nasıl kullanılacağı",
+	studyAheadMisreadings: (count) => `bu makalenin fark etmen gereken ${count} yaygın yanlış okuması`,
+	studyCheckTitle: "Kendini sına",
+	studyCheckIntro: "Az önce okuduğun yerle ilgili tek bir soru. Geri dönüp bakmadan, aklında kalanla cevapla.",
+	studyFinalTitle: "Son kontrol",
+	studyFinalIntro: "Henüz hiçbir bölümün sormadığı sorular.",
+	studyYourAnswer: (answer) => answer.correct ? answer.attempts === 1 ? "Geçen sefer: ilk denemede doğru." : `Geçen sefer: ${answer.attempts} denemede doğru.` : "Geçen sefer: cevabı açmıştın.",
+	studyAnswerAgain: "Yeniden cevapla",
+	studyBack: "Geri",
+	studyNext: "İleri",
+	studyBegin: "Başla",
+	studySkipCheck: "Soruyu atla",
+	studyToResults: "Nasıl geçtiğine bak",
+	studyFinishTitle: "Nasıl geçti",
+	studyFinishSteps: (done, total) => `${total} adımın ${done} tanesini tamamladın.`,
+	studyFinishChecks: (firstTry, answered, total) => `${answered} sorudan ${firstTry} tanesi ilk denemede doğru${answered < total ? `; ${total - answered} soru henüz cevaplanmadı` : ""}.`,
+	studyRevisit: "Bir kez daha bakmaya değer",
+	studyRevisitHint: "Birden fazla deneme gerektiren soruların dayandığı adımlar bunlar.",
+	studyAllClear: "Cevapladığın her soruyu ilk denemede bildin.",
+	studySkipped: "Henüz yapılmadı",
+	studyMoreSteps: (count) => `ve ${count} adım daha; hepsi yukarıdaki tüm adımlar listesinde.`,
+	studyStartOver: "Baştan başla",
+	studyStartOverConfirm: "İlerlemen ve cevapların silinsin mi?",
+	studyClear: "Sil",
+	studyKeep: "Kalsın",
+	studyBrowserNote: "İlerlemen bu tarayıcıda kalıyor. Hiçbir yere gönderilmiyor ve makalenin bir parçası değil.",
+	studySaveFile: "İlerlemeyi dosyaya kaydet",
+	studyLoadFile: "İlerlemeyi dosyadan yükle",
+	studyCarryHint: "Başka bir cihazda devam etmek için ilerlemeni bir dosyaya kaydet ve orada yükle: yayımlanmış sayfada, dışa aktarılan sayfada ya da stüdyoda. Oradakinin yerine geçmiyor, onunla birleşiyor.",
+	studyLoaded: (steps, answers, cards) => `İlerleme yüklendi ve buradakiyle birleşti: ${steps} adım tamamlandı, ${answers} cevap, ${cards} tekrar kartı.`,
+	studyLoadOtherPaper: (title) => `Bu dosya başka bir makalenin ilerlemesini taşıyor: ${title}. Hiçbir şey değişmedi.`,
+	studyLoadInvalid: "Bu dosya bir Trace çalışma ilerlemesi değil. Hiçbir şey değişmedi.",
+	studyNothingToSave: "Henüz kaydedilecek bir ilerleme yok.",
+	navPractice: "Öğren ve Dene",
+	tabLab: "Lab",
+	tabStory: "Hikâye",
+	tabPractice: "Öğren ve Dene",
+	tabTechnical: "Teknik",
+	tabStudy: "Çalış",
+	practiceHeading: "Öğren ve Dene",
+	derivationsHeading: "Adım adım türetimler",
+	interactivesHeading: "Etkileşimli keşif",
+	tryItHeading: "Şimdi kendin dene",
+	localStudio: "Yerel makale stüdyosu",
+	exportedCopy: "Bağımsız kopya",
+	publishedStory: "Yayımlanmış hikâye",
+	thesis: "Tez",
+	plainSummary: "Sade bir dille",
+	researchQuestion: "Araştırma sorusu",
+	methodsFindingsLimits: "Yöntemler, bulgular, sınırlılıklar",
+	methods: "Yöntemler",
+	findings: "Bulgular",
+	limitations: "Sınırlılıklar",
+	metrics: "Ölçümler",
+	claims: "İddialar",
+	glossary: "Sözlük",
+	openQuestions: "Açık sorular",
+	equations: "Denklemler",
+	algorithmSteps: "Algoritma adımları",
+	codeSketches: "Kod taslakları",
+	complexity: "Karmaşıklık",
+	implementationNotes: "Uygulama notları",
+	operation: "İşlem",
+	cost: "Maliyet",
+	context: "Bağlam",
+	sourceFallback: "kaynak",
+	home: "Ana sayfa",
+	library: "Kütüphane",
+	paperMap: "Makale haritası",
+	linkedSources: "bağlı kaynaklar",
+	pickAClaim: "Bir iddia seç",
+	pickAClaimHint: "Nereden geldiğini görmek için bir bulguya ya da hikâyedeki bir kaynak etiketine tıkla.",
+	claimKindBadge: {
+		"reported-result": "bildirilen sonuç",
+		"author-interpretation": "yazarın yorumu",
+		method: "yöntem",
+		background: "arka plan",
+		limitation: "sınırlılık"
+	},
+	reportKindBadge: {
+		contribution: "katkı",
+		mechanism: "mekanizma",
+		experiment: "deney",
+		critique: "eleştiri",
+		reproduction: "yeniden üretim",
+		implication: "çıkarım"
+	},
+	openInStudio: "Stüdyoda aç",
+	studioOfflineTitle: "Trace Studio çalışmıyor",
+	studioOfflineBody: "Stüdyo tam çalışma alanı: kütüphane, düzenleme ve yan yana makaleler. Bu komutla bir kez başlat, sonra teslimi yeniden çalıştır; proje kendiliğinden oraya düşer.",
+	studioOfflineNote: "Bu sayfadaki her şey stüdyo olmadan da çalışıyor; yukarıdaki Trace JSON da senin, istediğin zaman bir stüdyoya içe aktarabilirsin.",
+	studioTryAnyway: "Zaten çalışıyor mu? localhost:3000 adresini aç",
+	studioBanner: "Bu, makalenin taşınabilir kopyası. Tam stüdyo (kütüphane, düzenleme, yan yana makaleler) tek bir komut uzağında.",
+	studioBannerAction: "Komutu göster",
+	copyCommand: "Komutu kopyala",
+	copied: "Kopyalandı",
+	close: "Kapat",
+	labSectionsAria: "Makale analizinin bölümleri",
+	figuresHeading: "Makaledeki şekiller",
+	figureExpand: "Tam boyutta gör",
+	figureCollapse: "Genişliğe sığdır",
+	figureFromPaper: (page) => `Makaleden · s. ${page}`,
+	navHealth: "Kanıt sağlığı",
+	healthHeading: "Kanıt sağlığı",
+	healthIntro: "Aşağıdaki her şey bu projenin kendi verisinden hesaplandı; hiçbir modele sorulmadı. Analizin nerede sağlam zemine bastığını, nerede basmadığını gösteriyor.",
+	healthVerified: "doğrulanmış iddia",
+	healthVerifiedNote: (needsReview) => needsReview === 0 ? "Her iddianın alıntısı ifadesini doğrudan destekliyor." : `${needsReview} iddia hâlâ “incelenmeli” olarak işaretli: alıntı onları yalnızca kısmen destekliyor.`,
+	healthPages: "ulaşılan sayfa",
+	healthPagesNote: (first, last, gaps) => gaps === 0 ? `s. ${first} ile s. ${last} arası kesintisiz.` : `s. ${first} ile s. ${last} arası; ${gaps} sayfaya hiç atıf yok.`,
+	healthPagesNone: "Hiçbir iddia sayfa numarası taşımıyor; bu analiz yalnızca web bağlamına dayanıyor.",
+	healthInUse: "kullanılan iddia",
+	healthInUseNote: (unused) => unused === 0 ? "Toplanan her iddia anlatıda bir yerde kullanılıyor." : `${unused} iddia toplandı ama hiç kullanılmadı.`,
+	healthGrounding: "Kanıt nereden geliyor",
+	healthGroundingNote: (fromPaper, fromWeb) => fromWeb === 0 ? `${fromPaper} iddianın hepsi doğrudan makaleye dayanıyor.` : `${fromPaper} iddia makaleden, ${fromWeb} iddia makale hakkında yayımlanmış bağlamdan geliyor: atıf sayıları, yayın yeri, sürüm geçmişi. Bağlam, makalenin bir iddiası değildir.`,
+	healthCitations: (count) => `${count} atıf`,
+	healthNeverCited: "hiç atıf yok",
+	sourceTypes: {
+		paper: "makale",
+		web: "internet"
+	},
+	healthGaps: "Analizin hiç ulaşmadığı sayfalar",
+	healthGapsNote: (first, last) => `Makalenin toplam uzunluğu Trace projesinde saklanmıyor; bu yüzden yalnızca atıf yapılan ilk ve son sayfa arasındaki aralık (s. ${first}–${last}) değerlendirilebiliyor. Bu sayfalar o aralığın içinde ve hiçbir iddia, ölçüm ya da şekil onlara dokunmuyor.`,
+	healthThin: "İnce kanıta dayanan bölümler",
+	healthThinNote: "Bir bölüm tek bir iddiaya dayanıyorsa ya da altındaki iddiaların hiçbiri doğrulanmamışsa incedir. Bu illa yanlış olduğu anlamına gelmez; ama ilk bakılacak yer orası.",
+	healthSectionClaims: (verified, total) => `${verified}/${total} doğrulandı`,
+	healthStrengthen: "Güçlendir",
+	healthAreaStory: "Hikâye",
+	healthAreaReport: "Rapor",
+	healthUnused: "Toplandı ama kullanılmadı",
+	healthUnusedNote: "Bu iddialar kanıt defterinde duruyor ama hiçbir bölüm, denklem ya da şekil onlara başvurmuyor. Çoğu zaman en ilginç artıklar bunlardır.",
+	healthQuotes: "sayfasında bulunan alıntı",
+	healthQuotesNote: (missing) => missing === 0 ? "Her alıntı, atıf yaptığı sayfanın metninde bulundu." : `${missing} alıntı atıf yapılan sayfada bulunamadı.`,
+	healthQuotesUnchecked: "alıntılar denetlenmedi",
+	healthQuotesUncheckedNote: "Alıntılar henüz PDF'in metniyle karşılaştırılmadı.",
+	healthQuotesMissing: "Atıf yapılan sayfada bulunamayan alıntılar",
+	healthQuotesMissingNote: (date) => `${date} tarihinde PDF'ten çıkarılan metne karşı denetlendi. Bir alıntı başka sözlerle aktarıldığı ya da uydurulduğu için bulunamayabilir; metin çıkarmanın okuyamadığı bir tabloda, denklemde ya da taranmış bir sayfada duruyor da olabilir. Alıntılarının hiçbiri bulunamayan iddia “incelenmeli” olarak işaretlenir; onu aç ve sayfaya bak.`,
+	healthOwners: {
+		metric: "ölçüm",
+		glossary: "sözlük"
+	},
+	healthQuotesCheck: "Alıntıları PDF ile karşılaştır",
+	healthQuotesRecheck: "PDF ile yeniden karşılaştır",
+	healthQuotesPage: (page) => page ? `s. ${page}` : "sayfa yok",
+	healthReviewed: "bir kişinin incelediği iddia",
+	healthReviewedNote: (approved, rejected, pending) => `${approved} onaylandı, ${rejected} reddedildi${pending ? `, ${pending} henüz incelenmedi` : ""}. Bir kişinin kararı, modelin kendi güveninden ayrı tutuluyor.`,
+	permalinkTitle: "Bunun bağlantısını kopyala",
+	drill: {
+		title: "Hakem gibi oku",
+		intro: "Bir modelin değil, kanıtın kendisinden üretilen sorular: bir iddianın ne tür bir ifade olduğu, makalenin hangi cümlesine dayandığı ve makalenin hangi sayıyı bildirdiği. Her yanıt kendi sayfasında denetlenebilir.",
+		kinds: {
+			"reported-result": {
+				option: "Bildirilen bir sonuç: yazarların ölçtüğü bir şey",
+				meaning: "Bildirilen sonuç, yazarların ölçtüğü bir şeydir; çoğunlukla bir sayı ya da karşılaştırma."
+			},
+			"author-interpretation": {
+				option: "Yazarların bir sonucun ne anlama geldiğine dair yorumu",
+				meaning: "Yorum, yazarların bir sonucu okuyuşudur; ölçülenin ötesine geçer."
+			},
+			method: {
+				option: "Yöntem: yazarların kurduğu ya da yaptığı şey",
+				meaning: "Yöntem, yazarların kurduğu ya da yaptığı şeydir; ondan çıkan sonuç değil."
+			},
+			background: {
+				option: "Makalenin dayandığı arka plan",
+				meaning: "Arka plan, makalenin dayandığı önceki çalışmalar ya da bilgidir; makalenin kendi bulgusu değil."
+			},
+			limitation: {
+				option: "Makalenin kabul ettiği bir sınırlılık",
+				meaning: "Sınırlılık, makalenin kabul ettiği bir sınırdır: neyi denemediği ya da nerede geçerli olmayabileceği."
+			}
+		},
+		kindPrompt: (statement) => `Bu ne tür bir ifade? ${statement}`,
+		kindRight: (meaning, page) => `${meaning} Bu cümle de tam olarak bu${page ? ` (s. ${page})` : ""}.`,
+		kindWrong: (meaning) => `${meaning} Bu cümlenin yaptığı bu değil.`,
+		quotePrompt: (statement) => `Makaledeki hangi cümle bu iddiayı destekliyor? ${statement}`,
+		quoteRight: (page) => `İddianın dayandığı cümle bu${page ? ` (s. ${page})` : ""}.`,
+		quoteOther: (statement) => `Bu cümle başka bir iddiayı destekliyor: ${statement}`,
+		numberPrompt: (label) => `Makale şu ölçüm için hangi sayıyı bildiriyor: ${label}?`,
+		numberRight: (context, excerpt, page) => `${context}. Makale: ${excerpt}${page ? ` (s. ${page})` : ""}`,
+		numberOther: (label) => `Bu, makalenin şu ölçüm için verdiği sayı: ${label}.`
+	},
+	reportIntro: ({ verified, total, quotes, reviews }) => `Trace ile yapılmış, kanıta dayalı bir okuma. ${total} iddiadan ${verified} tanesini model doğrulanmış olarak işaretledi. ` + (quotes ? `${quotes.total} alıntıdan ${quotes.located} tanesi atıf yaptığı sayfanın metninde bulundu.` : "Alıntılar PDF ile karşılaştırılmadı.") + (reviews ? ` Bir kişi ${reviews.approved} iddiayı onayladı, ${reviews.rejected} iddiayı reddetti.` : "") + " Makalenin yerini tutmaz.",
+	reportRestsOn: (references) => `Dayandığı iddialar: ${references}`,
+	reportMethod: "Yöntem",
+	reportNumbers: "Bildirilen sayılar",
+	reportTableHead: [
+		"Ölçüm",
+		"Değer",
+		"Bağlam",
+		"Kaynak"
+	],
+	reportMisreading: (misreading) => `Yanlış okuma: ${misreading}`,
+	reportLedger: "Kanıt defteri",
+	claimKinds: {
+		"reported-result": "Bildirilen sonuç",
+		"author-interpretation": "Yazarın yorumu",
+		method: "Yöntem",
+		background: "Arka plan",
+		limitation: "Sınırlılık"
+	},
+	reportVerifiedByModel: "model doğruladı",
+	reportNeedsReview: "incelenmeli",
+	reportQuoteNotFound: "alıntı sayfasında bulunamadı",
+	reportReview: (status, by) => status === "approved" ? `Onaylayan: ${by}` : `Reddeden: ${by}`,
+	reportReviewerNote: (note) => `İnceleyenin notu: ${note}`,
+	reportSources: "Kaynaklar",
+	printTitle: (title) => `${title} — Trace raporu`,
+	printHint: "PDF olarak kaydetmek için sayfayı yazdır (Ctrl/Cmd + P) ve “PDF olarak kaydet”i seç. Bu not yazdırılmaz.",
+	slidesTitle: (title) => `${title} — slaytlar`,
+	slidesThesisKicker: "Makalenin iddiası",
+	slidesNumbersHeading: "Makalenin ölçtükleri",
+	slidesLimitsKicker: "Üzerine kurmadan önce",
+	slidesLimitsHeading: "Makalenin yapamadığını söyledikleri",
+	slidesHint: "← → ile ilerle · tam metin için N",
+	notebookIntro: "Aşağıdaki denklemleri Trace, makalenin etkileşimli deneme alanlarından üretti. Her biri metin olarak yapıştırılmadı, ayrıştırılmış bir formülden çevrildi ve makalenin kendi kullandığı değerle başlıyor. Bu değerden uzaklaşmak, makalenin doğruladığı bölgenin dışına çıkmak demek.",
+	notebookLeftOut: "Birebir çevrilemedikleri için dışarıda kalanlar:",
+	notebookUntranslatable: "çevrilemedi",
+	notebookInPaper: (anchor) => `Makalede: ${anchor}`,
+	notebookConfigComment: "Makalenin kendi yapılandırması",
+	notebookSweepComment: (label) => `Tarama: ${label}, deneme alanının kullandığı aralık boyunca; geri kalan her şey makalenin değerinde.`
+};
+const BCP47 = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
+/**
+* Görsellerin metinleri ve içeriğin `locale`'i.
+*
+* İki ayrı dil var:
+* - `locale` her zaman içeriğin dili: sayı ve tarih biçimleme, sıralama,
+*   harf dönüşümü ("i" → "İ") makalenin diline göre yapılmalı.
+* - Etiketler (`ui`) arayüzün dili. Stüdyo okuyucunun seçtiği dili veriyor.
+*   Verilmezse (bağımsız görüntüleyici, yayımlanmış hikâye, dışa aktarılan
+*   sayfa) içerik Türkçeyse Türkçe, değilse İngilizce: o sayfayı okuyan kişi
+*   stüdyonun seçimini bilmiyor, makalenin dili en iyi işaret.
+*
+* Etiket doğrudan `Intl`e gidiyor, o yüzden biçimi doğrulanıyor: bozuk bir
+* etiket orada `RangeError` fırlatır ve bileşeni komple düşürürdü.
+*/
+function stringsFor(language, ui) {
+	const tag = language?.trim();
+	const valid = Boolean(tag && BCP47.test(tag));
+	const base = (ui ?? (valid && tag.toLowerCase().split("-")[0] === "tr" ? "tr" : "en")) === "tr" ? tr : en;
+	return valid ? {
+		...base,
+		locale: tag
+	} : base;
+}
 
 //#endregion
 //#region src/lib/exports/report-document.ts
-const kindLabels = {
-	"reported-result": "Reported result",
-	"author-interpretation": "Author interpretation",
-	method: "Method",
-	background: "Background",
-	limitation: "Limitation"
-};
-function citeLabel(project, reference) {
+function citeLabel(project, reference, t = stringsFor(project.language)) {
 	const source = project.evidence.sources.find((item) => item.id === reference.sourceId);
-	if (reference.page) return `p. ${reference.page}`;
+	if (reference.page) return t.page(reference.page);
 	return source?.title ?? reference.sourceId;
 }
 /** Bir bölümün dayandığı iddiaların kısa dökümü: "[c1] p. 4 · [c2] p. 7". */
-function supportLine(project, claimIds) {
+function supportLine(project, claimIds, t) {
 	const claims = claimIds.map((id) => project.evidence.claims.find((claim) => claim.id === id)).filter((claim) => Boolean(claim));
 	if (!claims.length) return void 0;
-	return `Rests on: ${claims.map((claim) => `[${claim.id}] ${citeLabel(project, claim.sourceRefs[0])}`).join(" · ")}`;
+	return t.reportRestsOn(claims.map((claim) => `[${claim.id}] ${citeLabel(project, claim.sourceRefs[0], t)}`).join(" · "));
 }
 function reportDocument(project) {
+	const t = stringsFor(project.language);
 	const { evidence } = project;
 	const health = evidenceHealth(project);
 	const reviews = project.claimReviews ?? {};
@@ -6817,11 +7719,22 @@ function reportDocument(project) {
 		].filter(Boolean).join(" · ")
 	}, {
 		type: "note",
-		text: `An evidence-grounded reading made with Trace. ${health.claims.verified} of ${health.claims.total} claims are marked verified by the model. ` + (health.excerpts.checked ? `${health.excerpts.located} of ${health.excerpts.total} quotes were found in the text of the page they cite.` : "The quotes were not checked against the PDF.") + (health.reviews.approved + health.reviews.rejected ? ` A person approved ${health.reviews.approved} claims and rejected ${health.reviews.rejected}.` : "") + " This is not a substitute for the paper."
+		text: t.reportIntro({
+			verified: health.claims.verified,
+			total: health.claims.total,
+			...health.excerpts.checked ? { quotes: {
+				located: health.excerpts.located,
+				total: health.excerpts.total
+			} } : {},
+			...health.reviews.approved + health.reviews.rejected ? { reviews: {
+				approved: health.reviews.approved,
+				rejected: health.reviews.rejected
+			} } : {}
+		})
 	}, {
 		type: "heading",
 		level: 2,
-		text: "Thesis"
+		text: t.thesis
 	}, {
 		type: "paragraph",
 		text: evidence.thesis
@@ -6831,7 +7744,7 @@ function reportDocument(project) {
 	}, {
 		type: "heading",
 		level: 2,
-		text: "Research question"
+		text: t.researchQuestion
 	}, {
 		type: "paragraph",
 		text: evidence.researchQuestion
@@ -6855,7 +7768,7 @@ function reportDocument(project) {
 				type: "paragraph",
 				text: paragraph
 			}));
-			const support = supportLine(project, section.claimIds);
+			const support = supportLine(project, section.claimIds, t);
 			if (support) push({
 				type: "note",
 				text: support
@@ -6879,7 +7792,7 @@ function reportDocument(project) {
 				type: "paragraph",
 				text: section.body
 			});
-			const support = supportLine(project, section.claimIds);
+			const support = supportLine(project, section.claimIds, t);
 			if (support) push({
 				type: "note",
 				text: support
@@ -6889,7 +7802,7 @@ function reportDocument(project) {
 	push({
 		type: "heading",
 		level: 2,
-		text: "Method"
+		text: t.reportMethod
 	}, {
 		type: "list",
 		ordered: true,
@@ -6900,7 +7813,7 @@ function reportDocument(project) {
 		push({
 			type: "heading",
 			level: 2,
-			text: "Equations"
+			text: t.equations
 		});
 		for (const equation of appendix.equations) {
 			push({
@@ -6929,26 +7842,21 @@ function reportDocument(project) {
 	if (evidence.metrics.length) push({
 		type: "heading",
 		level: 2,
-		text: "Reported numbers"
+		text: t.reportNumbers
 	}, {
 		type: "table",
-		head: [
-			"Measurement",
-			"Value",
-			"Context",
-			"Source"
-		],
+		head: [...t.reportTableHead],
 		rows: evidence.metrics.map((metric) => [
 			metric.label,
 			metric.displayValue,
 			metric.context,
-			citeLabel(project, metric.sourceRef)
+			citeLabel(project, metric.sourceRef, t)
 		])
 	});
 	push({
 		type: "heading",
 		level: 2,
-		text: "Findings"
+		text: t.findings
 	}, {
 		type: "list",
 		items: evidence.findings
@@ -6956,7 +7864,7 @@ function reportDocument(project) {
 	push({
 		type: "heading",
 		level: 2,
-		text: "Limitations"
+		text: t.limitations
 	}, {
 		type: "list",
 		items: evidence.limitations
@@ -6973,28 +7881,28 @@ function reportDocument(project) {
 		for (const item of project.misreadings.items) push({
 			type: "heading",
 			level: 3,
-			text: `Misreading: ${item.misreading}`
+			text: t.reportMisreading(item.misreading)
 		}, {
 			type: "paragraph",
 			text: item.correction
 		}, {
 			type: "note",
-			text: `${misreadingTrapLabels[item.trap]} · ${item.claimIds.map((id) => `[${id}]`).join(" ")}`
+			text: `${t.misreadingTraps[item.trap]} · ${item.claimIds.map((id) => `[${id}]`).join(" ")}`
 		});
 	}
 	push({
 		type: "heading",
 		level: 2,
-		text: "Evidence ledger"
+		text: t.reportLedger
 	});
 	const unlocated = new Set(health.excerpts.unlocatedClaims.map((item) => item.claim.id));
 	for (const claim of evidence.claims) {
 		const review = reviews[claim.id];
 		const marks = [
-			kindLabels[claim.kind],
-			claim.confidence === "verified" ? "verified by the model" : "needs review",
-			unlocated.has(claim.id) ? "quote not found on its page" : void 0,
-			review ? `${review.status} by ${review.by}` : void 0
+			t.claimKinds[claim.kind],
+			claim.confidence === "verified" ? t.reportVerifiedByModel : t.reportNeedsReview,
+			unlocated.has(claim.id) ? t.reportQuoteNotFound : void 0,
+			review ? t.reportReview(review.status, review.by) : void 0
 		].filter(Boolean);
 		push({
 			type: "heading",
@@ -7007,17 +7915,17 @@ function reportDocument(project) {
 		claim.sourceRefs.forEach((reference) => push({
 			type: "quote",
 			text: reference.excerpt,
-			cite: citeLabel(project, reference)
+			cite: citeLabel(project, reference, t)
 		}));
 		if (review?.note) push({
 			type: "note",
-			text: `Reviewer's note: ${review.note}`
+			text: t.reportReviewerNote(review.note)
 		});
 	}
 	if (evidence.glossary.length) push({
 		type: "heading",
 		level: 2,
-		text: "Glossary"
+		text: t.glossary
 	}, {
 		type: "list",
 		items: evidence.glossary.map((item) => `${item.term}: ${item.definition}`)
@@ -7025,7 +7933,7 @@ function reportDocument(project) {
 	push({
 		type: "heading",
 		level: 2,
-		text: "Sources"
+		text: t.reportSources
 	}, {
 		type: "list",
 		items: evidence.sources.map((source) => `[${source.id}] ${source.title}${source.url ? ` — ${source.url}` : ""}`)
@@ -7141,9 +8049,9 @@ function formulaToNumpy(node) {
 }
 const pythonString = (value) => JSON.stringify(value.replace(/\s+/g, " ").trim());
 const comment = (value) => value.replace(/\s+/g, " ").trim();
-function playgroundCells(project, playground) {
+function playgroundCells(project, playground, t) {
 	const skipped = [];
-	const quotes = playground.claimIds.map((id) => project.evidence.claims.find((claim) => claim.id === id)).filter((claim) => claim !== void 0).map((claim) => `> “${claim.sourceRefs[0].excerpt.replace(/\s+/g, " ")}” — ${claim.sourceRefs[0].page ? `p. ${claim.sourceRefs[0].page}` : claim.sourceRefs[0].sourceId}`);
+	const quotes = playground.claimIds.map((id) => project.evidence.claims.find((claim) => claim.id === id)).filter((claim) => claim !== void 0).map((claim) => `> “${claim.sourceRefs[0].excerpt.replace(/\s+/g, " ")}” — ${claim.sourceRefs[0].page ? t.page(claim.sourceRefs[0].page) : claim.sourceRefs[0].sourceId}`);
 	const signature = playground.parameters.map((parameter) => pythonName(parameter.name)).join(", ");
 	const functions = [];
 	const outputs = [];
@@ -7159,7 +8067,7 @@ function playgroundCells(project, playground) {
 				unit: output.unit
 			});
 		} catch (error) {
-			skipped.push(`${playground.title} · ${output.label}: ${error instanceof Error ? error.message : "could not be translated"}`);
+			skipped.push(`${playground.title} · ${output.label}: ${error instanceof Error ? error.message : t.notebookUntranslatable}`);
 		}
 	});
 	if (!outputs.length) return {
@@ -7174,14 +8082,14 @@ function playgroundCells(project, playground) {
 			"",
 			playground.description,
 			"",
-			`*In the paper: ${playground.paperAnchor}*`,
+			`*${t.notebookInPaper(playground.paperAnchor)}*`,
 			"",
 			...quotes
 		].join("\n")
 	}, {
 		cell_type: "code",
 		source: [
-			"# The paper's own configuration",
+			`# ${t.notebookConfigComment}`,
 			paper,
 			"",
 			...functions.flatMap((fn) => [fn, ""]),
@@ -7200,12 +8108,12 @@ function playgroundCells(project, playground) {
 			cells.push({
 				cell_type: "code",
 				source: [
-					`# Sweep ${comment(axis.label)} over the range the playground uses; everything else stays at the paper's value.`,
+					`# ${t.notebookSweepComment(comment(axis.label))}`,
 					`${x}_values = np.linspace(${axis.min}, ${axis.max}, ${chart.samples})`,
 					`sweep = {**paper, ${pythonString(x)}: ${x}_values}`,
 					"fig, ax = plt.subplots(figsize=(7, 4))",
 					...series.map(({ item, output }) => `ax.plot(${x}_values, np.broadcast_to(${output.fn}(**sweep), ${x}_values.shape), label=${pythonString(item.label)})`),
-					`ax.axvline(paper[${pythonString(x)}], linestyle="--", linewidth=1, color="gray", label="paper's value")`,
+					`ax.axvline(paper[${pythonString(x)}], linestyle="--", linewidth=1, color="gray", label=${pythonString(t.chartPaperKey)})`,
 					...chart.yScale === "log" ? ["ax.set_yscale(\"log\")"] : [],
 					`ax.set_xlabel(${pythonString(axis.label + (axis.unit ? ` [${axis.unit}]` : ""))})`,
 					"ax.legend()",
@@ -7223,7 +8131,9 @@ function notebookPlaygrounds(project) {
 	return (project.interactives ?? []).filter((item) => item.kind === "formula-playground");
 }
 function buildNotebook(project) {
-	const built = notebookPlaygrounds(project).map((playground) => playgroundCells(project, playground));
+	const playgrounds = notebookPlaygrounds(project);
+	const t = stringsFor(project.language);
+	const built = playgrounds.map((playground) => playgroundCells(project, playground, t));
 	const skipped = built.flatMap((item) => item.skipped);
 	const { paper } = project.evidence;
 	const cells = [
@@ -7234,10 +8144,10 @@ function buildNotebook(project) {
 				"",
 				`${paper.authors.join(", ")} · ${paper.venue} · ${paper.year}`,
 				"",
-				"The equations below were generated by Trace from the paper's interactive playgrounds. Each one is translated from a parsed formula, not pasted as text, and starts at the value the paper itself uses. Moving away from that value leaves the region the paper verified.",
+				t.notebookIntro,
 				...skipped.length ? [
 					"",
-					"**Left out because they could not be translated exactly:**",
+					`**${t.notebookLeftOut}**`,
 					...skipped.map((item) => `- ${item}`)
 				] : []
 			].join("\n")
@@ -19830,18 +20740,18 @@ const STYLE = `
   @media print { body { margin: 0; max-width: none; padding: 0; } .print-hint { display: none; } }
 `;
 function buildPrintableReport(project) {
-	const title = escapeHtml(project.evidence.paper.title);
+	const t = stringsFor(project.language);
 	return `<!doctype html>
 <html lang="${escapeHtml(project.language)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${title} — Trace report</title>
+<title>${escapeHtml(t.printTitle(project.evidence.paper.title))}</title>
 <style>${STYLE}</style>
 </head>
 <body>
-<p class="print-hint" lang="en">To save this as a PDF, print the page (Ctrl/Cmd + P) and choose “Save as PDF”. This note is not printed.</p>
+<p class="print-hint" lang="${t.chrome}">${escapeHtml(t.printHint)}</p>
 ${reportDocument(project).map(render).join("\n")}
 </body>
 </html>
@@ -19856,10 +20766,11 @@ ${reportDocument(project).map(render).join("\n")}
 * Slaytlar hikâyenin bölümlerinden çıkıyor ve her biri dayandığı alıntıyı
 * sayfasıyla birlikte taşıyor: bir sunumda "bunu nereden biliyoruz?" sorusunun
 * cevabı slaydın üstünde olmalı. Proje metni kaçırılarak yazılıyor; gömülü
-* betik sabit ve proje verisi içermiyor.
+* betik sabit ve proje verisi içermiyor. Slaydın kendi etiketleri makalenin
+* dilini izliyor (`stringsFor`).
 */
-function evidenceFor(project, claimIds, limit = 2) {
-	return claimIds.map((id) => project.evidence.claims.find((claim) => claim.id === id)).filter((claim) => Boolean(claim)).slice(0, limit).map((claim) => `<blockquote>“${escapeHtml(claim.sourceRefs[0].excerpt)}” <cite>${escapeHtml(citeLabel(project, claim.sourceRefs[0]))}${claim.confidence === "verified" ? "" : " · needs review"}</cite></blockquote>`).join("");
+function evidenceFor(project, claimIds, t, limit = 2) {
+	return claimIds.map((id) => project.evidence.claims.find((claim) => claim.id === id)).filter((claim) => Boolean(claim)).slice(0, limit).map((claim) => `<blockquote>“${escapeHtml(claim.sourceRefs[0].excerpt)}” <cite>${escapeHtml(citeLabel(project, claim.sourceRefs[0], t))}${claim.confidence === "verified" ? "" : ` · ${escapeHtml(t.reportNeedsReview)}`}</cite></blockquote>`).join("");
 }
 /**
 * Slayt bir paragrafı taşımaz. Bölüm gövdesinin ilk iki cümlesi slaytta,
@@ -19874,23 +20785,24 @@ function slideLead(body) {
 	};
 }
 function buildSlides(project) {
+	const t = stringsFor(project.language);
 	const { evidence, story } = project;
 	const accent = /^#[0-9a-fA-F]{6}$/.test(story.accent) ? story.accent : "#e75b37";
 	const slides = [];
-	slides.push(`<section class="slide title"><p class="kicker">${escapeHtml([evidence.paper.venue, evidence.paper.year].filter(Boolean).join(" · "))}</p><h1>${escapeHtml(evidence.paper.title)}</h1><p class="authors">${escapeHtml(evidence.paper.authors.join(", "))}</p></section>`, `<section class="slide"><p class="kicker">The claim of the paper</p><h2>${escapeHtml(evidence.thesis)}</h2><p>${escapeHtml(evidence.researchQuestion)}</p></section>`);
+	slides.push(`<section class="slide title"><p class="kicker">${escapeHtml([evidence.paper.venue, evidence.paper.year].filter(Boolean).join(" · "))}</p><h1>${escapeHtml(evidence.paper.title)}</h1><p class="authors">${escapeHtml(evidence.paper.authors.join(", "))}</p></section>`, `<section class="slide"><p class="kicker">${escapeHtml(t.slidesThesisKicker)}</p><h2>${escapeHtml(evidence.thesis)}</h2><p>${escapeHtml(evidence.researchQuestion)}</p></section>`);
 	for (const section of story.sections) {
 		const figure = (project.figures ?? []).find((item) => item.claimIds.some((id) => section.claimIds.includes(id)));
-		slides.push(`<section class="slide${figure ? " with-figure" : ""}"><div><p class="kicker">${escapeHtml(`${section.indexLabel} · ${section.kicker}`)}</p><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(slideLead(section.body).lead)}</p>${evidenceFor(project, section.claimIds)}${slideLead(section.body).hasMore ? `<aside class="notes">${escapeHtml(section.body)}</aside>` : ""}</div>${figure ? `<figure><img src="${figure.image}" alt="${escapeHtml(figure.label)}"><figcaption>${escapeHtml(figure.label)} · p. ${figure.page}</figcaption></figure>` : ""}</section>`);
+		slides.push(`<section class="slide${figure ? " with-figure" : ""}"><div><p class="kicker">${escapeHtml(`${section.indexLabel} · ${section.kicker}`)}</p><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(slideLead(section.body).lead)}</p>${evidenceFor(project, section.claimIds, t)}${slideLead(section.body).hasMore ? `<aside class="notes">${escapeHtml(section.body)}</aside>` : ""}</div>${figure ? `<figure><img src="${figure.image}" alt="${escapeHtml(figure.label)}"><figcaption>${escapeHtml(figure.label)} · ${escapeHtml(t.page(figure.page))}</figcaption></figure>` : ""}</section>`);
 	}
-	if (evidence.metrics.length) slides.push(`<section class="slide"><p class="kicker">Reported numbers</p><h2>What the paper measured</h2><table>${evidence.metrics.slice(0, 8).map((metric) => `<tr><th>${escapeHtml(metric.label)}</th><td>${escapeHtml(metric.displayValue)}</td><td>${escapeHtml(metric.context)}</td><td class="page">${escapeHtml(citeLabel(project, metric.sourceRef))}</td></tr>`).join("")}</table></section>`);
-	slides.push(`<section class="slide"><p class="kicker">Before you build on it</p><h2>What the paper says it cannot do</h2><ul>${evidence.limitations.slice(0, 6).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`);
+	if (evidence.metrics.length) slides.push(`<section class="slide"><p class="kicker">${escapeHtml(t.reportNumbers)}</p><h2>${escapeHtml(t.slidesNumbersHeading)}</h2><table>${evidence.metrics.slice(0, 8).map((metric) => `<tr><th>${escapeHtml(metric.label)}</th><td>${escapeHtml(metric.displayValue)}</td><td>${escapeHtml(metric.context)}</td><td class="page">${escapeHtml(citeLabel(project, metric.sourceRef, t))}</td></tr>`).join("")}</table></section>`);
+	slides.push(`<section class="slide"><p class="kicker">${escapeHtml(t.slidesLimitsKicker)}</p><h2>${escapeHtml(t.slidesLimitsHeading)}</h2><ul>${evidence.limitations.slice(0, 6).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`);
 	return `<!doctype html>
 <html lang="${escapeHtml(project.language)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(evidence.paper.title)} — slides</title>
+<title>${escapeHtml(t.slidesTitle(evidence.paper.title))}</title>
 <style>
   :root { --accent: ${accent}; }
   * { box-sizing: border-box; }
@@ -19931,7 +20843,7 @@ function buildSlides(project) {
 </head>
 <body>
 ${slides.join("\n")}
-<div class="progress"></div><div class="counter"></div><div class="hint" lang="en">← → to move · N for the full text</div>
+<div class="progress"></div><div class="counter"></div><div class="hint" lang="${t.chrome}">${escapeHtml(t.slidesHint)}</div>
 <script>
   (function () {
     var slides = document.querySelectorAll(".slide"), index = 0;
@@ -19959,63 +20871,96 @@ ${slides.join("\n")}
 
 //#endregion
 //#region src/lib/exports/index.ts
+const EXPORT_MENU_WORDS = {
+	md: {
+		label: "Markdown report",
+		description: "For Obsidian, Notion or a repository. Every claim with its quote and page."
+	},
+	html: {
+		label: "Printable report (PDF)",
+		description: "Opens as a page; print it and choose Save as PDF."
+	},
+	slides: {
+		label: "Slides",
+		description: "One slide per story section, each with its quote and page. Arrow keys to move."
+	},
+	ipynb: {
+		label: "Jupyter notebook",
+		description: "The paper's equations as runnable NumPy, starting at the paper's own values.",
+		unavailable: "This project has no formula playground to turn into code."
+	},
+	bib: {
+		label: "BibTeX",
+		description: "The paper as a citation for LaTeX, Zotero or Mendeley."
+	},
+	ris: {
+		label: "RIS",
+		description: "The same citation for Zotero, EndNote and most reference managers."
+	},
+	anki: {
+		label: "Anki flashcards",
+		description: "Primer concepts, quiz questions and glossary, each card with its quote and page.",
+		unavailable: "This project has no primer, quiz or glossary to make cards from."
+	}
+};
+const words$1 = EXPORT_MENU_WORDS;
 const exportDefinitions = [
 	{
 		format: "md",
-		label: "Markdown report",
-		description: "For Obsidian, Notion or a repository. Every claim with its quote and page.",
+		label: words$1.md.label,
+		description: words$1.md.description,
 		extension: "md",
 		mime: "text/markdown",
 		build: buildMarkdownReport
 	},
 	{
 		format: "html",
-		label: "Printable report (PDF)",
-		description: "Opens as a page; print it and choose Save as PDF.",
+		label: words$1.html.label,
+		description: words$1.html.description,
 		extension: "report.html",
 		mime: "text/html",
 		build: buildPrintableReport
 	},
 	{
 		format: "slides",
-		label: "Slides",
-		description: "One slide per story section, each with its quote and page. Arrow keys to move.",
+		label: words$1.slides.label,
+		description: words$1.slides.description,
 		extension: "slides.html",
 		mime: "text/html",
 		build: buildSlides
 	},
 	{
 		format: "ipynb",
-		label: "Jupyter notebook",
-		description: "The paper's equations as runnable NumPy, starting at the paper's own values.",
+		label: words$1.ipynb.label,
+		description: words$1.ipynb.description,
 		extension: "ipynb",
 		mime: "application/x-ipynb+json",
-		unavailable: (project) => notebookPlaygrounds(project).length ? void 0 : "This project has no formula playground to turn into code.",
+		unavailable: (project) => notebookPlaygrounds(project).length ? void 0 : words$1.ipynb.unavailable,
 		build: buildNotebook
 	},
 	{
 		format: "bib",
-		label: "BibTeX",
-		description: "The paper as a citation for LaTeX, Zotero or Mendeley.",
+		label: words$1.bib.label,
+		description: words$1.bib.description,
 		extension: "bib",
 		mime: "application/x-bibtex",
 		build: (project) => buildBibtex(project)
 	},
 	{
 		format: "ris",
-		label: "RIS",
-		description: "The same citation for Zotero, EndNote and most reference managers.",
+		label: words$1.ris.label,
+		description: words$1.ris.description,
 		extension: "ris",
 		mime: "application/x-research-info-systems",
 		build: (project) => buildRis(project)
 	},
 	{
 		format: "anki",
-		label: "Anki flashcards",
-		description: "Primer concepts, quiz questions and glossary, each card with its quote and page.",
+		label: words$1.anki.label,
+		description: words$1.anki.description,
 		extension: "anki.txt",
 		mime: "text/plain",
-		unavailable: (project) => project.primer || project.quiz || project.evidence.glossary.length ? void 0 : "This project has no primer, quiz or glossary to make cards from.",
+		unavailable: (project) => project.primer || project.quiz || project.evidence.glossary.length ? void 0 : words$1.anki.unavailable,
 		build: buildAnkiDeck
 	}
 ];
@@ -20174,6 +21119,18 @@ const generationTaskRoles = generationTaskCatalog.map((task) => task.id);
 function getProvider(providerId) {
 	return providerCatalog.find((provider) => provider.id === providerId);
 }
+const ENGLISH_MODEL_PROVIDER_WORDS = {
+	providerLabels: { local: getProvider("local").label },
+	keyLabels: Object.fromEntries(providerCatalog.map((provider) => [provider.id, provider.keyLabel])),
+	hints: Object.fromEntries(providerCatalog.flatMap((provider) => provider.hint ? [[provider.id, provider.hint]] : [])),
+	modelNotes: Object.fromEntries(providerCatalog.flatMap((provider) => provider.models.map((model) => [model.note, model.note]))),
+	tasks: Object.fromEntries(generationTaskCatalog.map(({ id, label, shortLabel, description, recommendation }) => [id, {
+		label,
+		shortLabel,
+		description,
+		recommendation
+	}]))
+};
 
 //#endregion
 //#region src/lib/search-text.ts
@@ -20219,7 +21176,10 @@ function foldForSearch(value) {
 */
 /** `excerptCheckSchema.unlocated` üst sınırı. Bu sayıya ulaşan kayıt kesilmiş olabilir. */
 const UNLOCATED_LIMIT = 400;
-/** Stüdyo ve ajan köprüsü aynı cümleyi söylesin; nasıl düzeltileceği her yüzeyin kendi işi. */
+/**
+* Stüdyo ve ajan köprüsü aynı cümleyi söylesin; nasıl düzeltileceği her yüzeyin kendi işi.
+* Köprü İngilizcesini kullanıyor; stüdyonun Türkçesi aynı anahtarlarla `src/i18n/messages`'ta.
+*/
 const exclusionDescriptions = {
 	"not-checked": "Its quotes were never checked against the PDF.",
 	"model-not-recorded": "The project does not say which model wrote it.",
@@ -20238,8 +21198,9 @@ function modelIdentity(assignment) {
 		model
 	};
 }
-function modelLabel(model) {
-	return `${model.provider === "native-agent" ? "Agent" : getProvider(model.provider)?.label ?? model.provider} · ${model.model}`;
+const MODEL_LABEL_WORDS = { agent: "Agent" };
+function modelLabel(model, words = MODEL_LABEL_WORDS) {
+	return `${model.provider === "native-agent" ? words.agent : getProvider(model.provider)?.label ?? model.provider} · ${model.model}`;
 }
 /**
 * Model ekibinde alıntıları iki model yazıyor. Dört kanıt aşamasından
@@ -20793,16 +21754,21 @@ function applyReview(review, remembered, now) {
 function isDue(review, now) {
 	return Date.parse(review.due) <= Date.parse(now);
 }
+const DUE_WORDS = {
+	now: "now",
+	tomorrow: "tomorrow",
+	inDays: (days) => `in ${days} days`
+};
 /**
 * "tomorrow", "in 3 days": bir sonraki tekrarın okuyucuya söylenişi. Gün
 * yuvarlanıyor: ekranın açılışıyla yanıt arasında geçen birkaç dakika "3 gün"ü
-* "4 gün" yapmamalı.
+* "4 gün" yapmamalı. Ajan çıktısı hep İngilizce varsayılanla.
 */
-function describeDue(due, now) {
+function describeDue(due, now, words = DUE_WORDS) {
 	const difference = Date.parse(due) - Date.parse(now);
-	if (difference <= 0) return "now";
+	if (difference <= 0) return words.now;
 	const days = Math.max(1, Math.round(difference / DAY_MS));
-	return days === 1 ? "tomorrow" : `in ${days} days`;
+	return days === 1 ? words.tomorrow : words.inDays(days);
 }
 
 //#endregion
@@ -21005,10 +21971,16 @@ function emptyStudyProgress(now) {
 		updatedAt: now
 	};
 }
+/**
+* Sorunun mührü: soru değişince kayıtlı yanıtı ve tekrar kartı düşüyor. Arayüzün
+* diline çevrilen bir soru (okuma alıştırması) İngilizcesiyle mühürleniyor
+* (`signatureBasis`); dil değişmek soruyu değiştirmiş sayılmıyor.
+*/
 function questionSignature(question) {
+	const basis = question.signatureBasis ?? question;
 	return stableHash(canonicalJson({
-		prompt: question.prompt,
-		options: question.options
+		prompt: basis.prompt,
+		options: basis.options
 	}));
 }
 /** Kayıtlı yanıt, yalnızca soru o yanıttan beri değişmediyse. */
@@ -21249,10 +22221,11 @@ function pairKey(left, right) {
 	if (!a || !b || a === b) return void 0;
 	return [a, b].sort().join("\0");
 }
+const ALIAS_WORDS = { sameName: "These are two spellings of the same name; there is nothing to link." };
 /** Kararı yazar; aynı çift için önceki kararın yerini alıyor. */
-function decideAlias(file, left, right, decision, proposedBy, at, reason) {
+function decideAlias(file, left, right, decision, proposedBy, at, reason, words = ALIAS_WORDS) {
 	const key = pairKey(left, right);
-	if (!key) throw new Error("These are two spellings of the same name; there is nothing to link.");
+	if (!key) throw new Error(words.sameName);
 	const rest = file.decisions.filter((item) => pairKey(...item.terms) !== key);
 	const entry = {
 		terms: [left.trim(), right.trim()],
@@ -21471,187 +22444,6 @@ const aliasProposalSchema = object({ pairs: array(object({
 })).max(20) });
 
 //#endregion
-//#region src/lib/seeded.ts
-/**
-* Tohumlu sözde rastgelelik. Aynı proje her açılışta aynı soruları aynı
-* sırayla soruyor: okuyucu yeniden baktığında bir önceki denemesini
-* tanıyabilmeli, testler de sonucu sabitleyebilmeli.
-*/
-/** Küçük, tohumlanabilir bir sözde rastgele üreteç (mulberry32). */
-function seededRandom(seed) {
-	let state = 0;
-	for (const character of seed) state = Math.imul(state, 31) + character.charCodeAt(0) | 0;
-	return () => {
-		state = state + 1831565813 | 0;
-		let value = Math.imul(state ^ state >>> 15, 1 | state);
-		value = value + Math.imul(value ^ value >>> 7, 61 | value) ^ value;
-		return ((value ^ value >>> 14) >>> 0) / 4294967296;
-	};
-}
-function seededShuffle(items, next) {
-	const copy = [...items];
-	for (let index = copy.length - 1; index > 0; index -= 1) {
-		const other = Math.floor(next() * (index + 1));
-		[copy[index], copy[other]] = [copy[other], copy[index]];
-	}
-	return copy;
-}
-
-//#endregion
-//#region src/lib/reading-drill.ts
-/**
-* "Hakem gibi oku": kanıtın kendisinden üretilen sorular.
-*
-* Trace'in öğrettiği asıl beceri bir makaleyi kanıtıyla okumak: bir cümle
-* ölçülmüş bir sonuç mu yoksa yazarların yorumu mu, hangi cümleye dayanıyor,
-* makale tam olarak hangi sayıyı veriyor. Bu sorular model yazmıyor; iddia
-* türünden, alıntılardan ve metriklerden kod üretiyor. Doğru yanıt bu yüzden
-* tanım gereği doğru ve her proje (öğrenme katmanı olmayan da) bunları alıyor.
-*
-* Seçim projenin kimliğiyle tohumlanıyor: aynı proje her açılışta aynı
-* soruları gösteriyor, tekrar eden okuyucu kaldığı yerden devam edebiliyor.
-*/
-const KIND_TEXT = {
-	"reported-result": {
-		option: "A reported result: something the authors measured",
-		meaning: "A reported result is something the authors measured, usually a number or a comparison."
-	},
-	"author-interpretation": {
-		option: "The authors' interpretation of what a result means",
-		meaning: "An interpretation is the authors' reading of a result; it goes beyond what was measured."
-	},
-	method: {
-		option: "The method: what the authors built or did",
-		meaning: "The method is what the authors built or did, not what came out of it."
-	},
-	background: {
-		option: "Background the paper builds on",
-		meaning: "Background is earlier work or prior knowledge the paper relies on, not its own finding."
-	},
-	limitation: {
-		option: "A limitation the paper concedes",
-		meaning: "A limitation is a boundary the paper concedes: what it did not test, or where it may not hold."
-	}
-};
-const KINDS$1 = Object.keys(KIND_TEXT);
-const random = seededRandom;
-const shuffle = seededShuffle;
-const quoted$1 = (text) => `“${text.trim()}”`;
-const pageOf = (claim) => claim.sourceRefs.find((reference) => reference.page)?.page;
-const onPage = (page) => page ? ` (p. ${page})` : "";
-function kindQuestion(claim, next) {
-	const others = shuffle(KINDS$1.filter((kind) => kind !== claim.kind), next).slice(0, 3);
-	const options = shuffle([claim.kind, ...others], next).map((kind) => ({
-		label: KIND_TEXT[kind].option,
-		correct: kind === claim.kind,
-		explanation: kind === claim.kind ? `${KIND_TEXT[kind].meaning} That is what this sentence is${onPage(pageOf(claim))}.` : `${KIND_TEXT[kind].meaning} That is not what this sentence does.`
-	}));
-	return {
-		id: `drill-kind-${claim.id}`,
-		prompt: `What kind of statement is this? ${quoted$1(claim.statement)}`,
-		kind: "single",
-		options,
-		claimIds: [claim.id],
-		page: pageOf(claim)
-	};
-}
-function quoteQuestion(claim, pool, next) {
-	const own = claim.sourceRefs.find((reference) => reference.sourceId === "paper" && reference.excerpt.trim().length >= 20);
-	if (!own) return void 0;
-	const excerpt = own.excerpt.trim();
-	const distractors = shuffle(pool.filter((other) => other.id !== claim.id && other.sourceRefs.every((reference) => reference.excerpt.trim() !== excerpt)), next).sort((left, right) => Number(right.kind === claim.kind) - Number(left.kind === claim.kind)).flatMap((other) => {
-		const reference = other.sourceRefs.find((candidate) => candidate.excerpt.trim().length >= 20);
-		return reference ? [{
-			claim: other,
-			excerpt: reference.excerpt.trim()
-		}] : [];
-	}).filter((item, index, all) => all.findIndex((entry) => entry.excerpt === item.excerpt) === index).slice(0, 3);
-	if (distractors.length < 2) return void 0;
-	const options = shuffle([{
-		label: quoted$1(excerpt),
-		correct: true,
-		explanation: `This is the sentence the claim rests on${onPage(own.page)}.`
-	}, ...distractors.map(({ claim: other, excerpt: text }) => ({
-		label: quoted$1(text),
-		correct: false,
-		explanation: `This sentence supports a different claim: ${quoted$1(other.statement)}`
-	}))], next);
-	return {
-		id: `drill-quote-${claim.id}`,
-		prompt: `Which sentence from the paper supports this claim? ${quoted$1(claim.statement)}`,
-		kind: "single",
-		options,
-		claimIds: [claim.id],
-		page: own.page
-	};
-}
-function numberQuestion(metric, metrics, claims, next) {
-	const unit = metric.unit.trim().toLowerCase();
-	const alternatives = shuffle(metrics.filter((other) => other.id !== metric.id && other.unit.trim().toLowerCase() === unit && other.value !== metric.value), next).filter((item, index, all) => all.findIndex((entry) => entry.displayValue === item.displayValue) === index && item.displayValue !== metric.displayValue);
-	if (alternatives.length < 2) return void 0;
-	const options = shuffle([{
-		label: metric.displayValue,
-		correct: true,
-		explanation: `${metric.context}. The paper: ${quoted$1(metric.sourceRef.excerpt)}${onPage(metric.sourceRef.page)}`
-	}, ...alternatives.slice(0, 3).map((other) => ({
-		label: other.displayValue,
-		correct: false,
-		explanation: `That is the paper's figure for ${other.label}.`
-	}))], next);
-	const carrier = claims.find((claim) => claim.statement.includes(metric.displayValue) || claim.sourceRefs.some((reference) => reference.excerpt.includes(metric.displayValue)));
-	return {
-		id: `drill-number-${metric.id}`,
-		prompt: `Which number does the paper report for ${metric.label}?`,
-		kind: "single",
-		options,
-		claimIds: carrier ? [carrier.id] : [],
-		page: metric.sourceRef.page
-	};
-}
-const READING_DRILL_TITLE = "Read it like a reviewer";
-/**
-* En fazla `limit` soru: tür, alıntı ve sayı soruları sırayla. Soru
-* üretilecek kadar kanıt yoksa (üçten az soru) hiç gösterilmiyor.
-*/
-function readingDrill(evidence, options) {
-	const next = random(options.seed);
-	const rejected = new Set(options.rejectedClaimIds ?? []);
-	const usable = evidence.claims.filter((claim) => !rejected.has(claim.id));
-	const ordered = shuffle(usable, next).sort((left, right) => Number(right.confidence === "verified") - Number(left.confidence === "verified"));
-	const byKind = [
-		"author-interpretation",
-		"reported-result",
-		"limitation",
-		"method",
-		"background"
-	].flatMap((kind) => ordered.filter((claim) => claim.kind === kind).slice(0, 1));
-	const kindQuestions = byKind.map((claim) => kindQuestion(claim, next));
-	const quoteQuestions = ordered.filter((claim) => !byKind.slice(0, 2).includes(claim)).map((claim) => quoteQuestion(claim, usable, next)).filter((question) => Boolean(question));
-	const numberQuestions = shuffle(evidence.metrics, next).map((metric) => numberQuestion(metric, evidence.metrics, usable, next)).filter((question) => Boolean(question));
-	const limit = options.limit ?? 6;
-	const questions = [];
-	for (let round = 0; questions.length < limit && round < limit; round += 1) for (const source of [
-		kindQuestions,
-		quoteQuestions,
-		numberQuestions
-	]) if (questions.length < limit && source[round]) questions.push(source[round]);
-	if (questions.length < 3) return void 0;
-	return {
-		title: READING_DRILL_TITLE,
-		intro: "Questions made from the evidence itself, not by a model: what kind of statement a claim is, which sentence of the paper it rests on, and which number the paper reports. Every answer can be checked on its page.",
-		questions
-	};
-}
-/** Projenin kendi drili: kimliğiyle tohumlanmış, bir insanın reddettiği iddialar hariç. */
-function readingDrillFor(project) {
-	const rejected = Object.entries(project.claimReviews ?? {}).filter(([, review]) => review.status === "rejected").map(([id]) => id);
-	return readingDrill(project.evidence, {
-		seed: project.id,
-		rejectedClaimIds: rejected
-	});
-}
-
-//#endregion
 //#region src/lib/focus-colors.ts
 /**
 * Çalışma saatinin renkleri.
@@ -21756,7 +22548,7 @@ const SESSION_KINDS = [
 	"review",
 	"study"
 ];
-/** Oturum listelerinde adı olmayan bir oturumun adı. */
+/** Oturum listelerinde adı olmayan bir oturumun adı (takvim dosyasında da); arayüzde dile göre `t.focus.sessionKinds`. */
 const SESSION_KIND_LABELS = {
 	focus: "Focus",
 	timer: "Timer",
@@ -21937,15 +22729,29 @@ function workSummary(totals, now, options) {
 		goalDaysThisWeek
 	};
 }
-const monthFormat = new Intl.DateTimeFormat("en", { month: "short" });
+/** Ay adlarının biçimleyicisi, dile göre bir kez kuruluyor; İngilizcesi modül yüklenirken (önceden olduğu gibi). */
+const monthFormats = /* @__PURE__ */ new Map([["en", new Intl.DateTimeFormat("en", { month: "short" })]]);
+const DURATION_WORDS = {
+	underAMinute: "under a minute",
+	hours: (hours) => `${hours}h`,
+	minutes: (minutes) => `${minutes}m`
+};
 /** "2h 15m", "45m", "under a minute". */
 function formatDuration(seconds) {
+	return formatDurationIn(seconds, DURATION_WORDS);
+}
+/**
+* `formatDuration` başka kelimelerle ("2 sa 15 dk"). Ayrı işlev, çünkü
+* `formatDuration` `.map(formatDuration)` ile de çağrılıyor: ikinci
+* parametre dizinin sırasını alırdı.
+*/
+function formatDurationIn(seconds, words) {
 	const whole = Math.max(0, Math.round(seconds));
-	if (whole > 0 && whole < 60) return "under a minute";
+	if (whole > 0 && whole < 60) return words.underAMinute;
 	const hours = Math.floor(whole / 3600);
 	const minutes = Math.floor(whole % 3600 / 60);
-	if (!hours) return `${minutes}m`;
-	return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+	if (!hours) return words.minutes(minutes);
+	return minutes ? `${words.hours(hours)} ${words.minutes(minutes)}` : words.hours(hours);
 }
 
 //#endregion
@@ -21957,12 +22763,13 @@ function cardText(card) {
 	return `${text.slice(0, at)}_____${text.slice(at + answer.length)}`;
 }
 const REVIEW_SESSION_SIZE = 20;
-function reviewCards(projects, progress) {
+/** `drillWords`: okuma alıştırmasının soruları arayüzün dilinde; mühürleri dilden bağımsız. */
+function reviewCards(projects, progress, drillWords) {
 	const cards = [];
 	for (const project of projects) {
 		const reviews = progress.get(project.id)?.reviews ?? [];
 		if (!reviews.length) continue;
-		const questions = new Map([...project.quiz?.questions ?? [], ...readingDrillFor(project)?.questions ?? []].map((question) => [question.id, question]));
+		const questions = new Map([...project.quiz?.questions ?? [], ...readingDrillFor(project, drillWords)?.questions ?? []].map((question) => [question.id, question]));
 		const concepts = new Map((project.primer?.concepts ?? []).map((concept) => [concept.id, concept]));
 		const base = {
 			projectId: project.id,
@@ -22496,14 +23303,20 @@ function workKey(work) {
 	return `title:${normalizePhrase(work.title)}`;
 }
 const sameSource = (left, right) => left.projectId === right.projectId && left.relation === right.relation && (left.concept ?? "") === (right.concept ?? "");
+/** Liste dolu: rota bunu mesajından değil türünden tanıyabilsin (mesaj dile göre değişebiliyor). */
+var ReadingListFullError = class extends Error {};
+const READING_LIST_LIMIT_WORDS = {
+	full: (max) => `The reading list holds at most ${max} papers.`,
+	tooMany: (max, room) => `The reading list holds at most ${max} papers; ${room} more fit.`
+};
 /**
 * Listeye ekler; çalışma zaten listedeyse nereden geldiği birleşiyor ve
 * bilgileri tazeleniyor, eklenme zamanı ve sırası korunuyor.
 */
-function addToReadingList(list, incoming) {
+function addToReadingList(list, incoming, words = READING_LIST_LIMIT_WORDS) {
 	const existing = list.find((item) => item.id === incoming.id);
 	if (!existing) {
-		if (list.length >= 500) throw new Error(`The reading list holds at most ${500} papers.`);
+		if (list.length >= 500) throw new ReadingListFullError(words.full(500));
 		return [...list, incoming];
 	}
 	const from = [...existing.from, ...incoming.from.filter((source) => !existing.from.some((item) => sameSource(item, source)))].slice(0, 20);
@@ -22520,10 +23333,10 @@ function addToReadingList(list, incoming) {
 * Birçok çalışmayı birden (Zotero ya da .bib içe aktarımı): ya hepsi sığıyor
 * ya hiçbiri eklenmiyor; yarısı eklenmiş bir içe aktarma kafa karıştırırdı.
 */
-function addAllToReadingList(list, incoming) {
+function addAllToReadingList(list, incoming, words = READING_LIST_LIMIT_WORDS) {
 	const fresh = new Set(incoming.map((item) => item.id).filter((id) => !list.some((item) => item.id === id)));
-	if (list.length + fresh.size > 500) throw new Error(`The reading list holds at most ${500} papers; ${500 - list.length} more fit.`);
-	return incoming.reduce((current, item) => addToReadingList(current, item), [...list]);
+	if (list.length + fresh.size > 500) throw new ReadingListFullError(words.tooMany(500, 500 - list.length));
+	return incoming.reduce((current, item) => addToReadingList(current, item, words), [...list]);
 }
 function removeFromReadingList(list, id) {
 	return list.filter((item) => item.id !== id);
@@ -22611,19 +23424,27 @@ function mergeReadingOrder(order, list, library) {
 		others
 	};
 }
+const SAVED_REASON_WORDS = {
+	beforeConcept: (title, concept) => `Before ${title}: it explains ${concept ?? "a concept"}, which that paper assumes.`,
+	beforeReference: (title) => `Before ${title}: that paper builds on it.`,
+	afterCitedBy: (title) => `After ${title}: it cites that paper.`,
+	explainsConcept: (title, concept) => `It explains ${concept ?? "a concept"}, which ${title} assumes.`,
+	buildsOn: (title) => `${title} builds on it.`,
+	cites: (title) => `It cites ${title}.`
+};
 /** Okuyucuya "neden burada": kavramı anlatıyor, makale ona dayanıyor ya da ona atıf yapıyor. */
-function savedReason(why) {
+function savedReason(why, words = SAVED_REASON_WORDS) {
 	const title = why.project.evidence.paper.title;
-	if (why.relation === "concept") return `Before ${title}: it explains ${why.concept ?? "a concept"}, which that paper assumes.`;
-	if (why.relation === "reference") return `Before ${title}: that paper builds on it.`;
-	return `After ${title}: it cites that paper.`;
+	if (why.relation === "concept") return words.beforeConcept(title, why.concept);
+	if (why.relation === "reference") return words.beforeReference(title);
+	return words.afterCitedBy(title);
 }
 /** Sırada yeri olmayan bir çalışma için: nereden kaydedildiği. */
-function savedFrom(why) {
+function savedFrom(why, words = SAVED_REASON_WORDS) {
 	const title = why.project.evidence.paper.title;
-	if (why.relation === "concept") return `It explains ${why.concept ?? "a concept"}, which ${title} assumes.`;
-	if (why.relation === "reference") return `${title} builds on it.`;
-	return `It cites ${title}.`;
+	if (why.relation === "concept") return words.explainsConcept(title, why.concept);
+	if (why.relation === "reference") return words.buildsOn(title);
+	return words.cites(title);
 }
 
 //#endregion
@@ -22918,6 +23739,8 @@ function parseNotesFile(raw) {
 	return entries;
 }
 const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
+/** Artık projede olmayan hedeflerin notlarının başlığı; ekranlar bunu kendi dillerinde gösteriyor. */
+const ORPHAN_HEADING = "No longer in the paper";
 /**
 * Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, Primer
 * kavramları, sonra iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
@@ -22966,7 +23789,7 @@ function groupNotes(project, notes) {
 	const orphans = notes.filter((note) => !used.has(note.id));
 	if (orphans.length) groups.push({
 		target: orphans[0].target,
-		heading: "No longer in the paper",
+		heading: ORPHAN_HEADING,
 		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
 		notes: orphans
 	});
@@ -23023,6 +23846,10 @@ function notesFileName(project) {
 * kendisinden `/r/<kimlik>` adresinde sunuluyor; makale yayınları gibi
 * (`publications.ts`) bağlantıyı bilen açıyor, listeleme yok, yayından
 * kaldırılabiliyor ve isteğe bağlı bir son kullanma tarihi var.
+*
+* Liste birçok dildeki makaleyi bir arada taşıyor; sayfanın dili listeyi
+* paylaşan kişinin arayüz dili (`language`, paylaşırken kaydediliyor; eski
+* kayıtlarda yok, onlar İngilizce).
 */
 const readingShareIdPattern = /^[a-f0-9]{20}$/;
 const MAX_SHARED_WORKS = 500;
@@ -23046,6 +23873,8 @@ const readingShareSchema = object({
 	expiresAt: datetime().nullable(),
 	/** Kütüphanedeki makaleler de sırada mı. */
 	includePapers: boolean(),
+	/** Sayfanın dili: paylaşanın arayüz dili. Yoksa İngilizce. */
+	language: _enum(["en", "tr"]).optional(),
 	works: array(sharedWorkSchema).max(500)
 });
 /** Çalışmanın açılacağı yer: kendi adresi, yoksa arXiv ya da DOI. */
@@ -24212,16 +25041,21 @@ function detectFormat(name, text) {
 	if (/^TY {2}-/m.test(text)) return "ris";
 	if (/@\s*[A-Za-z]+\s*[{(]/.test(text)) return "bibtex";
 }
-function parseReferenceFile(name, text) {
-	if (text.length > 5242880) throw new Error("The file is larger than 5 MB.");
+const REFERENCE_IMPORT_WORDS = {
+	tooLarge: "The file is larger than 5 MB.",
+	unknownFormat: "This is not a BibTeX, RIS or CSL JSON file. In Zotero, use Export Collection… and choose one of those formats.",
+	unreadable: (format) => `The ${format} file could not be read.`
+};
+function parseReferenceFile(name, text, words = REFERENCE_IMPORT_WORDS) {
+	if (text.length > 5242880) throw new Error(words.tooLarge);
 	const format = detectFormat(name, text);
-	if (!format) throw new Error("This is not a BibTeX, RIS or CSL JSON file. In Zotero, use Export Collection… and choose one of those formats.");
+	if (!format) throw new Error(words.unknownFormat);
 	try {
 		if (format === "bibtex") return parseBibtex(text);
 		if (format === "ris") return parseRis(text);
 		return parseCslJson(text);
 	} catch {
-		throw new Error(`The ${FORMAT_LABELS[format]} file could not be read.`);
+		throw new Error(words.unreadable(FORMAT_LABELS[format]));
 	}
 }
 /** Okuma listesinin kaydı: kimlik arXiv varsa arXiv, yoksa DOI; ikisi de yoksa başlıktan. */

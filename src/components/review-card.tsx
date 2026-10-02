@@ -5,6 +5,7 @@ import { ConceptBody, QuizView } from "@/visuals";
 import { clozeMatches } from "@/lib/highlight-cards";
 import type { ReviewCard } from "@/lib/review-queue";
 import type { ResearchProject } from "@/lib/schema";
+import { useT } from "@/i18n/client";
 
 /**
  * Bir tekrar kartının içi. Soru çalışmadaki gibi yanıtlanıyor; yalnızca ilk
@@ -19,14 +20,15 @@ import type { ResearchProject } from "@/lib/schema";
 function ClozeCard({ card, graded, onMark }: { card: Extract<ReviewCard, { kind: "highlight" }>; graded: boolean; onMark: (remembered: boolean) => void }) {
   const [typed, setTyped] = useState("");
   const [outcome, setOutcome] = useState<"right" | "wrong" | "shown">();
+  const t = useT().paper.reviewCard;
   const { text, at, answer, where } = card.cloze;
   const open = Boolean(outcome);
   return (
     <div className="review-cloze">
-      <p className="review-prompt">Fill in the blank in your highlight{where ? ` from “${where}”` : ""}.</p>
+      <p className="review-prompt">{t.fillBlank(where)}</p>
       <blockquote lang={card.language}>
         {text.slice(0, at)}
-        <span className={`cloze-blank${open ? " is-open" : ""}`}>{open ? answer : <span aria-label="blank">_____</span>}</span>
+        <span className={`cloze-blank${open ? " is-open" : ""}`}>{open ? answer : <span aria-label={t.blank}>_____</span>}</span>
         {text.slice(at + answer.length)}
       </blockquote>
       {!open ? (
@@ -40,16 +42,16 @@ function ClozeCard({ card, graded, onMark }: { card: Extract<ReviewCard, { kind:
             if (right) onMark(true);
           }}
         >
-          <input value={typed} onChange={(event) => setTyped(event.target.value)} aria-label="The missing word" placeholder="The missing word" autoComplete="off" lang={card.language} />
-          <button type="submit" className="quiz-check" disabled={!typed.trim()}>Check</button>
-          <button type="button" className="cloze-show" onClick={() => setOutcome("shown")}>Show the answer</button>
+          <input value={typed} onChange={(event) => setTyped(event.target.value)} aria-label={t.missingWord} placeholder={t.missingWord} autoComplete="off" lang={card.language} />
+          <button type="submit" className="quiz-check" disabled={!typed.trim()}>{t.check}</button>
+          <button type="button" className="cloze-show" onClick={() => setOutcome("shown")}>{t.showAnswer}</button>
         </form>
       ) : null}
-      {outcome === "wrong" ? <p className="cloze-said">You wrote “{typed.trim()}”.</p> : null}
+      {outcome === "wrong" ? <p className="cloze-said">{t.youWrote(typed.trim())}</p> : null}
       {outcome && outcome !== "right" && !graded ? (
-        <div className="review-grade" role="group" aria-label="Did you remember it?">
-          <button onClick={() => onMark(true)}>{outcome === "wrong" ? "I had it" : "I remembered it"}</button>
-          <button onClick={() => onMark(false)}>Not yet</button>
+        <div className="review-grade" role="group" aria-label={t.rememberAria}>
+          <button onClick={() => onMark(true)}>{outcome === "wrong" ? t.hadIt : t.remembered}</button>
+          <button onClick={() => onMark(false)}>{t.notYet}</button>
         </div>
       ) : null}
     </div>
@@ -58,6 +60,7 @@ function ClozeCard({ card, graded, onMark }: { card: Extract<ReviewCard, { kind:
 
 export function ReviewCardBody({ card, project, graded, onMark }: { card: ReviewCard; project: ResearchProject; graded: boolean; onMark: (remembered: boolean) => void }) {
   const [revealed, setRevealed] = useState(false);
+  const t = useT().paper.reviewCard;
   if (card.kind === "highlight") return <ClozeCard card={card} graded={graded} onMark={onMark} />;
   if (card.kind === "question") {
     return (
@@ -70,19 +73,19 @@ export function ReviewCardBody({ card, project, graded, onMark }: { card: Review
   }
   return (
     <div className="review-concept">
-      <p className="review-prompt">What does it mean, and why does this paper need it?</p>
+      <p className="review-prompt">{t.conceptPrompt}</p>
       <h2 lang={card.language}>{card.concept.term}</h2>
       {revealed ? (
         <div className="primer-body" lang={card.language}>
           <ConceptBody concept={card.concept} prerequisites={[]} />
         </div>
       ) : (
-        <button className="quiz-check" onClick={() => setRevealed(true)}>Show the answer</button>
+        <button className="quiz-check" onClick={() => setRevealed(true)}>{t.showAnswer}</button>
       )}
       {revealed && !graded ? (
-        <div className="review-grade" role="group" aria-label="Did you remember it?">
-          <button onClick={() => onMark(true)}>I remembered it</button>
-          <button onClick={() => onMark(false)}>Not yet</button>
+        <div className="review-grade" role="group" aria-label={t.rememberAria}>
+          <button onClick={() => onMark(true)}>{t.remembered}</button>
+          <button onClick={() => onMark(false)}>{t.notYet}</button>
         </div>
       ) : null}
     </div>

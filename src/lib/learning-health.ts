@@ -1,5 +1,5 @@
 import { collectParams, evaluateFormula, parseFormula } from "./formula";
-import { learningBlockList, missingLearningBlocks, type LearningBlockId } from "./learning-generation";
+import { learningBlockIds, learningBlockSpec, missingLearningBlocks, type LearningBlockId } from "./learning-generation";
 import type { Claim, Interactive, QuizQuestion, ResearchProject } from "./schema";
 import { markTerms, termIndex } from "./term-index";
 
@@ -218,6 +218,17 @@ export function spareQuestion(health: Pick<LearningHealth, "sections">, question
   );
 }
 
-export function describeMissingBlocks(blocks: readonly LearningBlockId[]) {
-  return learningBlockList(blocks);
+/**
+ * Eksik blokların adları ve listenin bağlacı; Türkçesi arayüz sözlüğünde
+ * (`learning`). İngilizcesi üretimin kendi adları (`learningBlockList` ile aynı).
+ */
+export type MissingBlockWords = { nouns: Record<LearningBlockId, string>; list: (nouns: readonly string[]) => string };
+export const MISSING_BLOCK_WORDS: MissingBlockWords = {
+  nouns: Object.fromEntries(learningBlockIds.map((block) => [block, learningBlockSpec(block).noun])) as Record<LearningBlockId, string>,
+  list: (nouns) => (nouns.length <= 1 ? (nouns[0] ?? "") : `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}`),
+};
+
+/** "the primer, the quiz and the derivations" */
+export function describeMissingBlocks(blocks: readonly LearningBlockId[], words: MissingBlockWords = MISSING_BLOCK_WORDS) {
+  return words.list(blocks.map((block) => words.nouns[block]));
 }

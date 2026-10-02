@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { KeyRound, Server } from "lucide-react";
-import { defaultModelByProvider, getProvider, providerCatalog, resolveProviderModel, type ModelAssignment, type ProviderId } from "@/lib/model-providers";
+import { useT } from "@/i18n/client";
+import { defaultModelByProvider, getProvider, localizedProvider, providerCatalog, resolveProviderModel, type ModelAssignment, type ProviderId } from "@/lib/model-providers";
 
 // Bölüm yeniden üretimiyle aynı tercih: kullanıcı modelini bir kez seçsin. Anahtar hiçbir zaman saklanmaz.
 export const MODEL_PREFERENCE_KEY = "trace-regeneration-model-v1";
@@ -42,19 +43,20 @@ export function ModelKeyFields({
   apiKey: string;
   onApiKey: (value: string) => void;
 }) {
-  const provider = getProvider(assignment.provider)!;
+  const { providers: words, keyFields: t } = useT().studio.models;
+  const provider = localizedProvider(getProvider(assignment.provider)!, words);
   return (
     <div className="regen-model">
       <div className="model-select provider-select">
-        <select aria-label="Provider" value={assignment.provider} onChange={(event) => onAssignment({ provider: event.target.value as ProviderId, model: defaultModelByProvider[event.target.value as ProviderId] })}>
-          {providerCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        <select aria-label={t.provider} value={assignment.provider} onChange={(event) => onAssignment({ provider: event.target.value as ProviderId, model: defaultModelByProvider[event.target.value as ProviderId] })}>
+          {providerCatalog.map((item) => <option key={item.id} value={item.id}>{localizedProvider(item, words).label}</option>)}
         </select>
       </div>
       <div className="model-select">
         {provider.freeformModel ? (
-          <input aria-label="Model" value={assignment.model} onChange={(event) => onAssignment({ ...assignment, model: event.target.value })} spellCheck={false} />
+          <input aria-label={t.model} value={assignment.model} onChange={(event) => onAssignment({ ...assignment, model: event.target.value })} spellCheck={false} />
         ) : (
-          <select aria-label="Model" value={assignment.model} onChange={(event) => onAssignment({ ...assignment, model: event.target.value })}>
+          <select aria-label={t.model} value={assignment.model} onChange={(event) => onAssignment({ ...assignment, model: event.target.value })}>
             {provider.models.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.note}</option>)}
           </select>
         )}
@@ -64,7 +66,7 @@ export function ModelKeyFields({
         <input
           type={provider.local ? "text" : "password"}
           aria-label={provider.keyLabel}
-          placeholder={provider.local ? "Local server address (optional)" : provider.keyLabel}
+          placeholder={provider.local ? t.localAddress : provider.keyLabel}
           value={apiKey}
           onChange={(event) => onApiKey(event.target.value)}
           autoComplete="off"

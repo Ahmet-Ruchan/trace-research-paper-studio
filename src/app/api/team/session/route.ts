@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { clearedSessionCookie, listMembers, sessionCookie, sessionToken, signIn, signOut } from "@/lib/server/team-store";
 import { teamBody, teamFailure, teamJson } from "@/lib/server/team-http";
+import { serverText } from "@/lib/server/server-text";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const { token, member } = signIn(body.name, body.password);
     return teamJson({ ok: true, me: member, ...listMembers() }, { cookie: sessionCookie(token, request) });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }
 
@@ -22,6 +23,6 @@ export async function DELETE(request: Request) {
     signOut(sessionToken(request.headers.get("cookie")));
     return teamJson({ ok: true }, { cookie: clearedSessionCookie() });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }

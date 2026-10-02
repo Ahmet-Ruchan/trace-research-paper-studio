@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { messagesFor } from "@/i18n/messages";
 import {
+  ENGLISH_MODEL_PROVIDER_WORDS,
   createSingleModelTeam,
+  generationTaskCatalog,
+  getProvider,
+  localizedProvider,
+  localizedTaskCatalog,
   defaultModelByProvider,
   documentTaskRoles,
   generationTaskRoles,
@@ -112,5 +118,30 @@ describe("model provider catalog", () => {
     delete older.teaching;
     expect(withTeachingRole(older as Omit<ModelTeam, "teaching">).teaching).toEqual(recommendedModelTeam.report);
     expect(withTeachingRole(recommendedModelTeam)).toEqual(recommendedModelTeam);
+  });
+});
+
+describe("the catalogue in the reader's language", () => {
+  it("leaves the catalogue as it is in English", () => {
+    expect(messagesFor("en").studio.models.providers).toBe(ENGLISH_MODEL_PROVIDER_WORDS);
+    for (const provider of providerCatalog) expect(localizedProvider(provider)).toEqual(provider);
+    expect(localizedTaskCatalog()).toEqual(generationTaskCatalog);
+  });
+
+  it("translates names, key labels, notes and tasks, never ids or brand names", () => {
+    const words = messagesFor("tr").studio.models.providers;
+    const local = localizedProvider(getProvider("local")!, words);
+    expect(local).toMatchObject({ id: "local", label: "Yerel model", keyLabel: "Yerel sunucu adresi" });
+    expect(local.hint).toMatch(/Poppler/);
+    const gemini = localizedProvider(getProvider("gemini")!, words);
+    expect(gemini.label).toBe("Google Gemini");
+    expect(gemini.keyLabel).toBe("Gemini API anahtarı");
+    expect(gemini.models.map((model) => model.id)).toEqual(getProvider("gemini")!.models.map((model) => model.id));
+    expect(gemini.models[0].note).toBe("Hızlı");
+    const tasks = localizedTaskCatalog(words);
+    expect(tasks.map((task) => task.id)).toEqual(generationTaskRoles);
+    expect(tasks[0].shortLabel).toBe("Kanıt");
+    // Her İngilizce notun Türkçesi var.
+    for (const note of Object.keys(ENGLISH_MODEL_PROVIDER_WORDS.modelNotes)) expect(words.modelNotes[note], note).toBeTruthy();
   });
 });

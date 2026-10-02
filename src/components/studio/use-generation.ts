@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { initialGenerationProgress, readGenerationStream, type GenerationProgress } from "@/lib/generation-events";
+import { useT } from "@/i18n/client";
+import { initialProgressIn, readGenerationStream, type GenerationProgress } from "@/lib/generation-events";
 import { researchProjectSchema, type ResearchProject } from "@/lib/schema";
 import type { GenerationOptions } from "../onboarding";
 
@@ -33,8 +34,9 @@ export function useGeneration({
   onResult: (project: ResearchProject, warnings: string[], file: File) => Promise<void>;
   onFailure: (message: string) => void;
 }) {
+  const t = useT().studio.generation;
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState<GenerationProgress>(initialGenerationProgress);
+  const [progress, setProgress] = useState<GenerationProgress>(() => initialProgressIn(t.events));
   const controller = useRef<AbortController | undefined>(undefined);
   const checkpointCount = useRef(0);
 
@@ -43,7 +45,7 @@ export function useGeneration({
     controller.current = current;
     const savedCheckpoint = window.localStorage.getItem(CHECKPOINT_KEY);
     checkpointCount.current = checkpointPartCount(savedCheckpoint);
-    setProgress(initialGenerationProgress);
+    setProgress(initialProgressIn(t.events));
     setLoading(true);
     onStart();
     try {
@@ -66,7 +68,7 @@ export function useGeneration({
 
       if (!response.ok) {
         const data = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-        throw new Error(data?.error ?? "The paper could not be generated.");
+        throw new Error(data?.error ?? t.notGenerated);
       }
 
       let projectData: unknown;
@@ -74,7 +76,7 @@ export function useGeneration({
       const contentType = response.headers.get("content-type") ?? "";
 
       if (contentType.includes("application/x-ndjson")) {
-        if (!response.body) throw new Error("The generation stream could not be started.");
+        if (!response.body) throw new Error(t.streamNotStarted);
         await readGenerationStream(response.body, (event) => {
           if (event.type === "progress") setProgress(event);
           if (event.type === "checkpoint") {
@@ -90,8 +92,8 @@ export function useGeneration({
             setProgress({
               stage: "finalize",
               progress: 100,
-              title: "Research workspace ready.",
-              detail: "Evidence map and StorySpec built successfully.",
+              title: t.readyTitle,
+              detail: t.readyDetail,
             });
           }
         });
@@ -101,19 +103,17 @@ export function useGeneration({
           error?: string;
           warnings?: string[];
         };
-        if (!data.project) throw new Error(data.error ?? "The paper could not be generated.");
+        if (!data.project) throw new Error(data.error ?? t.notGenerated);
         projectData = data.project;
         responseWarnings = data.warnings ?? [];
       }
 
-      if (!projectData) throw new Error("Generation finished but no project data came back.");
+      if (!projectData) throw new Error(t.noProjectData);
       await onResult(researchProjectSchema.parse(projectData), responseWarnings, options.file);
     } catch (caught) {
       const aborted = current.signal.aborted || caught instanceof DOMException && caught.name === "AbortError";
-      const resumeNote = checkpointCount.current > 0
-        ? ` ${checkpointCount.current}/4 evidence stages were saved; press Analyse paper again to resume from here.`
-        : "";
-      onFailure(aborted ? "Generation cancelled; no API key or temporary file was kept." : `${caught instanceof Error ? caught.message : "Something unexpected went wrong."}${resumeNote}`);
+      const resumeNote = checkpointCount.current > 0 ? t.resumeNote(checkpointCount.current) : "";
+      onFailure(aborted ? t.cancelled : `${caught instanceof Error ? caught.message : t.unexpected}${resumeNote}`);
     } finally {
       if (controller.current === current) controller.current = undefined;
       setLoading(false);

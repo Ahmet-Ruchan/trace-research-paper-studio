@@ -7,25 +7,13 @@ import {
   MAX_REVISION_LABEL,
   REVISION_LIMIT,
   describeProjectChanges,
-  type RevisionReason,
+  revisionFieldLabel,
   type RevisionSummary,
   type TextChange,
 } from "@/lib/project-revisions";
 import type { ResearchProject } from "@/lib/schema";
 import { diffWords, withContext } from "@/lib/text-diff";
-
-const reasonLabels: Record<RevisionReason, string> = {
-  edit: "Before edits",
-  regenerate: "Before a regenerated section",
-  restore: "Before a restore",
-  import: "Before an import",
-  manual: "Saved version",
-  agent: "Before an agent update",
-  verify: "Before a quote check",
-  learning: "Before the learning layer was added",
-};
-
-const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
+import { useT } from "@/i18n/client";
 
 type HistoryPanelProps = {
   project: ResearchProject;
@@ -36,6 +24,10 @@ type HistoryPanelProps = {
 type Selected = { summary: RevisionSummary; project: ResearchProject };
 
 export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps) {
+  const messages = useT();
+  const t = messages.paper.history;
+  const reasonLabels = t.reasons;
+  const dateFormat = useMemo(() => new Intl.DateTimeFormat(messages.common.locale, { dateStyle: "medium", timeStyle: "short" }), [messages.common.locale]);
   const [revisions, setRevisions] = useState<RevisionSummary[]>();
   const [selected, setSelected] = useState<Selected>();
   const [loadingId, setLoadingId] = useState<string>();
@@ -51,10 +43,12 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
       .catch((caught: unknown) => {
         if (!active) return;
         setRevisions([]);
-        setError(caught instanceof Error ? caught.message : "The history could not be loaded.");
+        setError(caught instanceof Error ? caught.message : t.loadFailed);
       });
     return () => { active = false; };
     // Proje her düzenlemede yeni bir nesne; liste yalnızca proje değişince yenilenir.
+    // Dil değişince yeniden yüklenmesin; hata metni o anki dilde kalır.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
   useEffect(() => {
@@ -64,8 +58,8 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
   }, [onClose]);
 
   const changes = useMemo(
-    () => (selected ? describeProjectChanges(selected.project, project) : []),
-    [selected, project],
+    () => (selected ? describeProjectChanges(selected.project, project, t.changes) : []),
+    [selected, project, t.changes],
   );
 
   async function select(summary: RevisionSummary) {
@@ -75,7 +69,7 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
       const loaded = await loadLibraryRevision(project.id, summary.id);
       setSelected({ summary: loaded.revision, project: loaded.project });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "That version could not be opened.");
+      setError(caught instanceof Error ? caught.message : t.openFailed);
     } finally {
       setLoadingId(undefined);
     }
@@ -92,7 +86,7 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
       setRevisions((current) => [revision, ...(current ?? [])]);
       setLabel("");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The version could not be saved.");
+      setError(caught instanceof Error ? caught.message : t.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -103,11 +97,11 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
       <div className="regen-panel wide history-panel">
         <header className="regen-header">
           <div>
-            <span><History size={13} /> Version history</span>
-            <h2 id="history-title">Earlier versions of this project</h2>
-            <p>Trace keeps the version a change replaced: every regenerated section, restore and import, and a snapshot every ten minutes while you edit. The latest {REVISION_LIMIT} are kept.</p>
+            <span><History size={13} /> {t.kicker}</span>
+            <h2 id="history-title">{t.title}</h2>
+            <p>{t.intro(REVISION_LIMIT)}</p>
           </div>
-          <button className="regen-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
+          <button className="regen-close" onClick={onClose} aria-label={messages.common.close}><X size={16} /></button>
         </header>
 
         <div className="regen-body">
@@ -116,20 +110,20 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
               value={label}
               maxLength={MAX_REVISION_LABEL}
               onChange={(event) => setLabel(event.target.value)}
-              placeholder="Name this version (optional)"
-              aria-label="Version name"
+              placeholder={t.namePlaceholder}
+              aria-label={t.nameAria}
             />
             <button className="regen-primary" disabled={saving} onClick={() => { void saveVersion(); }}>
-              <Bookmark size={14} /> {saving ? "Saving…" : "Save this version"}
+              <Bookmark size={14} /> {saving ? messages.common.saving : t.saveThis}
             </button>
           </div>
           {error && <p className="regen-error" role="alert">{error}</p>}
 
           <div className="history-layout">
             <ol className="history-list">
-              {revisions === undefined && <li className="history-empty">Loading…</li>}
+              {revisions === undefined && <li className="history-empty">{messages.common.loading}</li>}
               {revisions?.length === 0 && (
-                <li className="history-empty">No earlier versions yet. They appear after the first regenerated section, restore, import or longer edit.</li>
+                <li className="history-empty">{t.empty}</li>
               )}
               {revisions?.map((revision) => (
                 <li key={revision.id}>
@@ -140,7 +134,7 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
                   >
                     <b>{revision.label ?? reasonLabels[revision.reason]}</b>
                     <small>{dateFormat.format(new Date(revision.savedAt))}{revision.label ? ` · ${reasonLabels[revision.reason]}` : ""}</small>
-                    <small>{revision.claims} claims · {revision.storySections} story · {revision.reportSections} report sections</small>
+                    <small>{t.counts(revision.claims, revision.storySections, revision.reportSections)}</small>
                   </button>
                 </li>
               ))}
@@ -148,20 +142,18 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
 
             <section className="history-detail" aria-live="polite">
               {!selected ? (
-                <p className="regen-note">Pick a version to see what has changed since.</p>
+                <p className="regen-note">{t.pick}</p>
               ) : (
                 <>
                   <h3>{selected.summary.label ?? reasonLabels[selected.summary.reason]}</h3>
-                  <p className="regen-note">
-                    Saved {dateFormat.format(new Date(selected.summary.savedAt))}. Restoring it replaces the current project; the current one is kept in this history first, so the restore can be undone.
-                  </p>
+                  <p className="regen-note">{t.savedAt(dateFormat.format(new Date(selected.summary.savedAt)))}</p>
                   {changes.length === 0 ? (
-                    <p className="regen-note">Nothing has changed since this version.</p>
+                    <p className="regen-note">{t.unchanged}</p>
                   ) : (
                     <>
-                      <span className="history-caption">Changed since this version</span>
+                      <span className="history-caption">{t.changedSince}</span>
                       <p className="history-legend">
-                        <del>Struck through</del> is what this version says; <ins>highlighted</ins> is what the project says now. Restoring brings back the struck text.
+                        <del>{t.legend.struck}</del>{t.legend.afterStruck}<ins>{t.legend.highlighted}</ins>{t.legend.afterHighlighted}
                       </p>
                       <ul className="history-changes">
                         {changes.map((change, index) => (
@@ -170,8 +162,8 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
                             {change.subject && <small lang={project.language}>{change.subject}</small>}
                             {change.texts && (
                               <details className="history-diff">
-                                <summary>Show the text</summary>
-                                {change.texts.map((text) => <TextDiff key={text.field} change={text} language={project.language} />)}
+                                <summary>{t.showText}</summary>
+                                {change.texts.map((text) => <TextDiff key={text.field} change={text} label={revisionFieldLabel(text.field, t.changes)} language={project.language} />)}
                               </details>
                             )}
                           </li>
@@ -187,12 +179,12 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
                         setRestoring(true);
                         setError(undefined);
                         onRestore(selected.project).catch((caught: unknown) => {
-                          setError(caught instanceof Error ? caught.message : "The version could not be restored.");
+                          setError(caught instanceof Error ? caught.message : t.restoreFailed);
                           setRestoring(false);
                         });
                       }}
                     >
-                      <RotateCcw size={14} /> {restoring ? "Restoring…" : "Restore this version"}
+                      <RotateCcw size={14} /> {restoring ? t.restoring : t.restoreThis}
                     </button>
                   </footer>
                 </>
@@ -209,11 +201,11 @@ export function HistoryPanel({ project, onRestore, onClose }: HistoryPanelProps)
  * Bir metin alanının kelime farkı. Silinen ve eklenen parçalar ekran
  * okuyucularda da ayrışsın diye `del` ve `ins` öğeleri kullanılıyor.
  */
-function TextDiff({ change, language }: { change: TextChange; language: string }) {
+function TextDiff({ change, label, language }: { change: TextChange; label: string; language: string }) {
   const segments = useMemo(() => withContext(diffWords(change.before, change.after)), [change.before, change.after]);
   return (
     <div className="history-diff-field">
-      <span>{change.field}</span>
+      <span>{label}</span>
       <p lang={language}>
         {segments.map((segment, index) => (
           segment.type === "removed" ? <del key={index}>{segment.text}</del>

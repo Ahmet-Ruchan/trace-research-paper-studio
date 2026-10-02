@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Layers } from "lucide-react";
+import { useUiLanguage } from "@/i18n/client";
 import { LanguageProvider } from "@/visuals";
-import { CARD_KIND_LABELS, dueCards, recordReview, reviewCards, reviewForecast, type ReviewCard } from "@/lib/review-queue";
+import { dueCards, recordReview, reviewCards, reviewForecast, type ReviewCard } from "@/lib/review-queue";
 import { REVIEW_INTERVALS_DAYS, describeDue } from "@/lib/review-schedule";
 import { extendReviewBlock, type ReviewBlock } from "@/lib/work-log";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyProgress } from "@/lib/study-path";
-import { putStudyProgress, readLibraryStudy } from "./study-progress";
+import { putStudyProgress, readLibraryStudy, useStudyProgressText } from "./study-progress";
 import { ReviewCardBody } from "./review-card";
 import { useFocus } from "./focus/focus-provider";
 import { FocusRoundBar } from "./focus/paper-time";
@@ -16,8 +17,6 @@ import { StudioNav } from "./focus/studio-nav";
 
 type Load = { status: "loading" } | { status: "failed"; message: string } | { status: "ready" };
 type Grade = { remembered: boolean; due: string; at: string };
-
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 /**
  * Tekrar: kütüphanedeki bütün makalelerin vadesi gelmiş kartları, tek tek.
@@ -46,6 +45,16 @@ export function ReviewView({
   backLabel: string;
   onOpen: (project: ResearchProject) => void;
 }) {
+  const { language, t: messages } = useUiLanguage();
+  const learning = messages.learning;
+  const t = learning.reviewView;
+  const due = (at: string, from: string) => describeDue(at, from, learning.words.due);
+  const progressText = useStudyProgressText();
+  // Yeni oturumun kartları o anki dilde; açık oturum dil değişince yeniden yüklenmiyor.
+  const drillWords = useRef(learning.words.readingDrill);
+  useEffect(() => {
+    drillWords.current = learning.words.readingDrill;
+  }, [learning]);
   const scoped = useMemo(() => (projectId ? projects.filter((item) => item.id === projectId) : projects), [projects, projectId]);
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [study, setStudy] = useState<Map<string, StudyProgress>>(new Map());
@@ -63,21 +72,21 @@ export function ReviewView({
   // Kartlar açılışta okunuyor; oturum o anki kuyruktan kuruluyor.
   useEffect(() => {
     let cancelled = false;
-    readLibraryStudy()
+    readLibraryStudy(progressText.current)
       .then((entries) => {
         if (cancelled) return;
         setStudy(entries);
-        setSession(dueCards(reviewCards(scoped, entries), new Date().toISOString()));
+        setSession(dueCards(reviewCards(scoped, entries, drillWords.current), new Date().toISOString()));
         setIndex(0);
         setLoad({ status: "ready" });
       })
       .catch((error: unknown) => {
-        if (!cancelled) setLoad({ status: "failed", message: error instanceof Error ? error.message : "The review cards could not be read." });
+        if (!cancelled) setLoad({ status: "failed", message: error instanceof Error ? error.message : progressText.current.cardsReadFailed });
       });
     return () => {
       cancelled = true;
     };
-  }, [scoped]);
+  }, [scoped, progressText]);
 
   const forecast = useMemo(() => reviewForecast(reviewCards(scoped, study), now), [scoped, study, now]);
   const card = session[index];
@@ -94,10 +103,10 @@ export function ReviewView({
   function save(target: string, progress: StudyProgress) {
     queue.current = queue.current.then(async () => {
       try {
-        await putStudyProgress(target, progress);
+        await putStudyProgress(target, progress, progressText.current);
         setSaveError(undefined);
       } catch (error) {
-        setSaveError(error instanceof Error ? error.message : "The review could not be saved.");
+        setSaveError(error instanceof Error ? error.message : progressText.current.reviewSaveFailed);
       }
     });
   }
@@ -131,7 +140,7 @@ export function ReviewView({
   }
 
   function another() {
-    setSession(dueCards(reviewCards(scoped, study), new Date().toISOString()));
+    setSession(dueCards(reviewCards(scoped, study, drillWords.current), new Date().toISOString()));
     setIndex(0);
     setResults([]);
     setGrade(undefined);
@@ -139,21 +148,21 @@ export function ReviewView({
 
   const finished = load.status === "ready" && session.length > 0 && index >= session.length;
   const heading = load.status !== "ready"
-    ? "Review what you studied."
+    ? t.headingLoading
     : finished
-      ? "Done for now."
+      ? t.headingDone
       : session.length
-        ? `${plural(session.length, "card")} to review${projectId ? "" : forecast.papers > 1 ? ` from ${forecast.papers} papers` : ""}.`
+        ? t.headingCards(session.length, projectId ? undefined : forecast.papers)
         : forecast.total
-          ? "Nothing is due."
-          : "Nothing to review yet.";
+          ? t.headingNothingDue
+          : t.headingNothing;
 
   return (
     <main className="compare-page review-page">
       <header className="library-header">
         <button className="brand" onClick={onBack} aria-label={backLabel}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{learning.shell.brandTagline}</small></span>
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {backLabel}</button>
@@ -162,53 +171,49 @@ export function ReviewView({
       </header>
 
       <section className="compare-hero">
-        <p className="landing-eyebrow"><span /> Review{paper ? ` · ${paper}` : ""}</p>
+        <p className="landing-eyebrow"><span /> {t.eyebrow}{paper ? ` · ${paper}` : ""}</p>
         <h1>{heading}</h1>
         <p>
-          What you answer and read in Study comes back here: a day later, then after{" "}
-          {REVIEW_INTERVALS_DAYS.slice(1).join(", ").replace(/, (\d+)$/, " and $1")} days while you keep remembering it. A card
-          you miss starts again from tomorrow. Papers are mixed, so one answer does not give away the next.
+          {t.intro(REVIEW_INTERVALS_DAYS.slice(1))}
         </p>
-        {onExam ? <button type="button" className="text-button review-exam-link" onClick={onExam}>Practice exam: every question, against the clock <ArrowRight size={14} /></button> : null}
+        {onExam ? <button type="button" className="text-button review-exam-link" onClick={onExam}>{t.examLink} <ArrowRight size={14} /></button> : null}
       </section>
 
       {session.length > 0 && !finished ? (
         <FocusRoundBar
-          subject={projectId && paper ? subject : { label: "Review" }}
-          hint={projectId ? "Review in a focus round: the time is counted for this paper." : "Review in a focus round, with a break after it. Time on the cards counts as work either way."}
+          subject={projectId && paper ? subject : { label: t.focusSubject }}
+          hint={projectId ? t.focusHintPaper : t.focusHintLibrary}
         />
       ) : null}
-      {load.status === "loading" && <p className="review-status" role="status">Loading your review cards…</p>}
+      {load.status === "loading" && <p className="review-status" role="status">{t.loading}</p>}
       {load.status === "failed" && <p className="regen-error" role="alert">{load.message}</p>}
-      {saveError && <p className="regen-error" role="status">Not saved: {saveError}</p>}
+      {saveError && <p className="regen-error" role="status">{t.notSaved(saveError)}</p>}
 
       {load.status === "ready" && !session.length && (
         <section className="review-empty">
           <Layers size={22} aria-hidden="true" />
           {forecast.total ? (
             <p>
-              {forecast.nextDue
-                ? `The next ${forecast.total === 1 ? "card comes" : "cards come"} back ${describeDue(forecast.nextDue, now)}. ${plural(forecast.total, "card")} in all.`
-                : `${plural(forecast.total, "card")} in all.`}
+              {forecast.nextDue ? t.nextComesBack(forecast.total, due(forecast.nextDue, now)) : t.inAll(forecast.total)}
             </p>
           ) : (
-            <p>Open a paper and choose Study. Every question you answer there and every concept you read becomes a card.</p>
+            <p>{t.emptyHint}</p>
           )}
           <button onClick={onBack}>{backLabel}</button>
         </section>
       )}
 
       {card && project && !finished && (
-        <LanguageProvider language={card.language}>
+        <LanguageProvider language={card.language} ui={language}>
           {/* Kart makalenin kendi rengini taşıyor: hangi makaleden geldiği bir bakışta belli. */}
           <article
             className="review-card"
-            aria-label={`Card ${index + 1} of ${session.length}`}
+            aria-label={t.cardLabel(index + 1, session.length)}
             style={{ "--accent": project.story.accent } as React.CSSProperties}
           >
             <header className="review-card-head">
-              <span className="review-kind">{CARD_KIND_LABELS[card.kind]}</span>
-              <button className="review-paper" onClick={() => onOpen(project)} title="Open this paper" lang={card.language}>{card.paperTitle}</button>
+              <span className="review-kind">{learning.cardKinds[card.kind]}</span>
+              <button className="review-paper" onClick={() => onOpen(project)} title={t.openPaper} lang={card.language}>{card.paperTitle}</button>
               <span className="review-count">{index + 1} / {session.length}</span>
             </header>
             <div className="review-progress" aria-hidden="true"><i style={{ width: `${(index / session.length) * 100}%` }} /></div>
@@ -219,14 +224,14 @@ export function ReviewView({
               {grade ? (
                 <>
                   <p role="status">
-                    {grade.remembered ? "Remembered." : "Not yet."} This card comes back {describeDue(grade.due, grade.at)}.
+                    {t.graded(grade.remembered, due(grade.due, grade.at))}
                   </p>
                   <button className="review-next" onClick={advance}>
-                    {index + 1 < session.length ? "Next card" : "Finish"} <ArrowRight size={14} />
+                    {index + 1 < session.length ? t.nextCard : t.finish} <ArrowRight size={14} />
                   </button>
                 </>
               ) : (
-                <button className="review-skip" onClick={advance}>Skip for now</button>
+                <button className="review-skip" onClick={advance}>{t.skip}</button>
               )}
             </footer>
           </article>
@@ -238,16 +243,16 @@ export function ReviewView({
           <Layers size={22} aria-hidden="true" />
           <p>
             {results.length
-              ? `You remembered ${results.filter(Boolean).length} of ${plural(results.length, "card")}.`
-              : "You skipped every card; they stay due."}{" "}
+              ? t.remembered(results.filter(Boolean).length, results.length)
+              : t.skippedAll}{" "}
             {forecast.due
-              ? `${plural(forecast.due, "card")} still due.`
+              ? t.stillDue(forecast.due)
               : forecast.nextDue
-                ? `The next review is ${describeDue(forecast.nextDue, now)}.`
+                ? t.nextReview(due(forecast.nextDue, now))
                 : ""}
           </p>
           <div className="review-actions">
-            {forecast.due ? <button onClick={another}>Review {forecast.due} more</button> : null}
+            {forecast.due ? <button onClick={another}>{t.reviewMore(forecast.due)}</button> : null}
             <button className="review-secondary" onClick={onBack}>{backLabel}</button>
           </div>
         </section>

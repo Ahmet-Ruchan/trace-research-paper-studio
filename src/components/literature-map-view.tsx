@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { ArrowLeft, BookMarked, Gauge, Milestone, TriangleAlert } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { buildLiteratureMap, type TrackedMetric } from "@/lib/literature-map";
 import type { ResearchProject } from "@/lib/schema";
 import { StudioNav } from "./focus/studio-nav";
@@ -23,34 +24,34 @@ export function LiteratureMapView({
   onBack: () => void;
   onOpen: (project: ResearchProject) => void;
 }) {
+  const learning = useT().learning;
+  const t = learning.literatureMap;
   const map = useMemo(() => buildLiteratureMap(projects), [projects]);
   const differing = map.terms.filter((term) => !term.identical);
 
   return (
     <main className="compare-page">
       <header className="library-header">
-        <button className="brand" onClick={onBack} aria-label="Back to the library">
+        <button className="brand" onClick={onBack} aria-label={learning.shell.backToLibrary}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{learning.shell.brandTagline}</small></span>
         </button>
         <div className="library-header-actions">
-          <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {learning.shell.library}</button>
           <StudioNav />
         </div>
       </header>
 
       <section className="compare-hero">
-        <p className="landing-eyebrow"><span /> Literature map</p>
-        <h1>{map.papers.length} papers, in the order they appeared.</h1>
+        <p className="landing-eyebrow"><span /> {t.eyebrow}</p>
+        <h1>{t.heading(map.papers.length)}</h1>
         <p>
-          Nothing here is a verdict. Trace lines up what each paper reports — the same benchmark, the same term — in
-          year order, with the page every number came from. A value that grows over the years is not progress by
-          itself: the dataset, the setup and which direction is better are things the papers say, not this screen.
+          {t.intro}
         </p>
       </section>
 
       <section className="compare-block">
-        <div className="block-title"><Milestone size={16} /> The papers</div>
+        <div className="block-title"><Milestone size={16} /> {t.papersTitle}</div>
         <ol className="map-timeline">
           {map.papers.map((paper) => {
             const project = projects.find((item) => item.id === paper.id);
@@ -61,16 +62,16 @@ export function LiteratureMapView({
                   <span className="compare-side">{paper.letter}</span>
                   <h2>{paper.title}</h2>
                   <p className="compare-meta">
-                    {paper.authors.slice(0, 3).join(", ")}{paper.authors.length > 3 ? " et al." : ""} · {paper.venue || "venue unknown"}
+                    {paper.authors.slice(0, 3).join(", ")}{paper.authors.length > 3 ? t.etAl : ""} · {paper.venue || t.venueUnknown}
                   </p>
                   <blockquote lang={paper.language}>{paper.thesis}</blockquote>
                   <dl className="compare-facts">
-                    <div><dt>Claims</dt><dd>{paper.health.claims.total}</dd></div>
-                    <div><dt>Verified</dt><dd>{paper.health.claims.verified}</dd></div>
-                    <div><dt>Pages reached</dt><dd>{paper.health.pages.cited.length}</dd></div>
-                    <div><dt>Depth</dt><dd>{paper.depth}</dd></div>
+                    <div><dt>{t.claims}</dt><dd>{paper.health.claims.total}</dd></div>
+                    <div><dt>{t.verified}</dt><dd>{paper.health.claims.verified}</dd></div>
+                    <div><dt>{t.pagesReached}</dt><dd>{paper.health.pages.cited.length}</dd></div>
+                    <div><dt>{t.depth}</dt><dd>{learning.depthNames[paper.depth]}</dd></div>
                   </dl>
-                  {project && <button className="library-open" onClick={() => onOpen(project)}>Open this one</button>}
+                  {project && <button className="library-open" onClick={() => onOpen(project)}>{t.openThis}</button>}
                 </article>
               </li>
             );
@@ -80,32 +81,28 @@ export function LiteratureMapView({
 
       {map.languages.length > 1 ? (
         <p className="compare-warning">
-          These projects were written in different languages ({map.languages.join(", ")}). Metrics and terms are
-          matched by name, so labels written in different languages will not line up — few matches here means the
-          wording differs, not the papers.
+          {t.languages(map.languages.join(", "))}
         </p>
       ) : null}
 
       <section className="compare-block">
-        <div className="block-title"><Gauge size={16} /> The same measurement across papers</div>
+        <div className="block-title"><Gauge size={16} /> {t.metricsTitle}</div>
         {map.metrics.length ? (
           <div className="compare-metrics">
             {map.metrics.map((metric) => <TrackedMetricCard metric={metric} key={metric.key} />)}
           </div>
         ) : (
           <p className="compare-empty">
-            No metric appears in two or more of these papers under the same name and unit. That usually means they
-            measure different things — not that they disagree.
+            {t.metricsEmpty}
           </p>
         )}
       </section>
 
       {differing.length ? (
         <section className="compare-block">
-          <div className="block-title"><BookMarked size={16} /> The same term, defined differently</div>
+          <div className="block-title"><BookMarked size={16} /> {t.termsTitle}</div>
           <p className="compare-note">
-            These words recur across the papers with definitions that are not identical — worth reading before
-            treating a shared word as a shared idea.
+            {t.termsNote}
           </p>
           <div className="compare-terms map-terms">
             {differing.map((term) => (
@@ -121,7 +118,7 @@ export function LiteratureMapView({
       ) : null}
 
       <section className="compare-block">
-        <div className="block-title"><TriangleAlert size={16} /> What each admits it cannot do</div>
+        <div className="block-title"><TriangleAlert size={16} /> {t.limitsTitle}</div>
         <div className="compare-lists map-lists">
           {map.papers.map((paper) => (
             <div key={paper.id}>
@@ -136,6 +133,8 @@ export function LiteratureMapView({
 }
 
 function TrackedMetricCard({ metric }: { metric: TrackedMetric }) {
+  const messages = useT();
+  const t = messages.learning.literatureMap;
   const values = metric.points.map((point) => point.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -151,7 +150,7 @@ function TrackedMetricCard({ metric }: { metric: TrackedMetric }) {
         <strong>{metric.label}</strong>
         <span>{metric.unit}</span>
       </header>
-      <svg className="map-spark" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${metric.label} as reported by ${metric.points.length} papers, in year order`}>
+      <svg className="map-spark" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t.sparkLabel(metric.label, metric.points.length)}>
         <polyline points={metric.points.map((point, index) => `${x(index)},${y(point.value)}`).join(" ")} />
         {metric.points.map((point, index) => (
           <g key={point.projectId}>
@@ -167,7 +166,7 @@ function TrackedMetricCard({ metric }: { metric: TrackedMetric }) {
               <td><span className="compare-side">{point.letter}</span></td>
               <td>{point.yearNumber ?? "—"}</td>
               <td><b>{point.displayValue}</b></td>
-              <td>{point.page ? `p. ${point.page}` : "web"}</td>
+              <td>{point.page ? messages.common.page(point.page) : t.web}</td>
               <td>{point.context}</td>
             </tr>
           ))}

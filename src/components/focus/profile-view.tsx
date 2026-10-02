@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BarChart3, CalendarDays, Camera, Download, Pencil, Play, Timer, Trash2, Upload, X } from "lucide-react";
+import { useT } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
 import { sessionsIcs, sessionsIcsName } from "@/lib/work-export";
 import { focusColorStyle } from "@/lib/focus-colors";
 import { learningStats } from "@/lib/learning-stats";
 import { displayName, MAX_PHOTO_CHARS, MAX_WEEKLY_CARDS, MAX_WEEKLY_PAPERS, SOUNDS, type Preferences, type Profile, type SoundId } from "@/lib/profile";
 import type { ResearchProject } from "@/lib/schema";
-import { calendarYears, dailyTotals, dayDate, dayKey, formatDuration, SESSION_KIND_LABELS, sessionPieces, workSummary, type WorkSession } from "@/lib/work-log";
+import { calendarYears, dailyTotals, dayDate, dayKey, sessionPieces, workSummary, type WorkSession } from "@/lib/work-log";
 import { DisplayControl } from "../display-control";
 import { useLibraryStudyState } from "../study-progress";
 import { useFocus, useFocusClock } from "./focus-provider";
@@ -20,19 +22,34 @@ import { WorkCalendar, type CalendarRange } from "./work-calendar";
 import { ThisDeviceCard } from "../offline";
 import { TeamCard } from "../team";
 
-const longDate = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short" });
-const memberSince = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" });
+type Words = Messages["focus"];
+
+/** Günlük kopyaların klasörü; yol, çevrilmiyor. */
+const DAILY_BACKUPS = "~/.trace/backups";
+
+/** Profilin tarih biçimleri, arayüzün dilinde. */
+function useDates() {
+  const locale = useT().common.locale;
+  return useMemo(
+    () => ({
+      longDate: new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+      shortDate: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }),
+      memberSince: new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }),
+      backupDate: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }),
+    }),
+    [locale],
+  );
+}
 
 /** Fotoğraf 192 px kareye kırpılıp JPEG'e çevriliyor: profil dosyası küçük kalsın. */
-async function photoFrom(file: File) {
-  if (!/^image\//.test(file.type)) throw new Error("Choose an image file.");
+async function photoFrom(file: File, t: Words["identity"]) {
+  if (!/^image\//.test(file.type)) throw new Error(t.photoNotImage);
   const url = URL.createObjectURL(file);
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const element = new Image();
       element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error("The image could not be read."));
+      element.onerror = () => reject(new Error(t.photoUnreadable));
       element.src = url;
     });
     const side = Math.min(image.naturalWidth, image.naturalHeight);
@@ -40,7 +57,7 @@ async function photoFrom(file: File) {
     canvas.width = canvas.height = 192;
     canvas.getContext("2d")!.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 192, 192);
     const data = canvas.toDataURL("image/jpeg", 0.85);
-    if (data.length > MAX_PHOTO_CHARS) throw new Error("The image is too large.");
+    if (data.length > MAX_PHOTO_CHARS) throw new Error(t.photoTooLarge);
     return data;
   } finally {
     URL.revokeObjectURL(url);
@@ -57,17 +74,21 @@ function download(name: string, content: string, type = "application/json") {
 }
 
 type IdentityFields = Pick<Profile, "firstName" | "lastName" | "title" | "institution" | "field" | "email" | "bio">;
-const IDENTITY: Array<{ key: keyof IdentityFields; label: string; placeholder: string; max: number; wide?: boolean }> = [
-  { key: "firstName", label: "First name", placeholder: "Ada", max: 60 },
-  { key: "lastName", label: "Last name", placeholder: "Lovelace", max: 60 },
-  { key: "title", label: "Role", placeholder: "PhD student, research engineer…", max: 80 },
-  { key: "institution", label: "Institution", placeholder: "University, lab or company", max: 120 },
-  { key: "field", label: "Field of study", placeholder: "Machine learning, neuroscience…", max: 120 },
-  { key: "email", label: "Email", placeholder: "Optional, only kept on this computer", max: 200 },
-  { key: "bio", label: "About you", placeholder: "A line about what you are reading and why", max: 400, wide: true },
+/** Alanların adı ve örneği sözlükte (`t.focus.identity.fields`). */
+const IDENTITY: Array<{ key: keyof IdentityFields; max: number; wide?: boolean }> = [
+  { key: "firstName", max: 60 },
+  { key: "lastName", max: 60 },
+  { key: "title", max: 80 },
+  { key: "institution", max: 120 },
+  { key: "field", max: 120 },
+  { key: "email", max: 200 },
+  { key: "bio", max: 400, wide: true },
 ];
 
 function IdentityCard({ onFocus }: { onFocus: () => void }) {
+  const { common, focus: words } = useT();
+  const t = words.identity;
+  const { memberSince } = useDates();
   const { profile, saveProfile, profileError } = useFocus();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<IdentityFields>(profile);
@@ -86,7 +107,7 @@ function IdentityCard({ onFocus }: { onFocus: () => void }) {
   }
 
   return (
-    <section className="profile-identity" style={focusColorStyle(profile.preferences.color)} aria-label="About you">
+    <section className="profile-identity" style={focusColorStyle(profile.preferences.color)} aria-label={t.region}>
       <div className="profile-photo">
         <Avatar profile={profile} size="large" />
         <input
@@ -99,15 +120,15 @@ function IdentityCard({ onFocus }: { onFocus: () => void }) {
             event.target.value = "";
             if (!file) return;
             setPhotoError(undefined);
-            void photoFrom(file)
+            void photoFrom(file, t)
               .then((photo) => saveProfile({ ...profile, photo }))
-              .catch((error: unknown) => setPhotoError(error instanceof Error ? error.message : "The photo could not be used."));
+              .catch((error: unknown) => setPhotoError(error instanceof Error ? error.message : t.photoFailed));
           }}
         />
         <div>
-          <button type="button" className="focus-secondary" onClick={() => photoInput.current?.click()}><Camera size={14} /> {profile.photo ? "Change photo" : "Add a photo"}</button>
+          <button type="button" className="focus-secondary" onClick={() => photoInput.current?.click()}><Camera size={14} /> {profile.photo ? t.changePhoto : t.addPhoto}</button>
           {profile.photo ? (
-            <button type="button" className="focus-icon-button" aria-label="Remove the photo" onClick={() => void saveProfile({ ...profile, photo: undefined })}><X size={15} /></button>
+            <button type="button" className="focus-icon-button" aria-label={t.removePhoto} onClick={() => void saveProfile({ ...profile, photo: undefined })}><X size={15} /></button>
           ) : null}
         </div>
         {photoError ? <p className="regen-error" role="alert">{photoError}</p> : null}
@@ -123,14 +144,14 @@ function IdentityCard({ onFocus }: { onFocus: () => void }) {
         >
           {IDENTITY.map((field) => (
             <label key={field.key} className={field.wide ? "is-wide" : ""}>
-              <span>{field.label}</span>
+              <span>{t.fields[field.key].label}</span>
               {field.wide ? (
-                <textarea rows={3} maxLength={field.max} placeholder={field.placeholder} value={draft[field.key]} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} />
+                <textarea rows={3} maxLength={field.max} placeholder={t.fields[field.key].placeholder} value={draft[field.key]} onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })} />
               ) : (
                 <input
                   type={field.key === "email" ? "email" : "text"}
                   maxLength={field.max}
-                  placeholder={field.placeholder}
+                  placeholder={t.fields[field.key].placeholder}
                   autoComplete={field.key === "firstName" ? "given-name" : field.key === "lastName" ? "family-name" : field.key === "email" ? "email" : "off"}
                   value={draft[field.key]}
                   onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })}
@@ -140,26 +161,26 @@ function IdentityCard({ onFocus }: { onFocus: () => void }) {
           ))}
           {profileError ? <p className="regen-error is-wide" role="alert">{profileError}</p> : null}
           <div className="profile-form-actions is-wide">
-            <button type="submit" className="focus-primary">Save</button>
-            <button type="button" className="focus-secondary" onClick={() => { setDraft(profile); setEditing(false); }}>Cancel</button>
+            <button type="submit" className="focus-primary">{common.save}</button>
+            <button type="button" className="focus-secondary" onClick={() => { setDraft(profile); setEditing(false); }}>{common.cancel}</button>
           </div>
         </form>
       ) : (
         <div className="profile-about">
-          <p className="landing-eyebrow"><span /> Profile</p>
-          <h1>{name || "Your profile"}</h1>
+          <p className="landing-eyebrow"><span /> {t.eyebrow}</p>
+          <h1>{name || t.yourProfile}</h1>
           {details ? <p className="profile-details">{details}</p> : null}
           {profile.field ? <p className="profile-field">{profile.field}</p> : null}
           {profile.bio ? <p className="profile-bio">{profile.bio}</p> : null}
-          {!name ? <p className="profile-bio">Add your name and what you study; it greets you on the timer and stays on this computer.</p> : null}
+          {!name ? <p className="profile-bio">{t.emptyBio}</p> : null}
           <p className="profile-meta">
             {profile.email ? <span>{profile.email}</span> : null}
-            <span>Using Trace since {memberSince.format(new Date(profile.createdAt))}</span>
-            {saved ? <span role="status">Saved.</span> : null}
+            <span>{t.since(memberSince.format(new Date(profile.createdAt)))}</span>
+            {saved ? <span role="status">{t.saved}</span> : null}
           </p>
           <div className="profile-form-actions">
-            <button type="button" className="focus-primary" onClick={() => { setDraft(profile); setSaved(false); setEditing(true); }}><Pencil size={14} /> Edit profile</button>
-            <button type="button" className="focus-secondary" onClick={onFocus}><Timer size={14} /> Open the timer</button>
+            <button type="button" className="focus-primary" onClick={() => { setDraft(profile); setSaved(false); setEditing(true); }}><Pencil size={14} /> {t.edit}</button>
+            <button type="button" className="focus-secondary" onClick={onFocus}><Timer size={14} /> {t.openTimer}</button>
           </div>
         </div>
       )}
@@ -168,68 +189,68 @@ function IdentityCard({ onFocus }: { onFocus: () => void }) {
 }
 
 function StudyingCard({ projects, state, onProgress }: { projects: ResearchProject[]; state: ReturnType<typeof useLibraryStudyState>; onProgress: () => void }) {
+  const t = useT().focus.studying;
   const now = useFocusClock();
   const stats = useMemo(() => (state.status === "ready" && now ? learningStats(projects, state.study, new Date(now).toISOString()) : undefined), [projects, state, now]);
   if (!stats) return null;
   return (
-    <section className="stats-block profile-studying" aria-label="Studying">
-      <h2>Studying</h2>
-      <p>
-        {stats.papers.length
-          ? `${stats.totals.finished} ${stats.totals.finished === 1 ? "paper" : "papers"} finished and ${stats.totals.started} in progress. ${stats.totals.reviews ? `You remembered ${stats.totals.remembered} of ${stats.totals.reviews} reviews` : "No reviews yet"}, and ${stats.totals.due} ${stats.totals.due === 1 ? "card is" : "cards are"} waiting.`
-          : "Open a paper and start Study: what you answer and read is counted here."}
-      </p>
-      <button type="button" className="focus-secondary" onClick={onProgress}><BarChart3 size={14} /> Your progress</button>
+    <section className="stats-block profile-studying" aria-label={t.region}>
+      <h2>{t.region}</h2>
+      <p>{stats.papers.length ? t.summary(stats.totals) : t.empty}</p>
+      <button type="button" className="focus-secondary" onClick={onProgress}><BarChart3 size={14} /> {t.progress}</button>
     </section>
   );
 }
 
 function PreferencesCard() {
+  const words = useT().focus;
+  const t = words.preferences;
   const { profile, saveProfile, previewSound } = useFocus();
   const { preferences } = profile;
   const set = (patch: Partial<Preferences>) => void saveProfile({ ...profile, preferences: { ...preferences, ...patch } });
   const [permission, setPermission] = useState(() => (typeof Notification === "undefined" ? "unsupported" : Notification.permission));
+  const blocked = permission === "denied";
   const goalHours = Math.floor(preferences.dailyGoalMinutes / 60);
   const goalMinutes = preferences.dailyGoalMinutes % 60;
 
   return (
-    <section className="stats-block profile-preferences" aria-label="Goals and preferences">
-      <h2>Goals and preferences</h2>
+    <section className="stats-block profile-preferences" aria-label={t.region}>
+      <h2>{t.region}</h2>
       <div className="focus-number-grid">
-        <NumberField label="Daily goal, hours" value={goalHours} min={0} max={24} onChange={(hours) => set({ dailyGoalMinutes: Math.min(1440, Math.max(15, hours * 60 + goalMinutes)) })} />
-        <NumberField label="and minutes" value={goalMinutes} min={0} max={59} onChange={(minutes) => set({ dailyGoalMinutes: Math.min(1440, Math.max(15, goalHours * 60 + minutes)) })} />
+        <NumberField label={t.goalHours} value={goalHours} min={0} max={24} onChange={(hours) => set({ dailyGoalMinutes: Math.min(1440, Math.max(15, hours * 60 + goalMinutes)) })} />
+        <NumberField label={t.goalMinutes} value={goalMinutes} min={0} max={59} onChange={(minutes) => set({ dailyGoalMinutes: Math.min(1440, Math.max(15, goalHours * 60 + minutes)) })} />
       </div>
       <div className="focus-number-grid profile-weekly-goals">
-        <NumberField label="Papers to finish a week" value={preferences.weeklyGoals.papers} min={0} max={MAX_WEEKLY_PAPERS} onChange={(papers) => set({ weeklyGoals: { ...preferences.weeklyGoals, papers } })} />
-        <NumberField label="Cards to review a week" value={preferences.weeklyGoals.cards} min={0} max={MAX_WEEKLY_CARDS} onChange={(cards) => set({ weeklyGoals: { ...preferences.weeklyGoals, cards } })} />
+        <NumberField label={t.weeklyPapers} value={preferences.weeklyGoals.papers} min={0} max={MAX_WEEKLY_PAPERS} onChange={(papers) => set({ weeklyGoals: { ...preferences.weeklyGoals, papers } })} />
+        <NumberField label={t.weeklyCards} value={preferences.weeklyGoals.cards} min={0} max={MAX_WEEKLY_CARDS} onChange={(cards) => set({ weeklyGoals: { ...preferences.weeklyGoals, cards } })} />
       </div>
-      <p className="focus-note">A weekly learning goal, shown in This week against last. 0 leaves it out.</p>
+      <p className="focus-note">{t.weeklyNote}</p>
       <div className="profile-choices">
-        <div role="group" aria-label="Week starts on">
-          <span>Week starts on</span>
-          {([[1, "Monday"], [0, "Sunday"]] as const).map(([value, label]) => (
+        <div role="group" aria-label={t.weekStarts}>
+          <span>{t.weekStarts}</span>
+          {([[1, t.monday], [0, t.sunday]] as const).map(([value, label]) => (
             <button key={value} type="button" aria-pressed={preferences.weekStart === value} onClick={() => set({ weekStart: value })}>{label}</button>
           ))}
         </div>
-        <div role="group" aria-label="Clock">
-          <span>Clock</span>
-          {([["24h", "24-hour"], ["12h", "12-hour"]] as const).map(([value, label]) => (
+        <div role="group" aria-label={t.clock}>
+          <span>{t.clock}</span>
+          {([["24h", t.hour24], ["12h", t.hour12]] as const).map(([value, label]) => (
             <button key={value} type="button" aria-pressed={preferences.clock === value} onClick={() => set({ clock: value })}>{label}</button>
           ))}
         </div>
       </div>
       <div className="profile-sound">
         <label className="focus-select">
-          <span>Sound</span>
+          <span>{t.sound}</span>
           <select value={preferences.sound} onChange={(event) => set({ sound: event.target.value as SoundId })}>
-            {SOUNDS.map((sound) => <option key={sound.id} value={sound.id}>{sound.label}</option>)}
+            {SOUNDS.map((sound) => <option key={sound.id} value={sound.id}>{words.sounds[sound.id]}</option>)}
           </select>
         </label>
         <label className="profile-volume">
-          <span>Volume</span>
-          <input type="range" min={0} max={1} step={0.05} value={preferences.volume} onChange={(event) => set({ volume: Number(event.target.value) })} aria-valuetext={`${Math.round(preferences.volume * 100)}%`} />
+          <span>{t.volume}</span>
+          <input type="range" min={0} max={1} step={0.05} value={preferences.volume} onChange={(event) => set({ volume: Number(event.target.value) })} aria-valuetext={words.percent(Math.round(preferences.volume * 100))} />
         </label>
-        <button type="button" className="focus-secondary" onClick={previewSound} disabled={preferences.sound === "none" || !preferences.volume}><Play size={14} /> Play it</button>
+        <button type="button" className="focus-secondary" onClick={previewSound} disabled={preferences.sound === "none" || !preferences.volume}><Play size={14} /> {t.play}</button>
       </div>
       <Toggle
         checked={preferences.notifications && permission === "granted"}
@@ -241,49 +262,52 @@ function PreferencesCard() {
             if (result === "granted") set({ notifications: true });
           });
         }}
-        label="Desktop notifications"
-        hint={permission === "denied" ? "Blocked in this browser; allow them in the site settings." : "When a round ends or an alarm rings while Trace is in the background."}
+        label={t.notifications}
+        hint={blocked ? t.notificationsBlocked : t.notificationsHint}
       />
-      <Toggle checked={preferences.reviewCountsAsWork} onChange={(reviewCountsAsWork) => set({ reviewCountsAsWork })} label="Count review time as work" hint="The time you spend on cards in Review, up to five minutes a card, is added to your calendar." />
-      <Toggle checked={preferences.weeklySummary} onChange={(weeklySummary) => set({ weeklySummary })} label="Weekly summary" hint="When a new week starts, a note sums up the last one: time worked, days, and how it compares." />
-      <Toggle checked={preferences.studyCountsAsWork} onChange={(studyCountsAsWork) => set({ studyCountsAsWork })} label="Count study time as work" hint="The time you spend on the Study path, up to twenty minutes a step, is added to your calendar and to the paper." />
+      <Toggle checked={preferences.reviewCountsAsWork} onChange={(reviewCountsAsWork) => set({ reviewCountsAsWork })} label={t.reviewAsWork} hint={t.reviewAsWorkHint} />
+      <Toggle checked={preferences.weeklySummary} onChange={(weeklySummary) => set({ weeklySummary })} label={t.weeklySummary} hint={t.weeklySummaryHint} />
+      <Toggle checked={preferences.studyCountsAsWork} onChange={(studyCountsAsWork) => set({ studyCountsAsWork })} label={t.studyAsWork} hint={t.studyAsWorkHint} />
     </section>
   );
 }
 
 function SessionsCard({ selected }: { selected?: string }) {
+  const { common, focus: words } = useT();
+  const t = words.sessions;
+  const { longDate, shortDate } = useDates();
   const { log, addSessions, deleteSession, logError, profile } = useFocus();
   const [date, setDate] = useState(() => dayKey(new Date()));
   const [start, setStart] = useState("09:00");
   const [minutes, setMinutes] = useState(30);
   const [label, setLabel] = useState("");
   const [added, setAdded] = useState<string>();
-  const time = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", hour12: profile.preferences.clock === "12h" });
+  const time = useMemo(() => new Intl.DateTimeFormat(common.locale, { hour: "numeric", minute: "2-digit", hour12: profile.preferences.clock === "12h" }), [common.locale, profile.preferences.clock]);
   const shown = (selected ? log.sessions.filter((session) => dayKey(new Date(session.start)) === selected || dayKey(new Date(session.end)) === selected) : log.sessions.slice(-12)).slice().reverse();
 
   return (
-    <section className="stats-block profile-sessions" aria-label="Sessions">
-      <h2>{selected ? longDate.format(dayDate(selected)) : "Recent sessions"}</h2>
+    <section className="stats-block profile-sessions" aria-label={t.region}>
+      <h2>{selected ? longDate.format(dayDate(selected)) : t.recent}</h2>
       {shown.length ? (
         <ul className="focus-sessions">
           {shown.map((session: WorkSession) => (
             <li key={session.id}>
               <span>{selected ? "" : `${shortDate.format(new Date(session.start))}, `}{time.format(new Date(session.start))}–{time.format(new Date(session.end))}</span>
               <span>
-                {session.label || SESSION_KIND_LABELS[session.kind]}
+                {session.label || words.sessionKinds[session.kind]}
                 {session.note ? <small className="focus-session-note">{session.note}</small> : null}
               </span>
-              <strong>{formatDuration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
-              <button type="button" className="focus-icon-button" aria-label={`Delete the session at ${time.format(new Date(session.start))}`} onClick={() => void deleteSession(session.id)}><Trash2 size={14} /></button>
+              <strong>{words.duration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
+              <button type="button" className="focus-icon-button" aria-label={t.delete(time.format(new Date(session.start)))} onClick={() => void deleteSession(session.id)}><Trash2 size={14} /></button>
             </li>
           ))}
         </ul>
       ) : (
-        <p>{selected ? "No work recorded on this day." : "No sessions yet. Start a focus round, or add time you worked without the timer."}</p>
+        <p>{selected ? t.emptyDay : t.empty}</p>
       )}
       <form
         className="profile-manual"
-        aria-label="Add time by hand"
+        aria-label={t.manual}
         onSubmit={(event) => {
           event.preventDefault();
           const [hours, mins] = start.split(":").map(Number);
@@ -291,23 +315,23 @@ function SessionsCard({ selected }: { selected?: string }) {
           from.setHours(hours, mins, 0, 0);
           const begin = from.getTime();
           const end = Math.min(begin + minutes * 60_000, Date.now());
-          if (end <= begin) return setAdded("That time has not come yet.");
+          if (end <= begin) return setAdded(t.notYet);
           const sessions = sessionPieces({ kind: "manual", label, color: profile.preferences.color, id: `manual-${begin}` }, begin, end);
           void addSessions(sessions).then((ok) => {
             if (ok) {
-              setAdded(`${formatDuration((end - begin) / 1000)} added to ${shortDate.format(from)}.`);
+              setAdded(t.added(words.duration((end - begin) / 1000), shortDate.format(from)));
               setLabel("");
             }
           });
         }}
       >
-        <h3>Add time by hand</h3>
-        <p>For work you did without the timer.</p>
-        <label><span>Day</span><input type="date" required max={dayKey(new Date())} value={date} onChange={(event) => setDate(event.target.value)} /></label>
-        <label><span>From</span><input type="time" required value={start} onChange={(event) => setStart(event.target.value)} /></label>
-        <NumberField label="Minutes" value={minutes} min={1} max={720} onChange={setMinutes} />
-        <label className="is-wide"><span>Label</span><input maxLength={120} placeholder="What you worked on" value={label} onChange={(event) => setLabel(event.target.value)} /></label>
-        <button type="submit" className="focus-secondary">Add</button>
+        <h3>{t.manual}</h3>
+        <p>{t.manualIntro}</p>
+        <label><span>{t.day}</span><input type="date" required max={dayKey(new Date())} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+        <label><span>{t.from}</span><input type="time" required value={start} onChange={(event) => setStart(event.target.value)} /></label>
+        <NumberField label={t.minutes} value={minutes} min={1} max={720} onChange={setMinutes} />
+        <label className="is-wide"><span>{t.labelField}</span><input maxLength={120} placeholder={t.placeholder} value={label} onChange={(event) => setLabel(event.target.value)} /></label>
+        <button type="submit" className="focus-secondary">{common.add}</button>
         {added ? <p role="status">{added}</p> : null}
         {logError ? <p className="regen-error" role="alert">{logError}</p> : null}
       </form>
@@ -321,6 +345,8 @@ function SessionsCard({ selected }: { selected?: string }) {
  * aktarma birleştiriyor, hiçbir şey silmiyor.
  */
 function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChanged?: () => void }) {
+  const t = useT().focus.data;
+  const { backupDate } = useDates();
   const { importData } = useFocus();
   const reading = useReadingList();
   const input = useRef<HTMLInputElement>(null);
@@ -343,25 +369,26 @@ function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChang
   const latest = weekly?.backups[0];
 
   return (
-    <section className="stats-block profile-data" aria-label="Your data">
-      <h2>Your data</h2>
+    <section className="stats-block profile-data" aria-label={t.region}>
+      <h2>{t.region}</h2>
       <p>
-        Everything you keep in Trace is on this computer, with a daily copy of the last seven days in <code>~/.trace/backups</code>: your profile and every
-        minute you worked, and next to your library your study progress and review cards, your notes and highlights, your reading list, tags and concept
-        links. Nothing is sent anywhere. Download it all in one file to move to another computer or keep a backup; importing a file adds what it holds to
-        what is here and never removes anything, and a paper you already have is kept as it is.
+        {t.introBefore}
+        <code>{DAILY_BACKUPS}</code>
+        {t.introAfter}
       </p>
       {weekly ? (
         <p className="profile-weekly-backup">
-          Every week Trace also writes all of it, papers included, to <code>{weekly.directory}</code>; the last {weekly.kept} are kept.{" "}
+          {t.weeklyBefore}
+          <code>{weekly.directory}</code>
+          {t.weeklyAfter(weekly.kept)}{" "}
           {latest
-            ? `Latest: ${new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(dayDate(latest.day))} (${latest.bytes < 1_000_000 ? `${Math.max(1, Math.round(latest.bytes / 1000))} kB` : `${(latest.bytes / 1_000_000).toFixed(1)} MB`}).`
-            : "The first one is written as soon as there is something to keep."}
+            ? t.latest(backupDate.format(dayDate(latest.day)), latest.bytes < 1_000_000 ? `${Math.max(1, Math.round(latest.bytes / 1000))} kB` : t.megabytes(latest.bytes / 1_000_000))
+            : t.firstPending}
         </p>
       ) : null}
       <label className="profile-data-papers">
         <input type="checkbox" checked={withPapers} onChange={(event) => setWithPapers(event.target.checked)} />
-        <span>Include the papers themselves ({papers === 1 ? "1 paper" : `${papers} papers`})</span>
+        <span>{t.includePapers(papers)}</span>
       </label>
       <div className="profile-form-actions">
         <button
@@ -376,7 +403,7 @@ function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChang
               .finally(() => setBusy(false));
           }}
         >
-          <Download size={14} /> Download my data
+          <Download size={14} /> {t.download}
         </button>
         <input
           ref={input}
@@ -394,14 +421,14 @@ function DataCard({ papers, onLibraryChanged }: { papers: number; onLibraryChang
                 onLibraryChanged?.();
                 void reading?.reload();
               })
-              .catch((error: unknown) => setMessage({ ok: false, text: error instanceof Error ? error.message : "The file could not be imported." }))
+              .catch((error: unknown) => setMessage({ ok: false, text: error instanceof Error ? error.message : t.importFailed }))
               .finally(() => setBusy(false));
           }}
         />
-        <button type="button" className="focus-secondary" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} /> Import a file</button>
+        <button type="button" className="focus-secondary" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} /> {t.import}</button>
         {/* Bütün kütüphane bir Obsidian kasası olarak: makale başına bir not, ortak kavramlar, dizin. */}
-        <a className="focus-secondary" href="/api/library/obsidian" download title="Every paper as a note with your highlights, linked through shared concepts and the reading order">
-          <Download size={14} /> Library for Obsidian
+        <a className="focus-secondary" href="/api/library/obsidian" download title={t.obsidianTitle}>
+          <Download size={14} /> {t.obsidian}
         </a>
       </div>
       {message ? <p className={message.ok ? "" : "regen-error"} role={message.ok ? "status" : "alert"}>{message.text}</p> : null}
@@ -431,6 +458,9 @@ export function ProfileView({
   /** Yedek içe aktarılınca kütüphane yeniden okunuyor. */
   onLibraryChanged?: () => void;
 }) {
+  const { common, focus: words } = useT();
+  const t = words.profile;
+  const { shortDate } = useDates();
   const { profile, saveProfile, log, logReady, liveIntervals, profileReady } = useFocus();
   const now = useFocusClock();
   const studyState = useLibraryStudyState();
@@ -443,9 +473,9 @@ export function ProfileView({
   const years = calendarYears(totals, today);
   // Makale başına süre, takvimde gösterilen aralıkta.
   const paperRange = useMemo(() => {
-    if (range === "recent") return { from: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate() + 1).getTime(), label: "The last 12 months" };
-    return { from: new Date(range, 0, 1).getTime(), to: new Date(range + 1, 0, 1).getTime(), label: `In ${range}` };
-  }, [range, today]);
+    if (range === "recent") return { from: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate() + 1).getTime(), label: t.last12Months };
+    return { from: new Date(range, 0, 1).getTime(), to: new Date(range + 1, 0, 1).getTime(), label: t.inYear(range) };
+  }, [range, t, today]);
 
   // Takvim dosyası, gösterilen aralığın oturumları.
   const rangeSessions = useMemo(
@@ -453,13 +483,15 @@ export function ProfileView({
     [log.sessions, paperRange],
   );
 
+  const { duration } = words;
+  const tile = t.tiles;
   const tiles = [
-    { label: "Today", value: formatDuration(summary.today), note: `goal ${formatDuration(preferences.dailyGoalMinutes * 60)}` },
-    { label: "This week", value: formatDuration(summary.week), note: `goal met on ${summary.goalDaysThisWeek} ${summary.goalDaysThisWeek === 1 ? "day" : "days"}` },
-    { label: "This month", value: formatDuration(summary.month), note: `${formatDuration(summary.total)} in all` },
-    { label: "Streak", value: `${summary.currentStreak} ${summary.currentStreak === 1 ? "day" : "days"}`, note: `longest ${summary.longestStreak} ${summary.longestStreak === 1 ? "day" : "days"}` },
-    { label: "Daily average", value: formatDuration(summary.average), note: `over ${summary.activeDays} ${summary.activeDays === 1 ? "day" : "days"} worked` },
-    { label: "Best day", value: summary.best ? formatDuration(summary.best.seconds) : "—", note: summary.best ? shortDate.format(dayDate(summary.best.day)) : "nothing yet" },
+    { label: tile.today, value: duration(summary.today), note: tile.todayNote(duration(preferences.dailyGoalMinutes * 60)) },
+    { label: tile.week, value: duration(summary.week), note: tile.weekNote(summary.goalDaysThisWeek) },
+    { label: tile.month, value: duration(summary.month), note: tile.monthNote(duration(summary.total)) },
+    { label: tile.streak, value: tile.streakValue(summary.currentStreak), note: tile.streakNote(summary.longestStreak) },
+    { label: tile.average, value: duration(summary.average), note: tile.averageNote(summary.activeDays) },
+    { label: tile.best, value: summary.best ? duration(summary.best.seconds) : "—", note: summary.best ? shortDate.format(dayDate(summary.best.day)) : tile.bestNone },
   ];
 
   return (
@@ -467,7 +499,7 @@ export function ProfileView({
       <header className="library-header">
         <button className="brand" onClick={onBack} aria-label={backLabel}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{words.brandTagline}</small></span>
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {backLabel}</button>
@@ -476,9 +508,9 @@ export function ProfileView({
         </div>
       </header>
 
-      {profileReady ? <IdentityCard key={profile.createdAt} onFocus={onFocus} /> : <p className="stats-note" role="status">Reading your profile…</p>}
+      {profileReady ? <IdentityCard key={profile.createdAt} onFocus={onFocus} /> : <p className="stats-note" role="status">{t.loading}</p>}
 
-      <section className="stat-tiles profile-tiles" aria-label="Work summary">
+      <section className="stat-tiles profile-tiles" aria-label={t.summary}>
         {tiles.map((tile) => (
           <div key={tile.label} className="stat-tile">
             <span>{tile.label}</span>
@@ -488,14 +520,14 @@ export function ProfileView({
         ))}
       </section>
 
-      <section className="stats-block profile-calendar" aria-label="Work calendar">
+      <section className="stats-block profile-calendar" aria-label={t.calendar}>
         <div className="profile-calendar-head">
-          <h2>Work calendar</h2>
+          <h2>{t.calendar}</h2>
           <div className="profile-calendar-tools">
             <label className="focus-select">
-              <span>Show</span>
+              <span>{common.show}</span>
               <select value={String(range)} onChange={(event) => { setSelected(undefined); setRange(event.target.value === "recent" ? "recent" : Number(event.target.value)); }}>
-                <option value="recent">The last 12 months</option>
+                <option value="recent">{t.last12Months}</option>
                 {years.map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
             </label>
@@ -503,18 +535,18 @@ export function ProfileView({
               type="button"
               className="focus-secondary"
               disabled={!rangeSessions.length}
-              title="A calendar file for Google Calendar, Apple Calendar or Outlook"
+              title={t.calendarFileTitle}
               onClick={() => {
                 const titles = new Map(projects.map((project) => [project.id, project.evidence.paper.title]));
                 const file = sessionsIcs(rangeSessions, { paperTitle: (id) => titles.get(id), now: new Date() });
                 download(sessionsIcsName(new Date()), file, "text/calendar;charset=utf-8");
               }}
             >
-              <CalendarDays size={14} /> Calendar file
+              <CalendarDays size={14} /> {t.calendarFile}
             </button>
           </div>
         </div>
-        <p>Each square is a day; the darker, the closer you came to your daily goal. Choose a day to see its sessions.</p>
+        <p>{t.calendarIntro}</p>
         {logReady && now ? (
           <WorkCalendar
             totals={totals}
@@ -527,11 +559,11 @@ export function ProfileView({
             onSelect={setSelected}
           />
         ) : (
-          <p className="stats-note" role="status">Reading your work log…</p>
+          <p className="stats-note" role="status">{t.loadingLog}</p>
         )}
         <div className="profile-calendar-color">
-          <h3>Calendar colour</h3>
-          <ColorPicker label="Calendar colour" value={preferences.color} onChange={(color) => void saveProfile({ ...profile, preferences: { ...preferences, color } })} />
+          <h3>{t.calendarColour}</h3>
+          <ColorPicker label={t.calendarColour} value={preferences.color} onChange={(color) => void saveProfile({ ...profile, preferences: { ...preferences, color } })} />
         </div>
       </section>
 

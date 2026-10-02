@@ -1,3 +1,4 @@
+import { stringsFor, type Strings } from "../../visuals/i18n";
 import type { Claim, ResearchProject } from "../schema";
 import { escapeHtml } from "./print-html";
 import { citeLabel } from "./report-document";
@@ -8,15 +9,16 @@ import { citeLabel } from "./report-document";
  * Slaytlar hikâyenin bölümlerinden çıkıyor ve her biri dayandığı alıntıyı
  * sayfasıyla birlikte taşıyor: bir sunumda "bunu nereden biliyoruz?" sorusunun
  * cevabı slaydın üstünde olmalı. Proje metni kaçırılarak yazılıyor; gömülü
- * betik sabit ve proje verisi içermiyor.
+ * betik sabit ve proje verisi içermiyor. Slaydın kendi etiketleri makalenin
+ * dilini izliyor (`stringsFor`).
  */
 
-function evidenceFor(project: ResearchProject, claimIds: readonly string[], limit = 2) {
+function evidenceFor(project: ResearchProject, claimIds: readonly string[], t: Strings, limit = 2) {
   return claimIds
     .map((id) => project.evidence.claims.find((claim) => claim.id === id))
     .filter((claim): claim is Claim => Boolean(claim))
     .slice(0, limit)
-    .map((claim) => `<blockquote>“${escapeHtml(claim.sourceRefs[0].excerpt)}” <cite>${escapeHtml(citeLabel(project, claim.sourceRefs[0]))}${claim.confidence === "verified" ? "" : " · needs review"}</cite></blockquote>`)
+    .map((claim) => `<blockquote>“${escapeHtml(claim.sourceRefs[0].excerpt)}” <cite>${escapeHtml(citeLabel(project, claim.sourceRefs[0], t))}${claim.confidence === "verified" ? "" : ` · ${escapeHtml(t.reportNeedsReview)}`}</cite></blockquote>`)
     .join("");
 }
 
@@ -37,38 +39,39 @@ export function slideCount(project: ResearchProject) {
 }
 
 export function buildSlides(project: ResearchProject): string {
+  const t = stringsFor(project.language);
   const { evidence, story } = project;
   const accent = /^#[0-9a-fA-F]{6}$/.test(story.accent) ? story.accent : "#e75b37";
   const slides: string[] = [];
 
   slides.push(
     `<section class="slide title"><p class="kicker">${escapeHtml([evidence.paper.venue, evidence.paper.year].filter(Boolean).join(" · "))}</p><h1>${escapeHtml(evidence.paper.title)}</h1><p class="authors">${escapeHtml(evidence.paper.authors.join(", "))}</p></section>`,
-    `<section class="slide"><p class="kicker">The claim of the paper</p><h2>${escapeHtml(evidence.thesis)}</h2><p>${escapeHtml(evidence.researchQuestion)}</p></section>`,
+    `<section class="slide"><p class="kicker">${escapeHtml(t.slidesThesisKicker)}</p><h2>${escapeHtml(evidence.thesis)}</h2><p>${escapeHtml(evidence.researchQuestion)}</p></section>`,
   );
 
   for (const section of story.sections) {
     // Bölümün iddialarını paylaşan bir şekil varsa slayda girer; eşleşme tahmin değil, ortak iddia.
     const figure = (project.figures ?? []).find((item) => item.claimIds.some((id) => section.claimIds.includes(id)));
     slides.push(
-      `<section class="slide${figure ? " with-figure" : ""}"><div><p class="kicker">${escapeHtml(`${section.indexLabel} · ${section.kicker}`)}</p><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(slideLead(section.body).lead)}</p>${evidenceFor(project, section.claimIds)}${
+      `<section class="slide${figure ? " with-figure" : ""}"><div><p class="kicker">${escapeHtml(`${section.indexLabel} · ${section.kicker}`)}</p><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(slideLead(section.body).lead)}</p>${evidenceFor(project, section.claimIds, t)}${
         slideLead(section.body).hasMore ? `<aside class="notes">${escapeHtml(section.body)}</aside>` : ""
       }</div>${
-        figure ? `<figure><img src="${figure.image}" alt="${escapeHtml(figure.label)}"><figcaption>${escapeHtml(figure.label)} · p. ${figure.page}</figcaption></figure>` : ""
+        figure ? `<figure><img src="${figure.image}" alt="${escapeHtml(figure.label)}"><figcaption>${escapeHtml(figure.label)} · ${escapeHtml(t.page(figure.page))}</figcaption></figure>` : ""
       }</section>`,
     );
   }
 
   if (evidence.metrics.length) {
     slides.push(
-      `<section class="slide"><p class="kicker">Reported numbers</p><h2>What the paper measured</h2><table>${evidence.metrics
+      `<section class="slide"><p class="kicker">${escapeHtml(t.reportNumbers)}</p><h2>${escapeHtml(t.slidesNumbersHeading)}</h2><table>${evidence.metrics
         .slice(0, 8)
-        .map((metric) => `<tr><th>${escapeHtml(metric.label)}</th><td>${escapeHtml(metric.displayValue)}</td><td>${escapeHtml(metric.context)}</td><td class="page">${escapeHtml(citeLabel(project, metric.sourceRef))}</td></tr>`)
+        .map((metric) => `<tr><th>${escapeHtml(metric.label)}</th><td>${escapeHtml(metric.displayValue)}</td><td>${escapeHtml(metric.context)}</td><td class="page">${escapeHtml(citeLabel(project, metric.sourceRef, t))}</td></tr>`)
         .join("")}</table></section>`,
     );
   }
 
   slides.push(
-    `<section class="slide"><p class="kicker">Before you build on it</p><h2>What the paper says it cannot do</h2><ul>${evidence.limitations
+    `<section class="slide"><p class="kicker">${escapeHtml(t.slidesLimitsKicker)}</p><h2>${escapeHtml(t.slidesLimitsHeading)}</h2><ul>${evidence.limitations
       .slice(0, 6)
       .map((item) => `<li>${escapeHtml(item)}</li>`)
       .join("")}</ul></section>`,
@@ -80,7 +83,7 @@ export function buildSlides(project: ResearchProject): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(evidence.paper.title)} — slides</title>
+<title>${escapeHtml(t.slidesTitle(evidence.paper.title))}</title>
 <style>
   :root { --accent: ${accent}; }
   * { box-sizing: border-box; }
@@ -121,7 +124,7 @@ export function buildSlides(project: ResearchProject): string {
 </head>
 <body>
 ${slides.join("\n")}
-<div class="progress"></div><div class="counter"></div><div class="hint" lang="en">← → to move · N for the full text</div>
+<div class="progress"></div><div class="counter"></div><div class="hint" lang="${t.chrome}">${escapeHtml(t.slidesHint)}</div>
 <script>
   (function () {
     var slides = document.querySelectorAll(".slide"), index = 0;

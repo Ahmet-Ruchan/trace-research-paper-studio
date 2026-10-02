@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useUiLanguage } from "@/i18n/client";
 import { buildPaletteCommands, type PaletteTarget } from "@/lib/command-palette";
 import { buildStandaloneStory } from "@/lib/export-story";
-import { exportDefinitions } from "@/lib/exports";
+import { exportDefinitions, exportMenuText } from "@/lib/exports";
 import { deleteLibraryProject, listLibraryProjects, saveLibraryProject } from "@/lib/project-library";
-import { parseTraceProject, PROJECT_TOO_LARGE, MAX_PROJECT_BYTES } from "@/lib/project-import";
+import { parseTraceProject, MAX_PROJECT_BYTES } from "@/lib/project-import";
 import type { RevisionReason } from "@/lib/project-revisions";
 import type { ReadingPosition } from "@/lib/reading-position";
 import { loadSampleProject } from "@/lib/sample-project";
@@ -33,7 +34,7 @@ import { scrollToSection } from "./reading-position";
 import { ReviewView } from "./review-view";
 import { download, projectSlug } from "./studio/download";
 import { GenerationOverlay } from "./studio/generation-overlay";
-import { returnLabels, STORAGE_KEY, type AppScreen, type LabJump, type WorkspaceMode, type WorkspacePanel } from "./studio/screens";
+import { STORAGE_KEY, type AppScreen, type LabJump, type WorkspaceMode, type WorkspacePanel } from "./studio/screens";
 import { CHECKPOINT_KEY, useGeneration } from "./studio/use-generation";
 import { useProjectDeletion } from "./studio/use-project-deletion";
 import { useStudioStartup, useStudioUrl } from "./studio/use-studio-url";
@@ -64,7 +65,12 @@ export function AppShell() {
   );
 }
 
+/** Hata bildiriminin başlığı; metni çizimde arayüzün dilinden geliyor. */
+type ErrorTitle = "generation" | "import" | "sample";
+
 function Studio() {
+  const { t: messages, toggle: toggleLanguage } = useUiLanguage();
+  const t = messages.studio.appShell;
   const [project, setProject] = useState<ResearchProject>();
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [screen, setScreen] = useState<AppScreen>("home");
@@ -83,7 +89,7 @@ function Studio() {
   const [fileUrl, setFileUrl] = useState<string>();
   const [selectedClaimId, setSelectedClaimId] = useState<string>();
   const [error, setError] = useState<string>();
-  const [errorTitle, setErrorTitle] = useState("Generation failed");
+  const [errorTitle, setErrorTitle] = useState<ErrorTitle>("generation");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -98,7 +104,7 @@ function Studio() {
   const generation = useGeneration({
     onStart: () => {
       setError(undefined);
-      setErrorTitle("Generation failed");
+      setErrorTitle("generation");
       setWarnings([]);
     },
     onResult: async (nextProject, responseWarnings, file) => {
@@ -139,7 +145,7 @@ function Studio() {
       setScreen("workspace");
     },
     importFailed: (message) => {
-      setErrorTitle("Import failed");
+      setErrorTitle("import");
       setError(message);
     },
     setInitialTeam,
@@ -191,8 +197,8 @@ function Studio() {
       setMode("lab");
       setScreen("workspace");
     } catch (caught) {
-      setErrorTitle("Could not open the example");
-      setError(caught instanceof Error ? caught.message : "The example project could not be loaded.");
+      setErrorTitle("sample");
+      setError(caught instanceof Error ? caught.message : t.sampleFailed);
     } finally {
       setLoadingSample(false);
     }
@@ -273,8 +279,8 @@ function Studio() {
   }
 
   async function importProject(file: File) {
-    if (file.size > MAX_PROJECT_BYTES) throw new Error(PROJECT_TOO_LARGE);
-    const imported = parseTraceProject(await file.text());
+    if (file.size > MAX_PROJECT_BYTES) throw new Error(messages.studio.projectImport.tooLarge);
+    const imported = parseTraceProject(await file.text(), messages.studio.projectImport);
     await saveLibraryProject(imported, { reason: "import" });
     setProjects((current) => [imported, ...current.filter((item) => item.id !== imported.id)]);
     setProject(imported);
@@ -303,6 +309,7 @@ function Studio() {
     setScreen(target);
   }
   const backFromWork = returnTo === "workspace" && !project ? "library" : returnTo;
+  const returnLabels: Partial<Record<AppScreen, string>> = t.returnLabels;
 
   /** Komut paletinin listesi: açık makalenin bölümleri ve eylemleri yalnızca makaledeyken. */
   const paletteCommands = () =>
@@ -310,10 +317,13 @@ function Studio() {
       projects,
       current: screen === "workspace" ? project : undefined,
       screen,
-      exports: project ? exportDefinitions.map((definition) => ({ format: definition.format, label: definition.label, description: definition.description, unavailable: definition.unavailable?.(project) })) : [],
+      exports: project ? exportDefinitions.map((definition) => ({ format: definition.format, ...exportMenuText(definition, project, messages.paper.exportMenu) })) : [],
+      words: messages.studio.commandPalette.words,
+      switchLanguage: { label: messages.common.switchLanguageAction, detail: t.languageDetail, keywords: t.languageKeywords },
     });
 
   function runCommand(target: PaletteTarget) {
+    if (target.type === "language") return toggleLanguage();
     if (target.type === "paper") {
       const next = projects.find((item) => item.id === target.projectId);
       if (next) openProject(next);
@@ -359,13 +369,13 @@ function Studio() {
 
   if (!hydrated) return <div className="boot-screen"><span>trace</span></div>;
   if (screen === "focus") {
-    return withWork(<FocusView projects={projects} backLabel={returnLabels[backFromWork] ?? "Library"} onBack={() => setScreen(backFromWork)} onProfile={() => setScreen("profile")} />);
+    return withWork(<FocusView projects={projects} backLabel={returnLabels[backFromWork] ?? t.returnLabels.library} onBack={() => setScreen(backFromWork)} onProfile={() => setScreen("profile")} />);
   }
   if (screen === "profile") {
     return withWork(
       <ProfileView
         projects={projects}
-        backLabel={returnLabels[backFromWork] ?? "Library"}
+        backLabel={returnLabels[backFromWork] ?? t.returnLabels.library}
         onBack={() => setScreen(backFromWork)}
         onFocus={() => setScreen("focus")}
         onProgress={() => setScreen("progress")}
@@ -412,7 +422,7 @@ function Studio() {
       <ExamView
         projects={projects}
         projectId={scoped ? reviewScope : undefined}
-        backLabel="Review"
+        backLabel={t.returnLabels.review}
         onBack={() => setScreen("review")}
         onOpen={(target) => {
           setReviewScope(undefined);
@@ -428,7 +438,7 @@ function Studio() {
         projects={projects}
         projectId={scoped ? reviewScope : undefined}
         onExam={() => setScreen("exam")}
-        backLabel={scoped ? "Back to the paper" : "Library"}
+        backLabel={scoped ? t.returnLabels.workspace : t.returnLabels.library}
         onBack={() => {
           setReviewScope(undefined);
           setScreen(scoped ? "workspace" : "library");
@@ -479,7 +489,7 @@ function Studio() {
     );
   }
   if (screen === "home" || !project) {
-    return withWork(<><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generation.generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryProjects={projects} initialTeam={initialTeam} />{generation.loading && <GenerationOverlay progress={generation.progress} onCancel={generation.cancel} />}{error && <div className="toast error-toast"><strong>{errorTitle}</strong><p>{error}</p><button onClick={() => setError(undefined)}>Close</button></div>}</>);
+    return withWork(<><Onboarding key={paperLookup?.query ?? "onboarding"} initialLookup={paperLookup} onGenerate={generation.generate} onSample={() => { void openSample(); }} sampleBusy={loadingSample} onLibrary={() => setScreen("library")} libraryProjects={projects} initialTeam={initialTeam} />{generation.loading && <GenerationOverlay progress={generation.progress} onCancel={generation.cancel} />}{error && <div className="toast error-toast"><strong>{t.errorTitles[errorTitle]}</strong><p>{error}</p><button onClick={() => setError(undefined)}>{messages.common.close}</button></div>}</>);
   }
 
   return withWork(

@@ -22,7 +22,6 @@ import {
 } from "@/lib/generation-validation";
 import {
   applyLearningBlock,
-  describeLearningGaps,
   learningBlockSpec,
   learningBlocksFor,
   type LearningBlockId,
@@ -75,7 +74,9 @@ import {
   type ProviderRuntime,
 } from "@/lib/server/model-runtime";
 import { generateLearningBlock, learningFailureReason } from "@/lib/server/learning-runner";
+import { serverText } from "@/lib/server/server-text";
 import { allocatePaperAccent, paperIdentityFromBytes } from "@/lib/trace-storage";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -99,6 +100,7 @@ type GenerationInput = {
 };
 
 type StreamWriter = (event: GenerationStreamEvent) => void;
+type ServerText = ReturnType<typeof serverText>;
 
 function jsonError(message: string, status: number, detail?: unknown) {
   return Response.json({ error: message, detail }, { status });
@@ -112,7 +114,7 @@ function expectedReportSections(input: Pick<GenerationInput, "depth" | "template
   return expectedSectionCounts(input).report;
 }
 
-async function loadWebSources(urls: string[]) {
+async function loadWebSources(urls: string[], t: ServerText) {
   const results = await Promise.allSettled(
     urls.map((url, index) => fetchPublicSource(url, `web-${index + 1}`)),
   );
@@ -122,14 +124,14 @@ async function loadWebSources(urls: string[]) {
     if (result.status === "fulfilled") sources.push(result.value);
     else {
       warnings.push(
-        `${urls[index]}: ${result.reason instanceof Error ? result.reason.message : "could not be read"}`,
+        `${urls[index]}: ${errorMessage(result.reason, t.errors, t.generate.sourceUnreadable)}`,
       );
     }
   });
   return { sources, warnings };
 }
 
-function parseInput(form: FormData): GenerationInput {
+function parseInput(form: FormData, t: ServerText): GenerationInput {
   const file = form.get("paper");
   // Eksik alan sessizce Türkçe'ye düşmemeli — bkz. `preferred-language.ts`.
   const language = preferredLanguage(String(form.get("language") ?? ""));
@@ -145,7 +147,7 @@ function parseInput(form: FormData): GenerationInput {
   const inferredProvider = getProviderForModel(requestedModel)?.id ?? "gemini";
   const requestedProvider = String(form.get("provider") ?? inferredProvider);
   const fallbackSelection = resolveProviderModel(requestedProvider, requestedModel);
-  if (!fallbackSelection) throw new InputError("The model and provider selection is not valid.", 400);
+  if (!fallbackSelection) throw new InputError(t.request.modelSelectionInvalid, 400);
 
   let assignments: ModelTeam;
   const rawAssignments = String(form.get("assignments") ?? "");
@@ -163,7 +165,7 @@ function parseInput(form: FormData): GenerationInput {
     }
     assignments = chosen as ModelTeam;
   } catch {
-    throw new InputError("The per-task model assignment is not valid.", 400);
+    throw new InputError(t.generate.assignmentInvalid, 400);
   }
   const { provider, model } = assignments.evidence;
 
@@ -179,19 +181,19 @@ function parseInput(form: FormData): GenerationInput {
     const legacyKey = String(form.get("apiKey") ?? "").trim();
     if (legacyKey && !apiKeys[provider]) apiKeys[provider] = legacyKey;
   } catch {
-    throw new InputError("The provider API key assignment is not valid.", 400);
+    throw new InputError(t.generate.keyAssignmentInvalid, 400);
   }
 
-  if (!(file instanceof File)) throw new InputError("You must upload a PDF file.", 400);
+  if (!(file instanceof File)) throw new InputError(t.generate.pdfRequired, 400);
   if (file.type !== "application/pdf") {
-    throw new InputError("Only PDF files are supported.", 415);
+    throw new InputError(t.generate.pdfOnly, 415);
   }
   if (file.size > MAX_PDF_BYTES) {
-    throw new InputError("The PDF exceeds the 35 MB limit.", 413);
+    throw new InputError(t.request.pdfTooLarge, 413);
   }
   const documentAssignments = [assignments.evidence, assignments.technical];
   if (documentAssignments.some((assignment) => assignment.provider === "anthropic") && file.size > 24 * 1024 * 1024) {
-    throw new InputError("The PDF limit for Claude is 24 MB; base64 encoding would push the request past its total limit.", 413);
+    throw new InputError(t.generate.claudePdfLimit, 413);
   }
   /**
    * Belge okuyamayan bir sağlayıcı, makaleyi okuyan aşamalara atanamaz.
@@ -201,11 +203,9 @@ function parseInput(form: FormData): GenerationInput {
    */
   const unreadable = documentTaskRoles.find((role) => !providerReadsDocuments(assignments[role].provider));
   if (unreadable) {
-    const providerLabel = getProvider(assignments[unreadable].provider)?.label ?? assignments[unreadable].provider;
-    throw new InputError(
-      `${providerLabel} cannot be given the PDF, so it cannot run the ${unreadable} stage — that stage reads the paper itself. Assign a provider that reads documents to Evidence and Technical; ${providerLabel} can still write the report and the visuals.`,
-      400,
-    );
+    const unreadableProvider = getProvider(assignments[unreadable].provider);
+    const providerLabel = t.errors.providerName(unreadableProvider?.label ?? assignments[unreadable].provider, Boolean(unreadableProvider?.local));
+    throw new InputError(t.generate.cannotReadPdf(providerLabel, unreadable), 400);
   }
 
   /**
@@ -218,14 +218,14 @@ function parseInput(form: FormData): GenerationInput {
     try {
       apiKeys[assignment.provider] = resolveLocalEndpoint(apiKeys[assignment.provider]);
     } catch (error) {
-      throw new InputError(error instanceof Error ? error.message : "The local model address is not valid.", 400);
+      throw new InputError(errorMessage(error, t.errors, t.request.localAddressInvalid), 400);
     }
   }
 
   const missingProvider = Object.values(assignments)
     .map((assignment) => assignment.provider)
     .find((providerId) => !apiKeys[providerId]);
-  if (missingProvider) throw new InputError(`${getProvider(missingProvider)!.keyLabel} is required.`, 401);
+  if (missingProvider) throw new InputError(t.request.keyRequired(getProvider(missingProvider)!), 401);
 
   let urls: string[] = [];
   try {
@@ -233,7 +233,7 @@ function parseInput(form: FormData): GenerationInput {
     if (!Array.isArray(rawUrls)) throw new Error("array expected");
     urls = rawUrls.filter((item): item is string => typeof item === "string").slice(0, 3);
   } catch {
-    throw new InputError("The list of source URLs is not valid.", 400);
+    throw new InputError(t.generate.sourcesInvalid, 400);
   }
 
   /**
@@ -248,12 +248,12 @@ function parseInput(form: FormData): GenerationInput {
     try {
       candidate = rawTemplate.startsWith("{") ? JSON.parse(rawTemplate) : findBuiltInTemplate(rawTemplate);
     } catch {
-      throw new InputError("The narrative template is not valid JSON.", 400);
+      throw new InputError(t.generate.templateInvalidJson, 400);
     }
     const parsedTemplate = narrativeTemplateSchema.safeParse(candidate);
-    if (!parsedTemplate.success) throw new InputError("The narrative template is not valid.", 400);
+    if (!parsedTemplate.success) throw new InputError(t.generate.templateInvalid, 400);
     const problems = templateIssues(parsedTemplate.data);
-    if (problems.length) throw new InputError(`The narrative template cannot be used: ${problems.join("; ")}.`, 400);
+    if (problems.length) throw new InputError(t.generate.templateUnusable(problems.join("; ")), 400);
     template = parsedTemplate.data;
   }
 
@@ -339,6 +339,7 @@ async function runPipeline(
   input: GenerationInput,
   signal: AbortSignal,
   emit: StreamWriter,
+  t: ServerText,
 ) {
   const runtimePromises = new Map<string, Promise<ProviderRuntime>>();
   let lastProgress: GenerationProgress | undefined;
@@ -367,7 +368,7 @@ async function runPipeline(
     const existing = runtimePromises.get(runtimeKey);
     if (existing) return existing;
     const apiKey = input.apiKeys[assignment.provider];
-    if (!apiKey) throw new InputError(`${getProvider(assignment.provider)!.keyLabel} is required.`, 401);
+    if (!apiKey) throw new InputError(t.request.keyRequired(getProvider(assignment.provider)!), 401);
     const runtime = prepareProviderRuntime(
       {
         file: input.file,
@@ -375,6 +376,7 @@ async function runPipeline(
         ...assignment,
         needsDocument,
         taskRole,
+        progressText: t.progress,
       },
       signal,
       progress,
@@ -406,10 +408,10 @@ async function runPipeline(
     progress({
       stage: "document",
       progress: 8,
-      title: "Preparing the sources in a sandbox.",
+      title: t.generate.preparingSources,
       detail: input.urls.length
-        ? `Checking the PDF along with ${input.urls.length} supporting source(s).`
-        : "The PDF passed file validation before analysis.",
+        ? t.generate.checkingSources(input.urls.length)
+        : t.generate.pdfValidated,
     });
 
     /**
@@ -428,23 +430,19 @@ async function runPipeline(
     const paperPages = await extractPaperPages(input.file, signal).catch((error: unknown) => {
       if (readsAsText || signal.aborted) throw error;
       const reason = error instanceof PaperTextError ? error.reason : "failed";
-      excerptCheckSkipped = {
-        "missing-tool": "Quotes were not checked against the page text: pdftotext (Poppler) is not installed on the server.",
-        "no-text": "Quotes were not checked against the page text: the PDF has no extractable text, it is probably a scan.",
-        failed: "Quotes were not checked against the page text: the text could not be extracted from the PDF.",
-      }[reason];
+      excerptCheckSkipped = t.generate.excerptCheckSkipped[reason];
       return undefined;
     });
     if (paperPages && readsAsText) {
       progress({
         stage: "document",
         progress: 14,
-        title: "Extracted the paper's text for the local model.",
-        detail: `${paperPages.length} pages · page boundaries kept, so every claim still points at a page.`,
+        title: t.generate.textExtracted,
+        detail: t.generate.textExtractedDetail(paperPages.length),
       });
     }
 
-    const webResultPromise = loadWebSources(input.urls);
+    const webResultPromise = loadWebSources(input.urls, t);
     const fingerprintPromise = inputFingerprint(input);
     const [webResult, fingerprint] = await Promise.all([webResultPromise, fingerprintPromise]);
 
@@ -480,16 +478,16 @@ async function runPipeline(
       progress({
         stage: "evidence",
         progress: evidenceHighWater,
-        title: "Resuming from the saved evidence stages.",
-        detail: `${completed}/4 stages will be reused; only the missing ones are generated.`,
+        title: t.generate.resuming,
+        detail: t.generate.resumingDetail(completed),
       });
       emit({ type: "checkpoint", checkpoint, completed: completedPasses(checkpoint) });
     } else {
       progress({
         stage: "evidence",
         progress: 27,
-        title: "Splitting the paper into four evidence layers.",
-        detail: "At most two small model tasks run at a time.",
+        title: t.generate.splitting,
+        detail: t.generate.splittingDetail,
       });
       emit({ type: "checkpoint", checkpoint, completed: [] });
     }
@@ -526,10 +524,10 @@ async function runPipeline(
       progress({
         stage: "evidence",
         progress: evidenceHighWater,
-        title: `Extracting ${evidencePassLabels[passId]}.`,
+        title: t.generate.extracting(passId),
         detail: paperText?.omitted.length
-          ? `${completed}/4 stages complete · pages ${paperText.omitted.join(", ")} did not fit the local model's context and were left out of this stage`
-          : `${completed}/4 stages complete · waiting for the structured stream`,
+          ? t.generate.passOmitted(completed, paperText.omitted.join(", "))
+          : t.generate.passWaiting(completed),
       });
 
       try {
@@ -559,8 +557,8 @@ async function runPipeline(
                 progress({
                   stage: "evidence",
                   progress: evidenceHighWater,
-                  title: `Streaming ${evidencePassLabels[passId]}.`,
-                  detail: `${characters.toLocaleString("en")} characters received · ${completed}/4 stages complete`,
+                  title: t.generate.streamingPass(passId),
+                  detail: t.generate.passReceived(characters, completed),
                 });
               },
             }),
@@ -569,16 +567,16 @@ async function runPipeline(
             progress({
               stage: "evidence",
               progress: evidenceHighWater,
-              title: `Rechecking ${evidencePassLabels[passId]}.`,
-              detail: `Clearing ${issues.length} inconsistencies · structure attempt ${attempt}/2`,
+              title: t.generate.recheckingPass(passId),
+              detail: t.retry.structure(issues.length, attempt),
               attempt,
             }),
           onNetworkRetry: (attempt) =>
             progress({
               stage: "evidence",
               progress: evidenceHighWater,
-              title: `Reconnecting for ${evidencePassLabels[passId]}.`,
-              detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+              title: t.generate.reconnectingPass(passId),
+              detail: t.retry.network(attempt, MAX_NETWORK_ATTEMPTS),
               attempt,
             }),
         });
@@ -590,9 +588,7 @@ async function runPipeline(
          */
         const checked = paperPages ? downgradeUnlocatedClaims(output, paperPages) : undefined;
         if (checked?.downgraded) {
-          warnings.push(
-            `${evidencePassLabels[passId]}: ${checked.downgraded} claim(s) quote text that could not be found on the cited page, so they were marked needs-review.`,
-          );
+          warnings.push(t.generate.downgraded(passId, checked.downgraded));
         }
         setCheckpointPart(checkpoint, passId, checked?.output ?? output);
         completed += 1;
@@ -601,8 +597,8 @@ async function runPipeline(
         progress({
           stage: "evidence",
           progress: evidenceHighWater,
-          title: `${evidencePassLabels[passId]} validated.`,
-          detail: `${completed}/4 evidence stages complete and written to the checkpoint.`,
+          title: t.generate.passValidated(passId),
+          detail: t.generate.passValidatedDetail(completed),
         });
         console.info("Trace generation stage", {
           stage: `evidence:${passId}`,
@@ -628,7 +624,7 @@ async function runPipeline(
     await runWithConcurrency(missingPasses, EVIDENCE_CONCURRENCY, runEvidencePass);
 
     const overview = checkpoint.parts.overview;
-    if (!overview) throw new Error("The paper overview checkpoint could not be found.");
+    if (!overview) throw new Error(t.generate.overviewMissing);
     const sources: Source[] = [
       {
         id: "paper",
@@ -653,8 +649,8 @@ async function runPipeline(
     progress({
       stage: "evidence",
       progress: 64,
-      title: "The four evidence layers were merged.",
-      detail: `${evidence.claims.length} claims · ${evidence.metrics.length} metrics · ${evidence.limitations.length} limitations`,
+      title: t.generate.merged,
+      detail: t.generate.mergedDetail(evidence.claims.length, evidence.metrics.length, evidence.limitations.length),
     });
 
     const presentation = await allocatePaperAccent(
@@ -696,8 +692,8 @@ async function runPipeline(
     progress({
       stage: "story",
       progress: specialistProgress(),
-      title: "Designing the visual narrative, the deep report and the learning material.",
-      detail: "Different models run in parallel; tasks sharing one model run in a controlled sequence.",
+      title: t.generate.designing,
+      detail: t.generate.designingDetail,
     });
     const [visualRuntime, reportRuntime, technicalRuntime] = await Promise.all([
       getRuntime("visual"),
@@ -709,7 +705,7 @@ async function runPipeline(
     let teachingUnavailable: string | undefined;
     const teachingRuntime = await getRuntime("teaching", false).catch((error: unknown) => {
       if (signal.aborted) throw error;
-      teachingUnavailable = learningFailureReason(error);
+      teachingUnavailable = learningFailureReason(error, t.errors);
       console.error("Trace generation stage", { stage: "learning", outcome: "skipped", ...safeDiagnostic(error) });
       return undefined;
     });
@@ -736,8 +732,8 @@ async function runPipeline(
             progress({
               stage: "story",
               progress: specialistProgress(),
-              title: "Streaming the StorySpec.",
-              detail: `Received ${characters.toLocaleString("en")} characters of validated narrative.`,
+              title: t.generate.streamingStory,
+              detail: t.generate.storyReceived(characters),
             });
           },
         }),
@@ -749,16 +745,16 @@ async function runPipeline(
         progress({
           stage: "story",
           progress: specialistProgress(),
-          title: "Relinking the story.",
-          detail: `Clearing ${issues.length} narrative inconsistencies · structure attempt ${attempt}/2`,
+          title: t.generate.relinkingStory,
+          detail: t.generate.storyRetry(issues.length, attempt),
           attempt,
         }),
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
           progress: specialistProgress(),
-          title: "Reconnecting for the story.",
-          detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+          title: t.generate.reconnectingStory,
+          detail: t.retry.network(attempt, MAX_NETWORK_ATTEMPTS),
           attempt,
         }),
     }).catch((error) => {
@@ -787,8 +783,8 @@ async function runPipeline(
             progress({
               stage: "story",
               progress: specialistProgress(),
-              title: "Streaming the deep report.",
-              detail: `Received ${characters.toLocaleString("en")} characters of analytical report.`,
+              title: t.generate.streamingReport,
+              detail: t.generate.reportReceived(characters),
             });
           },
         }),
@@ -800,16 +796,16 @@ async function runPipeline(
         progress({
           stage: "story",
           progress: specialistProgress(),
-          title: "Relinking the report.",
-          detail: `Clearing ${issues.length} report inconsistencies · structure attempt ${attempt}/2`,
+          title: t.generate.relinkingReport,
+          detail: t.generate.reportRetry(issues.length, attempt),
           attempt,
         }),
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
           progress: specialistProgress(),
-          title: "Reconnecting for the report.",
-          detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+          title: t.generate.reconnectingReport,
+          detail: t.retry.network(attempt, MAX_NETWORK_ATTEMPTS),
           attempt,
         }),
     }).catch((error) => {
@@ -837,8 +833,8 @@ async function runPipeline(
             progress({
               stage: "story",
               progress: specialistProgress(),
-              title: "Preparing the technical appendix.",
-              detail: `Received ${characters.toLocaleString("en")} characters of equation, algorithm and code analysis.`,
+              title: t.generate.preparingTechnical,
+              detail: t.generate.technicalReceived(characters),
             });
           },
         }),
@@ -846,15 +842,15 @@ async function runPipeline(
       onStructureRetry: (attempt, issues) => progress({
         stage: "story",
         progress: specialistProgress(),
-        title: "Relinking the technical appendix.",
-        detail: `Clearing ${issues.length} technical inconsistencies · structure attempt ${attempt}/2`,
+        title: t.generate.relinkingTechnical,
+        detail: t.generate.technicalRetry(issues.length, attempt),
         attempt,
       }),
       onNetworkRetry: (attempt) => progress({
         stage: "story",
         progress: specialistProgress(),
-        title: "Reconnecting for the technical appendix.",
-        detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+        title: t.generate.reconnectingTechnical,
+        detail: t.retry.network(attempt, MAX_NETWORK_ATTEMPTS),
         attempt,
       }),
     }).catch((error) => {
@@ -905,12 +901,12 @@ async function runPipeline(
       addPostTask(lane, async () => {
         const spec = learningBlockSpec(block);
         const appendix = spec.usesTechnicalAppendix ? await appendixReady : undefined;
-        const step = `${learningDone + 1}/${learningPlan.length}`;
+        const step = learningDone + 1;
         progress({
           stage: "story",
           progress: specialistProgress(),
-          title: `${spec.title}.`,
-          detail: `Learning material ${step} · built from the evidence only, without the PDF.`,
+          title: t.learningLayer.writing(block),
+          detail: t.generate.learningStep(step, learningPlan.length),
         });
         try {
           const value = await generateLearningBlock(block, lane, {
@@ -930,29 +926,29 @@ async function runPipeline(
               progress({
                 stage: "story",
                 progress: specialistProgress(),
-                title: `${spec.title}.`,
-                detail: `Received ${characters.toLocaleString("en")} characters · learning material ${step}`,
+                title: t.learningLayer.writing(block),
+                detail: t.generate.learningReceived(characters, step, learningPlan.length),
               });
             },
             onStructureRetry: (attempt, issues) => progress({
               stage: "story",
               progress: specialistProgress(),
-              title: `Relinking ${spec.noun}.`,
-              detail: `Clearing ${issues.length} inconsistencies · structure attempt ${attempt}/2`,
+              title: t.learningLayer.relinking(block),
+              detail: t.retry.structure(issues.length, attempt),
               attempt,
             }),
             onNetworkRetry: (attempt) => progress({
               stage: "story",
               progress: specialistProgress(),
-              title: `Reconnecting for ${spec.noun}.`,
-              detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+              title: t.learningLayer.reconnecting(block),
+              detail: t.retry.network(attempt, MAX_NETWORK_ATTEMPTS),
               attempt,
             }),
           });
           Object.assign(learning, applyLearningBlock(block, value));
         } catch (error) {
           if (signal.aborted) throw error;
-          learningFailures.push({ block, reason: learningFailureReason(error) });
+          learningFailures.push({ block, reason: learningFailureReason(error, t.errors) });
           console.error("Trace generation stage", {
             stage: `learning:${block}`,
             fallbackProvider: input.assignments.teaching.provider,
@@ -972,9 +968,9 @@ async function runPipeline(
       for (const task of tasks) await task();
     }));
     if (!story || !deepReport || !technicalAppendix) {
-      throw new Error("The model team did not produce every required output.");
+      throw new Error(t.generate.missingOutputs);
     }
-    const learningGap = describeLearningGaps(learningFailures);
+    const learningGap = t.learningLayer.gaps(learningFailures);
     if (learningGap) warnings.push(learningGap);
     console.info("Trace generation stage", {
       stage: "learning",
@@ -996,8 +992,8 @@ async function runPipeline(
     progress({
       stage: "finalize",
       progress: 91,
-      title: "Running the final integrity check.",
-      detail: "Claims, pages, metrics and visual links are checked together.",
+      title: t.generate.finalCheck,
+      detail: t.generate.finalCheckDetail,
     });
     validateEvidenceIntegrity(evidence);
     validateStoryIntegrity(story, evidence, expectedSections(input));
@@ -1041,8 +1037,8 @@ async function runPipeline(
     progress({
       stage: "finalize",
       progress: 97,
-      title: "Cleaning up temporary files.",
-      detail: `Cleaning up ${runtimePromises.size} model workspace(s); no API key is retained.`,
+      title: t.generate.cleaning,
+      detail: t.generate.cleaningDetail(runtimePromises.size),
     });
     await cleanupRuntimes();
 
@@ -1054,12 +1050,13 @@ async function runPipeline(
 }
 
 export async function POST(request: Request) {
+  const t = serverText(request);
   let input: GenerationInput;
   try {
-    input = parseInput(await request.formData());
+    input = parseInput(await request.formData(), t);
   } catch (error) {
     if (error instanceof InputError) return jsonError(error.message, error.status);
-    return jsonError("The submitted form data could not be read.", 400);
+    return jsonError(t.request.formDataUnreadable, 400);
   }
 
   const encoder = new TextEncoder();
@@ -1074,9 +1071,9 @@ export async function POST(request: Request) {
       };
 
       try {
-        await runPipeline(input, request.signal, emit);
+        await runPipeline(input, request.signal, emit, t);
       } catch (error) {
-        const message = publicError(error, request.signal.aborted, input.provider);
+        const message = publicError(error, request.signal.aborted, input.provider, t.errors);
         console.error("Trace generation pipeline failed", {
           fallbackProvider: input.provider,
           fallbackModel: input.model,

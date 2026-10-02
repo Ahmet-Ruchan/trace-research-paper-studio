@@ -32,9 +32,16 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .studio-nav-focus[aria-current="page"] { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
 .studio-nav-palette { width: 34px; height: 34px; display: grid; place-items: center; flex: none; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
 .studio-nav-palette:hover { border-color: var(--line-dark); }
-/* Makale başlığında eylemler sekmelere ancak geniş ekranda yer bırakıyor; dar ekranda Ctrl+K yetiyor. */
+/* Dil düğmesi: geçilecek dilin kısaltması ("TR" / "EN"). */
+.studio-nav-language { width: 34px; height: 34px; display: grid; place-items: center; flex: none; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-2xs); font-weight: 600; letter-spacing: .04em; }
+.studio-nav-language:hover { border-color: var(--line-dark); }
+/*
+ * Makale başlığında eylemler sekmelere ancak geniş ekranda yer bırakıyor; dar ekranda Ctrl+K yetiyor.
+ * Dil düğmesi de burada çekiliyor: kütüphanenin, çalışma saatinin ve profilin başlığında, komut
+ * paletinde duruyor.
+ */
 @media (max-width: 1240px) {
-  .workspace-actions .studio-nav-palette { display: none; }
+  .workspace-actions .studio-nav-palette, .workspace-actions .studio-nav-language { display: none; }
 }
 .studio-nav-profile { width: 36px; height: 36px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
 .studio-nav-profile[aria-current="page"] .focus-avatar { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }

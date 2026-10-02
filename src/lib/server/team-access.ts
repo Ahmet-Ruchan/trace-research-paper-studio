@@ -1,5 +1,6 @@
 import type { ReaderNote } from "../reader-notes";
 import { visibleNotes } from "../team";
+import { serverText } from "./server-text";
 import { currentMember, firstOwnerId, memberNames, readTeam } from "./team-store";
 
 /**
@@ -27,7 +28,8 @@ export function ownerOnlyInTeam(request: Request): Response | undefined {
   if (!team.members.length) return undefined;
   const member = currentMember(request);
   const headers = { "Cache-Control": "no-store" };
-  if (!member) return Response.json({ error: "Sign in to the studio first." }, { status: 401, headers });
-  if (member.role !== "owner") return Response.json({ error: "In a team only an owner can export, import or back up all the data: it holds every member's notes." }, { status: 403, headers });
+  const t = serverText(request).errors;
+  if (!member) return Response.json({ error: t.signInToStudio() }, { status: 401, headers });
+  if (member.role !== "owner") return Response.json({ error: t.ownerOnlyData() }, { status: 403, headers });
   return undefined;
 }

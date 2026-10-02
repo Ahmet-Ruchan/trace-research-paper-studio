@@ -2,9 +2,7 @@ import { z } from "zod";
 import type { GenerationProgress, GenerationStreamEvent } from "@/lib/generation-events";
 import {
   applyLearningBlock,
-  describeLearningGaps,
   learningBlockIds,
-  learningBlockSpec,
   missingLearningBlocks,
   type LearningBlockId,
   type LearningBlocks,
@@ -25,6 +23,10 @@ import {
   type ProviderRuntime,
 } from "@/lib/server/model-runtime";
 import { RequestError, readJsonBody } from "@/lib/server/request-body";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
+
+type ServerText = ReturnType<typeof serverText>;
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -47,42 +49,42 @@ const requestSchema = z.object({
   apiKey: z.string().max(4_096).default(""),
 });
 
-function parseInput(raw: unknown) {
+function parseInput(raw: unknown, t: ServerText) {
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    throw new RequestError(`The learning layer request is not valid: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`, 400);
+    throw new RequestError(t.learningLayer.requestInvalid(issue?.path.join(".") ?? "", issue?.message), 400);
   }
   const project = researchProjectSchema.safeParse(parsed.data.project);
   if (!project.success) {
     const issue = project.error.issues[0];
-    throw new RequestError(`Invalid Trace project schema: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`, 400);
+    throw new RequestError(t.request.projectSchemaInvalid(issue?.path.join(".") ?? "", issue?.message), 400);
   }
 
   const blocks: LearningBlockId[] = parsed.data.blocks
     ? learningBlockIds.filter((block) => parsed.data.blocks!.includes(block))
     : missingLearningBlocks(project.data);
-  if (!blocks.length) throw new RequestError("This project already has its learning layer.", 400);
+  if (!blocks.length) throw new RequestError(t.learningLayer.alreadyComplete, 400);
   const existing = blocks.find((block) => {
     const value = project.data[block];
     return value !== undefined && !(Array.isArray(value) && value.length === 0);
   });
   if (existing) {
-    throw new RequestError(`This project already has ${learningBlockSpec(existing).noun}. Regenerate its items one by one instead.`, 409);
+    throw new RequestError(t.learningLayer.alreadyHas(existing), 409);
   }
 
   const assignment = resolveProviderModel(parsed.data.assignment.provider, parsed.data.assignment.model);
-  if (!assignment) throw new RequestError("The model and provider selection is not valid.", 400);
+  if (!assignment) throw new RequestError(t.request.modelSelectionInvalid, 400);
   const provider = getProvider(assignment.provider)!;
   let apiKey = parsed.data.apiKey.trim();
   if (provider.local) {
     try {
       apiKey = resolveLocalEndpoint(apiKey);
     } catch (error) {
-      throw new RequestError(error instanceof Error ? error.message : "The local model address is not valid.", 400);
+      throw new RequestError(errorMessage(error, t.errors, t.request.localAddressInvalid), 400);
     }
   } else if (!apiKey) {
-    throw new RequestError(`${provider.keyLabel} is required.`, 401);
+    throw new RequestError(t.request.keyRequired(provider), 401);
   }
 
   return { project: project.data, blocks, assignment, apiKey };
@@ -92,6 +94,7 @@ async function runLearning(
   input: ReturnType<typeof parseInput>,
   signal: AbortSignal,
   emit: (event: GenerationStreamEvent) => void,
+  t: ServerText,
 ) {
   const { project, blocks, assignment } = input;
   const fingerprint = evidenceFingerprint(project.evidence);
@@ -120,11 +123,11 @@ async function runLearning(
     progress({
       stage: "story",
       progress: 6,
-      title: "Preparing the teaching model.",
-      detail: "The evidence is locked; the learning material is written from it alone, without the PDF.",
+      title: t.learningLayer.preparing,
+      detail: t.learningLayer.preparingDetail,
     });
     providerRuntime = await prepareProviderRuntime(
-      { ...assignment, apiKey: input.apiKey, needsDocument: false, taskRole: "teaching" },
+      { ...assignment, apiKey: input.apiKey, needsDocument: false, taskRole: "teaching", progressText: t.progress },
       signal,
       progress,
       markActivity,
@@ -137,10 +140,8 @@ async function runLearning(
     let firstError: unknown;
     let lastNotice = 0;
     for (const [index, block] of blocks.entries()) {
-      const spec = learningBlockSpec(block);
-      const step = `${index + 1}/${blocks.length}`;
       const floor = 10 + (index / blocks.length) * 85;
-      progress({ stage: "story", progress: floor, title: `${spec.title}.`, detail: `Part ${step} of the learning layer.` });
+      progress({ stage: "story", progress: floor, title: t.learningLayer.writing(block), detail: t.learningLayer.part(index + 1, blocks.length) });
       try {
         const value = await generateLearningBlock(block, providerRuntime, {
           evidence: project.evidence,
@@ -158,22 +159,22 @@ async function runLearning(
             progress({
               stage: "story",
               progress: floor + Math.min(0.9, characters / 7_000) * (85 / blocks.length),
-              title: `${spec.title}.`,
-              detail: `Received ${characters.toLocaleString("en")} characters · part ${step}`,
+              title: t.learningLayer.writing(block),
+              detail: t.learningLayer.received(characters, index + 1, blocks.length),
             });
           },
           onStructureRetry: (attempt, issues) => progress({
             stage: "story",
             progress: highWater,
-            title: `Relinking ${spec.noun}.`,
-            detail: `Clearing ${issues.length} inconsistencies · structure attempt ${attempt}/2`,
+            title: t.learningLayer.relinking(block),
+            detail: t.retry.structure(issues.length, attempt),
             attempt,
           }),
           onNetworkRetry: (attempt) => progress({
             stage: "story",
             progress: highWater,
-            title: `Reconnecting for ${spec.noun}.`,
-            detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+            title: t.learningLayer.reconnecting(block),
+            detail: t.retry.network(attempt, MAX_NETWORK_ATTEMPTS),
             attempt,
           }),
         });
@@ -183,7 +184,7 @@ async function runLearning(
         // Reddedilen bir anahtarla sonraki parçalar da düşer: boşuna istek yok.
         if (refusesEveryRequest(error)) throw tagProviderError(error, assignment, "teaching");
         firstError ??= error;
-        failed.push({ block, reason: learningFailureReason(error) });
+        failed.push({ block, reason: learningFailureReason(error, t.errors) });
         console.error("Trace learning layer block failed", { block, fallbackProvider: assignment.provider, fallbackModel: assignment.model, ...safeDiagnostic(error) });
       }
     }
@@ -192,8 +193,8 @@ async function runLearning(
     progress({
       stage: "story",
       progress: 100,
-      title: "The learning material passed the evidence check.",
-      detail: failed.length ? describeLearningGaps(failed)! : "Every part cites only claims the evidence has.",
+      title: t.learningLayer.passed,
+      detail: (failed.length ? t.learningLayer.gaps(failed) : undefined) ?? t.learningLayer.allCited,
     });
     emit({ type: "learning", blocks: written, failed, evidenceFingerprint: fingerprint });
   } finally {
@@ -203,12 +204,13 @@ async function runLearning(
 }
 
 export async function POST(request: Request) {
+  const t = serverText(request);
   let input: ReturnType<typeof parseInput>;
   try {
-    input = parseInput(await readJsonBody(request, MAX_BODY_BYTES, "The project is too large to add a learning layer to."));
+    input = parseInput(await readJsonBody(request, MAX_BODY_BYTES, t.learningLayer.tooLarge, t.errors), t);
   } catch (error) {
     if (error instanceof RequestError) return Response.json({ error: error.message }, { status: error.status });
-    return Response.json({ error: "The learning layer request could not be read." }, { status: 400 });
+    return Response.json({ error: t.learningLayer.unreadable }, { status: 400 });
   }
 
   const encoder = new TextEncoder();
@@ -222,14 +224,14 @@ export async function POST(request: Request) {
         }
       };
       try {
-        await runLearning(input, request.signal, emit);
+        await runLearning(input, request.signal, emit, t);
       } catch (error) {
         console.error("Trace learning layer failed", {
           fallbackProvider: input.assignment.provider,
           fallbackModel: input.assignment.model,
           ...safeDiagnostic(error),
         });
-        const message = error instanceof RequestError ? error.message : publicError(error, request.signal.aborted, input.assignment.provider);
+        const message = error instanceof RequestError ? error.message : publicError(error, request.signal.aborted, input.assignment.provider, t.errors);
         emit({ type: "error", error: message });
       } finally {
         try {

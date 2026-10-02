@@ -26,6 +26,8 @@ import {
   updateWorkLog,
 } from "@/lib/trace-storage";
 import { ownerOnlyInTeam } from "@/lib/server/team-access";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +52,8 @@ export async function GET(request?: Request) {
     const withPapers = request ? new URL(request.url).searchParams.get("papers") !== "0" : true;
     return noStore(await collectBackup({ withPapers }));
   } catch (error) {
-    return noStore({ error: error instanceof Error ? error.message : "Your data could not be read." }, { status: 500 });
+    const t = serverText(request);
+    return noStore({ error: errorMessage(error, t.errors, t.data.readFailed) }, { status: 500 });
   }
 }
 
@@ -63,11 +66,12 @@ export async function GET(request?: Request) {
 export async function POST(request: Request) {
   const blocked = ownerOnlyInTeam(request);
   if (blocked) return blocked;
+  const t = serverText(request);
   try {
     const text = await request.text();
-    if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: "The file is larger than 300 MB." }, { status: 413 });
+    if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: t.data.tooLarge }, { status: 413 });
     const parsed = backupFileSchema.safeParse(JSON.parse(text));
-    if (!parsed.success) return noStore({ error: "This is not a Trace data file." }, { status: 400 });
+    if (!parsed.success) return noStore({ error: t.data.notTraceFile }, { status: 400 });
     const before = (await readWorkLog()).sessions.length;
     const log = await updateWorkLog((current) => mergeWorkLogs(current, parsed.data.log));
     let profileAdopted = false;
@@ -83,8 +87,8 @@ export async function POST(request: Request) {
     const library = parsed.data.library ? await importLibrary(parsed.data.library) : undefined;
     return noStore({ ok: true, added: log.sessions.length - before, sessions: log.sessions.length, profileAdopted, ...(library ? { library } : {}) });
   } catch (error) {
-    if (error instanceof SyntaxError) return noStore({ error: "The file is not valid JSON." }, { status: 400 });
-    return noStore({ error: error instanceof Error ? error.message : "Your data could not be imported." }, { status: 500 });
+    if (error instanceof SyntaxError) return noStore({ error: t.data.invalidJson }, { status: 400 });
+    return noStore({ error: errorMessage(error, t.errors, t.data.importFailed) }, { status: 500 });
   }
 }
 

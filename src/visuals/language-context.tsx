@@ -1,23 +1,28 @@
 "use client";
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { stringsFor, type Strings } from "./i18n";
+import { stringsFor, type ChromeLanguage, type Strings } from "./i18n";
 
 /**
- * Paylaşılan bileşenler projenin dilini prop zinciriyle taşımak yerine
- * buradan okur. Sağlayıcı yoksa Türkçeye düşer, böylece bu bağlamı henüz
- * kurmamış bir çağrı yeri kırılmaz.
+ * Paylaşılan bileşenler projenin dilini (ve stüdyoda arayüzün dilini) prop
+ * zinciriyle taşımak yerine buradan okur. Sağlayıcı yoksa İngilizce.
+ *
+ * `ui` verilmezse etiketler içeriğin dilinden çıkıyor (`stringsFor`):
+ * bağımsız görüntüleyici ve yayımlanmış hikâye böyle. Stüdyo okuyucunun
+ * seçtiği dili veriyor.
  */
-const LanguageContext = createContext<Strings>(stringsFor("tr"));
+const LanguageContext = createContext<Strings>(stringsFor(undefined, "en"));
 
 export function LanguageProvider({
   language,
+  ui,
   children,
 }: {
   language: string | undefined;
+  ui?: ChromeLanguage;
   children: ReactNode;
 }) {
-  const value = useMemo(() => stringsFor(language), [language]);
+  const value = useMemo(() => stringsFor(language, ui), [language, ui]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 

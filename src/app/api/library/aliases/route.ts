@@ -3,6 +3,8 @@ import { conceptNames } from "@/lib/alias-proposals";
 import { conceptKeys } from "@/lib/concept-links";
 import { decideAlias, forgetAlias } from "@/lib/concept-aliases";
 import { listStoredProjects, readConceptAliases, updateConceptAliases } from "@/lib/trace-storage";
+import { routeMessages } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,12 +26,13 @@ function noStore(body: unknown, init?: ResponseInit) {
 }
 
 /** Okuyucunun kavram eşleri ve kütüphanedeki kavram adları (elle eşlemek için). */
-export async function GET() {
+export async function GET(request?: Request) {
   try {
     const [file, projects] = await Promise.all([readConceptAliases(), listStoredProjects()]);
     return noStore({ ...file, names: conceptNames(projects, { version: 1, decisions: [] }).map((name) => name.term) });
   } catch (error) {
-    return noStore({ error: error instanceof Error ? error.message : "The concept links could not be read." }, { status: 500 });
+    const t = routeMessages(request).server;
+    return noStore({ error: errorMessage(error, t.errors, t.aliases.readFailed) }, { status: 500 });
   }
 }
 
@@ -39,24 +42,26 @@ export async function GET() {
  * yerde olmayan adlar arasında bağ kurulmuyor.
  */
 export async function PUT(request: Request) {
+  const messages = routeMessages(request);
+  const t = messages.server;
   try {
     const text = await request.text();
-    if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: "The request is too large." }, { status: 413 });
+    if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return noStore({ error: t.errors.requestTooLarge() }, { status: 413 });
     const parsed = bodySchema.safeParse(JSON.parse(text));
-    if (!parsed.success) return noStore({ error: parsed.error.issues[0]?.message ?? "The request is not valid." }, { status: 400 });
+    if (!parsed.success) return noStore({ error: parsed.error.issues[0]?.message ?? t.request.notValid }, { status: 400 });
     const { a, b, decision, proposedBy, reason } = parsed.data;
     const projects = await listStoredProjects();
     const known = new Set(
       projects.flatMap((project) => [...(project.primer?.concepts ?? []).map((concept) => concept.term), ...project.evidence.glossary.map((item) => item.term)]).flatMap(conceptKeys),
     );
     if (decision !== "forget" && ![a, b].every((term) => conceptKeys(term).some((key) => known.has(key)))) {
-      return noStore({ error: "Both names must be concepts of a paper in your library." }, { status: 404 });
+      return noStore({ error: t.aliases.notConcepts }, { status: 404 });
     }
     const now = new Date().toISOString();
-    const file = await updateConceptAliases((current) => (decision === "forget" ? forgetAlias(current, a, b) : decideAlias(current, a, b, decision, proposedBy, now, reason)));
+    const file = await updateConceptAliases((current) => (decision === "forget" ? forgetAlias(current, a, b) : decideAlias(current, a, b, decision, proposedBy, now, reason, messages.learning.words.alias)));
     return noStore({ ok: true, ...file });
   } catch (error) {
-    if (error instanceof SyntaxError) return noStore({ error: "The request is not valid JSON." }, { status: 400 });
-    return noStore({ error: error instanceof Error ? error.message : "The concept link could not be saved." }, { status: 400 });
+    if (error instanceof SyntaxError) return noStore({ error: t.request.invalidJson }, { status: 400 });
+    return noStore({ error: errorMessage(error, t.errors, t.aliases.saveFailed) }, { status: 400 });
   }
 }

@@ -3,21 +3,16 @@
 import { useMemo } from "react";
 import { ArrowLeft, Columns2, Gauge, ListX } from "lucide-react";
 import { documentTaskRoles, type ModelTeam } from "@/lib/model-providers";
-import { exclusionDescriptions, modelIdentity, modelLabel, modelRecord, type ExclusionReason, type ModelIdentity, type ModelRecord } from "@/lib/model-record";
+import { modelIdentity, modelLabel, modelRecord, type ModelIdentity, type ModelRecord } from "@/lib/model-record";
 import type { ResearchProject } from "@/lib/schema";
+import { useT } from "@/i18n/client";
 import { StudioNav } from "./focus/studio-nav";
 
-const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
-
-function plural(value: number, noun: string) {
-  return `${value.toLocaleString("en")} ${noun}${value === 1 ? "" : "s"}`;
+/** Yüzde arayüzün dilinde: "95.5%" / "%95,5". */
+function usePercent() {
+  const { locale } = useT().common;
+  return useMemo(() => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }), [locale]);
 }
-
-/** Stüdyoda düzeltilebilen nedenler için yol. */
-const exclusionRemedy: Partial<Record<ExclusionReason, string>> = {
-  "not-checked": "Open it and use Check the quotes against the PDF in Evidence health.",
-  "changed-since-check": "Check them again with the PDF to count it.",
-};
 
 /**
  * Hangi model kaç alıntıyı sayfasında bulunabilir yazdı?
@@ -38,52 +33,49 @@ export function ModelRecordView({
   onOpen: (project: ResearchProject) => void;
 }) {
   const record = useMemo(() => modelRecord(projects), [projects]);
+  const messages = useT();
+  const t = messages.paper.modelRecord;
+  const header = messages.paper.pageHeader;
+  const { locale } = messages.common;
+  const percent = usePercent();
+  const label = (model: Pick<ModelIdentity, "provider" | "model">) => modelLabel(model, t.modelLabel);
 
   return (
     <main className="compare-page model-record-page">
       <header className="library-header">
-        <button className="brand" onClick={onBack} aria-label="Back to the library">
+        <button className="brand" onClick={onBack} aria-label={header.back}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{header.tagline}</small></span>
         </button>
         <div className="library-header-actions">
-          <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {header.library}</button>
           <StudioNav />
         </div>
       </header>
 
       <section className="compare-hero">
-        <p className="landing-eyebrow"><span /> Model record</p>
-        <h1>{record.models.length ? "How each model’s quotes held up." : "No model has a checked quote yet."}</h1>
-        <p>
-          Every quote a model writes is searched for on the page it cites. This adds up, for each model, how many were
-          found across the papers in your library. A quote that is not found is not always invented: tables, equations
-          and scanned pages do not survive text extraction. A low rate says look closer, not that the model made it up.
-          No model is asked; the numbers come from the projects alone.
-        </p>
+        <p className="landing-eyebrow"><span /> {t.eyebrow}</p>
+        <h1>{record.models.length ? t.title : t.titleEmpty}</h1>
+        <p>{t.intro}</p>
       </section>
 
       {record.models.length > 0 && (
         <section className="compare-block">
-          <div className="block-title"><Gauge size={16} /> By model</div>
-          <p className="compare-note">
-            Sorted by the lowest rate the evidence is consistent with (a 95% Wilson interval), so a model checked on three
-            quotes cannot outrank one checked on three hundred. Each model read different papers, and a scanned or
-            table-heavy paper lowers any model’s rate. Reviewed claims are a person’s decisions in the Review tab.
-          </p>
+          <div className="block-title"><Gauge size={16} /> {t.byModel}</div>
+          <p className="compare-note">{t.byModelNote}</p>
           <div className="record-table-wrap">
             <table className="record-table">
               <thead>
-                <tr><th>Model</th><th>Papers</th><th>Quotes found on their page</th><th>Rate</th><th>Reviewed claims</th></tr>
+                <tr><th>{t.columns.model}</th><th>{t.columns.papers}</th><th>{t.columns.quotesFound}</th><th>{t.columns.rate}</th><th>{t.columns.reviewed}</th></tr>
               </thead>
               <tbody>
                 {record.models.map((row) => (
                   <tr key={row.key}>
-                    <th scope="row">{modelLabel(row)}</th>
-                    <td data-label="Papers">{row.papers}</td>
-                    <td data-label="Quotes found">{row.found.toLocaleString("en")} of {row.checked.toLocaleString("en")}</td>
-                    <td data-label="Rate"><b>{percent.format(row.rate)}</b><small>likely {percent.format(row.low)}–{percent.format(row.high)}</small></td>
-                    <td data-label="Reviewed claims">{row.approved || row.rejected ? `${row.approved} approved · ${row.rejected} rejected` : "—"}</td>
+                    <th scope="row">{label(row)}</th>
+                    <td data-label={t.columns.papers}>{row.papers}</td>
+                    <td data-label={t.columns.quotesFoundShort}>{t.foundOf(row.found.toLocaleString(locale), row.checked.toLocaleString(locale))}</td>
+                    <td data-label={t.columns.rate}><b>{percent.format(row.rate)}</b><small>{t.likely(percent.format(row.low), percent.format(row.high))}</small></td>
+                    <td data-label={t.columns.reviewed}>{row.approved || row.rejected ? t.reviewedCounts(row.approved, row.rejected) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -93,13 +85,10 @@ export function ModelRecordView({
       )}
 
       <section className="compare-block">
-        <div className="block-title"><Columns2 size={16} /> Same paper, different models</div>
+        <div className="block-title"><Columns2 size={16} /> {t.samePaper}</div>
         {record.samePaper.length ? (
           <>
-            <p className="compare-note">
-              The fairest comparison in the library: the same PDF, so the same tables and equations stood in every
-              model’s way.
-            </p>
+            <p className="compare-note">{t.samePaperNote}</p>
             <div className="record-pairs">
               {record.samePaper.map((group) => (
                 <article className="compare-card" key={group.entries[0].project.id}>
@@ -108,10 +97,10 @@ export function ModelRecordView({
                     <tbody>
                       {group.entries.map((entry) => (
                         <tr key={`${entry.project.id}:${entry.key}`}>
-                          <th scope="row">{modelLabel(entry)}</th>
-                          <td>{entry.found} of {entry.checked}</td>
+                          <th scope="row">{label(entry)}</th>
+                          <td>{t.foundOf(String(entry.found), String(entry.checked))}</td>
                           <td><b>{percent.format(entry.found / entry.checked)}</b></td>
-                          <td><button className="library-open" onClick={() => onOpen(entry.project)}>Open</button></td>
+                          <td><button className="library-open" onClick={() => onOpen(entry.project)}>{messages.common.open}</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -121,25 +110,19 @@ export function ModelRecordView({
             </div>
           </>
         ) : (
-          <p className="compare-empty">
-            When the same paper is analysed with two different models, their quotes are lined up here. That is the
-            fairest comparison, because the same tables and equations stand in both models’ way.
-          </p>
+          <p className="compare-empty">{t.samePaperEmpty}</p>
         )}
       </section>
 
       {record.excluded.length > 0 && (
         <section className="compare-block">
-          <div className="block-title"><ListX size={16} /> Not counted</div>
-          <p className="compare-note">
-            {plural(record.excluded.length, "project")} {record.excluded.length === 1 ? "is" : "are"} left out rather than
-            counted with numbers that could be wrong.
-          </p>
+          <div className="block-title"><ListX size={16} /> {t.notCounted}</div>
+          <p className="compare-note">{t.notCountedNote(record.excluded.length)}</p>
           <ul className="record-excluded">
             {record.excluded.map((item) => (
               <li key={item.project.id}>
-                <div><strong>{item.project.evidence.paper.title}</strong><span>{[exclusionDescriptions[item.reason], exclusionRemedy[item.reason]].filter(Boolean).join(" ")}</span></div>
-                <button className="library-open" onClick={() => onOpen(item.project)}>Open</button>
+                <div><strong>{item.project.evidence.paper.title}</strong><span>{[t.exclusions[item.reason], t.remedies[item.reason]].filter(Boolean).join(" ")}</span></div>
+                <button className="library-open" onClick={() => onOpen(item.project)}>{messages.common.open}</button>
               </li>
             ))}
           </ul>
@@ -155,6 +138,8 @@ export function ModelRecordView({
  * alıntı yazmıyor.
  */
 export function QuoteTrackRecord({ assignments, record }: { assignments: ModelTeam; record: ModelRecord }) {
+  const t = useT().paper.modelRecord;
+  const percent = usePercent();
   const models = [...new Map(
     documentTaskRoles
       .map((role) => modelIdentity(assignments[role]))
@@ -165,17 +150,17 @@ export function QuoteTrackRecord({ assignments, record }: { assignments: ModelTe
 
   return (
     <div className="quote-track-record">
-      <strong>Quote record in your library</strong>
+      <strong>{t.trackRecord}</strong>
       <ul>
         {models.map((model) => {
           const row = record.models.find((item) => item.key === model.key);
           return (
             <li key={model.key}>
-              <b>{modelLabel(model)}</b>
+              <b>{modelLabel(model, t.modelLabel)}</b>
               <span>
                 {row
-                  ? `${row.found.toLocaleString("en")} of ${row.checked.toLocaleString("en")} quotes found on their page, in ${plural(row.papers, "paper")} (${percent.format(row.rate)}, likely ${percent.format(row.low)}–${percent.format(row.high)}).`
-                  : "No checked quotes from this model in your library yet."}
+                  ? t.trackRow(row.found, row.checked, row.papers, percent.format(row.rate), percent.format(row.low), percent.format(row.high))
+                  : t.trackNone}
               </span>
             </li>
           );

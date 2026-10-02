@@ -106,23 +106,26 @@ export type ProbeStage = {
  * büyüyüp bu sayılar eskirse kırılıyor). Anlatı ve rapor çıktısı bölüm
  * sayısıyla ölçekleniyor; şablon varsa sayıyı şablon belirliyor.
  */
-export function generationStageProfiles(options: {
-  depth: ResearchProject["depth"];
-  template?: NarrativeTemplate;
-}): Record<GenerationTaskRole, ProbeStage> {
+export function generationStageProfiles(
+  options: {
+    depth: ResearchProject["depth"];
+    template?: NarrativeTemplate;
+  },
+  labels: Record<GenerationTaskRole, string> = ENGLISH_PROBE_WORDS.stages,
+): Record<GenerationTaskRole, ProbeStage> {
   const counts = expectedSectionCounts(options);
   return {
-    evidence: { id: "evidence", label: "Reading the paper", promptCharacters: 2_800 + PDF_PROMPT_CHARACTERS, outputCharacters: 10_000 },
-    technical: { id: "technical", label: "The method and results pass", promptCharacters: 2_800 + PDF_PROMPT_CHARACTERS, outputCharacters: 11_000 },
+    evidence: { id: "evidence", label: labels.evidence, promptCharacters: 2_800 + PDF_PROMPT_CHARACTERS, outputCharacters: 10_000 },
+    technical: { id: "technical", label: labels.technical, promptCharacters: 2_800 + PDF_PROMPT_CHARACTERS, outputCharacters: 11_000 },
     report: {
       id: "report",
-      label: "The deep report",
+      label: labels.report,
       promptCharacters: 34_000,
       outputCharacters: Math.round(17_000 * counts.report / SECTION_BUDGETS.deepReport.standard),
     },
     visual: {
       id: "visual",
-      label: "The visual story",
+      label: labels.visual,
       promptCharacters: 34_000,
       outputCharacters: Math.round(18_500 * counts.story / SECTION_BUDGETS.story.standard),
     },
@@ -130,7 +133,7 @@ export function generationStageProfiles(options: {
     // özlüde ön bilgi, standartta türetimler, derinde oyun alanları.
     teaching: {
       id: "teaching",
-      label: "The learning material",
+      label: labels.teaching,
       promptCharacters: options.depth === "concise" ? 19_000 : 25_500,
       outputCharacters: Math.max(...learningBlocksFor(options.depth).map((block) => learningBlockSpec(block).expectedCharacters)),
     },
@@ -142,22 +145,61 @@ export function slowestEstimate<T extends { estimateSeconds: number }>(estimates
   return estimates.reduce<T | undefined>((slowest, item) => (!slowest || item.estimateSeconds > slowest.estimateSeconds ? item : slowest), undefined);
 }
 
-export function formatDuration(seconds: number) {
-  if (seconds < 90) return `${Math.max(1, Math.round(seconds))} s`;
+/**
+ * Deneme sonucunun ekranda görünen metinleri. Stüdyo arayüzün dilindekini
+ * veriyor (`src/i18n/messages`); verilmezse İngilizce.
+ */
+export type ProbeWords = {
+  /** Süre birimleri: saniye, dakika, saat. */
+  seconds: (count: number) => string;
+  minutes: (count: number) => string;
+  hours: (count: number) => string;
+  answered: (seconds: number) => string;
+  /** Tek bölümün denemesinde cümlenin öznesi. */
+  aSection: string;
+  fast: (subject: string, estimate: string) => string;
+  slow: (subject: string, estimate: string, limit: string) => string;
+  tooSlow: (subject: string, estimate: string, limit: string) => string;
+  /** Tam üretimdeki her görevin en ağır isteği; tahmin cümlesinin öznesi. */
+  stages: Record<GenerationTaskRole, string>;
+};
+
+export const ENGLISH_PROBE_WORDS: ProbeWords = {
+  seconds: (count) => `${count} s`,
+  minutes: (count) => `${count} min`,
+  hours: (count) => `${count} h`,
+  answered: (seconds) => `Answered in ${seconds.toFixed(1)} s.`,
+  aSection: "A section",
+  fast: (subject, estimate) => `${subject} should take about ${estimate}.`,
+  slow: (subject, estimate, limit) => `${subject} should take about ${estimate}, close to the ${limit} limit.`,
+  tooSlow: (subject, estimate, limit) => `${subject} would take about ${estimate}, longer than the ${limit} limit. Pick a faster model.`,
+  stages: {
+    evidence: "Reading the paper",
+    technical: "The method and results pass",
+    report: "The deep report",
+    visual: "The visual story",
+    teaching: "The learning material",
+  },
+};
+
+export function formatDuration(seconds: number, words: ProbeWords = ENGLISH_PROBE_WORDS) {
+  if (seconds < 90) return words.seconds(Math.max(1, Math.round(seconds)));
   const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `${minutes} min`;
-  return `${Math.round(minutes / 60)} h`;
+  if (minutes < 90) return words.minutes(minutes);
+  return words.hours(Math.round(minutes / 60));
 }
 
 /** Arayüzün göstereceği tek cümle. */
 export function describeProbe(
   result: Pick<ProbeResult, "firstChunkMs" | "estimateSeconds" | "limitSeconds" | "verdict">,
-  subject = "A section",
+  subject?: string,
+  words: ProbeWords = ENGLISH_PROBE_WORDS,
 ) {
-  const answered = `Answered in ${(result.firstChunkMs / 1000).toFixed(1)} s.`;
-  const estimate = formatDuration(result.estimateSeconds);
-  const limit = formatDuration(result.limitSeconds);
-  if (result.verdict === "fast") return `${answered} ${subject} should take about ${estimate}.`;
-  if (result.verdict === "slow") return `${answered} ${subject} should take about ${estimate}, close to the ${limit} limit.`;
-  return `${answered} ${subject} would take about ${estimate}, longer than the ${limit} limit. Pick a faster model.`;
+  const who = subject ?? words.aSection;
+  const answered = words.answered(result.firstChunkMs / 1000);
+  const estimate = formatDuration(result.estimateSeconds, words);
+  const limit = formatDuration(result.limitSeconds, words);
+  if (result.verdict === "fast") return `${answered} ${words.fast(who, estimate)}`;
+  if (result.verdict === "slow") return `${answered} ${words.slow(who, estimate, limit)}`;
+  return `${answered} ${words.tooSlow(who, estimate, limit)}`;
 }

@@ -172,6 +172,15 @@ export function compareProjects(left: ResearchProject, right: ResearchProject): 
   };
 }
 
+/** "equal" ve büyük sayıların kısaltma dili; stüdyo arayüzün dilindekini veriyor. */
+export type DifferenceWords = {
+  equal: string;
+  /** "1.2M" / "1,5 Mn": İngilizcedeki "B" (milyar) Türkçede "bin" diye okunurdu. */
+  locale: string;
+};
+
+export const DIFFERENCE_WORDS: DifferenceWords = { equal: "equal", locale: "en" };
+
 /**
  * Farkı okunabilir kıl.
  *
@@ -179,12 +188,13 @@ export function compareProjects(left: ResearchProject, right: ResearchProject): 
  * yazıldığında "-231000000000000000" karta sığmıyor ve zaten kimseye bir şey
  * anlatmıyor; büyük sayılar kısaltılıyor, küçükler tam kalıyor — çünkü
  * BLEU'da 0.9 ile 1.9 arasındaki fark tam olarak okunması gereken şey.
+ * Küçükler, yanlarındaki makale değerleri gibi her dilde noktalı.
  */
-export function formatDifference(difference: number): string {
-  if (!Number.isFinite(difference) || difference === 0) return "equal";
+export function formatDifference(difference: number, words: DifferenceWords = DIFFERENCE_WORDS): string {
+  if (!Number.isFinite(difference) || difference === 0) return words.equal;
   const sign = difference > 0 ? "+" : "";
   if (Math.abs(difference) >= 10_000) {
-    return sign + new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(difference);
+    return sign + new Intl.NumberFormat(words.locale, { notation: "compact", maximumFractionDigits: 2 }).format(difference);
   }
   return sign + String(Number(difference.toFixed(4)));
 }

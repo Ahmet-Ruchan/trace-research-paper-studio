@@ -1,6 +1,8 @@
 import { applyExcerptCheck } from "@/lib/paper-text";
 import { paperEvidenceSchema } from "@/lib/schema";
 import { extractPaperPages, PaperTextError } from "@/lib/server/paper-text-extract";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -19,27 +21,28 @@ const MAX_EVIDENCE_BYTES = 5 * 1024 * 1024;
  * yüzden neredeyse hiçbir şey eşleşmiyorsa sonuç UYGULANMAZ, reddedilir.
  */
 export async function POST(request: Request) {
+  const t = serverText(request);
   let form: FormData;
   try {
     form = await request.formData();
   } catch {
-    return Response.json({ error: "The submitted form data could not be read." }, { status: 400 });
+    return Response.json({ error: t.request.formDataUnreadable }, { status: 400 });
   }
   const file = form.get("paper");
   if (!(file instanceof File) || file.type !== "application/pdf") {
-    return Response.json({ error: "Upload the paper's PDF." }, { status: 400 });
+    return Response.json({ error: t.excerpts.pdfRequired }, { status: 400 });
   }
-  if (file.size > MAX_PDF_BYTES) return Response.json({ error: "The PDF exceeds the 35 MB limit." }, { status: 413 });
+  if (file.size > MAX_PDF_BYTES) return Response.json({ error: t.request.pdfTooLarge }, { status: 413 });
 
   const rawEvidence = String(form.get("evidence") ?? "");
   if (!rawEvidence || rawEvidence.length > MAX_EVIDENCE_BYTES) {
-    return Response.json({ error: "The project's evidence is missing or too large." }, { status: 400 });
+    return Response.json({ error: t.excerpts.evidenceMissing }, { status: 400 });
   }
   let evidence;
   try {
     evidence = paperEvidenceSchema.parse(JSON.parse(rawEvidence));
   } catch {
-    return Response.json({ error: "The project's evidence is not valid." }, { status: 400 });
+    return Response.json({ error: t.excerpts.evidenceInvalid }, { status: 400 });
   }
 
   try {
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
     const check = result.project.excerptCheck;
     if (check.checked >= 5 && check.unlocated.length / check.checked > 0.8) {
       return Response.json(
-        { error: `Only ${check.checked - check.unlocated.length} of ${check.checked} quotes were found in this PDF. It is probably a different paper or a different version, so nothing was changed.` },
+        { error: t.excerpts.wrongPdf(check.checked - check.unlocated.length, check.checked) },
         { status: 422 },
       );
     }
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    if (error instanceof PaperTextError) return Response.json({ error: error.message }, { status: 422 });
-    return Response.json({ error: "The quotes could not be checked." }, { status: 500 });
+    if (error instanceof PaperTextError) return Response.json({ error: errorMessage(error, t.errors, t.excerpts.checkFailed) }, { status: 422 });
+    return Response.json({ error: t.excerpts.checkFailed }, { status: 500 });
   }
 }

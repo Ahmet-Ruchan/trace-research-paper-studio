@@ -38,7 +38,10 @@ export type ModelTally = ModelIdentity & {
 
 export type ExclusionReason = "model-not-recorded" | "not-checked" | "check-truncated" | "changed-since-check" | "stage-unknown";
 
-/** Stüdyo ve ajan köprüsü aynı cümleyi söylesin; nasıl düzeltileceği her yüzeyin kendi işi. */
+/**
+ * Stüdyo ve ajan köprüsü aynı cümleyi söylesin; nasıl düzeltileceği her yüzeyin kendi işi.
+ * Köprü İngilizcesini kullanıyor; stüdyonun Türkçesi aynı anahtarlarla `src/i18n/messages`'ta.
+ */
 export const exclusionDescriptions: Record<ExclusionReason, string> = {
   "not-checked": "Its quotes were never checked against the PDF.",
   "model-not-recorded": "The project does not say which model wrote it.",
@@ -59,8 +62,12 @@ export function modelIdentity(assignment: { provider: string; model: string } | 
   return { key: `${provider}:${model}`, provider, model };
 }
 
-export function modelLabel(model: Pick<ModelIdentity, "provider" | "model">) {
-  const provider = model.provider === "native-agent" ? "Agent" : getProvider(model.provider)?.label ?? model.provider;
+/** Ajanın yazdığı projelerde sağlayıcı yerine geçen ad; stüdyo arayüzün dilindekini veriyor. */
+export type ModelLabelWords = { agent: string };
+export const MODEL_LABEL_WORDS: ModelLabelWords = { agent: "Agent" };
+
+export function modelLabel(model: Pick<ModelIdentity, "provider" | "model">, words: ModelLabelWords = MODEL_LABEL_WORDS) {
+  const provider = model.provider === "native-agent" ? words.agent : getProvider(model.provider)?.label ?? model.provider;
   return `${provider} · ${model.model}`;
 }
 

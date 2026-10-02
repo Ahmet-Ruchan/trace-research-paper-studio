@@ -17,7 +17,7 @@ type VisualRendererProps = {
 };
 
 export function VisualRenderer({ visual, accent = "#e75b37", active = true }: VisualRendererProps) {
-  // Görsel metinleri MAKALEDEN gelir. Arayüz İngilizce olsa da bu metinler
+  // Görsel metinleri MAKALEDEN gelir. Arayüz başka dilde olsa da bu metinler
   // projenin dilinde kalır; `lang` olmadan CSS büyük harf dönüşümü Türkçe
   // "i" harfini "I" yapıp "İÇ ÇARPIM" yerine "IÇ ÇARPIM" üretir.
   const t = useStrings();
@@ -108,7 +108,7 @@ export function VisualRenderer({ visual, accent = "#e75b37", active = true }: Vi
                 </div>
               ))}
             </div>
-            <div className="architecture-edges" aria-label="Architecture connections">
+            <div className="architecture-edges" aria-label={t.architectureConnections}>
               {visual.edges.map((edge, index) => {
                 const from = visual.nodes.find((node) => node.id === edge.from)?.label ?? edge.from;
                 const to = visual.nodes.find((node) => node.id === edge.to)?.label ?? edge.to;

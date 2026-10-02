@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { messagesFor } from "@/i18n/messages";
 import { loadExampleProject } from "./example-fixture";
 import {
+  ENGLISH_TEMPLATE_ISSUE_WORDS,
   builtInTemplates,
   reportTemplateIssues,
   storyTemplateIssues,
@@ -132,5 +134,34 @@ describe("templates in prompts", () => {
     const swapped = { ...current, visual: project.story.sections[0].visual };
     expect(() => spliceSection(project, target, swapped, { claimPolicy: "locked" })).toThrow(/an architecture visual/);
     expect(() => spliceSection(project, target, { ...current, body: "Rewritten." }, { claimPolicy: "locked" })).not.toThrow();
+  });
+});
+
+describe("templates in the reader's language", () => {
+  const broken: NarrativeTemplate = {
+    ...builtInTemplates[0],
+    id: "flat",
+    story: builtInTemplates[0].story.map((slot) => ({ ...slot, visual: "concept", claimKinds: ["background"] })),
+    report: ["contribution", "mechanism", "experiment", "critique", "reproduction", "reproduction"],
+  };
+
+  it("keeps the studio's English words identical to the module's own", () => {
+    const english = messagesFor("en").studio.templates;
+    expect(templateIssues(broken, english.issues)).toEqual(templateIssues(broken));
+    expect(english.issues.visualNames).toEqual(ENGLISH_TEMPLATE_ISSUE_WORDS.visualNames);
+    expect(english.issues.reportKindNames).toEqual(ENGLISH_TEMPLATE_ISSUE_WORDS.reportKindNames);
+    // Hazır şablonların ekrandaki İngilizce adı ve açıklaması şablonun kendisiyle aynı.
+    for (const template of builtInTemplates) {
+      expect(english.builtIn[template.id]).toEqual({ name: template.name, description: template.description });
+    }
+  });
+
+  it("explains template problems in Turkish, naming visuals and report kinds in Turkish", () => {
+    const turkish = messagesFor("tr").studio.templates;
+    const issues = templateIssues(broken, turkish.issues).join(" ");
+    expect(issues).toMatch(/en az üç farklı görsel türü/);
+    expect(issues).toMatch(/mimari, denklem, zaman çizelgesi, matris, infografik/);
+    expect(issues).toMatch(/eksik: çıkarım/);
+    for (const template of builtInTemplates) expect(turkish.builtIn[template.id]?.name).toBeTruthy();
   });
 });

@@ -30,6 +30,10 @@ import {
   type ProviderRuntime,
 } from "@/lib/server/model-runtime";
 import { RequestError, readJsonBody } from "@/lib/server/request-body";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
+
+type ServerText = ReturnType<typeof serverText>;
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -51,20 +55,20 @@ const requestSchema = z.object({
   apiKey: z.string().max(4_096).default(""),
 });
 
-function parseInput(raw: unknown) {
+function parseInput(raw: unknown, t: ServerText) {
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    throw new RequestError(`The regeneration request is not valid: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`, 400);
+    throw new RequestError(t.regenerate.requestInvalid(issue?.path.join(".") ?? "", issue?.message), 400);
   }
   const project = researchProjectSchema.safeParse(parsed.data.project);
   if (!project.success) {
     const issue = project.error.issues[0];
-    throw new RequestError(`Invalid Trace project schema: ${issue?.path.join(".") || "root"} · ${issue?.message ?? "unknown error"}`, 400);
+    throw new RequestError(t.request.projectSchemaInvalid(issue?.path.join(".") ?? "", issue?.message), 400);
   }
   const { target } = parsed.data;
   if (!findSection(project.data, target)) {
-    throw new RequestError(`There is no ${sectionKindInfo(target.kind).label} with id "${target.sectionId}" in this project.`, 404);
+    throw new RequestError(t.regenerate.notFound(target.kind, target.sectionId), 404);
   }
 
   try {
@@ -75,7 +79,7 @@ function parseInput(raw: unknown) {
   }
 
   const assignment = resolveProviderModel(parsed.data.assignment.provider, parsed.data.assignment.model);
-  if (!assignment) throw new RequestError("The model and provider selection is not valid.", 400);
+  if (!assignment) throw new RequestError(t.request.modelSelectionInvalid, 400);
   const provider = getProvider(assignment.provider)!;
 
   /**
@@ -88,10 +92,10 @@ function parseInput(raw: unknown) {
     try {
       apiKey = resolveLocalEndpoint(apiKey);
     } catch (error) {
-      throw new RequestError(error instanceof Error ? error.message : "The local model address is not valid.", 400);
+      throw new RequestError(errorMessage(error, t.errors, t.request.localAddressInvalid), 400);
     }
   } else if (!apiKey) {
-    throw new RequestError(`${provider.keyLabel} is required.`, 401);
+    throw new RequestError(t.request.keyRequired(provider), 401);
   }
 
   return {
@@ -109,9 +113,11 @@ async function runRegeneration(
   input: ReturnType<typeof parseInput>,
   signal: AbortSignal,
   emit: (event: GenerationStreamEvent) => void,
+  t: ServerText,
 ) {
   const { project, target, claimPolicy, assignment } = input;
-  const { taskRole, label, noun, schemaName } = sectionKindInfo(target.kind);
+  const { taskRole, label, schemaName } = sectionKindInfo(target.kind);
+  const kind = target.kind;
   const fingerprint = evidenceFingerprint(project.evidence);
   const schema = sectionSchemaFor(target.kind);
   const prompt = buildSectionRegenerationPrompt(project, target, {
@@ -152,12 +158,12 @@ async function runRegeneration(
     progress({
       stage: "story",
       progress: 10,
-      title: `Preparing the ${label}.`,
-      detail: `The evidence is locked; only this ${noun} will be rewritten.`,
+      title: t.regenerate.preparing(kind),
+      detail: t.regenerate.preparingDetail(kind),
     });
 
     providerRuntime = await prepareProviderRuntime(
-      { ...assignment, apiKey: input.apiKey, needsDocument: false, taskRole },
+      { ...assignment, apiKey: input.apiKey, needsDocument: false, taskRole, progressText: t.progress },
       signal,
       progress,
       markActivity,
@@ -187,8 +193,8 @@ async function runRegeneration(
             progress({
               stage: "story",
               progress: 20 + Math.min(65, characters / 60),
-              title: `Streaming the ${label}.`,
-              detail: `Received ${characters.toLocaleString("en")} characters.`,
+              title: t.regenerate.streaming(kind),
+              detail: t.regenerate.received(characters),
             });
           },
         }),
@@ -204,16 +210,16 @@ async function runRegeneration(
         progress({
           stage: "story",
           progress: highWater,
-          title: `Relinking the ${label}.`,
-          detail: `Clearing ${issues.length} inconsistencies · structure attempt ${attempt}/2`,
+          title: t.regenerate.relinking(kind),
+          detail: t.retry.structure(issues.length, attempt),
           attempt,
         }),
       onNetworkRetry: (attempt) =>
         progress({
           stage: "story",
           progress: highWater,
-          title: `Reconnecting for the ${label}.`,
-          detail: `Transient model error · network attempt ${attempt}/${MAX_NETWORK_ATTEMPTS}`,
+          title: t.regenerate.reconnecting(kind),
+          detail: t.retry.network(attempt, MAX_NETWORK_ATTEMPTS),
           attempt,
         }),
     }).catch((error) => {
@@ -223,8 +229,8 @@ async function runRegeneration(
     progress({
       stage: "story",
       progress: 100,
-      title: `The ${noun} passed the evidence check.`,
-      detail: "Review it before it replaces the current version.",
+      title: t.regenerate.passed(kind),
+      detail: t.regenerate.reviewFirst,
     });
     emit({ type: "section", target, section, evidenceFingerprint: fingerprint });
   } finally {
@@ -234,12 +240,13 @@ async function runRegeneration(
 }
 
 export async function POST(request: Request) {
+  const t = serverText(request);
   let input: ReturnType<typeof parseInput>;
   try {
-    input = parseInput(await readJsonBody(request, MAX_BODY_BYTES, "The project is too large to regenerate a section of."));
+    input = parseInput(await readJsonBody(request, MAX_BODY_BYTES, t.regenerate.tooLarge, t.errors), t);
   } catch (error) {
     if (error instanceof RequestError) return Response.json({ error: error.message }, { status: error.status });
-    return Response.json({ error: "The regeneration request could not be read." }, { status: 400 });
+    return Response.json({ error: t.regenerate.unreadable }, { status: 400 });
   }
 
   const encoder = new TextEncoder();
@@ -253,7 +260,7 @@ export async function POST(request: Request) {
         }
       };
       try {
-        await runRegeneration(input, request.signal, emit);
+        await runRegeneration(input, request.signal, emit, t);
       } catch (error) {
         console.error("Trace section regeneration failed", {
           target: input.target,
@@ -262,8 +269,8 @@ export async function POST(request: Request) {
           ...safeDiagnostic(error),
         });
         const message = error instanceof IntegrityError || error instanceof z.ZodError
-          ? `The regenerated ${sectionKindInfo(input.target.kind).noun} failed the evidence check on both attempts. Nothing was changed; try again, or relax the claim lock.`
-          : publicError(error, request.signal.aborted, input.assignment.provider);
+          ? t.regenerate.failedTwice(input.target.kind)
+          : publicError(error, request.signal.aborted, input.assignment.provider, t.errors);
         emit({ type: "error", error: message });
       } finally {
         try {

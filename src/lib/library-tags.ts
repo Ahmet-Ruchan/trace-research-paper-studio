@@ -99,20 +99,28 @@ export function libraryTagsToJson(tags: LibraryTags) {
 
 export type TagEdit = { ok: true; tags: string[] } | { ok: false; error: string };
 
+/** Etiket eklenemeyince okuyucuya söylenen; Türkçesi arayüz sözlüğünde (`studio`). */
+export type TagWords = { tooLong: (max: number) => string; tooMany: (max: number) => string; failed: string };
+export const TAG_WORDS: TagWords = {
+  tooLong: (max) => `A tag can be at most ${max} characters.`,
+  tooMany: (max) => `A paper can carry at most ${max} tags.`,
+  failed: "The tag could not be added.",
+};
+
 /**
  * Bir etiket ekler. Kütüphanede aynı etiket başka bir yazımla zaten varsa o
  * yazım kullanılıyor: "nlp" yazan kullanıcı ikinci bir "NLP" koleksiyonu
  * açmamalı, var olanına katılmalı.
  */
-export function addTag(current: readonly string[], raw: string, known: readonly string[] = []): TagEdit {
+export function addTag(current: readonly string[], raw: string, known: readonly string[] = [], words: TagWords = TAG_WORDS): TagEdit {
   const cleaned = cleanTag(raw);
   const key = tagKey(cleaned);
   if (!cleaned || current.some((tag) => tagKey(tag) === key)) return { ok: true, tags: [...current] };
   const tag = known.find((item) => tagKey(item) === key) ?? cleaned;
+  if (tag.length > MAX_TAG_LENGTH) return { ok: false, error: words.tooLong(MAX_TAG_LENGTH) };
+  if (current.length >= MAX_TAGS_PER_PROJECT) return { ok: false, error: words.tooMany(MAX_TAGS_PER_PROJECT) };
   const parsed = tagListSchema.safeParse([...current, tag]);
-  return parsed.success
-    ? { ok: true, tags: parsed.data }
-    : { ok: false, error: parsed.error.issues[0]?.message ?? "The tag could not be added." };
+  return parsed.success ? { ok: true, tags: parsed.data } : { ok: false, error: words.failed };
 }
 
 export function removeTag(current: readonly string[], tag: string) {

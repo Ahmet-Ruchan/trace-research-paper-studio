@@ -1,3 +1,5 @@
+import { userErrorText, type UserErrorText } from "../user-error";
+
 /** Gövde okunamadığında kullanıcıya gösterilecek, durum kodlu hata. */
 export class RequestError extends Error {
   constructor(message: string, readonly status: number) {
@@ -8,11 +10,17 @@ export class RequestError extends Error {
 /**
  * JSON gövdesini boyut sınırıyla okur. Sınır okunmadan önce de (bildirilen
  * uzunluk) okurken de uygulanıyor: devasa bir gövde belleğe alınmıyor.
+ * Metinler isteği yapanın dilinde verilir (`tooLarge`, `text`); verilmezse İngilizce.
  */
-export async function readJsonBody(request: Request, maxBytes: number, tooLarge: string): Promise<unknown> {
+export async function readJsonBody(
+  request: Request,
+  maxBytes: number,
+  tooLarge: string,
+  text: Pick<UserErrorText, "requestBodyEmpty" | "requestBodyInvalidJson"> = userErrorText,
+): Promise<unknown> {
   const declared = Number(request.headers.get("content-length") ?? 0);
   if (declared > maxBytes) throw new RequestError(tooLarge, 413);
-  if (!request.body) throw new RequestError("The request body is empty.", 400);
+  if (!request.body) throw new RequestError(text.requestBodyEmpty(), 400);
 
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -36,6 +44,6 @@ export async function readJsonBody(request: Request, maxBytes: number, tooLarge:
   try {
     return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch {
-    throw new RequestError("The request body is not valid JSON.", 400);
+    throw new RequestError(text.requestBodyInvalidJson(), 400);
   }
 }

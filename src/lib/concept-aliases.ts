@@ -59,6 +59,10 @@ export function decisionFor(file: AliasFile, left: string, right: string) {
   return key ? file.decisions.find((item) => pairKey(...item.terms) === key) : undefined;
 }
 
+/** Bağlanamayan çiftin hatası; Türkçesi arayüz sözlüğünde (`learning`). */
+export type AliasWords = { sameName: string };
+export const ALIAS_WORDS: AliasWords = { sameName: "These are two spellings of the same name; there is nothing to link." };
+
 /** Kararı yazar; aynı çift için önceki kararın yerini alıyor. */
 export function decideAlias(
   file: AliasFile,
@@ -68,9 +72,10 @@ export function decideAlias(
   proposedBy: AliasDecision["proposedBy"],
   at: string,
   reason?: string,
+  words: AliasWords = ALIAS_WORDS,
 ): AliasFile {
   const key = pairKey(left, right);
-  if (!key) throw new Error("These are two spellings of the same name; there is nothing to link.");
+  if (!key) throw new Error(words.sameName);
   const rest = file.decisions.filter((item) => pairKey(...item.terms) !== key);
   const entry: AliasDecision = { terms: [left.trim(), right.trim()], decision, proposedBy, at, ...(reason ? { reason: reason.slice(0, 400) } : {}) };
   return { version: 1, decisions: [...rest, entry].slice(-MAX_ALIAS_DECISIONS) };

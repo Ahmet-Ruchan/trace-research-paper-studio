@@ -91,7 +91,8 @@ export function EvidenceHealthView({
           <h4>{t.healthQuotesMissing}</h4>
           <p className="health-note">
             {t.healthQuotesMissingNote(
-              new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(
+              // Tarih arayüz cümlesinin parçası: içeriğin değil, etiketlerin dilinde.
+              new Intl.DateTimeFormat(t.chrome, { day: "numeric", month: "short", year: "numeric" }).format(
                 // Bulunamayan bir alıntı listeleniyorsa denetim yapılmıştır ve tarihi vardır.
                 new Date(health.excerpts.checkedAt ?? 0),
               ),
@@ -111,7 +112,7 @@ export function EvidenceHealthView({
             ))}
             {health.excerpts.unlocatedOther.map((item, index) => (
               <li key={`${item.owner}-${item.label}-${index}`}>
-                <p lang={project.language}>{item.label} <small>{item.owner} · {t.healthQuotesPage(item.page)}</small></p>
+                <p lang={project.language}>{item.label} <small>{t.healthOwners[item.owner]} · {t.healthQuotesPage(item.page)}</small></p>
               </li>
             ))}
           </ul>
@@ -124,7 +125,7 @@ export function EvidenceHealthView({
         <ul className="health-sources">
           {health.sources.map((source) => (
             <li key={source.id} className={source.claimCount ? "" : "is-unused"}>
-              <span className={`health-source-type type-${source.type}`}>{source.type}</span>
+              <span className={`health-source-type type-${source.type}`}>{t.sourceTypes[source.type]}</span>
               <span className="health-source-title">{source.title}</span>
               <span className="health-source-count">
                 {source.claimCount ? t.healthCitations(source.claimCount) : t.healthNeverCited}
@@ -196,12 +197,13 @@ export function EvidenceHealthView({
 }
 
 function Stat({ value, label, note, ratio }: { value: string; label: string; note: string; ratio: number }) {
+  const t = useStrings();
   const percent = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
   return (
     <article className="health-stat">
       <strong>{value}</strong>
       <span>{label}</span>
-      <div className="health-meter" role="img" aria-label={`${percent}%`}>
+      <div className="health-meter" role="img" aria-label={t.percent(percent)}>
         <i className={percent >= 80 ? "is-good" : percent >= 50 ? "is-fair" : "is-weak"} style={{ width: `${percent}%` }} />
       </div>
       <small>{note}</small>

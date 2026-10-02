@@ -1,23 +1,48 @@
 /**
- * Arayüz metinleri — HER ZAMAN İNGİLİZCE.
+ * Görsellerin arayüz metinleri, iki dilde: İngilizce ve Türkçe.
  *
- * Ürün tek bir arayüz dili konuşuyor; makale içeriği ise onu üreten modelin
- * yazdığı dilde kalıyor. İkisi ayrı: kanıta bağlı metni çevirmek alıntıyı
- * bozar, arayüzü çevirmek ise ürünü iki farklı ürüne böler.
+ * Makale içeriği onu üreten modelin yazdığı dilde kalıyor; bu dosya yalnızca
+ * çevresindeki etiketleri taşıyor. İkisi ayrı: kanıta bağlı metni çevirmek
+ * alıntıyı bozar.
  *
- * Projenin dilinden yalnızca `locale` etkilenir (sıralama ve harf dönüşümü).
+ * Bu paket eklentinin bağımsız görüntüleyicisine ve dışa aktarılan dosyalara
+ * da giriyor; o yüzden saf TypeScript: `@/i18n/*` kaydını içine çekmiyor.
+ * Dışa aktarımların (rapor, slayt, defter) etiketleri de burada, aynı
+ * kuralla: makale Türkçeyse Türkçe, değilse İngilizce.
  */
+import { READING_DRILL_WORDS, type ReadingDrillWords } from "@/lib/reading-drill";
+import type { Claim, DeepReport, Misreading, Source } from "@/lib/schema";
 
 /** BCP-47 dil etiketi; artık iki dille sınırlı değil. */
 export type Language = string;
 
+/** Görsellerin konuştuğu arayüz dilleri; stüdyonun `UiLanguage`'ıyla aynı. */
+export type ChromeLanguage = "en" | "tr";
+
+/** Raporun başındaki not için kanıt özeti. */
+export type ReportSummary = {
+  verified: number;
+  total: number;
+  /** Alıntılar PDF ile karşılaştırıldıysa. */
+  quotes?: { located: number; total: number };
+  /** Bir kişi en az bir iddiaya karar verdiyse. */
+  reviews?: { approved: number; rejected: number };
+};
+
+type ClaimKind = Claim["kind"];
+type ReportKind = DeepReport["sections"][number]["kind"];
+
 export type Strings = {
   /** Sıralama ve büyük/küçük harf dönüşümü için BCP-47 etiketi. */
   locale: string;
+  /** Etiketlerin dili: kök `lang` ve arayüz metnindeki tarihler için. */
+  chrome: ChromeLanguage;
   // Ortak
   sourceLabel: string;
   page: (page: number) => string;
   evidenceLabel: string;
+  /** Ekran okuyucu için yüzde: "80%" / "%80". */
+  percent: (value: number) => string;
   // İnteraktif
   playgroundKind: string;
   simulationKind: string;
@@ -37,6 +62,8 @@ export type Strings = {
   filterPlaceholder: string;
   filterAria: string;
   emptyRows: string;
+  // Hikâye görselleri
+  architectureConnections: string;
   // Ön bilgi
   levels: Record<"temel" | "orta" | "ileri", string>;
   whyItMatters: string;
@@ -86,6 +113,8 @@ export type Strings = {
   misreadingTempting: string;
   misreadingActually: string;
   misreadingReveal: string;
+  /** Yanlış okumanın türü; arayüz ve rapor aynı adı kullanıyor. */
+  misreadingTraps: Record<Misreading["trap"], string>;
   // Uygulama rehberi
   hyperparameters: string;
   pitfalls: string;
@@ -183,6 +212,10 @@ export type Strings = {
   linkedSources: string;
   pickAClaim: string;
   pickAClaimHint: string;
+  /** Görüntüleyicide iddianın türü (İngilizcede şemadaki değer olduğu gibi). */
+  claimKindBadge: Record<ClaimKind, string>;
+  /** Görüntüleyicide rapor bölümünün türü (İngilizcede şemadaki değer olduğu gibi). */
+  reportKindBadge: Record<ReportKind, string>;
   // Bağımsız görüntüleyici → stüdyo köprüsü
   openInStudio: string;
   studioOfflineTitle: string;
@@ -215,6 +248,8 @@ export type Strings = {
   healthGroundingNote: (fromPaper: number, fromWeb: number) => string;
   healthCitations: (count: number) => string;
   healthNeverCited: string;
+  /** Kaynağın türü etiketi. */
+  sourceTypes: Record<Source["type"], string>;
   healthGaps: string;
   healthGapsNote: (first: number, last: number) => string;
   healthThin: string;
@@ -231,6 +266,8 @@ export type Strings = {
   healthQuotesUncheckedNote: string;
   healthQuotesMissing: string;
   healthQuotesMissingNote: (date: string) => string;
+  /** Bulunamayan alıntının sahibi iddia değilse: ölçüm ya da sözlük maddesi. */
+  healthOwners: Record<"metric" | "glossary", string>;
   healthQuotesCheck: string;
   healthQuotesRecheck: string;
   healthQuotesPage: (page?: number) => string;
@@ -238,13 +275,49 @@ export type Strings = {
   healthReviewedNote: (approved: number, rejected: number, pending: number) => string;
   // Kalıcı bağlantı
   permalinkTitle: string;
+  /** "Hakem gibi oku" alıştırması (`reading-drill.ts`); mührü dilden bağımsız. */
+  drill: ReadingDrillWords;
+  // Dışa aktarılan rapor (Markdown ve yazdırılabilir HTML)
+  reportIntro: (summary: ReportSummary) => string;
+  reportRestsOn: (references: string) => string;
+  reportMethod: string;
+  reportNumbers: string;
+  reportTableHead: readonly [measurement: string, value: string, context: string, source: string];
+  reportMisreading: (misreading: string) => string;
+  reportLedger: string;
+  /** İddianın türü, raporda. */
+  claimKinds: Record<ClaimKind, string>;
+  reportVerifiedByModel: string;
+  reportNeedsReview: string;
+  reportQuoteNotFound: string;
+  reportReview: (status: "approved" | "rejected", by: string) => string;
+  reportReviewerNote: (note: string) => string;
+  reportSources: string;
+  printTitle: (title: string) => string;
+  printHint: string;
+  // Slaytlar
+  slidesTitle: (title: string) => string;
+  slidesThesisKicker: string;
+  slidesNumbersHeading: string;
+  slidesLimitsKicker: string;
+  slidesLimitsHeading: string;
+  slidesHint: string;
+  // Jupyter defteri
+  notebookIntro: string;
+  notebookLeftOut: string;
+  notebookUntranslatable: string;
+  notebookInPaper: (anchor: string) => string;
+  notebookConfigComment: string;
+  notebookSweepComment: (label: string) => string;
 };
 
 const en: Strings = {
   locale: "en",
+  chrome: "en",
   sourceLabel: "View source",
   page: (page) => `p. ${page}`,
   evidenceLabel: "View evidence",
+  percent: (value) => `${value}%`,
   playgroundKind: "Playground",
   simulationKind: "Simulation",
   explorerKind: "Data explorer",
@@ -262,6 +335,7 @@ const en: Strings = {
   filterPlaceholder: "Filter…",
   filterAria: "Filter the table",
   emptyRows: "No rows match the filter.",
+  architectureConnections: "Architecture connections",
   levels: { temel: "Basic", orta: "Intermediate", ileri: "Advanced" },
   whyItMatters: "Why this paper needs it:",
   readFirst: "Read these first:",
@@ -310,6 +384,12 @@ const en: Strings = {
   misreadingTempting: "Tempting to conclude:",
   misreadingActually: "What the paper shows",
   misreadingReveal: "Why this is wrong",
+  misreadingTraps: {
+    "interpretation-as-result": "An interpretation read as a result",
+    "beyond-tested": "Beyond what was tested",
+    number: "A misread number",
+    mechanism: "How the method works",
+  },
   hyperparameters: "Choosing hyperparameters",
   pitfalls: "Common pitfalls",
   pitfallCause: "Cause:",
@@ -411,6 +491,21 @@ const en: Strings = {
   linkedSources: "linked sources",
   pickAClaim: "Select a claim",
   pickAClaimHint: "Click a finding, or a source tag inside the story, to see where it comes from.",
+  claimKindBadge: {
+    "reported-result": "reported-result",
+    "author-interpretation": "author-interpretation",
+    method: "method",
+    background: "background",
+    limitation: "limitation",
+  },
+  reportKindBadge: {
+    contribution: "contribution",
+    mechanism: "mechanism",
+    experiment: "experiment",
+    critique: "critique",
+    reproduction: "reproduction",
+    implication: "implication",
+  },
   openInStudio: "Open in Studio",
   studioOfflineTitle: "Trace Studio is not running",
   studioOfflineBody: "The studio is the full workspace: a library, editing and side-by-side papers. Start it once with this command, then run the delivery again and the project lands there on its own.",
@@ -453,6 +548,7 @@ const en: Strings = {
       : `${fromPaper} claims come from the paper, ${fromWeb} from published context about it — citation counts, venue, version history. Context is not a paper claim.`,
   healthCitations: (count) => `${count} citation${count === 1 ? "" : "s"}`,
   healthNeverCited: "never cited",
+  sourceTypes: { paper: "paper", web: "web" },
   healthGaps: "Pages the analysis never reaches",
   healthGapsNote: (first, last) =>
     `The paper's total length is not stored in a Trace project, so only the span between the first and last cited page (p. ${first}–${last}) can be judged. These pages fall inside it and no claim, metric or figure touches them.`,
@@ -476,6 +572,7 @@ const en: Strings = {
   healthQuotesMissing: "Quotes that were not found on the cited page",
   healthQuotesMissingNote: (date) =>
     `Checked on ${date} against the text extracted from the PDF. A quote can be missing because it was paraphrased or invented, or because it sits in a table, an equation or a scanned page that text extraction cannot read. A claim whose quotes are all missing is marked needs-review; open it and look at the page.`,
+  healthOwners: { metric: "metric", glossary: "glossary" },
   healthQuotesCheck: "Check the quotes against the PDF",
   healthQuotesRecheck: "Check again with the PDF",
   healthQuotesPage: (page) => (page ? `p. ${page}` : "no page"),
@@ -483,19 +580,418 @@ const en: Strings = {
   healthReviewedNote: (approved, rejected, pending) =>
     `${approved} approved, ${rejected} rejected${pending ? `, ${pending} not looked at yet` : ""}. A person's decision is kept apart from the model's own confidence.`,
   permalinkTitle: "Copy a link to this",
+  drill: READING_DRILL_WORDS,
+  reportIntro: ({ verified, total, quotes, reviews }) =>
+    `An evidence-grounded reading made with Trace. ${verified} of ${total} claims are marked verified by the model. ` +
+    (quotes ? `${quotes.located} of ${quotes.total} quotes were found in the text of the page they cite.` : "The quotes were not checked against the PDF.") +
+    (reviews ? ` A person approved ${reviews.approved} claims and rejected ${reviews.rejected}.` : "") +
+    " This is not a substitute for the paper.",
+  reportRestsOn: (references) => `Rests on: ${references}`,
+  reportMethod: "Method",
+  reportNumbers: "Reported numbers",
+  reportTableHead: ["Measurement", "Value", "Context", "Source"],
+  reportMisreading: (misreading) => `Misreading: ${misreading}`,
+  reportLedger: "Evidence ledger",
+  claimKinds: {
+    "reported-result": "Reported result",
+    "author-interpretation": "Author interpretation",
+    method: "Method",
+    background: "Background",
+    limitation: "Limitation",
+  },
+  reportVerifiedByModel: "verified by the model",
+  reportNeedsReview: "needs review",
+  reportQuoteNotFound: "quote not found on its page",
+  reportReview: (status, by) => `${status} by ${by}`,
+  reportReviewerNote: (note) => `Reviewer's note: ${note}`,
+  reportSources: "Sources",
+  printTitle: (title) => `${title} — Trace report`,
+  printHint: "To save this as a PDF, print the page (Ctrl/Cmd + P) and choose “Save as PDF”. This note is not printed.",
+  slidesTitle: (title) => `${title} — slides`,
+  slidesThesisKicker: "The claim of the paper",
+  slidesNumbersHeading: "What the paper measured",
+  slidesLimitsKicker: "Before you build on it",
+  slidesLimitsHeading: "What the paper says it cannot do",
+  slidesHint: "← → to move · N for the full text",
+  notebookIntro:
+    "The equations below were generated by Trace from the paper's interactive playgrounds. Each one is translated from a parsed formula, not pasted as text, and starts at the value the paper itself uses. Moving away from that value leaves the region the paper verified.",
+  notebookLeftOut: "Left out because they could not be translated exactly:",
+  notebookUntranslatable: "could not be translated",
+  notebookInPaper: (anchor) => `In the paper: ${anchor}`,
+  notebookConfigComment: "The paper's own configuration",
+  notebookSweepComment: (label) => `Sweep ${label} over the range the playground uses; everything else stays at the paper's value.`,
+};
+
+/**
+ * Türkçe arayüz metinleri. `Strings` ile yazıldığı için eksik anahtar
+ * derlemede yakalanıyor. Terimler `src/i18n/glossary.md` ile aynı.
+ */
+const tr: Strings = {
+  locale: "tr",
+  chrome: "tr",
+  sourceLabel: "Kaynağı gör",
+  page: (page) => `s. ${page}`,
+  evidenceLabel: "Kanıtı gör",
+  percent: (value) => `%${value}`,
+  playgroundKind: "Deneme alanı",
+  simulationKind: "Simülasyon",
+  explorerKind: "Veri gezgini",
+  resetToPaper: "Makalenin değerlerine dön",
+  paperValueShort: "makalede",
+  offPaperWarning: (anchor) =>
+    `Makalenin aralığının dışındasın — bu değerler doğrulanmadı. ${anchor}`,
+  notComputable: "burada tanımsız",
+  chartPaperKey: "makalenin değeri",
+  back: "‹ Geri",
+  forward: "İleri ›",
+  play: "Oynat",
+  pause: "Duraklat",
+  replay: "Yeniden oynat",
+  filterPlaceholder: "Filtrele…",
+  filterAria: "Tabloyu filtrele",
+  emptyRows: "Filtreye uyan satır yok.",
+  architectureConnections: "Mimari bağlantılar",
+  levels: { temel: "Temel", orta: "Orta", ileri: "İleri" },
+  whyItMatters: "Makalede neden gerekli:",
+  readFirst: "Önce bunları oku:",
+  predictHeading: "Önce tahmin et",
+  predictIntro: (label, min, max) => `Grafiği görmeden önce: ${label}, ${min} değerinden ${max} değerine giderken ve geri kalan her şey makalenin değerlerindeyken ne olur?`,
+  curveShapes: {
+    rises: "Artar",
+    falls: "Azalır",
+    flat: "Aşağı yukarı aynı kalır",
+    peak: "Önce artar, sonra azalır",
+    valley: "Önce azalır, sonra artar",
+  },
+  predictCross: (left, right) => `“${left}” ile “${right}” kesişir mi?`,
+  predictCrossYes: "Evet, kesişirler",
+  predictCrossNo: "Hayır, hiç buluşmazlar",
+  predictShow: "Kontrol et ve grafiği göster",
+  predictSkip: "Grafiği doğrudan göster",
+  predictRight: "Bildin.",
+  predictWrong: "Tam değil.",
+  curveActual: (shape, start, end, flat) => (flat ? `${shape}: baştan sona ${start}.` : `${shape}: ${start} değerinden ${end} değerine.`),
+  crossActual: (xParam, at) => (at === undefined ? "Bu aralıkta hiç kesişmiyorlar." : `${xParam} = ${at} civarında kesişiyorlar.`),
+  predictScore: (right, total) => `${total} tahminden ${right} tanesi doğru.`,
+  nextStepQuestion: "Sıradaki adım hangisi?",
+  justShowIt: "Doğrudan göster",
+  stepCalled: "Bildin.",
+  stepComesAt: (text, position) => `Seçtiğin: “${text}”. Doğru bir adım, ama sırası ${position}.`,
+  stepsCalled: (right, total) => `${total} adımdan ${right} tanesini görmeden bildin.`,
+  goal: "Amaç:",
+  nextStep: (shown, total) => `Sonraki adımı göster (${shown}/${total})`,
+  numericExample: "Çözümlü örnek",
+  illustrativeValues: "Örnek değerler, makaleden değil",
+  beforeThisSection: "Bu bölümden önce:",
+  closeDefinition: "Tanımı kapat",
+  result: "Sonuç:",
+  checkAnswer: "Cevabı kontrol et",
+  checkAgain: "Yeniden kontrol et",
+  correct: "Doğru",
+  correctAfter: (attempts) => `${attempts}. denemede doğru`,
+  notQuite: "Tam değil",
+  missingOption: "Seçtiklerinin hepsi doğru, ama doğru olan başka bir seçenek daha var.",
+  tryAgain: "Yeniden dene",
+  showAnswer: "Cevabı göster",
+  answerShown: "Cevap",
+  whereToLook: "Makalede nerede geçiyor:",
+  score: (firstTry, attempted) => `${attempted} sorudan ${firstTry} tanesi ilk denemede doğru`,
+  misreadingTempting: "Şu sonuca varmak cazip:",
+  misreadingActually: "Makalenin gösterdiği",
+  misreadingReveal: "Bu neden yanlış",
+  misreadingTraps: {
+    "interpretation-as-result": "Sonuç sanılan bir yorum",
+    "beyond-tested": "Denenenin ötesine geçmek",
+    number: "Yanlış okunan bir sayı",
+    mechanism: "Yöntemin nasıl çalıştığı",
+  },
+  hyperparameters: "Hiperparametre seçimi",
+  pitfalls: "Sık yapılan hatalar",
+  pitfallCause: "Neden:",
+  pitfallFix: "Çözüm:",
+  whenNotToUse: "Ne zaman kullanılmamalı",
+  guideParameter: "Parametre",
+  guidePaperValue: "Makaledeki değer",
+  guideRange: "Aralık",
+  guideHowToChoose: "Nasıl seçilir",
+  navPrimer: "Ön bilgi",
+  studyHeading: "Bu makaleyi çalış",
+  studyPhases: { prepare: "Hazırlık", read: "Okuma", work: "Üzerinde çalışma", check: "Kontrol", apply: "Uygulama", review: "Tekrar" },
+  studyStepOf: (step, total) => `Adım ${step} / ${total}`,
+  studyDoneOf: (done, total) => `${done}/${total} tamamlandı`,
+  studyProgress: "Çalışma ilerlemesi",
+  studyAllSteps: "Tüm adımlar",
+  studyStartTitle: "Bu makale neyi soruyor",
+  studyAhead: "Önündeki yol",
+  studyAheadConcepts: (count) => `makalenin bildiğini varsaydığı ${count} kavram`,
+  studyAheadSections: (count, checks) =>
+    `hikâyenin ${count} bölümü${checks ? (checks === count ? ", her biri tek bir soruyla bitiyor" : `, ${checks} tanesi tek bir soruyla bitiyor`) : ""}`,
+  studyAheadWork: (count) => `üzerinde çalışacağın ${count} ${count === 1 ? "türetim ya da keşif" : "türetim ve keşif"}`,
+  studyAheadQuiz: (count) => `${count} soruluk bir son kontrol`,
+  studyAheadGuide: "uygulamada nasıl kullanılacağı",
+  studyAheadMisreadings: (count) => `bu makalenin fark etmen gereken ${count} yaygın yanlış okuması`,
+  studyCheckTitle: "Kendini sına",
+  studyCheckIntro: "Az önce okuduğun yerle ilgili tek bir soru. Geri dönüp bakmadan, aklında kalanla cevapla.",
+  studyFinalTitle: "Son kontrol",
+  studyFinalIntro: "Henüz hiçbir bölümün sormadığı sorular.",
+  studyYourAnswer: (answer) =>
+    answer.correct
+      ? answer.attempts === 1 ? "Geçen sefer: ilk denemede doğru." : `Geçen sefer: ${answer.attempts} denemede doğru.`
+      : "Geçen sefer: cevabı açmıştın.",
+  studyAnswerAgain: "Yeniden cevapla",
+  studyBack: "Geri",
+  studyNext: "İleri",
+  studyBegin: "Başla",
+  studySkipCheck: "Soruyu atla",
+  studyToResults: "Nasıl geçtiğine bak",
+  studyFinishTitle: "Nasıl geçti",
+  studyFinishSteps: (done, total) => `${total} adımın ${done} tanesini tamamladın.`,
+  studyFinishChecks: (firstTry, answered, total) =>
+    `${answered} sorudan ${firstTry} tanesi ilk denemede doğru${answered < total ? `; ${total - answered} soru henüz cevaplanmadı` : ""}.`,
+  studyRevisit: "Bir kez daha bakmaya değer",
+  studyRevisitHint: "Birden fazla deneme gerektiren soruların dayandığı adımlar bunlar.",
+  studyAllClear: "Cevapladığın her soruyu ilk denemede bildin.",
+  studySkipped: "Henüz yapılmadı",
+  studyMoreSteps: (count) => `ve ${count} adım daha; hepsi yukarıdaki tüm adımlar listesinde.`,
+  studyStartOver: "Baştan başla",
+  studyStartOverConfirm: "İlerlemen ve cevapların silinsin mi?",
+  studyClear: "Sil",
+  studyKeep: "Kalsın",
+  studyBrowserNote: "İlerlemen bu tarayıcıda kalıyor. Hiçbir yere gönderilmiyor ve makalenin bir parçası değil.",
+  studySaveFile: "İlerlemeyi dosyaya kaydet",
+  studyLoadFile: "İlerlemeyi dosyadan yükle",
+  studyCarryHint:
+    "Başka bir cihazda devam etmek için ilerlemeni bir dosyaya kaydet ve orada yükle: yayımlanmış sayfada, dışa aktarılan sayfada ya da stüdyoda. Oradakinin yerine geçmiyor, onunla birleşiyor.",
+  studyLoaded: (steps, answers, cards) =>
+    `İlerleme yüklendi ve buradakiyle birleşti: ${steps} adım tamamlandı, ${answers} cevap, ${cards} tekrar kartı.`,
+  studyLoadOtherPaper: (title) => `Bu dosya başka bir makalenin ilerlemesini taşıyor: ${title}. Hiçbir şey değişmedi.`,
+  studyLoadInvalid: "Bu dosya bir Trace çalışma ilerlemesi değil. Hiçbir şey değişmedi.",
+  studyNothingToSave: "Henüz kaydedilecek bir ilerleme yok.",
+  navPractice: "Öğren ve Dene",
+  tabLab: "Lab",
+  tabStory: "Hikâye",
+  tabPractice: "Öğren ve Dene",
+  tabTechnical: "Teknik",
+  tabStudy: "Çalış",
+  practiceHeading: "Öğren ve Dene",
+  derivationsHeading: "Adım adım türetimler",
+  interactivesHeading: "Etkileşimli keşif",
+  tryItHeading: "Şimdi kendin dene",
+  localStudio: "Yerel makale stüdyosu",
+  exportedCopy: "Bağımsız kopya",
+  publishedStory: "Yayımlanmış hikâye",
+  thesis: "Tez",
+  plainSummary: "Sade bir dille",
+  researchQuestion: "Araştırma sorusu",
+  methodsFindingsLimits: "Yöntemler, bulgular, sınırlılıklar",
+  methods: "Yöntemler",
+  findings: "Bulgular",
+  limitations: "Sınırlılıklar",
+  metrics: "Ölçümler",
+  claims: "İddialar",
+  glossary: "Sözlük",
+  openQuestions: "Açık sorular",
+  equations: "Denklemler",
+  algorithmSteps: "Algoritma adımları",
+  codeSketches: "Kod taslakları",
+  complexity: "Karmaşıklık",
+  implementationNotes: "Uygulama notları",
+  operation: "İşlem",
+  cost: "Maliyet",
+  context: "Bağlam",
+  sourceFallback: "kaynak",
+  home: "Ana sayfa",
+  library: "Kütüphane",
+  paperMap: "Makale haritası",
+  linkedSources: "bağlı kaynaklar",
+  pickAClaim: "Bir iddia seç",
+  pickAClaimHint: "Nereden geldiğini görmek için bir bulguya ya da hikâyedeki bir kaynak etiketine tıkla.",
+  claimKindBadge: {
+    "reported-result": "bildirilen sonuç",
+    "author-interpretation": "yazarın yorumu",
+    method: "yöntem",
+    background: "arka plan",
+    limitation: "sınırlılık",
+  },
+  reportKindBadge: {
+    contribution: "katkı",
+    mechanism: "mekanizma",
+    experiment: "deney",
+    critique: "eleştiri",
+    reproduction: "yeniden üretim",
+    implication: "çıkarım",
+  },
+  openInStudio: "Stüdyoda aç",
+  studioOfflineTitle: "Trace Studio çalışmıyor",
+  studioOfflineBody: "Stüdyo tam çalışma alanı: kütüphane, düzenleme ve yan yana makaleler. Bu komutla bir kez başlat, sonra teslimi yeniden çalıştır; proje kendiliğinden oraya düşer.",
+  studioOfflineNote: "Bu sayfadaki her şey stüdyo olmadan da çalışıyor; yukarıdaki Trace JSON da senin, istediğin zaman bir stüdyoya içe aktarabilirsin.",
+  studioTryAnyway: "Zaten çalışıyor mu? localhost:3000 adresini aç",
+  studioBanner: "Bu, makalenin taşınabilir kopyası. Tam stüdyo (kütüphane, düzenleme, yan yana makaleler) tek bir komut uzağında.",
+  studioBannerAction: "Komutu göster",
+  copyCommand: "Komutu kopyala",
+  copied: "Kopyalandı",
+  close: "Kapat",
+  labSectionsAria: "Makale analizinin bölümleri",
+  figuresHeading: "Makaledeki şekiller",
+  figureExpand: "Tam boyutta gör",
+  figureCollapse: "Genişliğe sığdır",
+  figureFromPaper: (page) => `Makaleden · s. ${page}`,
+  navHealth: "Kanıt sağlığı",
+  healthHeading: "Kanıt sağlığı",
+  healthIntro:
+    "Aşağıdaki her şey bu projenin kendi verisinden hesaplandı; hiçbir modele sorulmadı. Analizin nerede sağlam zemine bastığını, nerede basmadığını gösteriyor.",
+  healthVerified: "doğrulanmış iddia",
+  healthVerifiedNote: (needsReview) =>
+    needsReview === 0
+      ? "Her iddianın alıntısı ifadesini doğrudan destekliyor."
+      : `${needsReview} iddia hâlâ “incelenmeli” olarak işaretli: alıntı onları yalnızca kısmen destekliyor.`,
+  healthPages: "ulaşılan sayfa",
+  healthPagesNote: (first, last, gaps) =>
+    gaps === 0
+      ? `s. ${first} ile s. ${last} arası kesintisiz.`
+      : `s. ${first} ile s. ${last} arası; ${gaps} sayfaya hiç atıf yok.`,
+  healthPagesNone: "Hiçbir iddia sayfa numarası taşımıyor; bu analiz yalnızca web bağlamına dayanıyor.",
+  healthInUse: "kullanılan iddia",
+  healthInUseNote: (unused) =>
+    unused === 0
+      ? "Toplanan her iddia anlatıda bir yerde kullanılıyor."
+      : `${unused} iddia toplandı ama hiç kullanılmadı.`,
+  healthGrounding: "Kanıt nereden geliyor",
+  healthGroundingNote: (fromPaper, fromWeb) =>
+    fromWeb === 0
+      ? `${fromPaper} iddianın hepsi doğrudan makaleye dayanıyor.`
+      : `${fromPaper} iddia makaleden, ${fromWeb} iddia makale hakkında yayımlanmış bağlamdan geliyor: atıf sayıları, yayın yeri, sürüm geçmişi. Bağlam, makalenin bir iddiası değildir.`,
+  healthCitations: (count) => `${count} atıf`,
+  healthNeverCited: "hiç atıf yok",
+  sourceTypes: { paper: "makale", web: "internet" },
+  healthGaps: "Analizin hiç ulaşmadığı sayfalar",
+  healthGapsNote: (first, last) =>
+    `Makalenin toplam uzunluğu Trace projesinde saklanmıyor; bu yüzden yalnızca atıf yapılan ilk ve son sayfa arasındaki aralık (s. ${first}–${last}) değerlendirilebiliyor. Bu sayfalar o aralığın içinde ve hiçbir iddia, ölçüm ya da şekil onlara dokunmuyor.`,
+  healthThin: "İnce kanıta dayanan bölümler",
+  healthThinNote:
+    "Bir bölüm tek bir iddiaya dayanıyorsa ya da altındaki iddiaların hiçbiri doğrulanmamışsa incedir. Bu illa yanlış olduğu anlamına gelmez; ama ilk bakılacak yer orası.",
+  healthSectionClaims: (verified, total) => `${verified}/${total} doğrulandı`,
+  healthStrengthen: "Güçlendir",
+  healthAreaStory: "Hikâye",
+  healthAreaReport: "Rapor",
+  healthUnused: "Toplandı ama kullanılmadı",
+  healthUnusedNote:
+    "Bu iddialar kanıt defterinde duruyor ama hiçbir bölüm, denklem ya da şekil onlara başvurmuyor. Çoğu zaman en ilginç artıklar bunlardır.",
+  healthQuotes: "sayfasında bulunan alıntı",
+  healthQuotesNote: (missing) =>
+    missing === 0
+      ? "Her alıntı, atıf yaptığı sayfanın metninde bulundu."
+      : `${missing} alıntı atıf yapılan sayfada bulunamadı.`,
+  healthQuotesUnchecked: "alıntılar denetlenmedi",
+  healthQuotesUncheckedNote: "Alıntılar henüz PDF'in metniyle karşılaştırılmadı.",
+  healthQuotesMissing: "Atıf yapılan sayfada bulunamayan alıntılar",
+  healthQuotesMissingNote: (date) =>
+    `${date} tarihinde PDF'ten çıkarılan metne karşı denetlendi. Bir alıntı başka sözlerle aktarıldığı ya da uydurulduğu için bulunamayabilir; metin çıkarmanın okuyamadığı bir tabloda, denklemde ya da taranmış bir sayfada duruyor da olabilir. Alıntılarının hiçbiri bulunamayan iddia “incelenmeli” olarak işaretlenir; onu aç ve sayfaya bak.`,
+  healthOwners: { metric: "ölçüm", glossary: "sözlük" },
+  healthQuotesCheck: "Alıntıları PDF ile karşılaştır",
+  healthQuotesRecheck: "PDF ile yeniden karşılaştır",
+  healthQuotesPage: (page) => (page ? `s. ${page}` : "sayfa yok"),
+  healthReviewed: "bir kişinin incelediği iddia",
+  healthReviewedNote: (approved, rejected, pending) =>
+    `${approved} onaylandı, ${rejected} reddedildi${pending ? `, ${pending} henüz incelenmedi` : ""}. Bir kişinin kararı, modelin kendi güveninden ayrı tutuluyor.`,
+  permalinkTitle: "Bunun bağlantısını kopyala",
+  drill: {
+    title: "Hakem gibi oku",
+    intro:
+      "Bir modelin değil, kanıtın kendisinden üretilen sorular: bir iddianın ne tür bir ifade olduğu, makalenin hangi cümlesine dayandığı ve makalenin hangi sayıyı bildirdiği. Her yanıt kendi sayfasında denetlenebilir.",
+    kinds: {
+      "reported-result": {
+        option: "Bildirilen bir sonuç: yazarların ölçtüğü bir şey",
+        meaning: "Bildirilen sonuç, yazarların ölçtüğü bir şeydir; çoğunlukla bir sayı ya da karşılaştırma.",
+      },
+      "author-interpretation": {
+        option: "Yazarların bir sonucun ne anlama geldiğine dair yorumu",
+        meaning: "Yorum, yazarların bir sonucu okuyuşudur; ölçülenin ötesine geçer.",
+      },
+      method: {
+        option: "Yöntem: yazarların kurduğu ya da yaptığı şey",
+        meaning: "Yöntem, yazarların kurduğu ya da yaptığı şeydir; ondan çıkan sonuç değil.",
+      },
+      background: {
+        option: "Makalenin dayandığı arka plan",
+        meaning: "Arka plan, makalenin dayandığı önceki çalışmalar ya da bilgidir; makalenin kendi bulgusu değil.",
+      },
+      limitation: {
+        option: "Makalenin kabul ettiği bir sınırlılık",
+        meaning: "Sınırlılık, makalenin kabul ettiği bir sınırdır: neyi denemediği ya da nerede geçerli olmayabileceği.",
+      },
+    },
+    kindPrompt: (statement) => `Bu ne tür bir ifade? ${statement}`,
+    kindRight: (meaning, page) => `${meaning} Bu cümle de tam olarak bu${page ? ` (s. ${page})` : ""}.`,
+    kindWrong: (meaning) => `${meaning} Bu cümlenin yaptığı bu değil.`,
+    quotePrompt: (statement) => `Makaledeki hangi cümle bu iddiayı destekliyor? ${statement}`,
+    quoteRight: (page) => `İddianın dayandığı cümle bu${page ? ` (s. ${page})` : ""}.`,
+    quoteOther: (statement) => `Bu cümle başka bir iddiayı destekliyor: ${statement}`,
+    numberPrompt: (label) => `Makale şu ölçüm için hangi sayıyı bildiriyor: ${label}?`,
+    numberRight: (context, excerpt, page) => `${context}. Makale: ${excerpt}${page ? ` (s. ${page})` : ""}`,
+    numberOther: (label) => `Bu, makalenin şu ölçüm için verdiği sayı: ${label}.`,
+  },
+  reportIntro: ({ verified, total, quotes, reviews }) =>
+    `Trace ile yapılmış, kanıta dayalı bir okuma. ${total} iddiadan ${verified} tanesini model doğrulanmış olarak işaretledi. ` +
+    (quotes ? `${quotes.total} alıntıdan ${quotes.located} tanesi atıf yaptığı sayfanın metninde bulundu.` : "Alıntılar PDF ile karşılaştırılmadı.") +
+    (reviews ? ` Bir kişi ${reviews.approved} iddiayı onayladı, ${reviews.rejected} iddiayı reddetti.` : "") +
+    " Makalenin yerini tutmaz.",
+  reportRestsOn: (references) => `Dayandığı iddialar: ${references}`,
+  reportMethod: "Yöntem",
+  reportNumbers: "Bildirilen sayılar",
+  reportTableHead: ["Ölçüm", "Değer", "Bağlam", "Kaynak"],
+  reportMisreading: (misreading) => `Yanlış okuma: ${misreading}`,
+  reportLedger: "Kanıt defteri",
+  claimKinds: {
+    "reported-result": "Bildirilen sonuç",
+    "author-interpretation": "Yazarın yorumu",
+    method: "Yöntem",
+    background: "Arka plan",
+    limitation: "Sınırlılık",
+  },
+  reportVerifiedByModel: "model doğruladı",
+  reportNeedsReview: "incelenmeli",
+  reportQuoteNotFound: "alıntı sayfasında bulunamadı",
+  reportReview: (status, by) => (status === "approved" ? `Onaylayan: ${by}` : `Reddeden: ${by}`),
+  reportReviewerNote: (note) => `İnceleyenin notu: ${note}`,
+  reportSources: "Kaynaklar",
+  printTitle: (title) => `${title} — Trace raporu`,
+  printHint: "PDF olarak kaydetmek için sayfayı yazdır (Ctrl/Cmd + P) ve “PDF olarak kaydet”i seç. Bu not yazdırılmaz.",
+  slidesTitle: (title) => `${title} — slaytlar`,
+  slidesThesisKicker: "Makalenin iddiası",
+  slidesNumbersHeading: "Makalenin ölçtükleri",
+  slidesLimitsKicker: "Üzerine kurmadan önce",
+  slidesLimitsHeading: "Makalenin yapamadığını söyledikleri",
+  slidesHint: "← → ile ilerle · tam metin için N",
+  notebookIntro:
+    "Aşağıdaki denklemleri Trace, makalenin etkileşimli deneme alanlarından üretti. Her biri metin olarak yapıştırılmadı, ayrıştırılmış bir formülden çevrildi ve makalenin kendi kullandığı değerle başlıyor. Bu değerden uzaklaşmak, makalenin doğruladığı bölgenin dışına çıkmak demek.",
+  notebookLeftOut: "Birebir çevrilemedikleri için dışarıda kalanlar:",
+  notebookUntranslatable: "çevrilemedi",
+  notebookInPaper: (anchor) => `Makalede: ${anchor}`,
+  notebookConfigComment: "Makalenin kendi yapılandırması",
+  notebookSweepComment: (label) => `Tarama: ${label}, deneme alanının kullandığı aralık boyunca; geri kalan her şey makalenin değerinde.`,
 };
 
 const BCP47 = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 
 /**
- * İçeriğin dilinden yalnızca `locale` etkilenir: sayı ve tarih biçimleme,
- * sıralama, harf dönüşümü ("i" → "İ") makalenin diline göre yapılmalı. Arayüz
- * metinleri her dilde aynı kalır.
+ * Görsellerin metinleri ve içeriğin `locale`'i.
+ *
+ * İki ayrı dil var:
+ * - `locale` her zaman içeriğin dili: sayı ve tarih biçimleme, sıralama,
+ *   harf dönüşümü ("i" → "İ") makalenin diline göre yapılmalı.
+ * - Etiketler (`ui`) arayüzün dili. Stüdyo okuyucunun seçtiği dili veriyor.
+ *   Verilmezse (bağımsız görüntüleyici, yayımlanmış hikâye, dışa aktarılan
+ *   sayfa) içerik Türkçeyse Türkçe, değilse İngilizce: o sayfayı okuyan kişi
+ *   stüdyonun seçimini bilmiyor, makalenin dili en iyi işaret.
  *
  * Etiket doğrudan `Intl`e gidiyor, o yüzden biçimi doğrulanıyor: bozuk bir
  * etiket orada `RangeError` fırlatır ve bileşeni komple düşürürdü.
  */
-export function stringsFor(language: string | undefined): Strings {
+export function stringsFor(language: string | undefined, ui?: ChromeLanguage): Strings {
   const tag = language?.trim();
-  return tag && BCP47.test(tag) ? { ...en, locale: tag } : en;
+  const valid = Boolean(tag && BCP47.test(tag));
+  const chrome = ui ?? (valid && tag!.toLowerCase().split("-")[0] === "tr" ? "tr" : "en");
+  const base = chrome === "tr" ? tr : en;
+  return valid ? { ...base, locale: tag! } : base;
 }

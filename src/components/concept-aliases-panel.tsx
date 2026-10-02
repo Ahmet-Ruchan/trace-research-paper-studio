@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { Link2, Sparkles, Unlink } from "lucide-react";
-import { getProvider } from "@/lib/model-providers";
+import { useT } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
+import { getProvider, localizedProvider } from "@/lib/model-providers";
 import type { useConceptAliases } from "./study-progress";
 import { ModelKeyFields, useRememberedAssignment } from "./model-key-fields";
 
@@ -12,11 +14,11 @@ type Coverage = { names: number; parts: number; failedParts: number; unread: num
 type Lookup = { status: "idle" } | { status: "loading" } | ({ status: "done"; proposals: Proposal[]; model: string } & Coverage) | { status: "failed"; message: string };
 
 /** Büyük bir kütüphanede adlar parçalar hâlinde okunuyor; okuyucu hangisinin okunmadığını bilmeli. */
-function coverageNote({ names, parts, failedParts, unread }: Coverage) {
+function coverageNote(t: Messages["learning"]["conceptAliases"], { names, parts, failedParts, unread }: Coverage) {
   if (parts <= 1 && !unread) return null;
-  const notes = [`${names} names, read in ${parts} parts; names with similar definitions were kept in the same part.`];
-  if (failedParts) notes.push(`${failedParts} of ${parts} parts could not be read; ask again to try them.`);
-  if (unread) notes.push(`${unread} names did not fit in the parts a model is asked at once; link them yourself above if you know another name for one.`);
+  const notes = [t.coverage(names, parts)];
+  if (failedParts) notes.push(t.failedParts(failedParts, parts));
+  if (unread) notes.push(t.unread(unread));
   return notes.join(" ");
 }
 
@@ -26,6 +28,8 @@ function coverageNote({ names, parts, failedParts, unread }: Coverage) {
  * öneriyor, her çifte okuyucu "aynı" ya da "farklı" diyor.
  */
 export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof useConceptAliases> }) {
+  const messages = useT();
+  const t = messages.learning.conceptAliases;
   const [assignment, choose] = useRememberedAssignment();
   const [apiKey, setApiKey] = useState("");
   const [lookup, setLookup] = useState<Lookup>({ status: "idle" });
@@ -46,13 +50,13 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
       await aliases.decide(a, b, decision, proposedBy, reason);
       return true;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The concept link could not be saved.");
+      setError(caught instanceof Error ? caught.message : t.saveFailed);
       return false;
     }
   }
 
   async function propose() {
-    if (!provider.local && !apiKey.trim()) return setLookup({ status: "failed", message: `${provider.keyLabel} is required.` });
+    if (!provider.local && !apiKey.trim()) return setLookup({ status: "failed", message: t.keyRequired(localizedProvider(provider, messages.studio.models.providers).keyLabel) });
     setLookup({ status: "loading" });
     try {
       const response = await fetch("/api/library/aliases/propose", {
@@ -61,7 +65,7 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
         body: JSON.stringify({ assignment, apiKey: apiKey.trim() }),
       });
       const data = (await response.json().catch(() => undefined)) as ({ proposals?: Proposal[]; model?: string; error?: string } & Partial<Coverage>) | undefined;
-      if (!response.ok || !data?.proposals) throw new Error(data?.error ?? "The model could not be asked.");
+      if (!response.ok || !data?.proposals) throw new Error(data?.error ?? t.askFailed);
       setLookup({
         status: "done",
         proposals: data.proposals,
@@ -72,7 +76,7 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
         unread: data.unread ?? 0,
       });
     } catch (caught) {
-      setLookup({ status: "failed", message: caught instanceof Error ? caught.message : "The model could not be asked." });
+      setLookup({ status: "failed", message: caught instanceof Error ? caught.message : t.askFailed });
     }
   }
 
@@ -82,12 +86,10 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
   }
 
   return (
-    <section className="concept-aliases" aria-label="Names for the same concept">
-      <div className="block-title"><Link2 size={16} /> Names for the same concept</div>
+    <section className="concept-aliases" aria-label={t.title}>
+      <div className="block-title"><Link2 size={16} /> {t.title}</div>
       <p>
-        Concepts are matched by name, so one idea under two names stays two concepts. Link them yourself, or ask a model which
-        names in your library may mean the same thing; it only proposes, and nothing is linked until you say so. Links are kept in
-        your library, never in a paper.
+        {t.intro}
       </p>
 
       {linked.length ? (
@@ -95,15 +97,15 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
           {linked.map((item) => (
             <li key={`${item.terms[0]}|${item.terms[1]}`}>
               <span><strong>{item.terms[0]}</strong> = <strong>{item.terms[1]}</strong></span>
-              <small>{item.proposedBy === "model" ? "proposed by a model, confirmed by you" : "linked by you"}</small>
-              <button type="button" onClick={() => { void decide(item.terms[0], item.terms[1], "forget"); }} aria-label={`Unlink ${item.terms[0]} and ${item.terms[1]}`}>
-                <Unlink size={13} /> Unlink
+              <small>{item.proposedBy === "model" ? t.byModel : t.byYou}</small>
+              <button type="button" onClick={() => { void decide(item.terms[0], item.terms[1], "forget"); }} aria-label={t.unlinkLabel(item.terms[0], item.terms[1])}>
+                <Unlink size={13} /> {t.unlink}
               </button>
             </li>
           ))}
         </ul>
       ) : null}
-      {apart ? <p className="alias-apart">{apart === 1 ? "One pair was" : `${apart} pairs were`} marked as different and will not be proposed again.</p> : null}
+      {apart ? <p className="alias-apart">{t.apart(apart)}</p> : null}
 
       <form
         className="alias-manual"
@@ -118,25 +120,25 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
         }}
       >
         <datalist id="concept-names">{names.map((name) => <option key={name} value={name} />)}</datalist>
-        <input list="concept-names" aria-label="First name" placeholder="A concept…" value={first} onChange={(event) => setFirst(event.target.value)} />
+        <input list="concept-names" aria-label={t.firstName} placeholder={t.firstPlaceholder} value={first} onChange={(event) => setFirst(event.target.value)} />
         <span aria-hidden="true">=</span>
-        <input list="concept-names" aria-label="Second name" placeholder="…and its other name" value={second} onChange={(event) => setSecond(event.target.value)} />
-        <button type="submit" disabled={!first.trim() || !second.trim()}>Link them</button>
+        <input list="concept-names" aria-label={t.secondName} placeholder={t.secondPlaceholder} value={second} onChange={(event) => setSecond(event.target.value)} />
+        <button type="submit" disabled={!first.trim() || !second.trim()}>{t.link}</button>
       </form>
       {error ? <p className="regen-error" role="alert">{error}</p> : null}
 
       <details className="alias-ask">
-        <summary><Sparkles size={14} aria-hidden="true" /> Ask a model for other names</summary>
-        <p>The model sees the names of the concepts in your library and the definitions their papers give, nothing else.</p>
+        <summary><Sparkles size={14} aria-hidden="true" /> {t.ask}</summary>
+        <p>{t.askNote}</p>
         <ModelKeyFields assignment={assignment} onAssignment={choose} apiKey={apiKey} onApiKey={setApiKey} />
         <button type="button" className="regen-primary" disabled={lookup.status === "loading"} onClick={() => { void propose(); }}>
-          {lookup.status === "loading" ? `Reading ${names.length} names…` : "Look for other names"}
+          {lookup.status === "loading" ? t.readingNames(names.length) : t.look}
         </button>
         {lookup.status === "failed" ? <p className="regen-error" role="alert">{lookup.message}</p> : null}
-        {lookup.status === "done" && coverageNote(lookup) ? <p className="alias-coverage" role="status">{coverageNote(lookup)}</p> : null}
+        {lookup.status === "done" && coverageNote(t, lookup) ? <p className="alias-coverage" role="status">{coverageNote(t, lookup)}</p> : null}
         {lookup.status === "done" ? (
           lookup.proposals.length ? (
-            <ul className="alias-proposals" aria-label="Proposed pairs">
+            <ul className="alias-proposals" aria-label={t.proposed}>
               {lookup.proposals.map((proposal) => (
                 <li key={`${proposal.a.term}|${proposal.b.term}`}>
                   <div className="alias-sides">
@@ -150,14 +152,14 @@ export function ConceptAliasesPanel({ aliases }: { aliases: ReturnType<typeof us
                   </div>
                   <p className="alias-why">{proposal.why}</p>
                   <div className="alias-actions">
-                    <button type="button" onClick={() => { void answer(proposal, "same"); }}>Same concept</button>
-                    <button type="button" onClick={() => { void answer(proposal, "different"); }}>Different</button>
+                    <button type="button" onClick={() => { void answer(proposal, "same"); }}>{t.same}</button>
+                    <button type="button" onClick={() => { void answer(proposal, "different"); }}>{t.different}</button>
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p>{lookup.model} found no other names for the same concept.</p>
+            <p>{t.noneFound(lookup.model)}</p>
           )
         ) : null}
       </details>

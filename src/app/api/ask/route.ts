@@ -4,6 +4,8 @@ import { resolveLocalEndpoint } from "@/lib/local-endpoint";
 import { getProvider, resolveProviderModel } from "@/lib/model-providers";
 import { researchProjectSchema } from "@/lib/schema";
 import { generateValidated, prepareProviderRuntime, publicError, safeDiagnostic, tagProviderError, type ProviderRuntime } from "@/lib/server/model-runtime";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -23,38 +25,39 @@ const requestSchema = z.object({
  * bellekte durur; proje ve soru saklanmaz.
  */
 export async function POST(request: Request) {
+  const t = serverText(request);
   const text = await request.text().catch(() => "");
-  if (!text || text.length > MAX_BODY_CHARACTERS) return Response.json({ error: "The request is empty or too large." }, { status: 400 });
+  if (!text || text.length > MAX_BODY_CHARACTERS) return Response.json({ error: t.request.emptyOrTooLarge }, { status: 400 });
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    return Response.json({ error: "The request body is not valid JSON." }, { status: 400 });
+    return Response.json({ error: t.errors.requestBodyInvalidJson() }, { status: 400 });
   }
   const parsed = requestSchema.safeParse(raw);
-  if (!parsed.success) return Response.json({ error: "Ask a question of at least three characters." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: t.ask.questionTooShort }, { status: 400 });
   const project = researchProjectSchema.safeParse(parsed.data.project);
-  if (!project.success) return Response.json({ error: "The Trace project is not valid." }, { status: 400 });
+  if (!project.success) return Response.json({ error: t.request.projectInvalid }, { status: 400 });
 
   const assignment = resolveProviderModel(parsed.data.assignment.provider, parsed.data.assignment.model);
-  if (!assignment) return Response.json({ error: "The model and provider selection is not valid." }, { status: 400 });
+  if (!assignment) return Response.json({ error: t.request.modelSelectionInvalid }, { status: 400 });
   const provider = getProvider(assignment.provider)!;
   let apiKey = parsed.data.apiKey.trim();
   if (provider.local) {
     try {
       apiKey = resolveLocalEndpoint(apiKey);
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "The local model address is not valid." }, { status: 400 });
+      return Response.json({ error: errorMessage(error, t.errors, t.request.localAddressInvalid) }, { status: 400 });
     }
   } else if (!apiKey) {
-    return Response.json({ error: `${provider.keyLabel} is required.` }, { status: 401 });
+    return Response.json({ error: t.request.keyRequired(provider) }, { status: 401 });
   }
 
   const prompt = buildAskPrompt(project.data, parsed.data.question);
   let providerRuntime: ProviderRuntime | undefined;
   try {
     providerRuntime = await prepareProviderRuntime(
-      { ...assignment, apiKey, needsDocument: false, taskRole: "report" },
+      { ...assignment, apiKey, needsDocument: false, taskRole: "report", progressText: t.progress },
       request.signal,
       () => undefined,
       () => undefined,
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const tagged = tagProviderError(error, assignment, "report");
     console.error("Trace ask failed", safeDiagnostic(tagged));
-    return Response.json({ error: publicError(tagged, request.signal.aborted, assignment.provider) }, { status: 502 });
+    return Response.json({ error: publicError(tagged, request.signal.aborted, assignment.provider, t.errors) }, { status: 502 });
   } finally {
     await providerRuntime?.cleanup().catch(() => undefined);
   }

@@ -887,6 +887,28 @@ visible text on eight screens in both themes. Both choices are kept in this brow
 
 ![The dark theme](docs/images/dark.jpg)
 
+### Use it in English or Turkish
+
+**TR** in the header switches every screen to Turkish at once, without a reload; **EN** switches
+back. The command palette has it too (*Switch the interface to Turkish*), and so does the sign-in
+screen of a team studio. The choice is remembered on this device, in a cookie, and is never written
+into your papers or your library: two people on one studio each see their own language. Until you
+choose, the studio follows your browser's language order: Turkish if it comes before English,
+English otherwise.
+
+- **Everything on the screen moves together**: buttons, labels, hints, the names a screen reader
+  announces, dates, weekdays and durations, notifications and alarms, and the messages the server
+  writes back, so an error reads in the same language as the screen around it.
+- **The paper does not.** Switching the interface never translates an analysis: a paper stays in the
+  language it was analysed in, and its text keeps sorting and capitalising by its own language.
+  Quotes stay verbatim.
+- **Pages that leave the studio** (the standalone site, a published story, an exported report or
+  slide deck) are read by someone who never saw your choice, so their labels follow the paper:
+  Turkish for a Turkish paper, English otherwise. A shared reading list mixes papers, so it uses the
+  language of whoever shared it.
+- **Your agent is not affected.** The Trace skill, the bridge and the MCP tools speak English to the
+  agent, which answers you in your own language anyway.
+
 ### Install it as an app, and read offline
 
 The studio installs like an app, on a computer (the install icon in Chrome or Edge's address bar) or
@@ -1291,7 +1313,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.40.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.41.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live [--require-live codex,claude]] [--report report.json]
 ```
 
@@ -1508,8 +1530,9 @@ per-claim and per-section permalinks, resolution from a paper's name, DOI or rep
 (arXiv, bioRxiv, medRxiv, PubMed Central, ACL Anthology), literature maps of up to six projects,
 citation graphs, a local library with claim search across papers, tags, sorting, a list view and
 undoable deletion, a per-model record of how quotes held up, a dark theme and an adjustable text
-size, the native plugin for Codex / Claude Code / Antigravity CLI with the library as MCP tools, and generation through Gemini,
-OpenAI, Claude, OpenRouter and a local model server (Ollama, LM Studio, llama.cpp).
+size, an interface in English and Turkish switched with one button, the native plugin for Codex / Claude Code /
+Antigravity CLI with the library as MCP tools, and generation through Gemini, OpenAI, Claude, OpenRouter and a local
+model server (Ollama, LM Studio, llama.cpp).
 
 A local model can run every stage, so an analysis can stay on your machine from start to finish.
 Local servers have no file-upload endpoint and most open-weight models cannot see a document, so in
@@ -1530,14 +1553,16 @@ still one for the studio), or cloud-synced persistence.
 serving at once as the built-in demo, a downloadable artifact and the test fixture — covered
 by tests so neither can silently fall behind the schema.
 
-The interface is always English. The analysis is not: **it comes back in the language you wrote
-to your agent in** — any language, identified by its BCP-47 tag, with `pt-BR` kept distinct from
-`pt-PT`. Nothing is guessed: the bridge cannot see your conversation, so `--language` is required
-and fails loudly rather than picking a default that would be wrong for somebody. Quoted evidence
-is the one exception; an excerpt stays verbatim in the source's own language, because translating
-a quotation breaks the chain back to the page. Content still sorts and uppercases by its own
-locale — casing follows the text, not the chrome — and a test scans the interface layer to keep
-the two from mixing.
+The interface is in English or Turkish, whichever you choose (see *Use it in English or Turkish*).
+The analysis is a separate matter: **it comes back in the language you wrote to your agent in** —
+any language, identified by its BCP-47 tag, with `pt-BR` kept distinct from `pt-PT`. Nothing is
+guessed: the bridge cannot see your conversation, so `--language` is required and fails loudly
+rather than picking a default that would be wrong for somebody. Quoted evidence is the one
+exception; an excerpt stays verbatim in the source's own language, because translating a quotation
+breaks the chain back to the page. Content still sorts and uppercases by its own locale — casing
+follows the text, not the chrome — and tests scan the interface layer: Turkish text lives only in
+the two dictionaries, a screen cannot show an English string the dictionary does not know, and every
+Turkish entry is checked against its English one for gaps and copied-over English.
 
 ## Roadmap
 
@@ -1560,7 +1585,7 @@ the two from mixing.
 - [x] Getting around and testing yourself: a command palette, search inside a paper, reading aloud, a practice exam, questions across two papers
 - [x] Beyond the studio: the library as MCP tools in all three agents, a Zotero or BibTeX import, an installable app that reads offline
 - [x] Team review with accounts and shared annotations
-- [ ] The interface in more than one language (a decision first)
+- [x] The interface in English and Turkish, switched with one button
 
 The work planned next, in order and ticked off as each item is tested and merged, is kept in
 [docs/plan.md](docs/plan.md).

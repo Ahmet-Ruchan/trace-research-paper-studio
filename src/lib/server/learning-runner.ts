@@ -5,6 +5,7 @@ import {
   type LearningBlockId,
   type LearningContext,
 } from "@/lib/learning-generation";
+import { userErrorText, type UserErrorText } from "@/lib/user-error";
 import { generateValidated, type ProviderRuntime } from "./model-runtime";
 
 export type LearningBlockEvents = {
@@ -58,14 +59,14 @@ export function refusesEveryRequest(error: unknown) {
   return status === 401 || status === 403;
 }
 
-/** Uyarıda gösterilecek kısa neden; model çıktısını ya da anahtarı taşımaz. */
-export function learningFailureReason(error: unknown) {
+/** Uyarıda gösterilecek kısa neden, `text`in dilinde; model çıktısını ya da anahtarı taşımaz. */
+export function learningFailureReason(error: unknown, text: UserErrorText = userErrorText) {
   const status = errorStatus(error);
-  if (status === 401 || status === 403) return "The teaching model's key was refused.";
-  if (status === 429) return "The teaching model's rate limit was reached.";
-  if (error instanceof Error && error.name === "TimeoutError") return "The teaching model did not answer in time.";
+  if (status === 401 || status === 403) return text.teachingKeyRefused();
+  if (status === 429) return text.teachingRateLimited();
+  if (error instanceof Error && error.name === "TimeoutError") return text.teachingTimedOut();
   if (error instanceof Error && /integrity check failed|ZodError|did not return valid JSON/i.test(`${error.name} ${error.message}`)) {
-    return "The model's answer did not pass the checks twice.";
+    return text.teachingChecksFailed();
   }
-  return "The teaching model returned an error.";
+  return text.teachingFailed();
 }

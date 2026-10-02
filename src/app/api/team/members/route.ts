@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { addMember, changePassword, currentMember, listMembers, removeMember, sessionToken } from "@/lib/server/team-store";
 import { teamBody, teamFailure, teamJson } from "@/lib/server/team-http";
+import { serverText } from "@/lib/server/server-text";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const member = addMember(currentMember(request), body.name, body.password, body.role);
     return teamJson({ ok: true, member, ...listMembers() });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }
 
@@ -20,11 +21,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const id = new URL(request.url).searchParams.get("id")?.trim();
-    if (!id) return teamJson({ error: "A member id is required." }, { status: 400 });
+    if (!id) return teamJson({ error: serverText(request).team.memberIdRequired }, { status: 400 });
     removeMember(currentMember(request), id);
     return teamJson({ ok: true, ...listMembers() });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }
 
@@ -35,6 +36,6 @@ export async function PATCH(request: Request) {
     changePassword(currentMember(request), body.current, body.next, sessionToken(request.headers.get("cookie")));
     return teamJson({ ok: true });
   } catch (error) {
-    return teamFailure(error);
+    return teamFailure(error, serverText(request));
   }
 }

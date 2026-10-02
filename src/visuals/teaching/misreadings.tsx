@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useStrings } from "../language-context";
-import { misreadingTrapLabels } from "@/lib/misreadings";
 import type { Claim, Misreadings } from "@/lib/schema";
 
 /**
@@ -26,7 +25,7 @@ export function MisreadingsView({ misreadings, claims }: { misreadings: Misreadi
           const page = linked.flatMap((claim) => claim.sourceRefs.flatMap((reference) => reference.page ?? []))[0];
           return (
             <li key={item.id} className={open ? "misreading is-open" : "misreading"}>
-              <span className="misreading-trap">{misreadingTrapLabels[item.trap]}</span>
+              <span className="misreading-trap">{t.misreadingTraps[item.trap]}</span>
               <p className="misreading-text">
                 <span className="misreading-label">{t.misreadingTempting}</span>{" "}
                 <span className="misreading-sentence">{item.misreading}</span>

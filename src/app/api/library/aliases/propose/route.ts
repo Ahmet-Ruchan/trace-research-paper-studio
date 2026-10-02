@@ -15,6 +15,8 @@ import { resolveLocalEndpoint } from "@/lib/local-endpoint";
 import { getProvider, resolveProviderModel } from "@/lib/model-providers";
 import { generateValidated, prepareProviderRuntime, publicError, safeDiagnostic, tagProviderError, type ProviderRuntime } from "@/lib/server/model-runtime";
 import { listStoredProjects, readConceptAliases } from "@/lib/trace-storage";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -38,20 +40,21 @@ const PARALLEL_PARTS = 3;
  * okunamadığı söyleniyor.
  */
 export async function POST(request: Request) {
+  const t = serverText(request);
   const parsed = requestSchema.safeParse(await request.json().catch(() => undefined));
-  if (!parsed.success) return Response.json({ error: "A model and provider are required." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: t.aliases.modelRequired }, { status: 400 });
   const assignment = resolveProviderModel(parsed.data.assignment.provider, parsed.data.assignment.model);
-  if (!assignment) return Response.json({ error: "The model and provider selection is not valid." }, { status: 400 });
+  if (!assignment) return Response.json({ error: t.request.modelSelectionInvalid }, { status: 400 });
   const provider = getProvider(assignment.provider)!;
   let apiKey = parsed.data.apiKey.trim();
   if (provider.local) {
     try {
       apiKey = resolveLocalEndpoint(apiKey);
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "The local model address is not valid." }, { status: 400 });
+      return Response.json({ error: errorMessage(error, t.errors, t.request.localAddressInvalid) }, { status: 400 });
     }
   } else if (!apiKey) {
-    return Response.json({ error: `${provider.keyLabel} is required.` }, { status: 401 });
+    return Response.json({ error: t.request.keyRequired(provider) }, { status: 401 });
   }
 
   const [projects, file] = await Promise.all([listStoredProjects(), readConceptAliases()]);
@@ -95,7 +98,7 @@ export async function POST(request: Request) {
     }
     const answered = outcomes.flatMap((outcome) => (outcome.status === "fulfilled" ? [outcome.value] : []));
     const failed = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
-    if (!answered.length) throw failed?.reason ?? new Error("The model could not be asked.");
+    if (!answered.length) throw failed?.reason ?? new Error(t.aliases.modelNotAsked);
     if (failed) console.error("Trace concept alias proposal: a part failed", safeDiagnostic(tagProviderError(failed.reason, assignment, "teaching")));
     return Response.json(
       {
@@ -115,7 +118,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const tagged = tagProviderError(error, assignment, "teaching");
     console.error("Trace concept alias proposal failed", safeDiagnostic(tagged));
-    return Response.json({ error: publicError(tagged, request.signal.aborted, assignment.provider) }, { status: 502 });
+    return Response.json({ error: publicError(tagged, request.signal.aborted, assignment.provider, t.errors) }, { status: 502 });
   } finally {
     await providerRuntime?.cleanup().catch(() => undefined);
   }

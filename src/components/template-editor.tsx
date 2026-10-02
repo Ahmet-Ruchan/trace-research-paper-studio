@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, LayoutTemplate, Plus, Trash2, X } from "lucide-react";
+import { useT } from "@/i18n/client";
 import {
   claimKinds,
   narrativeTemplateSchema,
@@ -13,14 +14,6 @@ import {
   type TemplateSlot,
 } from "@/lib/narrative-templates";
 import { saveTemplate } from "@/lib/template-library";
-
-const claimKindLabels: Record<(typeof claimKinds)[number], string> = {
-  "reported-result": "results",
-  "author-interpretation": "interpretation",
-  method: "method",
-  background: "background",
-  limitation: "limitation",
-};
 
 /** Şema sınırları; düğmeler bunların dışına çıkmaya izin vermiyor. */
 const MIN_SLOTS = 5;
@@ -59,6 +52,8 @@ function move<T>(items: readonly T[], from: number, to: number) {
  * taşıyor; düzenleme onları değiştirmiyor.
  */
 export function TemplateEditor({ initial, mode, heading, intro, initialName, onSaved, onClose }: TemplateEditorProps) {
+  const messages = useT();
+  const t = messages.studio.templates;
   const [name, setName] = useState(initialName ?? initial.name);
   const [description, setDescription] = useState(initial.description);
   const [slots, setSlots] = useState<TemplateSlot[]>(() => structuredClone(initial.story));
@@ -76,22 +71,22 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
   const draft = useMemo<NarrativeTemplate>(() => ({
     ...initial,
     builtIn: false,
-    name: name.trim() || "Untitled template",
+    name: name.trim() || t.untitled,
     description: description.trim(),
     story: slots.map((slot) => ({ ...slot, purpose: slot.purpose.trim() })),
     report,
-  }), [initial, name, description, slots, report]);
+  }), [initial, name, description, slots, report, t.untitled]);
 
   const issues = useMemo(() => {
     const parsed = narrativeTemplateSchema.safeParse(draft);
     const shape = parsed.success ? [] : parsed.error.issues.map((issue) => {
       const [area, index] = issue.path;
       return area === "story" && typeof index === "number"
-        ? `Section ${index + 1}: ${issue.path[2] === "purpose" ? "give it a purpose" : issue.message}`
-        : `${issue.path.join(".") || "Template"}: ${issue.message}`;
+        ? t.sectionIssue(index + 1, issue.path[2] === "purpose" ? t.givePurpose : issue.message)
+        : `${issue.path.join(".") || t.templateLabel}: ${issue.message}`;
     });
-    return [...shape, ...templateIssues(draft)];
-  }, [draft]);
+    return [...shape, ...templateIssues(draft, t.issues)];
+  }, [draft, t]);
 
   const updateSlot = (index: number, patch: Partial<TemplateSlot>) =>
     setSlots((current) => current.map((slot, position) => (position === index ? { ...slot, ...patch } : slot)));
@@ -105,7 +100,7 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
 
   async function save() {
     if (!name.trim()) {
-      setError("Give the template a name.");
+      setError(t.nameRequired);
       return;
     }
     setSaving(true);
@@ -120,7 +115,7 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
       setSaved(template);
       onSaved?.(template);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The template could not be saved.");
+      setError(caught instanceof Error ? caught.message : t.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -131,29 +126,29 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
       <div className="regen-panel wide">
         <header className="regen-header">
           <div>
-            <span><LayoutTemplate size={13} /> Narrative template</span>
+            <span><LayoutTemplate size={13} /> {t.eyebrow}</span>
             <h2 id="template-title">{heading}</h2>
             <p>{intro}</p>
           </div>
-          <button className="regen-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
+          <button className="regen-close" onClick={onClose} aria-label={messages.common.close}><X size={16} /></button>
         </header>
 
         <div className="regen-body">
           {saved ? (
             <>
-              <p className="regen-note"><b>{saved.name}</b> is saved. It appears under Narrative template when you analyse a paper, and agents can use it with <code>prepare --template {saved.id}</code>.{mode === "edit" ? " Projects already analysed with it keep their own copy." : ""}</p>
+              <p className="regen-note"><b>{saved.name}</b>{t.savedBefore}<code>{`prepare --template ${saved.id}`}</code>{t.savedAfter}{mode === "edit" ? t.savedEditNote : ""}</p>
               <footer className="regen-actions">
-                <button className="regen-primary" onClick={onClose}>Done</button>
+                <button className="regen-primary" onClick={onClose}>{messages.common.done}</button>
               </footer>
             </>
           ) : (
             <>
               <div className="template-form">
-                <input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} placeholder="Template name, e.g. Weekly reading group" aria-label="Template name" />
-                <textarea value={description} maxLength={400} onChange={(event) => setDescription(event.target.value)} placeholder="Who is it for? (optional)" aria-label="Template description" />
+                <input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} placeholder={t.namePlaceholder} aria-label={t.nameLabel} />
+                <textarea value={description} maxLength={400} onChange={(event) => setDescription(event.target.value)} placeholder={t.descriptionPlaceholder} aria-label={t.descriptionLabel} />
               </div>
 
-              <span className="history-caption">Story sections, in order</span>
+              <span className="history-caption">{t.storySections}</span>
               <ol className="template-editor-slots">
                 {slots.map((slot, index) => (
                   <li key={index}>
@@ -163,14 +158,14 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
                         value={slot.purpose}
                         maxLength={160}
                         onChange={(event) => updateSlot(index, { purpose: event.target.value })}
-                        aria-label={`Purpose of section ${index + 1}`}
-                        placeholder="What this section does for the reader"
+                        aria-label={t.purposeLabel(index + 1)}
+                        placeholder={t.purposePlaceholder}
                       />
                       <div className="template-slot-options">
-                        <select value={slot.visual} onChange={(event) => updateSlot(index, { visual: event.target.value as TemplateSlot["visual"] })} aria-label={`Visual of section ${index + 1}`}>
-                          {visualTypes.map((visual) => <option key={visual} value={visual}>{visual}</option>)}
+                        <select value={slot.visual} onChange={(event) => updateSlot(index, { visual: event.target.value as TemplateSlot["visual"] })} aria-label={t.visualLabel(index + 1)}>
+                          {visualTypes.map((visual) => <option key={visual} value={visual}>{t.issues.visualNames[visual]}</option>)}
                         </select>
-                        <div className="template-kinds" role="group" aria-label={`Claim kinds of section ${index + 1}`}>
+                        <div className="template-kinds" role="group" aria-label={t.kindsLabel(index + 1)}>
                           {claimKinds.map((kind) => {
                             const active = slot.claimKinds.includes(kind);
                             return (
@@ -182,7 +177,7 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
                                 disabled={!active && slot.claimKinds.length >= MAX_CLAIM_KINDS}
                                 onClick={() => toggleKind(index, kind)}
                               >
-                                {claimKindLabels[kind]}
+                                {t.claimKinds[kind]}
                               </button>
                             );
                           })}
@@ -190,9 +185,9 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
                       </div>
                     </div>
                     <div className="template-slot-actions">
-                      <button type="button" aria-label={`Move section ${index + 1} up`} disabled={index === 0} onClick={() => setSlots((current) => move(current, index, index - 1))}><ArrowUp size={13} /></button>
-                      <button type="button" aria-label={`Move section ${index + 1} down`} disabled={index === slots.length - 1} onClick={() => setSlots((current) => move(current, index, index + 1))}><ArrowDown size={13} /></button>
-                      <button type="button" aria-label={`Remove section ${index + 1}`} disabled={slots.length <= MIN_SLOTS} onClick={() => setSlots((current) => current.filter((_, position) => position !== index))}><Trash2 size={13} /></button>
+                      <button type="button" aria-label={t.moveUp(index + 1)} disabled={index === 0} onClick={() => setSlots((current) => move(current, index, index - 1))}><ArrowUp size={13} /></button>
+                      <button type="button" aria-label={t.moveDown(index + 1)} disabled={index === slots.length - 1} onClick={() => setSlots((current) => move(current, index, index + 1))}><ArrowDown size={13} /></button>
+                      <button type="button" aria-label={t.removeSection(index + 1)} disabled={slots.length <= MIN_SLOTS} onClick={() => setSlots((current) => current.filter((_, position) => position !== index))}><Trash2 size={13} /></button>
                     </div>
                   </li>
                 ))}
@@ -203,7 +198,7 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
                 disabled={slots.length >= MAX_SLOTS}
                 onClick={() => setSlots((current) => [...current, { purpose: "", visual: "concept", claimKinds: [] }])}
               >
-                <Plus size={13} /> Add a section {slots.length >= MAX_SLOTS ? `(at most ${MAX_SLOTS})` : ""}
+                <Plus size={13} /> {t.addSection} {slots.length >= MAX_SLOTS ? t.atMost(MAX_SLOTS) : ""}
               </button>
 
               <div className="template-report">
@@ -213,15 +208,15 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
                     checked={Boolean(report)}
                     onChange={(event) => setReport(event.target.checked ? [...(initial.report ?? reportKinds)] : undefined)}
                   />
-                  Fix the order of the deep report sections
+                  {t.fixReportOrder}
                 </label>
                 {report && (
                   <ol>
                     {report.map((kind, index) => (
                       <li key={`${kind}-${index}`}>
-                        <span>{kind}</span>
-                        <button type="button" aria-label={`Move ${kind} up`} disabled={index === 0} onClick={() => setReport((current) => current && move(current, index, index - 1))}><ArrowUp size={12} /></button>
-                        <button type="button" aria-label={`Move ${kind} down`} disabled={index === report.length - 1} onClick={() => setReport((current) => current && move(current, index, index + 1))}><ArrowDown size={12} /></button>
+                        <span>{t.issues.reportKindNames[kind]}</span>
+                        <button type="button" aria-label={t.moveKindUp(t.issues.reportKindNames[kind])} disabled={index === 0} onClick={() => setReport((current) => current && move(current, index, index - 1))}><ArrowUp size={12} /></button>
+                        <button type="button" aria-label={t.moveKindDown(t.issues.reportKindNames[kind])} disabled={index === report.length - 1} onClick={() => setReport((current) => current && move(current, index, index + 1))}><ArrowDown size={12} /></button>
                       </li>
                     ))}
                   </ol>
@@ -230,15 +225,15 @@ export function TemplateEditor({ initial, mode, heading, intro, initialName, onS
 
               {issues.length > 0 && (
                 <div className="regen-error" role="alert">
-                  <b>This structure cannot be saved yet.</b>
+                  <b>{t.cannotSave}</b>
                   <ul>{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
                 </div>
               )}
               {error && <p className="regen-error" role="alert">{error}</p>}
               <footer className="regen-actions">
-                <button className="regen-secondary" onClick={onClose}>Cancel</button>
+                <button className="regen-secondary" onClick={onClose}>{messages.common.cancel}</button>
                 <button className="regen-primary" disabled={saving || issues.length > 0} onClick={() => { void save(); }}>
-                  {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Save template"}
+                  {saving ? messages.common.saving : mode === "edit" ? t.saveChanges : t.saveTemplate}
                 </button>
               </footer>
             </>

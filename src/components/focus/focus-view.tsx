@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlarmClock, ArrowLeft, Bell, BookOpen, Flag, Hourglass, Layers, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, SkipForward, Square, Timer, Trash2, Volume2, Watch } from "lucide-react";
+import { useT } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
 import { focusColorStyle, type FocusColorId } from "@/lib/focus-colors";
 import { countdownRemaining, elapsedOf, lapTimes, nextAlarm, shortBreakKey, type Subject } from "@/lib/focus-timer";
 import { AMBIENT_SOUNDS, MAX_ALARMS, type Alarm, type AmbientId, type Preferences, type TimerMode } from "@/lib/profile";
 import type { ResearchProject } from "@/lib/schema";
-import { addDaysLocal, dailyTotals, dayKey, formatClock, formatDuration, SESSION_KIND_LABELS, startOfWeek, workSummary } from "@/lib/work-log";
+import { addDaysLocal, dailyTotals, dayKey, formatClock, startOfWeek, workSummary } from "@/lib/work-log";
 import { DisplayControl } from "../display-control";
 import { BreakReviewCard, useBreakReview, type BreakReview } from "./break-review";
 import { focusDisplay, useFocus, useFocusClock } from "./focus-provider";
@@ -14,20 +16,15 @@ import { ColorPicker, Dial, NumberField, Toggle } from "./focus-parts";
 import { StudioNav } from "./studio-nav";
 
 const TAB_KEY = "trace-focus-tab";
-const TABS: Array<{ id: TimerMode; label: string; icon: typeof Timer }> = [
-  { id: "focus", label: "Focus", icon: Timer },
-  { id: "timer", label: "Timer", icon: Hourglass },
-  { id: "stopwatch", label: "Stopwatch", icon: Watch },
-  { id: "alarm", label: "Alarms", icon: AlarmClock },
+const TABS: Array<{ id: TimerMode; icon: typeof Timer }> = [
+  { id: "focus", icon: Timer },
+  { id: "timer", icon: Hourglass },
+  { id: "stopwatch", icon: Watch },
+  { id: "alarm", icon: AlarmClock },
 ];
 const TIMER_PRESETS = [5, 10, 15, 25, 30, 45, 60, 90];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const phaseTitle = { work: "Focus", short: "Short break", long: "Long break" } as const;
 
-function greeting(now: number) {
-  const hour = new Date(now).getHours();
-  return hour < 5 ? "Working late" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-}
+type Words = Messages["focus"];
 
 /** Tercihi değiştirip kaydeden yardımcı. */
 function usePreferences() {
@@ -51,6 +48,7 @@ function resolveSubject(text: string, papers: readonly Paper[]): Subject {
 
 /** Ne üzerinde çalışıldığı: serbest metin ya da kütüphaneden bir makale. */
 function SubjectField({ label, placeholder, value, onChange, active, papers }: { label: string; placeholder: string; value: string; onChange: (text: string) => void; active?: Subject; papers: readonly Paper[] }) {
+  const t = useT().focus.view;
   const shown = active ? active.label ?? "" : value;
   const linked = active ? active.projectId : resolveSubject(value, papers).projectId;
   const paper = linked ? papers.find((item) => item.id === linked) : undefined;
@@ -59,9 +57,9 @@ function SubjectField({ label, placeholder, value, onChange, active, papers }: {
       <span>{label}</span>
       <input list="focus-papers" placeholder={placeholder} maxLength={120} value={shown} disabled={Boolean(active)} onChange={(event) => onChange(event.target.value)} />
       {paper ? (
-        <small className="focus-linked"><BookOpen size={13} aria-hidden="true" /> The time is counted for this paper in your library.</small>
+        <small className="focus-linked"><BookOpen size={13} aria-hidden="true" /> {t.linked}</small>
       ) : papers.length && !active ? (
-        <small className="focus-linked-hint">Choose a paper from your library to count the time for it.</small>
+        <small className="focus-linked-hint">{t.linkHint}</small>
       ) : null}
     </label>
   );
@@ -70,6 +68,8 @@ function SubjectField({ label, placeholder, value, onChange, active, papers }: {
 type PanelProps = { papers: readonly Paper[]; subject: string; onSubject: (text: string) => void; onStage: () => void };
 
 function FocusPanel({ papers, subject, onSubject, onStage, review, projects }: PanelProps & { review: BreakReview; projects: readonly ResearchProject[] }) {
+  const words = useT().focus;
+  const { view, focusPanel: t } = words;
   const { profile, store, actions, previewAmbient } = useFocus();
   const now = useFocusClock();
   const setPreferences = usePreferences();
@@ -77,7 +77,7 @@ function FocusPanel({ papers, subject, onSubject, onStage, review, projects }: P
   const focus = store.focus;
   const shown = focusDisplay(focus, profile, now);
   const active = Boolean(focus && !focus.finished);
-  const rounds = settings.rounds ? `Round ${shown.round} of ${settings.rounds}` : `Round ${shown.round}`;
+  const rounds = t.round(shown.round, settings.rounds);
   const setFocus = (patch: Partial<Preferences["focus"]>) => void setPreferences({ focus: { ...settings, ...patch } });
   // Uzun molaya kadarki turlar: uzun molada hepsi dolu, sonra baştan.
   const filled = !focus ? 0 : focus.phase === "long" || focus.finished ? settings.longEvery : focus.completed % settings.longEvery;
@@ -86,76 +86,77 @@ function FocusPanel({ papers, subject, onSubject, onStage, review, projects }: P
   return (
     <div className="focus-mode" style={focusColorStyle(profile.preferences.colors.focus)}>
       <div className="focus-stack">
-        <section className="focus-dial-card" aria-label="Focus rounds">
-          <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
+        <section className="focus-dial-card" aria-label={t.region}>
+          <button type="button" className="focus-expand" onClick={onStage} aria-label={view.fullScreen} title={view.fullScreenTitle}><Maximize2 size={15} /></button>
           <p className="focus-phase">
-            <span className={`focus-phase-chip is-${shown.phase}`}>{shown.finished ? "Done" : phaseTitle[shown.phase]}</span>
-            {shown.finished ? `${focus?.completed ?? 0} rounds done` : rounds}
+            <span className={`focus-phase-chip is-${shown.phase}`}>{shown.finished ? t.done : view.phases[shown.phase]}</span>
+            {shown.finished ? t.roundsDone(focus?.completed ?? 0) : rounds}
           </p>
-          <Dial progress={active ? 1 - shown.remaining / shown.total : 0} label={`${phaseTitle[shown.phase]}: ${formatClock(shown.remaining, "up")} left`}>
+          <Dial progress={active ? 1 - shown.remaining / shown.total : 0} label={t.dialLabel(shown.phase, formatClock(shown.remaining, "up"))}>
             <strong className="focus-time">{formatClock(shown.remaining, "up")}</strong>
-            <small>{shown.waiting ? `Ready for ${phaseTitle[shown.phase].toLowerCase()}` : shown.running ? (shown.phase === "work" ? "Stay with it" : "Rest your eyes") : active ? "Paused" : `${settings.work} min focus · ${settings.shortBreak} min break`}</small>
+            <small>{shown.waiting ? t.readyFor(shown.phase) : shown.running ? (shown.phase === "work" ? t.stayWithIt : t.restYourEyes) : active ? view.paused : t.idle(settings.work, settings.shortBreak)}</small>
           </Dial>
-          <ol className="focus-cycle" aria-label={`${focus?.completed ?? 0} rounds done; a long break after every ${settings.longEvery}`}>
+          <ol className="focus-cycle" aria-label={t.cycle(focus?.completed ?? 0, settings.longEvery)}>
             {cycle.map((done, index) => <li key={index} className={done ? "is-done" : ""} />)}
           </ol>
           <Controls>
             {!active ? (
-              <button type="button" className="focus-primary" onClick={() => actions.startFocus(resolveSubject(subject, papers))}><Play size={16} /> {focus?.finished ? "Start again" : "Start focus"}</button>
+              <button type="button" className="focus-primary" onClick={() => actions.startFocus(resolveSubject(subject, papers))}><Play size={16} /> {focus?.finished ? view.startAgain : t.startFocus}</button>
             ) : shown.running ? (
-              <button type="button" className="focus-primary" onClick={actions.pauseFocus}><Pause size={16} /> Pause</button>
+              <button type="button" className="focus-primary" onClick={actions.pauseFocus}><Pause size={16} /> {view.pause}</button>
             ) : (
-              <button type="button" className="focus-primary" onClick={actions.resumeFocus}><Play size={16} /> {shown.waiting ? `Start ${phaseTitle[shown.phase].toLowerCase()}` : "Resume"}</button>
+              <button type="button" className="focus-primary" onClick={actions.resumeFocus}><Play size={16} /> {shown.waiting ? t.startPhase(shown.phase) : view.resume}</button>
             )}
-            {active ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> {shown.phase === "work" ? "Skip to a break" : "Skip the break"}</button> : null}
-            {focus ? <button type="button" onClick={actions.stopFocus}><Square size={14} /> Stop</button> : null}
+            {active ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> {shown.phase === "work" ? t.skipToBreak : t.skipBreak}</button> : null}
+            {focus ? <button type="button" onClick={actions.stopFocus}><Square size={14} /> {view.stop}</button> : null}
           </Controls>
-          <SubjectField label="What are you working on?" placeholder="A paper, a chapter, a problem set…" value={subject} onChange={onSubject} active={active ? focus : undefined} papers={papers} />
+          <SubjectField label={t.subject} placeholder={t.subjectPlaceholder} value={subject} onChange={onSubject} active={active ? focus : undefined} papers={papers} />
         </section>
         <BreakReviewCard review={review} projects={projects} />
       </div>
 
-      <section className="focus-settings" aria-label="Focus settings">
-        <h2>Rounds and breaks</h2>
+      <section className="focus-settings" aria-label={t.settings}>
+        <h2>{t.heading}</h2>
         <div className="focus-number-grid">
-          <NumberField label="Focus" unit="min" value={settings.work} min={1} max={240} onChange={(work) => setFocus({ work })} />
-          <NumberField label="Short break" unit="min" value={settings.shortBreak} min={1} max={60} onChange={(shortBreak) => setFocus({ shortBreak })} />
-          <NumberField label="Long break" unit="min" value={settings.longBreak} min={1} max={120} onChange={(longBreak) => setFocus({ longBreak })} />
-          <NumberField label="Long break every" unit="rounds" value={settings.longEvery} min={1} max={12} onChange={(longEvery) => setFocus({ longEvery })} />
+          <NumberField label={view.phases.work} unit={view.minutesUnit} value={settings.work} min={1} max={240} onChange={(work) => setFocus({ work })} />
+          <NumberField label={view.phases.short} unit={view.minutesUnit} value={settings.shortBreak} min={1} max={60} onChange={(shortBreak) => setFocus({ shortBreak })} />
+          <NumberField label={view.phases.long} unit={view.minutesUnit} value={settings.longBreak} min={1} max={120} onChange={(longBreak) => setFocus({ longBreak })} />
+          <NumberField label={t.longEvery} unit={t.roundsUnit} value={settings.longEvery} min={1} max={12} onChange={(longEvery) => setFocus({ longEvery })} />
         </div>
         <label className="focus-select">
-          <span>How many rounds</span>
+          <span>{t.howMany}</span>
           <select value={settings.rounds} onChange={(event) => setFocus({ rounds: Number(event.target.value) })}>
-            <option value={0}>Keep going until I stop</option>
-            {Array.from({ length: 12 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count} {count === 1 ? "round" : "rounds"}</option>)}
+            <option value={0}>{t.untilStop}</option>
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{t.roundCount(count)}</option>)}
           </select>
         </label>
-        <Toggle checked={settings.autoStartBreaks} onChange={(autoStartBreaks) => setFocus({ autoStartBreaks })} label="Start breaks on their own" hint="Otherwise the timer waits for you after each round." />
-        <Toggle checked={settings.autoStartWork} onChange={(autoStartWork) => setFocus({ autoStartWork })} label="Start the next round after a break" hint="With both on, rounds and breaks follow each other until you stop." />
-        <Toggle checked={profile.preferences.breakReview} onChange={(breakReview) => void setPreferences({ breakReview })} label="Review a few cards in short breaks" hint="Up to three cards from your library that are due. Long breaks stay for rest." />
-        <p className="focus-note">Changes apply from the next round. Only focus time is counted as work, never a break.</p>
+        <Toggle checked={settings.autoStartBreaks} onChange={(autoStartBreaks) => setFocus({ autoStartBreaks })} label={t.autoBreaks} hint={t.autoBreaksHint} />
+        <Toggle checked={settings.autoStartWork} onChange={(autoStartWork) => setFocus({ autoStartWork })} label={t.autoWork} hint={t.autoWorkHint} />
+        <Toggle checked={profile.preferences.breakReview} onChange={(breakReview) => void setPreferences({ breakReview })} label={t.breakReview} hint={t.breakReviewHint} />
+        <p className="focus-note">{t.changesNote}</p>
         <div className="focus-ambient">
           <label className="focus-select">
-            <span>Background sound</span>
+            <span>{t.ambient}</span>
             <select value={profile.preferences.ambient} onChange={(event) => void setPreferences({ ambient: event.target.value as AmbientId })}>
-              {AMBIENT_SOUNDS.map((sound) => <option key={sound.id} value={sound.id}>{sound.label}</option>)}
+              {AMBIENT_SOUNDS.map((sound) => <option key={sound.id} value={sound.id}>{words.ambientSounds[sound.id]}</option>)}
             </select>
           </label>
           <label className="profile-volume">
-            <span>Volume</span>
-            <input type="range" min={0} max={1} step={0.05} value={profile.preferences.ambientVolume} onChange={(event) => void setPreferences({ ambientVolume: Number(event.target.value) })} aria-valuetext={`${Math.round(profile.preferences.ambientVolume * 100)}%`} disabled={profile.preferences.ambient === "none"} />
+            <span>{t.volume}</span>
+            <input type="range" min={0} max={1} step={0.05} value={profile.preferences.ambientVolume} onChange={(event) => void setPreferences({ ambientVolume: Number(event.target.value) })} aria-valuetext={words.percent(Math.round(profile.preferences.ambientVolume * 100))} disabled={profile.preferences.ambient === "none"} />
           </label>
-          <button type="button" className="focus-secondary" onClick={previewAmbient} disabled={profile.preferences.ambient === "none"}><Volume2 size={14} /> Listen</button>
+          <button type="button" className="focus-secondary" onClick={previewAmbient} disabled={profile.preferences.ambient === "none"}><Volume2 size={14} /> {t.listen}</button>
         </div>
-        <p className="focus-note">It plays during focus rounds and stops for breaks.</p>
-        <h3>Colour</h3>
-        <ColorPicker label="Focus colour" value={profile.preferences.colors.focus} onChange={(color) => void setPreferences({ colors: { ...profile.preferences.colors, focus: color } })} />
+        <p className="focus-note">{t.ambientNote}</p>
+        <h3>{view.colour}</h3>
+        <ColorPicker label={t.colour} value={profile.preferences.colors.focus} onChange={(color) => void setPreferences({ colors: { ...profile.preferences.colors, focus: color } })} />
       </section>
     </div>
   );
 }
 
 function TimerPanel({ papers, subject, onSubject, onStage }: PanelProps) {
+  const { view, timerPanel: t } = useT().focus;
   const { profile, store, actions } = useFocus();
   const now = useFocusClock();
   const setPreferences = usePreferences();
@@ -167,45 +168,45 @@ function TimerPanel({ papers, subject, onSubject, onStage }: PanelProps) {
 
   return (
     <div className="focus-mode" style={focusColorStyle(profile.preferences.colors.timer)}>
-      <section className="focus-dial-card" aria-label="Timer">
-        <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
+      <section className="focus-dial-card" aria-label={t.label}>
+        <button type="button" className="focus-expand" onClick={onStage} aria-label={view.fullScreen} title={view.fullScreenTitle}><Maximize2 size={15} /></button>
         <p className="focus-phase">
-          <span className="focus-phase-chip">{timer?.done ? "Time’s up" : timer?.clock.running ? "Counting down" : timer ? "Paused" : "Timer"}</span>
+          <span className="focus-phase-chip">{timer?.done ? t.timesUp : timer?.clock.running ? t.countingDown : timer ? view.paused : t.label}</span>
           {timer ? timer.label ?? "" : subject}
         </p>
-        <Dial progress={timer ? 1 - remaining / timer.duration : 0} label={`Timer: ${formatClock(remaining, "up")} left`}>
+        <Dial progress={timer ? 1 - remaining / timer.duration : 0} label={t.dialLabel(formatClock(remaining, "up"))}>
           <strong className="focus-time">{formatClock(remaining, "up")}</strong>
-          <small>{timer ? `of ${formatClock(timer.duration)}` : "Set a time and start"}</small>
+          <small>{timer ? t.of(formatClock(timer.duration)) : t.setAndStart}</small>
         </Dial>
         <Controls>
           {!timer || timer.done ? (
-            <button type="button" className="focus-primary" onClick={() => actions.startTimer(total * 1000, resolveSubject(subject, papers))}><Play size={16} /> {timer?.done ? "Start again" : "Start"}</button>
+            <button type="button" className="focus-primary" onClick={() => actions.startTimer(total * 1000, resolveSubject(subject, papers))}><Play size={16} /> {timer?.done ? view.startAgain : view.start}</button>
           ) : timer.clock.running ? (
-            <button type="button" className="focus-primary" onClick={actions.pauseTimer}><Pause size={16} /> Pause</button>
+            <button type="button" className="focus-primary" onClick={actions.pauseTimer}><Pause size={16} /> {view.pause}</button>
           ) : (
-            <button type="button" className="focus-primary" onClick={actions.resumeTimer}><Play size={16} /> Resume</button>
+            <button type="button" className="focus-primary" onClick={actions.resumeTimer}><Play size={16} /> {view.resume}</button>
           )}
-          {timer ? <button type="button" onClick={() => actions.extendTimer(60_000)}><Plus size={15} /> 1 min</button> : null}
-          {timer ? <button type="button" onClick={actions.stopTimer}><RotateCcw size={15} /> Reset</button> : null}
+          {timer ? <button type="button" onClick={() => actions.extendTimer(60_000)}><Plus size={15} /> {t.oneMinute}</button> : null}
+          {timer ? <button type="button" onClick={actions.stopTimer}><RotateCcw size={15} /> {view.reset}</button> : null}
         </Controls>
-        <SubjectField label="Label" placeholder="Tea, a practice exam, a paper…" value={subject} onChange={onSubject} active={timer && !timer.done ? timer : undefined} papers={papers} />
+        <SubjectField label={view.label} placeholder={t.placeholder} value={subject} onChange={onSubject} active={timer && !timer.done ? timer : undefined} papers={papers} />
       </section>
 
-      <section className="focus-settings" aria-label="Timer settings">
-        <h2>How long</h2>
-        <div className="focus-presets" role="group" aria-label="Quick lengths">
+      <section className="focus-settings" aria-label={t.settings}>
+        <h2>{t.heading}</h2>
+        <div className="focus-presets" role="group" aria-label={t.presets}>
           {TIMER_PRESETS.map((preset) => (
-            <button key={preset} type="button" aria-pressed={total === preset * 60} onClick={() => setTotal(preset * 60)}>{preset} min</button>
+            <button key={preset} type="button" aria-pressed={total === preset * 60} onClick={() => setTotal(preset * 60)}>{t.preset(preset)}</button>
           ))}
         </div>
         <div className="focus-number-grid">
-          <NumberField label="Hours" value={hours} min={0} max={23} onChange={(value) => setTotal(value * 3600 + minutes * 60 + seconds)} />
-          <NumberField label="Minutes" value={minutes} min={0} max={59} onChange={(value) => setTotal(hours * 3600 + value * 60 + seconds)} />
-          <NumberField label="Seconds" value={seconds} min={0} max={59} onChange={(value) => setTotal(hours * 3600 + minutes * 60 + value)} />
+          <NumberField label={t.hours} value={hours} min={0} max={23} onChange={(value) => setTotal(value * 3600 + minutes * 60 + seconds)} />
+          <NumberField label={t.minutes} value={minutes} min={0} max={59} onChange={(value) => setTotal(hours * 3600 + value * 60 + seconds)} />
+          <NumberField label={t.seconds} value={seconds} min={0} max={59} onChange={(value) => setTotal(hours * 3600 + minutes * 60 + value)} />
         </div>
-        <Toggle checked={profile.preferences.timerCountsAsWork} onChange={(timerCountsAsWork) => void setPreferences({ timerCountsAsWork })} label="Count it as work time" hint="The time it runs is added to your work calendar." />
-        <h3>Colour</h3>
-        <ColorPicker label="Timer colour" value={profile.preferences.colors.timer} onChange={(color) => void setPreferences({ colors: { ...profile.preferences.colors, timer: color } })} />
+        <Toggle checked={profile.preferences.timerCountsAsWork} onChange={(timerCountsAsWork) => void setPreferences({ timerCountsAsWork })} label={view.countAsWork} hint={view.countAsWorkHint} />
+        <h3>{view.colour}</h3>
+        <ColorPicker label={t.colour} value={profile.preferences.colors.timer} onChange={(color) => void setPreferences({ colors: { ...profile.preferences.colors, timer: color } })} />
       </section>
     </div>
   );
@@ -231,6 +232,7 @@ function LiveElapsed({ since, elapsed, running }: { since: number; elapsed: numb
 }
 
 function StopwatchPanel({ papers, subject, onSubject, onStage }: PanelProps) {
+  const { view, stopwatchPanel: t } = useT().focus;
   const { profile, store, actions } = useFocus();
   const now = useFocusClock();
   const setPreferences = usePreferences();
@@ -242,40 +244,40 @@ function StopwatchPanel({ papers, subject, onSubject, onStage }: PanelProps) {
 
   return (
     <div className="focus-mode" style={focusColorStyle(profile.preferences.colors.stopwatch)}>
-      <section className="focus-dial-card" aria-label="Stopwatch">
-        <button type="button" className="focus-expand" onClick={onStage} aria-label="Full screen" title="Full screen (F)"><Maximize2 size={15} /></button>
+      <section className="focus-dial-card" aria-label={t.label}>
+        <button type="button" className="focus-expand" onClick={onStage} aria-label={view.fullScreen} title={view.fullScreenTitle}><Maximize2 size={15} /></button>
         <p className="focus-phase">
-          <span className="focus-phase-chip">{stopwatch?.clock.running ? "Running" : stopwatch ? "Paused" : "Stopwatch"}</span>
+          <span className="focus-phase-chip">{stopwatch?.clock.running ? t.running : stopwatch ? view.paused : t.label}</span>
           {stopwatch ? stopwatch.label ?? "" : subject}
         </p>
-        <Dial progress={(elapsed % 60_000) / 60_000} label={`Stopwatch: ${formatClock(elapsed)}`}>
+        <Dial progress={(elapsed % 60_000) / 60_000} label={t.dialLabel(formatClock(elapsed))}>
           <strong className="focus-time">
             {formatClock(elapsed)}
             {stopwatch ? <LiveElapsed since={stopwatch.clock.since} elapsed={stopwatch.clock.elapsed} running={stopwatch.clock.running} /> : <span className="focus-hundredths" aria-hidden="true">.00</span>}
           </strong>
-          <small>{laps.length ? `${laps.length} ${laps.length === 1 ? "lap" : "laps"}` : "Laps appear here"}</small>
+          <small>{laps.length ? t.laps(laps.length) : t.lapsAppear}</small>
         </Dial>
         <Controls>
           {!stopwatch || !stopwatch.clock.running ? (
-            <button type="button" className="focus-primary" onClick={() => (stopwatch ? actions.resumeStopwatch() : actions.startStopwatch(resolveSubject(subject, papers)))}><Play size={16} /> {stopwatch ? "Resume" : "Start"}</button>
+            <button type="button" className="focus-primary" onClick={() => (stopwatch ? actions.resumeStopwatch() : actions.startStopwatch(resolveSubject(subject, papers)))}><Play size={16} /> {stopwatch ? view.resume : view.start}</button>
           ) : (
-            <button type="button" className="focus-primary" onClick={actions.pauseStopwatch}><Pause size={16} /> Pause</button>
+            <button type="button" className="focus-primary" onClick={actions.pauseStopwatch}><Pause size={16} /> {view.pause}</button>
           )}
-          {stopwatch?.clock.running ? <button type="button" onClick={actions.lapStopwatch}><Flag size={15} /> Lap</button> : null}
-          {stopwatch ? <button type="button" onClick={actions.stopStopwatch}><RotateCcw size={15} /> Reset</button> : null}
+          {stopwatch?.clock.running ? <button type="button" onClick={actions.lapStopwatch}><Flag size={15} /> {t.lap}</button> : null}
+          {stopwatch ? <button type="button" onClick={actions.stopStopwatch}><RotateCcw size={15} /> {view.reset}</button> : null}
         </Controls>
-        <SubjectField label="Label" placeholder="What you are timing" value={subject} onChange={onSubject} active={stopwatch} papers={papers} />
+        <SubjectField label={view.label} placeholder={t.placeholder} value={subject} onChange={onSubject} active={stopwatch} papers={papers} />
       </section>
 
-      <section className="focus-settings" aria-label="Stopwatch laps and settings">
-        <h2>Laps</h2>
+      <section className="focus-settings" aria-label={t.settings}>
+        <h2>{t.heading}</h2>
         {laps.length ? (
           <table className="focus-laps">
-            <thead><tr><th scope="col">Lap</th><th scope="col">Lap time</th><th scope="col">Total</th></tr></thead>
+            <thead><tr><th scope="col">{t.lap}</th><th scope="col">{t.lapTime}</th><th scope="col">{t.total}</th></tr></thead>
             <tbody>
               {[...laps].reverse().map((lap) => (
                 <tr key={lap.lap} className={laps.length > 1 && lap.split === fastest ? "is-fastest" : laps.length > 1 && lap.split === slowest ? "is-slowest" : ""}>
-                  <td>{lap.lap}{laps.length > 1 && lap.split === fastest ? <small> fastest</small> : laps.length > 1 && lap.split === slowest ? <small> slowest</small> : null}</td>
+                  <td>{lap.lap}{laps.length > 1 && lap.split === fastest ? <small> {t.fastest}</small> : laps.length > 1 && lap.split === slowest ? <small> {t.slowest}</small> : null}</td>
                   <td>{lapClock(lap.split)}</td>
                   <td>{lapClock(lap.total)}</td>
                 </tr>
@@ -283,11 +285,11 @@ function StopwatchPanel({ papers, subject, onSubject, onStage }: PanelProps) {
             </tbody>
           </table>
         ) : (
-          <p className="focus-note">Press <strong>Lap</strong> while it runs to split the time: a chapter, a question, a problem.</p>
+          <p className="focus-note">{t.hintBefore}<strong>{t.lap}</strong>{t.hintAfter}</p>
         )}
-        <Toggle checked={profile.preferences.stopwatchCountsAsWork} onChange={(stopwatchCountsAsWork) => void setPreferences({ stopwatchCountsAsWork })} label="Count it as work time" hint="The time it runs is added to your work calendar." />
-        <h3>Colour</h3>
-        <ColorPicker label="Stopwatch colour" value={profile.preferences.colors.stopwatch} onChange={(color) => void setPreferences({ colors: { ...profile.preferences.colors, stopwatch: color } })} />
+        <Toggle checked={profile.preferences.stopwatchCountsAsWork} onChange={(stopwatchCountsAsWork) => void setPreferences({ stopwatchCountsAsWork })} label={view.countAsWork} hint={view.countAsWorkHint} />
+        <h3>{view.colour}</h3>
+        <ColorPicker label={t.colour} value={profile.preferences.colors.stopwatch} onChange={(color) => void setPreferences({ colors: { ...profile.preferences.colors, stopwatch: color } })} />
       </section>
     </div>
   );
@@ -298,24 +300,27 @@ function lapClock(ms: number) {
   return `${formatClock(ms)}.${String(Math.floor((ms % 1000) / 10)).padStart(2, "0")}`;
 }
 
-function repeatLabel(days: number[]) {
-  if (!days.length) return "Once";
-  if (days.length === 7) return "Every day";
+function repeatLabel(days: number[], t: Words["alarms"]) {
+  if (!days.length) return t.once;
+  if (days.length === 7) return t.everyDay;
   const sorted = [...days].sort().join(",");
-  if (sorted === "1,2,3,4,5") return "Weekdays";
-  if (sorted === "0,6") return "Weekends";
-  return [...days].sort((left, right) => ((left + 6) % 7) - ((right + 6) % 7)).map((day) => WEEKDAYS[day]).join(" ");
+  if (sorted === "1,2,3,4,5") return t.weekdays;
+  if (sorted === "0,6") return t.weekends;
+  return [...days].sort((left, right) => ((left + 6) % 7) - ((right + 6) % 7)).map((day) => t.dayShort[day]).join(" ");
 }
 
-function untilLabel(ms: number) {
+function untilLabel(ms: number, t: Words["alarms"]["until"]) {
   const minutes = Math.round(ms / 60_000);
-  if (minutes < 1) return "in less than a minute";
-  if (minutes < 60) return `in ${minutes} min`;
+  if (minutes < 1) return t.underAMinute;
+  if (minutes < 60) return t.minutes(minutes);
   const hours = Math.floor(minutes / 60);
-  return hours < 24 ? `in ${hours}h ${minutes % 60}m` : `in ${Math.round(hours / 24)} days`;
+  return hours < 24 ? t.hours(hours, minutes % 60) : t.days(Math.round(hours / 24));
 }
 
 function AlarmsPanel() {
+  const { common, focus: words } = useT();
+  const t = words.alarms;
+  const dayName = useMemo(() => new Intl.DateTimeFormat(common.locale, { weekday: "long" }), [common.locale]);
   const { profile, saveProfile } = useFocus();
   const now = useFocusClock();
   const [time, setTime] = useState("07:30");
@@ -335,8 +340,8 @@ function AlarmsPanel() {
 
   return (
     <div className="focus-mode focus-alarms" style={focusColorStyle(color)}>
-      <section className="focus-dial-card focus-alarm-form" aria-label="New alarm">
-        <h2>New alarm</h2>
+      <section className="focus-dial-card focus-alarm-form" aria-label={t.newAlarm}>
+        <h2>{t.newAlarm}</h2>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -351,31 +356,31 @@ function AlarmsPanel() {
           }}
         >
           <label className="focus-alarm-time">
-            <span>Time</span>
+            <span>{t.time}</span>
             <input type="time" required value={time} onChange={(event) => setTime(event.target.value)} />
           </label>
           <label className="focus-task">
-            <span>Label</span>
-            <input placeholder="Start reading, stand up, call home…" maxLength={80} value={label} onChange={(event) => setLabel(event.target.value)} />
+            <span>{words.view.label}</span>
+            <input placeholder={t.placeholder} maxLength={80} value={label} onChange={(event) => setLabel(event.target.value)} />
           </label>
           <fieldset className="focus-days">
-            <legend>Repeat</legend>
+            <legend>{t.repeat}</legend>
             {weekOrder.map((day) => (
-              <button key={day} type="button" aria-pressed={days.includes(day)} aria-label={new Intl.DateTimeFormat("en", { weekday: "long" }).format(new Date(2026, 0, 4 + day))} onClick={() => setDays((current) => (current.includes(day) ? current.filter((item) => item !== day) : [...current, day]))}>
-                {WEEKDAYS[day].slice(0, 2)}
+              <button key={day} type="button" aria-pressed={days.includes(day)} aria-label={dayName.format(new Date(2026, 0, 4 + day))} onClick={() => setDays((current) => (current.includes(day) ? current.filter((item) => item !== day) : [...current, day]))}>
+                {t.dayButton[day]}
               </button>
             ))}
-            <small>{days.length ? repeatLabel(days) : "No day chosen: it rings once."}</small>
+            <small>{days.length ? repeatLabel(days, t) : t.noDay}</small>
           </fieldset>
-          <h3>Colour</h3>
-          <ColorPicker label="Alarm colour" value={color} onChange={setColor} />
-          <button type="submit" className="focus-primary" disabled={profile.alarms.length >= MAX_ALARMS}><Plus size={16} /> Add the alarm</button>
-          {profile.alarms.length >= MAX_ALARMS ? <p className="focus-note">You have {MAX_ALARMS} alarms, the most there can be.</p> : null}
+          <h3>{words.view.colour}</h3>
+          <ColorPicker label={t.colour} value={color} onChange={setColor} />
+          <button type="submit" className="focus-primary" disabled={profile.alarms.length >= MAX_ALARMS}><Plus size={16} /> {t.add}</button>
+          {profile.alarms.length >= MAX_ALARMS ? <p className="focus-note">{t.full(MAX_ALARMS)}</p> : null}
         </form>
       </section>
 
-      <section className="focus-settings" aria-label="Your alarms">
-        <h2>Your alarms</h2>
+      <section className="focus-settings" aria-label={t.yours}>
+        <h2>{t.yours}</h2>
         {profile.alarms.length ? (
           <ul className="focus-alarm-list">
             {[...profile.alarms].sort((left, right) => left.time.localeCompare(right.time)).map((alarm) => {
@@ -385,19 +390,19 @@ function AlarmsPanel() {
                   <span className="focus-alarm-swatch" aria-hidden="true" />
                   <div>
                     <strong>{alarm.time}</strong>
-                    <span>{alarm.label || "Alarm"} · {repeatLabel(alarm.days)}{next ? ` · ${untilLabel(next - now)}` : ""}</span>
+                    <span>{alarm.label || t.alarm} · {repeatLabel(alarm.days, t)}{next ? ` · ${untilLabel(next - now, t.until)}` : ""}</span>
                   </div>
                   <button
                     type="button"
                     role="switch"
                     className="focus-switch"
                     aria-checked={alarm.enabled}
-                    aria-label={`Alarm at ${alarm.time}${alarm.label ? `, ${alarm.label}` : ""}`}
+                    aria-label={t.switchLabel(alarm.time, alarm.label)}
                     onClick={() => void saveAlarms(profile.alarms.map((item) => (item.id === alarm.id ? { ...item, enabled: !item.enabled } : item)))}
                   >
                     <span aria-hidden="true" />
                   </button>
-                  <button type="button" className="focus-icon-button" aria-label={`Delete the alarm at ${alarm.time}`} onClick={() => void saveAlarms(profile.alarms.filter((item) => item.id !== alarm.id))}>
+                  <button type="button" className="focus-icon-button" aria-label={t.delete(alarm.time)} onClick={() => void saveAlarms(profile.alarms.filter((item) => item.id !== alarm.id))}>
                     <Trash2 size={15} />
                   </button>
                 </li>
@@ -405,15 +410,15 @@ function AlarmsPanel() {
             })}
           </ul>
         ) : (
-          <p className="focus-note">No alarms yet. Add one to be called back to your desk, or to stop for the day.</p>
+          <p className="focus-note">{t.empty}</p>
         )}
         <p className="focus-note">
-          <Bell size={14} aria-hidden="true" /> Alarms ring while Trace is open in a browser tab, also in the background.
-          {permission === "granted" && profile.preferences.notifications ? " Desktop notifications are on." : null}
+          <Bell size={14} aria-hidden="true" /> {t.ringNote}
+          {permission === "granted" && profile.preferences.notifications ? ` ${t.notificationsOn}` : null}
         </p>
         {permission !== "unsupported" && !(permission === "granted" && profile.preferences.notifications) ? (
           <button type="button" className="focus-secondary" disabled={permission === "denied"} onClick={() => void enableNotifications()}>
-            {permission === "denied" ? "Notifications are blocked in this browser" : "Show desktop notifications too"}
+            {permission === "denied" ? t.blocked : t.enable}
           </button>
         ) : null}
       </section>
@@ -423,60 +428,69 @@ function AlarmsPanel() {
 
 /** Bugünün toplamı, hedef, haftanın günleri ve bugünkü oturumlar. */
 function TodayCard({ onProfile }: { onProfile: () => void }) {
+  const { common, focus: words } = useT();
+  const t = words.today;
   const { profile, log, liveIntervals } = useFocus();
   const now = useFocusClock();
   const { preferences } = profile;
   const totals = useMemo(() => dailyTotals(log, now ? liveIntervals(now) : []), [log, liveIntervals, now]);
-  if (!now) return <section className="focus-today" aria-label="Today" aria-busy="true" />;
+  // Gün adları ve saat arayüzün dilinde.
+  const { weekday, time } = useMemo(
+    () => ({
+      weekday: new Intl.DateTimeFormat(common.locale, { weekday: "short" }),
+      time: new Intl.DateTimeFormat(common.locale, { hour: "numeric", minute: "2-digit", hour12: preferences.clock === "12h" }),
+    }),
+    [common.locale, preferences.clock],
+  );
+  if (!now) return <section className="focus-today" aria-label={t.label} aria-busy="true" />;
   const today = new Date(now);
   const summary = workSummary(totals, today, { weekStart: preferences.weekStart, goalMinutes: preferences.dailyGoalMinutes });
   const goal = preferences.dailyGoalMinutes * 60;
   const weekStart = startOfWeek(today, preferences.weekStart);
   const week = Array.from({ length: 7 }, (_, index) => {
     const day = addDaysLocal(weekStart, index);
-    return { key: dayKey(day), label: new Intl.DateTimeFormat("en", { weekday: "short" }).format(day), seconds: totals.get(dayKey(day)) ?? 0 };
+    return { key: dayKey(day), label: weekday.format(day), seconds: totals.get(dayKey(day)) ?? 0 };
   });
   const most = Math.max(goal, ...week.map((day) => day.seconds));
   const todayKey = dayKey(today);
   const sessions = log.sessions.filter((session) => dayKey(new Date(session.start)) === todayKey || dayKey(new Date(session.end)) === todayKey).slice(-6).reverse();
-  const time = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", hour12: preferences.clock === "12h" });
 
   return (
-    <section className="focus-today" style={focusColorStyle(preferences.color)} aria-label="Today">
+    <section className="focus-today" style={focusColorStyle(preferences.color)} aria-label={t.label}>
       <div className="focus-today-head">
         <div>
-          <span>Today</span>
-          <strong>{formatDuration(summary.today)}</strong>
-          <small>of your {formatDuration(goal)} goal{summary.currentStreak > 1 ? ` · ${summary.currentStreak}-day streak` : ""}</small>
+          <span>{t.label}</span>
+          <strong>{words.duration(summary.today)}</strong>
+          <small>{t.ofGoal(words.duration(goal), summary.currentStreak)}</small>
         </div>
-        <button type="button" className="focus-secondary" onClick={onProfile}>Your calendar</button>
+        <button type="button" className="focus-secondary" onClick={onProfile}>{t.calendar}</button>
       </div>
-      <div className="focus-goal" role="progressbar" aria-label="Today’s goal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round((summary.today / goal) * 100))}>
+      <div className="focus-goal" role="progressbar" aria-label={t.goal} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round((summary.today / goal) * 100))}>
         <i style={{ width: `${Math.min(100, (summary.today / goal) * 100)}%` }} />
       </div>
-      <ul className="focus-week" aria-label="This week">
+      <ul className="focus-week" aria-label={t.week}>
         {week.map((day) => (
-          <li key={day.key} className={day.key === todayKey ? "is-today" : ""} aria-label={`${day.label}: ${formatDuration(day.seconds)}`}>
+          <li key={day.key} className={day.key === todayKey ? "is-today" : ""} aria-label={`${day.label}: ${words.duration(day.seconds)}`}>
             <span className="focus-week-bar" aria-hidden="true"><i style={{ height: `${Math.max(day.seconds ? 4 : 0, (day.seconds / most) * 100)}%` }} /></span>
             <small aria-hidden="true">{day.label}</small>
           </li>
         ))}
       </ul>
       {sessions.length ? (
-        <ul className="focus-sessions" aria-label="Today’s sessions">
+        <ul className="focus-sessions" aria-label={t.sessions}>
           {sessions.map((session) => (
             <li key={session.id}>
               <span>{time.format(new Date(session.start))}–{time.format(new Date(session.end))}</span>
               <span>
-                {session.label || SESSION_KIND_LABELS[session.kind]}
+                {session.label || words.sessionKinds[session.kind]}
                 {session.note ? <small className="focus-session-note">{session.note}</small> : null}
               </span>
-              <strong>{formatDuration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
+              <strong>{words.duration((Date.parse(session.end) - Date.parse(session.start)) / 1000)}</strong>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="focus-note">Your finished rounds show up here, and in the calendar on your profile.</p>
+        <p className="focus-note">{t.empty}</p>
       )}
     </section>
   );
@@ -487,6 +501,7 @@ function TodayCard({ onProfile }: { onProfile: () => void }) {
  * Tarayıcı izin verirse gerçekten tam ekran; vermezse sayfayı kaplayan bir katman.
  */
 function FocusStage({ tab, subject, papers, onClose, reviewWaiting, onReview }: { tab: Exclude<TimerMode, "alarm">; subject: string; papers: readonly Paper[]; onClose: () => void; reviewWaiting: number; onReview: () => void }) {
+  const { view, stage: t, timerPanel, stopwatchPanel } = useT().focus;
   const { profile, store, actions } = useFocus();
   const now = useFocusClock();
   const ref = useRef<HTMLDivElement>(null);
@@ -516,7 +531,7 @@ function FocusStage({ tab, subject, papers, onClose, reviewWaiting, onReview }: 
   if (tab === "focus") {
     const shown = focusDisplay(store.focus, profile, now);
     time = formatClock(shown.remaining, "up");
-    caption = shown.finished ? "All rounds done" : `${phaseTitle[shown.phase]} · Round ${shown.round}${profile.preferences.focus.rounds ? ` of ${profile.preferences.focus.rounds}` : ""}`;
+    caption = shown.finished ? t.allDone : t.caption(shown.phase, shown.round, profile.preferences.focus.rounds);
     progress = store.focus && !store.focus.finished ? 1 - shown.remaining / shown.total : 0;
     label = store.focus?.label ?? subject;
     running = shown.running;
@@ -524,14 +539,14 @@ function FocusStage({ tab, subject, papers, onClose, reviewWaiting, onReview }: 
     const timer = store.timer;
     const remaining = timer ? countdownRemaining(timer, now) : profile.preferences.timerSeconds * 1000;
     time = formatClock(remaining, "up");
-    caption = timer?.done ? "Time’s up" : "Timer";
+    caption = timer?.done ? timerPanel.timesUp : timerPanel.label;
     progress = timer ? 1 - remaining / timer.duration : 0;
     label = timer?.label ?? subject;
     running = Boolean(timer?.clock.running);
   } else {
     const stopwatch = store.stopwatch;
     time = formatClock(stopwatch ? elapsedOf(stopwatch.clock, now) : 0);
-    caption = "Stopwatch";
+    caption = stopwatchPanel.label;
     progress = stopwatch ? (elapsedOf(stopwatch.clock, now) % 60_000) / 60_000 : 0;
     label = stopwatch?.label ?? subject;
     running = Boolean(stopwatch?.clock.running);
@@ -545,7 +560,7 @@ function FocusStage({ tab, subject, papers, onClose, reviewWaiting, onReview }: 
       className="focus-stage"
       role="dialog"
       aria-modal="true"
-      aria-label="Full-screen timer"
+      aria-label={t.label}
       tabIndex={-1}
       style={focusColorStyle(color)}
       onKeyDown={(event) => {
@@ -557,14 +572,14 @@ function FocusStage({ tab, subject, papers, onClose, reviewWaiting, onReview }: 
       {label ? <p className="focus-stage-label">{label}</p> : null}
       <div className="focus-stage-bar" aria-hidden="true"><i style={{ width: `${Math.round(progress * 1000) / 10}%` }} /></div>
       <div className="focus-controls">
-        <button type="button" className="focus-primary" onClick={toggle}>{running ? <><Pause size={16} /> Pause</> : <><Play size={16} /> {tab === "focus" && store.focus && !store.focus.finished ? "Resume" : "Start"}</>}</button>
-        {tab === "focus" && store.focus && !store.focus.finished ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> Skip</button> : null}
-        <button type="button" onClick={onClose}><Minimize2 size={15} /> Leave full screen</button>
+        <button type="button" className="focus-primary" onClick={toggle}>{running ? <><Pause size={16} /> {view.pause}</> : <><Play size={16} /> {tab === "focus" && store.focus && !store.focus.finished ? view.resume : view.start}</>}</button>
+        {tab === "focus" && store.focus && !store.focus.finished ? <button type="button" onClick={actions.skipFocus}><SkipForward size={15} /> {t.skip}</button> : null}
+        <button type="button" onClick={onClose}><Minimize2 size={15} /> {t.leave}</button>
       </div>
       {tab === "focus" && reviewWaiting ? (
-        <button type="button" className="focus-stage-review" onClick={onReview}><Layers size={15} /> Review {reviewWaiting === 1 ? "1 card" : `${reviewWaiting} cards`} in this break</button>
+        <button type="button" className="focus-stage-review" onClick={onReview}><Layers size={15} /> {t.review(reviewWaiting)}</button>
       ) : null}
-      <small className="focus-stage-keys">Space to start or pause · Esc to leave</small>
+      <small className="focus-stage-keys">{t.keys}</small>
     </div>
   );
 }
@@ -597,6 +612,8 @@ const typing = (target: EventTarget | null) =>
  * Sayaçlar ekrandan çıkınca da sürüyor (`focus-provider.tsx`).
  */
 export function FocusView({ projects, backLabel, onBack, onProfile }: { projects: ResearchProject[]; backLabel: string; onBack: () => void; onProfile: () => void }) {
+  const words = useT().focus;
+  const t = words.view;
   const { profile, profileError, store, actions } = useFocus();
   const now = useFocusClock();
   const [subjects, setSubjects] = useState<Subjects>({ focus: "", timer: "", stopwatch: "" });
@@ -662,7 +679,7 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
       <header className="library-header">
         <button className="brand" onClick={onBack} aria-label={backLabel}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{words.brandTagline}</small></span>
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {backLabel}</button>
@@ -672,15 +689,15 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
       </header>
 
       <section className="compare-hero focus-hero">
-        <p className="landing-eyebrow"><span /> Focus</p>
-        <h1>{now ? greeting(now) : "Hello"}{firstName ? `, ${firstName}` : ""}.</h1>
-        <p>Work in rounds with breaks between them, time anything, and set alarms. Every minute you work is saved on this computer and shown in your calendar.</p>
+        <p className="landing-eyebrow"><span /> {t.eyebrow}</p>
+        <h1>{now ? t.greeting(new Date(now).getHours()) : t.hello}{firstName ? `, ${firstName}` : ""}.</h1>
+        <p>{t.intro}</p>
       </section>
       {profileError ? <p className="regen-error stats-note" role="alert">{profileError}</p> : null}
 
       <div className="focus-layout">
         <div>
-          <div className="focus-tabs" role="tablist" aria-label="Timers">
+          <div className="focus-tabs" role="tablist" aria-label={t.tablist}>
             {TABS.map((item) => {
               const Icon = item.icon;
               return (
@@ -694,7 +711,7 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
                   style={focusColorStyle(profile.preferences.colors[item.id])}
                   onClick={() => choose(item.id)}
                 >
-                  <Icon size={15} aria-hidden="true" /> {item.label}
+                  <Icon size={15} aria-hidden="true" /> {t.tabs[item.id]}
                 </button>
               );
             })}
@@ -713,7 +730,7 @@ export function FocusView({ projects, backLabel, onBack, onProfile }: { projects
           </div>
           <datalist id="focus-papers">{papers.map((paper) => <option key={paper.id} value={paper.title} />)}</datalist>
           <p className="focus-keys">
-            <kbd>Space</kbd> start or pause · <kbd>F</kbd> full screen · <kbd>S</kbd> skip · <kbd>L</kbd> lap · <kbd>1</kbd>–<kbd>4</kbd> switch timers
+            <kbd>Space</kbd> {t.keys.startPause} · <kbd>F</kbd> {t.keys.fullScreen} · <kbd>S</kbd> {t.keys.skip} · <kbd>L</kbd> {t.keys.lap} · <kbd>1</kbd>–<kbd>4</kbd> {t.keys.switchTimers}
           </p>
         </div>
         <TodayCard onProfile={onProfile} />

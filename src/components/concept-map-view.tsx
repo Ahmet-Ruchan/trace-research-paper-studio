@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, ListOrdered, Waypoints } from "lucide-react";
+import { useT } from "@/i18n/client";
 import { conceptKeys, libraryConceptIndex, sharedConcepts } from "@/lib/concept-links";
 import { mergeReadingOrder } from "@/lib/reading-list";
 import { readingOrder } from "@/lib/reading-order";
 import type { ResearchProject } from "@/lib/schema";
-import { studyStatusLabel } from "./concepts-view";
 import { ConceptAliasesPanel } from "./concept-aliases-panel";
 import { useConceptAliases, useLibraryStudy } from "./study-progress";
 import { StudioNav } from "./focus/studio-nav";
@@ -35,6 +35,8 @@ export function ConceptMapView({
   /** Kütüphanedeki "Reading list" düğmesinden: okuma sırasına kaydırılarak açılıyor. */
   focusReading?: boolean;
 }) {
+  const learning = useT().learning;
+  const t = learning.conceptMap;
   const study = useLibraryStudy();
   const aliases = useConceptAliases();
   const shared = useMemo(() => sharedConcepts(projects, study ?? new Map(), aliases.map), [projects, study, aliases.map]);
@@ -53,43 +55,35 @@ export function ConceptMapView({
   return (
     <main className="compare-page shared-concepts-page">
       <header className="library-header">
-        <button className="brand" onClick={onBack} aria-label="Back to the library">
+        <button className="brand" onClick={onBack} aria-label={learning.shell.backToLibrary}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{learning.shell.brandTagline}</small></span>
         </button>
         <div className="library-header-actions">
-          <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> Library</button>
+          <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {learning.shell.library}</button>
           <StudioNav />
         </div>
       </header>
 
       <section className="compare-hero">
-        <p className="landing-eyebrow"><span /> Concept map</p>
-        <h1>{shared.length ? `${shared.length} ${shared.length === 1 ? "concept connects" : "concepts connect"} your papers.` : "No concept connects two papers yet."}</h1>
+        <p className="landing-eyebrow"><span /> {t.eyebrow}</p>
+        <h1>{t.heading(shared.length)}</h1>
         <p>
-          The concepts more than one paper in your library explains, from their primers and glossaries, matched by name.
-          A check mark means you studied it in that paper. Spellings are compared loosely (case, hyphens, British and American
-          endings, plurals), never by meaning, so two names for one idea stay apart. {total} names in all.
+          {t.intro(total)}
         </p>
       </section>
 
       {/* Liste boşken de duruyor: Zotero'dan içe aktarma buradan başlıyor. */}
-        <section ref={readingRef} className="reading-order" aria-label="A reading order">
-          <div className="block-title"><ListOrdered size={16} /> A reading order</div>
+        <section ref={readingRef} className="reading-order" aria-label={t.orderTitle}>
+          <div className="block-title"><ListOrdered size={16} /> {t.orderTitle}</div>
           {!order.steps.length && !merged.others.length ? (
             <p>
-              Nothing to put in order yet. Papers in your library that define a concept another one assumes are ordered here,
-              and so are the works you save to read later: from a paper&rsquo;s citation graph, its concept suggestions, or all at
-              once from Zotero below.
+              {t.orderEmpty}
             </p>
           ) : (
           <p>
-            Each paper comes after the papers that define, in their glossary, a concept it assumes. Where nothing decides, the
-            older paper comes first. Papers you saved to read later take their place: before the paper that builds on them or
-            needs a concept they explain, after the paper they cite.{" "}
-            {order.unconnected
-              ? `${order.unconnected === 1 ? "One paper is" : `${order.unconnected} papers are`} not connected to the others this way and ${order.unconnected === 1 ? "is" : "are"} left out.`
-              : ""}
+            {t.orderNote}{" "}
+            {order.unconnected ? t.unconnected(order.unconnected) : ""}
           </p>
           )}
           {merged.entries.length ? (
@@ -109,19 +103,17 @@ export function ConceptMapView({
                     <div className="reading-head">
                       <button type="button" onClick={() => onOpen(step.project)}>{step.project.evidence.paper.title}</button>
                       <small>{step.project.evidence.paper.year}</small>
-                      {next ? <strong className="reading-next">Next</strong> : null}
-                      <span className="reading-status">{studyStatusLabel[step.status]}</span>
+                      {next ? <strong className="reading-next">{t.next}</strong> : null}
+                      <span className="reading-status">{learning.studyStatus[step.status]}</span>
                     </div>
                     {step.after.map((item) => (
                       <p key={item.project.id} className="reading-why">
-                        After <em>{item.project.evidence.paper.title}</em>: it assumes{" "}
-                        {item.concepts.map((concept) => concept.term).join(", ")}, which that paper defines.
+                        {t.after.before}<em>{item.project.evidence.paper.title}</em>{t.after.rest(item.concepts.map((concept) => concept.term).join(", "))}
                       </p>
                     ))}
                     {step.together.length ? (
                       <p className="reading-why">
-                        Read it alongside {step.together.map((item) => item.evidence.paper.title).join(" and ")}: each defines something
-                        the other assumes.
+                        {t.together(step.together.map((item) => item.evidence.paper.title))}
                       </p>
                     ) : null}
                   </li>
@@ -131,7 +123,7 @@ export function ConceptMapView({
           ) : null}
           {merged.others.length ? (
             <>
-              <h3 className="reading-others">{merged.entries.length ? "Also on your reading list" : "Your reading list"}</h3>
+              <h3 className="reading-others">{merged.entries.length ? t.alsoOnList : t.yourList}</h3>
               <ul className="reading-list">
                 {merged.others.map((place) => (
                   <li key={place.item.id} className="is-saved">
@@ -155,7 +147,7 @@ export function ConceptMapView({
               <div className="shared-concept-head">
                 <Waypoints size={15} aria-hidden="true" />
                 <strong>{concept.term}</strong>
-                <span>{concept.papers} papers</span>
+                <span>{t.papers(concept.papers)}</span>
               </div>
               <div className="shared-concept-papers">
                 {concept.sources.map((source) => {
@@ -170,8 +162,8 @@ export function ConceptMapView({
                     >
                       {source.knowledge?.studied ? "✓ " : ""}{source.paperTitle}
                       <small>
-                        {source.kind === "primer" ? "primer" : "glossary"}{source.year ? ` · ${source.year}` : ""}
-                        {otherName(concept.term, source.term) ? ` · as “${source.term}”` : ""}
+                        {source.kind === "primer" ? t.primer : t.glossary}{source.year ? ` · ${source.year}` : ""}
+                        {otherName(concept.term, source.term) ? t.as(source.term) : ""}
                       </small>
                     </button>
                   );
@@ -183,8 +175,8 @@ export function ConceptMapView({
       ) : (
         <section className="review-empty">
           <Waypoints size={22} aria-hidden="true" />
-          <p>Once two papers in your library explain the same concept, it appears here with both of them.</p>
-          <button onClick={onBack}>Library</button>
+          <p>{t.empty}</p>
+          <button onClick={onBack}>{learning.shell.library}</button>
         </section>
       )}
     </main>

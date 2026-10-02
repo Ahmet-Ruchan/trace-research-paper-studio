@@ -1,3 +1,4 @@
+import { stringsFor } from "../../visuals/i18n";
 import { renderToMathML } from "../../visuals/mathml";
 import type { ResearchProject } from "../schema";
 import { reportDocument, type ReportBlock } from "./report-document";
@@ -57,18 +58,19 @@ const STYLE = `
 `;
 
 export function buildPrintableReport(project: ResearchProject): string {
-  const title = escapeHtml(project.evidence.paper.title);
+  // Etiketler makalenin dilini izliyor: Türkçe makale → Türkçe, öteki → İngilizce.
+  const t = stringsFor(project.language);
   return `<!doctype html>
 <html lang="${escapeHtml(project.language)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${title} — Trace report</title>
+<title>${escapeHtml(t.printTitle(project.evidence.paper.title))}</title>
 <style>${STYLE}</style>
 </head>
 <body>
-<p class="print-hint" lang="en">To save this as a PDF, print the page (Ctrl/Cmd + P) and choose “Save as PDF”. This note is not printed.</p>
+<p class="print-hint" lang="${t.chrome}">${escapeHtml(t.printHint)}</p>
 ${reportDocument(project).map(render).join("\n")}
 </body>
 </html>

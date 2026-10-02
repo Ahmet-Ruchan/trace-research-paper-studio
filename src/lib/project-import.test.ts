@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { messagesFor } from "@/i18n/messages";
 import { loadExampleProject } from "./example-fixture";
-import { handoffAddress, MAX_PROJECT_BYTES, parseTraceProject, PROJECT_TOO_LARGE } from "./project-import";
+import { ENGLISH_PROJECT_IMPORT_WORDS, handoffAddress, MAX_PROJECT_BYTES, parseTraceProject, PROJECT_TOO_LARGE } from "./project-import";
 
 describe("a project coming into the studio", () => {
   it("parses a valid project and names what is wrong with an invalid one", () => {
@@ -23,5 +24,22 @@ describe("a project coming into the studio", () => {
       expect(() => handoffAddress(address, origin), address).toThrow("Imports are only accepted from an address on this machine.");
     }
     expect(() => handoffAddress("http://[bad", origin)).toThrow("The import address is not valid.");
+  });
+});
+
+describe("import errors in the reader's language", () => {
+  it("keeps the studio's English words identical to the module's own", () => {
+    const english = messagesFor("en").studio.projectImport;
+    const { invalidSchema, ...texts } = english;
+    const { invalidSchema: ownSchema, ...ownTexts } = ENGLISH_PROJECT_IMPORT_WORDS;
+    expect(texts).toEqual(ownTexts);
+    expect(invalidSchema("evidence", "Required")).toBe(ownSchema("evidence", "Required"));
+  });
+
+  it("explains a bad file or address in Turkish", () => {
+    const turkish = messagesFor("tr").studio.projectImport;
+    expect(() => parseTraceProject("{ nope", turkish)).toThrow("Dosya geçerli bir JSON değil.");
+    expect(() => parseTraceProject("[]", turkish)).toThrow(/^Trace proje şeması geçersiz: kök · /);
+    expect(() => handoffAddress("https://attacker.example/x.json", "http://127.0.0.1:3000", turkish)).toThrow("İçe aktarma yalnızca bu makinedeki bir adresten kabul ediliyor.");
   });
 });

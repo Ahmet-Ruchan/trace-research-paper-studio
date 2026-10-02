@@ -1,5 +1,7 @@
 import { MAX_REVISION_LABEL, revisionIdPattern } from "@/lib/project-revisions";
 import { createProjectRevision, listProjectRevisions, readProjectRevision } from "@/lib/trace-storage";
+import { serverText } from "@/lib/server/server-text";
+import { errorMessage } from "@/lib/user-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,18 +24,19 @@ function projectIdFrom(request: Request) {
  * revizyon olarak saklar. Geri yükleme de böylece geri alınabilir.
  */
 export async function GET(request: Request) {
+  const t = serverText(request);
   const projectId = projectIdFrom(request);
-  if (!projectId) return noStore({ error: "A project id is required." }, { status: 400 });
+  if (!projectId) return noStore({ error: t.request.projectIdRequired }, { status: 400 });
   const revision = new URL(request.url).searchParams.get("revision");
   try {
     if (!revision) return noStore({ revisions: await listProjectRevisions(projectId) });
-    if (!revisionIdPattern.test(revision)) return noStore({ error: "The revision id is not valid." }, { status: 400 });
+    if (!revisionIdPattern.test(revision)) return noStore({ error: t.revisions.idInvalid }, { status: 400 });
     const loaded = await readProjectRevision(projectId, revision);
-    if (!loaded) return noStore({ error: "That revision does not exist." }, { status: 404 });
+    if (!loaded) return noStore({ error: t.revisions.missing }, { status: 404 });
     return noStore({ revision: loaded.summary, project: loaded.project });
   } catch (error) {
     return noStore(
-      { error: error instanceof Error ? error.message : "The project history could not be read." },
+      { error: errorMessage(error, t.errors, t.revisions.readFailed) },
       { status: 500 },
     );
   }
@@ -41,18 +44,19 @@ export async function GET(request: Request) {
 
 /** Kaydedilmiş hâli elle bir sürüm olarak işaretler. Gövde: `{ "label"?: string }`. */
 export async function POST(request: Request) {
+  const t = serverText(request);
   const projectId = projectIdFrom(request);
-  if (!projectId) return noStore({ error: "A project id is required." }, { status: 400 });
+  if (!projectId) return noStore({ error: t.request.projectIdRequired }, { status: 400 });
   let label: string | undefined;
   try {
     const body = (await request.json().catch(() => ({}))) as { label?: unknown };
     label = typeof body.label === "string" ? body.label.slice(0, MAX_REVISION_LABEL) : undefined;
     const revision = await createProjectRevision(projectId, label);
-    if (!revision) return noStore({ error: "Save the project before marking a version." }, { status: 404 });
+    if (!revision) return noStore({ error: t.revisions.saveFirst }, { status: 404 });
     return noStore({ revision });
   } catch (error) {
     return noStore(
-      { error: error instanceof Error ? error.message : "The version could not be saved." },
+      { error: errorMessage(error, t.errors, t.revisions.saveFailed) },
       { status: 500 },
     );
   }

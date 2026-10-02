@@ -67,7 +67,7 @@ export function ViewerShell({
     technical: t.tabTechnical,
   };
   // Kanıttan üretilen okuma alıştırması öğrenme katmanı olmayan projede de var.
-  const drill = useMemo(() => readingDrillFor(project), [project]);
+  const drill = useMemo(() => readingDrillFor(project, t.drill), [project, t.drill]);
   const hasPractice = Boolean(
     project.primer || project.derivations?.length || project.interactives?.length || project.quiz || project.misreadings || project.applicationGuide || drill,
   );
@@ -133,14 +133,15 @@ export function ViewerShell({
   }
 
   useEffect(() => {
-    // Arayüz İngilizce; kök `lang` de öyle. Makale metninin dili tek tek
-    // içerik öğelerinde işaretlenir, kökte değil — kökü Türkçeye çekmek
-    // İngilizce başlıkları "TECHNİCAL" gibi bozardı.
-    document.documentElement.lang = "en";
+    // Kök `lang` etiketlerin dili: makale Türkçeyse Türkçe, değilse
+    // İngilizce (`stringsFor`). Makale metninin dili tek tek içerik
+    // öğelerinde işaretlenir, kökte değil: başka dilde bir makalede kökü
+    // içeriğe çekmek İngilizce başlıkların harf dönüşümünü bozardı.
+    document.documentElement.lang = t.chrome;
     document.title = `${project.story.title} · Trace`;
     const accent = /^#[0-9a-f]{6}$/i.test(project.story.accent) ? project.story.accent : "#e75b37";
     document.documentElement.style.setProperty("--accent", accent);
-  }, [project]);
+  }, [project, t.chrome]);
 
   return (
     <LanguageProvider language={project.language}>
@@ -357,7 +358,7 @@ function LabTab({ project }: { project: ResearchProject }) {
               className={claim.confidence === "needs-review" ? "is-review" : ""}
             >
               <span className="viewer-claim-kind">
-                {claim.kind}
+                {t.claimKindBadge[claim.kind]}
                 <PermalinkButton hash={claimHash(claim.id)} />
               </span>
               <p>{claim.statement}</p>
@@ -378,7 +379,7 @@ function LabTab({ project }: { project: ResearchProject }) {
           <p className="viewer-lead">{project.deepReport.dek}</p>
           {project.deepReport.sections.map((section) => (
             <article className="viewer-report-section" key={section.id}>
-              <span className="viewer-eyebrow">{section.kind}</span>
+              <span className="viewer-eyebrow">{t.reportKindBadge[section.kind]}</span>
               <h3>{section.title}</h3>
               <p className="viewer-summary">{section.summary}</p>
               <TermParagraphs paragraphs={section.analysis} entries={terms} />

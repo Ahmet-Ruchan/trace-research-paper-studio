@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { MessageSquareText } from "lucide-react";
 import { MAX_EXPLANATION_LENGTH, MIN_EXPLANATION_LENGTH, type ExplainTarget, type ExplanationFeedback } from "@/lib/explain-back";
 import {
@@ -12,15 +12,22 @@ import {
   recordExplanation,
   type ExplanationChange,
 } from "@/lib/explanation-history";
-import { getProvider } from "@/lib/model-providers";
+import { getProvider, localizedProvider } from "@/lib/model-providers";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyHandle } from "@/visuals/teaching/study";
 import { ModelKeyFields, useRememberedAssignment } from "./model-key-fields";
+import { useT } from "@/i18n/client";
 
 type Result = { feedback: ExplanationFeedback; coverage: { covered: number; total: number }; model: string; change?: ExplanationChange };
 
-const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
-const when = (at: string) => dateFormat.format(new Date(at));
+/** Tarih arayüzün dilinde: "1 Eki 2026 14:05". */
+function useWhen() {
+  const { locale } = useT().common;
+  return useMemo(() => {
+    const format = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+    return (at: string) => format.format(new Date(at));
+  }, [locale]);
+}
 
 /**
  * "Kendi cümlelerinle anlat" (bkz. `explain-back.ts`). Okuyucu bölümü
@@ -50,6 +57,10 @@ export function ExplainPanel({
   const [error, setError] = useState<string>();
   const [result, setResult] = useState<Result>();
   const [confirmForget, setConfirmForget] = useState(false);
+  const messages = useT();
+  const t = messages.paper.explain;
+  const { claimStatus } = messages.paper;
+  const when = useWhen();
   const provider = getProvider(assignment.provider)!;
   const length = text.trim().length;
   const history = study ? explanationHistory(study.progress, target) : [];
@@ -57,7 +68,7 @@ export function ExplainPanel({
 
   async function check() {
     if (busy || length < MIN_EXPLANATION_LENGTH) return;
-    if (!provider.local && !apiKey.trim()) return setError(`${provider.keyLabel} is required.`);
+    if (!provider.local && !apiKey.trim()) return setError(messages.paper.modelRequest.keyRequired(localizedProvider(provider, messages.studio.models.providers).keyLabel));
     setBusy(true);
     setError(undefined);
     try {
@@ -67,14 +78,14 @@ export function ExplainPanel({
         body: JSON.stringify({ project, target, text: text.trim(), assignment, apiKey: apiKey.trim() }),
       });
       const data = (await response.json().catch(() => undefined)) as (Result & { error?: string }) | undefined;
-      if (!response.ok || !data?.feedback) throw new Error(data?.error ?? "Your explanation could not be checked.");
+      if (!response.ok || !data?.feedback) throw new Error(data?.error ?? t.failed);
       const now = new Date().toISOString();
       const record = explanationRecord(project, target, text, data.feedback, data.coverage, data.model, now);
       const previous = history[0];
       setResult({ feedback: data.feedback, coverage: data.coverage, model: data.model, change: previous ? compareExplanations(previous, record) : undefined });
       study?.update((current) => recordExplanation(current, record, now));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Your explanation could not be checked.");
+      setError(caught instanceof Error ? caught.message : t.failed);
     } finally {
       setBusy(false);
     }
@@ -87,11 +98,11 @@ export function ExplainPanel({
     const label = (
       <>
         {found.statement}
-        <small>{found.sourceRefs[0]?.page ? `p. ${found.sourceRefs[0].page}` : "web"} · {found.confidence === "verified" ? "verified" : "needs review"}</small>
+        <small lang={messages.common.locale}>{found.sourceRefs[0]?.page ? messages.common.page(found.sourceRefs[0].page) : "web"} · {found.confidence === "verified" ? claimStatus.verifiedInline : claimStatus.needsReviewInline}</small>
       </>
     );
     return onClaimSelect ? (
-      <button type="button" onClick={() => onClaimSelect(id)} lang={project.language} title="Open the evidence for this claim">{label}</button>
+      <button type="button" onClick={() => onClaimSelect(id)} lang={project.language} title={claimStatus.openEvidence}>{label}</button>
     ) : (
       <span lang={project.language}>{label}</span>
     );
@@ -99,36 +110,32 @@ export function ExplainPanel({
 
   return (
     <details className="explain">
-      <summary><MessageSquareText size={15} aria-hidden="true" /> Explain it in your own words</summary>
+      <summary><MessageSquareText size={15} aria-hidden="true" /> {t.summary}</summary>
       <p className="explain-intro">
-        Write what this section says, as you would to a friend, without looking back. A model that sees only the collected
-        evidence (not the paper) says which of the section&apos;s claims you conveyed, what you left out and where you said
-        something the evidence does not. It is a model&apos;s reading, not a grade.{" "}
-        {study
-          ? "Each explanation you check is kept with your study progress (never in the project), so next time you see what you added."
-          : "Nothing is saved."}
+        {t.intro}{" "}
+        {study ? t.kept : t.nothingSaved}
       </p>
       <div className="explain-field">
         <textarea
-          aria-label="Your explanation"
+          aria-label={t.aria}
           value={text}
           maxLength={MAX_EXPLANATION_LENGTH}
           rows={5}
-          placeholder="In my own words: …"
+          placeholder={t.placeholder}
           onChange={(event) => setText(event.target.value)}
         />
-        <small className="regen-count">{length < MIN_EXPLANATION_LENGTH ? `${MIN_EXPLANATION_LENGTH - length} more characters` : `${text.length}/${MAX_EXPLANATION_LENGTH}`}</small>
+        <small className="regen-count">{length < MIN_EXPLANATION_LENGTH ? t.moreCharacters(MIN_EXPLANATION_LENGTH - length) : `${text.length}/${MAX_EXPLANATION_LENGTH}`}</small>
       </div>
       <ModelKeyFields assignment={assignment} onAssignment={choose} apiKey={apiKey} onApiKey={setApiKey} />
       <button type="button" className="regen-primary" disabled={busy || length < MIN_EXPLANATION_LENGTH} onClick={() => { void check(); }}>
-        {busy ? "Reading your explanation…" : "Check my explanation"}
+        {busy ? t.reading : t.check}
       </button>
       {error ? <p className="regen-error" role="alert">{error}</p> : null}
 
       {result ? (
-        <section className="explain-result" aria-live="polite" aria-label="How your explanation compares with the evidence">
+        <section className="explain-result" aria-live="polite" aria-label={t.resultAria}>
           <p className="explain-coverage">
-            <strong>{result.coverage.covered} of {result.coverage.total}</strong> claims this section rests on are in your explanation.
+            {t.coverageBefore}<strong>{t.coverage(result.coverage.covered, result.coverage.total)}</strong>{t.coverageAfter}
           </p>
           <p className="explain-summary" lang={project.language}>{result.feedback.summary}</p>
 
@@ -136,7 +143,7 @@ export function ExplainPanel({
 
           {result.feedback.covered.length ? (
             <div className="explain-group is-covered">
-              <h5>What you conveyed</h5>
+              <h5>{t.conveyed}</h5>
               <ul className="ask-claims">
                 {result.feedback.covered.map((item) => (
                   <li key={item.claimId}>
@@ -150,7 +157,7 @@ export function ExplainPanel({
 
           {result.feedback.missed.length ? (
             <div className="explain-group is-missed">
-              <h5>What you left out</h5>
+              <h5>{t.leftOut}</h5>
               <ul className="ask-claims">
                 {result.feedback.missed.map((item) => (
                   <li key={item.claimId}>
@@ -164,7 +171,7 @@ export function ExplainPanel({
 
           {result.feedback.misstated.length ? (
             <div className="explain-group is-misstated">
-              <h5>Where the evidence says otherwise</h5>
+              <h5>{t.misstated}</h5>
               <ul className="ask-claims">
                 {result.feedback.misstated.map((item, index) => (
                   <li key={`${item.claimId}-${index}`}>
@@ -179,7 +186,7 @@ export function ExplainPanel({
 
           {result.feedback.unsupported.length ? (
             <div className="explain-group is-unsupported">
-              <h5>Not in the collected evidence</h5>
+              <h5>{t.unsupported}</h5>
               <ul className="ask-claims">
                 {result.feedback.unsupported.map((item, index) => (
                   <li key={index}>
@@ -191,33 +198,33 @@ export function ExplainPanel({
             </div>
           ) : null}
 
-          <small className="ask-model">Checked by {result.model} against the evidence only; it has not read the paper.</small>
+          <small className="ask-model">{t.checkedBy(result.model)}</small>
         </section>
       ) : null}
 
       {history.length ? (
         <details className="explain-history">
-          <summary>Your earlier explanations ({history.length})</summary>
+          <summary>{t.earlier(history.length)}</summary>
           <ol>
             {history.map((item) => (
               <li key={item.at}>
                 <p className="explain-history-meta">
-                  <strong>{when(item.at)}</strong> · conveyed {item.covered.length} of {item.total} claims
-                  {item.misstated ? ` · ${item.misstated} said otherwise` : ""}
-                  {item.sig !== signature ? " · for an earlier version of this section" : ""}
+                  <strong>{when(item.at)}</strong>{t.historyConveyed(item.covered.length, item.total)}
+                  {item.misstated ? t.historyMisstated(item.misstated) : ""}
+                  {item.sig !== signature ? t.historyEarlierVersion : ""}
                 </p>
                 <blockquote className="explain-history-text">{item.text}</blockquote>
               </li>
             ))}
           </ol>
           {confirmForget ? (
-            <p className="explain-forget" role="group" aria-label="Forget these explanations">
-              Forget {history.length === 1 ? "this explanation" : `these ${history.length} explanations`}?{" "}
-              <button type="button" onClick={() => { study?.update((current) => forgetExplanations(current, target, new Date().toISOString())); setConfirmForget(false); }}>Forget</button>
-              <button type="button" onClick={() => setConfirmForget(false)}>Keep</button>
+            <p className="explain-forget" role="group" aria-label={t.forgetAria}>
+              {t.forgetQuestion(history.length)}{" "}
+              <button type="button" onClick={() => { study?.update((current) => forgetExplanations(current, target, new Date().toISOString())); setConfirmForget(false); }}>{t.forget}</button>
+              <button type="button" onClick={() => setConfirmForget(false)}>{t.keep}</button>
             </p>
           ) : (
-            <button type="button" className="explain-forget-open" onClick={() => setConfirmForget(true)}>Forget these</button>
+            <button type="button" className="explain-forget-open" onClick={() => setConfirmForget(true)}>{t.forgetThese}</button>
           )}
         </details>
       ) : null}
@@ -227,22 +234,24 @@ export function ExplainPanel({
 
 /** Önceki anlatıştan bu yana: ne eklendi, ne düştü, ne hâlâ eksik. Kod karşılaştırıyor, model değil. */
 function ChangeSince({ change, claimButton }: { change: ExplanationChange; claimButton: (id: string) => ReactNode }) {
+  const t = useT().paper.explain;
+  const when = useWhen();
   const list = (ids: string[]) => (
     <ul className="ask-claims">
       {ids.map((id) => <li key={id}>{claimButton(id)}</li>)}
     </ul>
   );
   return (
-    <section className="explain-change" aria-label="Since your last explanation">
-      <h5>Since your explanation on {when(change.previous.at)}</h5>
+    <section className="explain-change" aria-label={t.sinceAria}>
+      <h5>{t.since(when(change.previous.at))}</h5>
       <p className="explain-change-coverage">
-        {change.before.covered} of {change.before.total} → <strong>{change.after.covered} of {change.after.total}</strong> claims conveyed.
-        {change.sameSection ? "" : " The section was rewritten since then, so the claims it rests on may differ."}
+        {t.changeBefore(change.before.covered, change.before.total)}<strong>{t.changeAfter(change.after.covered, change.after.total)}</strong>{t.changeTail}
+        {change.sameSection ? "" : t.rewritten}
       </p>
-      {change.gained.length ? <div className="explain-group is-covered"><h5>Conveyed this time, not last time</h5>{list(change.gained)}</div> : null}
-      {change.lost.length ? <div className="explain-group is-missed"><h5>Conveyed last time, not this time</h5>{list(change.lost)}</div> : null}
-      {change.stillMissed.length ? <div className="explain-group is-missed"><h5>Left out both times</h5>{list(change.stillMissed)}</div> : null}
-      {!change.gained.length && !change.lost.length ? <p className="explain-note">The same claims as last time.</p> : null}
+      {change.gained.length ? <div className="explain-group is-covered"><h5>{t.gained}</h5>{list(change.gained)}</div> : null}
+      {change.lost.length ? <div className="explain-group is-missed"><h5>{t.lost}</h5>{list(change.lost)}</div> : null}
+      {change.stillMissed.length ? <div className="explain-group is-missed"><h5>{t.stillMissed}</h5>{list(change.stillMissed)}</div> : null}
+      {!change.gained.length && !change.lost.length ? <p className="explain-note">{t.same}</p> : null}
     </section>
   );
 }

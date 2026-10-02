@@ -229,8 +229,17 @@ export function emptyStudyProgress(now: string): StudyProgress {
   return { version: 1, done: [], answers: [], startedAt: now, updatedAt: now };
 }
 
-export function questionSignature(question: Pick<QuizQuestion, "prompt" | "options">) {
-  return stableHash(canonicalJson({ prompt: question.prompt, options: question.options }));
+/** Sorunun mühürlenen metni. */
+export type SignatureBasis = Pick<QuizQuestion, "prompt" | "options">;
+
+/**
+ * Sorunun mührü: soru değişince kayıtlı yanıtı ve tekrar kartı düşüyor. Arayüzün
+ * diline çevrilen bir soru (okuma alıştırması) İngilizcesiyle mühürleniyor
+ * (`signatureBasis`); dil değişmek soruyu değiştirmiş sayılmıyor.
+ */
+export function questionSignature(question: SignatureBasis & { signatureBasis?: SignatureBasis }) {
+  const basis = question.signatureBasis ?? question;
+  return stableHash(canonicalJson({ prompt: basis.prompt, options: basis.options }));
 }
 
 /** Kayıtlı yanıt, yalnızca soru o yanıttan beri değişmediyse. */

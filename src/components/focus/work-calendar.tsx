@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useT } from "@/i18n/client";
 import { focusColorStyle, type FocusColorId } from "@/lib/focus-colors";
-import { addDaysLocal, dayDate, dayKey, formatDuration, heatmap, type HeatCell } from "@/lib/work-log";
-
-const dateFormat = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-const weekdayFormat = new Intl.DateTimeFormat("en", { weekday: "short" });
+import { addDaysLocal, dayDate, dayKey, heatmap, type HeatCell } from "@/lib/work-log";
 
 export type CalendarRange = "recent" | number;
 
@@ -38,9 +36,20 @@ export function WorkCalendar({
   selected?: string;
   onSelect: (day: string) => void;
 }) {
+  const { common, focus } = useT();
+  const t = focus.calendar;
+  const locale = common.locale;
+  // Tarih ve gün adları arayüzün dilinde.
+  const { dateFormat, weekdayFormat } = useMemo(
+    () => ({
+      dateFormat: new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+      weekdayFormat: new Intl.DateTimeFormat(locale, { weekday: "short" }),
+    }),
+    [locale],
+  );
   const todayKey = dayKey(today);
   const { from, to } = useMemo(() => rangeDates(range, dayDate(todayKey)), [range, todayKey]);
-  const map = useMemo(() => heatmap(totals, { from, to, today: dayDate(todayKey), weekStart, goalMinutes }), [totals, from, to, todayKey, weekStart, goalMinutes]);
+  const map = useMemo(() => heatmap(totals, { from, to, today: dayDate(todayKey), weekStart, goalMinutes, locale }), [totals, from, to, todayKey, weekStart, goalMinutes, locale]);
   const grid = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   // Dar ekranda takvim kayıyor: en yeni haftalar görünsün, bir yıl önce değil.
@@ -66,7 +75,7 @@ export function WorkCalendar({
   return (
     <div className="work-calendar" style={focusColorStyle(color)}>
       <div className="work-calendar-scroll" ref={scroller}>
-        <div className="work-calendar-grid" ref={grid} style={{ gridTemplateColumns: `2.4rem repeat(${map.weeks.length}, var(--cell))` }} role="group" aria-label="Work calendar, one square per day">
+        <div className="work-calendar-grid" ref={grid} style={{ gridTemplateColumns: `2.4rem repeat(${map.weeks.length}, var(--cell))` }} role="group" aria-label={t.grid}>
           <span className="work-calendar-corner" aria-hidden="true" />
           {map.weeks.map((_, week) => {
             const month = map.months.find((item) => item.week === week);
@@ -77,7 +86,7 @@ export function WorkCalendar({
               {map.weeks.map((week, column) => {
                 const cell = week[row];
                 if (!cell) return <span key={`${column}-${row}`} className="work-cell is-empty" aria-hidden="true" />;
-                const spoken = `${cell.future ? "Not yet: " : cell.seconds ? `${formatDuration(cell.seconds)} on ` : "Nothing on "}${dateFormat.format(dayDate(cell.day))}`;
+                const spoken = t.day(dateFormat.format(dayDate(cell.day)), cell.seconds ? focus.duration(cell.seconds) : undefined, cell.future);
                 return (
                   <button
                     key={cell.day}
@@ -99,11 +108,11 @@ export function WorkCalendar({
         </div>
       </div>
       <div className="work-calendar-legend">
-        <span>{formatDuration(map.total)} over {map.activeDays} {map.activeDays === 1 ? "day" : "days"}</span>
-        <span className="work-calendar-scale" aria-label="Lighter squares mean less time; the darkest means the daily goal was met">
-          Less
+        <span>{t.total(focus.duration(map.total), map.activeDays)}</span>
+        <span className="work-calendar-scale" aria-label={t.scale}>
+          {t.less}
           {[0, 1, 2, 3, 4].map((level) => <i key={level} className={`work-cell level-${level}`} aria-hidden="true" />)}
-          Goal met
+          {t.goalMet}
         </span>
       </div>
     </div>

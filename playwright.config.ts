@@ -60,6 +60,9 @@ export default defineConfig({
     serviceWorkers: "block",
     ...devices["Desktop Chrome"],
     viewport: { width: 1480, height: 860 },
+    // Arayüz tarayıcının diline göre açılıyor (`src/i18n`); testler İngilizce arayüzü seçiyor,
+    // Türkçe olanlar dili kendisi değiştiriyor.
+    locale: "en-US",
   },
   webServer: Array.from({ length: WORKERS }, (_, index) => ({
     // Uzun boşta bekleme: sunucu boştaki bağlantıyı tam testin yeniden kullandığı anda kapatınca

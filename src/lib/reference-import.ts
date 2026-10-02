@@ -315,16 +315,24 @@ export function detectFormat(name: string, text: string): ImportFormat | undefin
   return undefined;
 }
 
-export function parseReferenceFile(name: string, text: string): ParsedReferences {
-  if (text.length > MAX_REFERENCE_FILE) throw new Error("The file is larger than 5 MB.");
+/** Dosya okunamadığında okuyucuya söylenen; Türkçesi arayüz sözlüğünde (`learning`). Biçim adları (BibTeX…) çevrilmiyor. */
+export type ReferenceImportWords = { tooLarge: string; unknownFormat: string; unreadable: (format: string) => string };
+export const REFERENCE_IMPORT_WORDS: ReferenceImportWords = {
+  tooLarge: "The file is larger than 5 MB.",
+  unknownFormat: "This is not a BibTeX, RIS or CSL JSON file. In Zotero, use Export Collection… and choose one of those formats.",
+  unreadable: (format) => `The ${format} file could not be read.`,
+};
+
+export function parseReferenceFile(name: string, text: string, words: ReferenceImportWords = REFERENCE_IMPORT_WORDS): ParsedReferences {
+  if (text.length > MAX_REFERENCE_FILE) throw new Error(words.tooLarge);
   const format = detectFormat(name, text);
-  if (!format) throw new Error("This is not a BibTeX, RIS or CSL JSON file. In Zotero, use Export Collection… and choose one of those formats.");
+  if (!format) throw new Error(words.unknownFormat);
   try {
     if (format === "bibtex") return parseBibtex(text);
     if (format === "ris") return parseRis(text);
     return parseCslJson(text);
   } catch {
-    throw new Error(`The ${FORMAT_LABELS[format]} file could not be read.`);
+    throw new Error(words.unreadable(FORMAT_LABELS[format]));
   }
 }
 

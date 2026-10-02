@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useT } from "@/i18n/client";
+import type { Messages } from "@/i18n/messages";
 import type { FocusColorId } from "@/lib/focus-colors";
 import {
   advanceCountdown,
@@ -34,9 +36,9 @@ import {
   type TimerEvent,
 } from "@/lib/focus-timer";
 import { emptyProfile, WORK_DATA_KIND, type Alarm, type Profile } from "@/lib/profile";
-import { describeBackupImport, type BackupSummary } from "@/lib/full-backup";
-import { lastWeekSummary, weekSummaryText } from "@/lib/work-export";
-import { addSessions, emptyWorkLog, formatClock, formatDuration, MAX_SESSION_NOTE, removeSession, roundSession, sessionPieces, type ReviewBlock, type WorkLog, type WorkSession } from "@/lib/work-log";
+import type { BackupSummary } from "@/lib/full-backup";
+import { lastWeekSummary, weekSummaryText, type WeekSummary } from "@/lib/work-export";
+import { addSessions, emptyWorkLog, formatClock, MAX_SESSION_NOTE, removeSession, roundSession, sessionPieces, type ReviewBlock, type WorkLog, type WorkSession } from "@/lib/work-log";
 import { playSound, setAmbient, stopAmbient, unlockAudio } from "./focus-sound";
 
 /**
@@ -84,7 +86,25 @@ export type FocusAlert = {
   resume?: "focus" | "timer" | "stopwatch";
   /** Biten odak turunun bitiş anı: bildirimde "ne yaptın?" notu o turun oturumuna yazılıyor. */
   roundEnd?: number;
+  /** Ne söylendiği; varsa kart metni bundan, gösterildiği anın dilinde (`alertCopy`). */
+  message?: AlertMessage;
 };
+
+/**
+ * Bildirimin söylediği, metinden ayrı. Başlık ve gövde bildirim çaldığı anın
+ * dilinde yazılıp saklanıyor (masaüstü bildirimi onları gösteriyor); ekrandaki
+ * kart dil değişince yeni dille yeniden yazılıyor.
+ */
+export type AlertMessage =
+  | { type: "all-done"; rounds: number; focusSeconds: number }
+  | { type: "break-started"; round?: number; minutes: number; phase: "short" | "long" }
+  | { type: "round-done"; minutes: number; phase: "short" | "long" }
+  | { type: "back-to-focus"; round: number }
+  | { type: "break-over"; round: number }
+  | { type: "timer-done"; label?: string }
+  | { type: "paused"; timer: "focus" | "timer" | "stopwatch"; at: number; clock: "24h" | "12h" }
+  | { type: "alarm"; at: number; label?: string; clock: "24h" | "12h" }
+  | { type: "week"; summary: WeekSummary };
 
 export type FocusStore = {
   version: 1;
@@ -186,12 +206,38 @@ export function useFocusClock() {
 
 const withoutAlerts = (current: FocusStore, kinds: FocusAlert["kind"][]) => ({ ...current, alerts: current.alerts.filter((alert) => !kinds.includes(alert.kind)) });
 
-const clockTime = (at: number, clock: "24h" | "12h") =>
-  new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", hour12: clock === "12h" }).format(at);
+const clockTime = (at: number, clock: "24h" | "12h", locale: string) =>
+  new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: clock === "12h" }).format(at);
 
-const phaseName = { work: "focus", short: "short break", long: "long break" } as const;
+/** Bildirimin başlığı, gövdesi ve (varsayılandan farklıysa) düğmesi, verilen dilde. */
+export function alertCopy(message: AlertMessage, messages: Messages): Pick<FocusAlert, "title" | "body" | "actionLabel"> {
+  const t = messages.focus.alerts;
+  switch (message.type) {
+    case "all-done":
+      return { title: t.allDone, body: t.allDoneBody(message.rounds, messages.focus.duration(message.focusSeconds)) };
+    case "break-started":
+      return { title: t.breakStarted, body: t.breakStartedBody(message.round, message.minutes, message.phase) };
+    case "round-done":
+      return { title: t.roundDone, body: t.roundDoneBody(message.minutes, message.phase), actionLabel: t.startBreak };
+    case "back-to-focus":
+      return { title: t.backToFocus, body: t.backToFocusBody(message.round) };
+    case "break-over":
+      return { title: t.breakOver, body: t.breakOverBody(message.round), actionLabel: t.startFocus };
+    case "timer-done":
+      return { title: t.timesUp, body: message.label || t.timerDone };
+    case "paused":
+      return { title: t.paused[message.timer], body: t.pausedBody(clockTime(message.at, message.clock, messages.common.locale)) };
+    case "alarm":
+      return { title: `${clockTime(message.at, message.clock, messages.common.locale)}${message.label ? ` · ${message.label}` : ""}`, body: message.label ? t.alarmRinging : t.alarm };
+    case "week":
+      return { title: t.week, body: weekSummaryText(message.summary, messages.focus.weekSummary), actionLabel: t.weekReport };
+  }
+}
 
-function alertFor(event: TimerEvent, store: FocusStore, profile: Profile, now: number): FocusAlert | undefined {
+/** İleti ve onun o anki dildeki metni. */
+const said = (message: AlertMessage, messages: Messages) => ({ message, ...alertCopy(message, messages) });
+
+function alertFor(event: TimerEvent, store: FocusStore, profile: Profile, now: number, messages: Messages): FocusAlert | undefined {
   const { preferences } = profile;
   const base = { id: `${event.type}-${event.at}`, at: event.at };
   const ring = now + RING_FOR_MS;
@@ -200,29 +246,27 @@ function alertFor(event: TimerEvent, store: FocusStore, profile: Profile, now: n
     const minutes = (phase: "short" | "long") => (phase === "short" ? preferences.focus.shortBreak : preferences.focus.longBreak);
     if (event.to === "done") {
       const rounds = focus?.completed ?? 0;
-      return { ...base, kind: "done", title: "All rounds done", body: `${rounds} ${rounds === 1 ? "round" : "rounds"}, ${formatDuration(rounds * preferences.focus.work * 60)} of focus. Well done.`, color: preferences.colors.focus, ringUntil: ring, action: "restart", roundEnd: event.at };
+      return { ...base, kind: "done", ...said({ type: "all-done", rounds, focusSeconds: rounds * preferences.focus.work * 60 }, messages), color: preferences.colors.focus, ringUntil: ring, action: "restart", roundEnd: event.at };
     }
     if (event.from === "work") {
       const to = event.to as "short" | "long";
       return event.autoStarted
-        ? { ...base, kind: "phase", title: "Time for a break", body: `Focus round ${focus?.completed ?? ""} done. Your ${minutes(to)}-minute ${phaseName[to]} has started.`, color: preferences.colors.focus, ringUntil: ring, action: "skip-break", roundEnd: event.at }
-        : { ...base, kind: "phase", title: "Focus round done", body: `Start your ${minutes(to)}-minute ${phaseName[to]} when you are ready.`, color: preferences.colors.focus, ringUntil: ring, action: "start-next", actionLabel: "Start the break", roundEnd: event.at };
+        ? { ...base, kind: "phase", ...said({ type: "break-started", round: focus?.completed, minutes: minutes(to), phase: to }, messages), color: preferences.colors.focus, ringUntil: ring, action: "skip-break", roundEnd: event.at }
+        : { ...base, kind: "phase", ...said({ type: "round-done", minutes: minutes(to), phase: to }, messages), color: preferences.colors.focus, ringUntil: ring, action: "start-next", roundEnd: event.at };
     }
     const round = (focus?.completed ?? 0) + 1;
     return event.autoStarted
-      ? { ...base, kind: "phase", title: "Back to focus", body: `Round ${round} has started.`, color: preferences.colors.focus, ringUntil: ring }
-      : { ...base, kind: "phase", title: "Break is over", body: `Start round ${round} when you are ready.`, color: preferences.colors.focus, ringUntil: ring, action: "start-next", actionLabel: "Start focus" };
+      ? { ...base, kind: "phase", ...said({ type: "back-to-focus", round }, messages), color: preferences.colors.focus, ringUntil: ring }
+      : { ...base, kind: "phase", ...said({ type: "break-over", round }, messages), color: preferences.colors.focus, ringUntil: ring, action: "start-next" };
   }
   if (event.type === "countdown-end") {
-    return { ...base, kind: "timer", title: "Time’s up", body: event.label || "Your timer has finished.", color: preferences.colors.timer, ringUntil: ring, action: "extend" };
+    return { ...base, kind: "timer", ...said({ type: "timer-done", ...(event.label ? { label: event.label } : {}) }, messages), color: preferences.colors.timer, ringUntil: ring, action: "extend" };
   }
-  const names = { focus: "focus timer", timer: "timer", stopwatch: "stopwatch" } as const;
   return {
     id: `interrupted-${event.timer}-${event.at}`,
     at: event.at,
     kind: "notice",
-    title: `Your ${names[event.timer]} was paused`,
-    body: `Trace was closed or the computer was asleep. The time up to ${clockTime(event.at, preferences.clock)} is saved; nothing after it was counted.`,
+    ...said({ type: "paused", timer: event.timer, at: event.at, clock: preferences.clock }, messages),
     color: preferences.colors[event.timer],
     ringUntil: 0,
     action: "resume",
@@ -230,13 +274,12 @@ function alertFor(event: TimerEvent, store: FocusStore, profile: Profile, now: n
   };
 }
 
-function alarmAlert(alarm: Alarm, at: number, now: number, clock: "24h" | "12h"): FocusAlert {
+function alarmAlert(alarm: Alarm, at: number, now: number, clock: "24h" | "12h", messages: Messages): FocusAlert {
   return {
     id: `alarm-${alarm.id}-${at}`,
     at,
     kind: "alarm",
-    title: `${clockTime(at, clock)}${alarm.label ? ` · ${alarm.label}` : ""}`,
-    body: alarm.label ? "Your alarm is ringing." : "Alarm",
+    ...said({ type: "alarm", at, clock, ...(alarm.label ? { label: alarm.label } : {}) }, messages),
     color: alarm.color,
     ringUntil: now + RING_FOR_MS,
     action: "snooze",
@@ -255,6 +298,12 @@ function notify(alert: FocusAlert, profile: Profile) {
 }
 
 export function FocusProvider({ children }: { children: ReactNode }) {
+  // Bildirimler ve hatalar zamanlayıcının içinden yazılıyor: o anki dil bir ref'te.
+  const messages = useT();
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [profile, setProfile] = useState<Profile>(() => emptyProfile(new Date(0).toISOString()));
   const [profileReady, setProfileReady] = useState(false);
   const [profileError, setProfileError] = useState<string>();
@@ -290,17 +339,27 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     profileRef.current = profile;
   }, [profile]);
 
-  /** Sunucuya yazılamamış oturumları gönderir; başaramazsa bir sonraki denemeye kalıyor. */
+  /**
+   * Sunucuya yazılamamış oturumları gönderir; başaramazsa bir sonraki denemeye kalıyor.
+   *
+   * Gönderilenin kendisi listeden düşüyor, kimliği değil: istek yoldayken uzayan bir oturum
+   * (aynı kimlik, yeni bitiş) listede kalıyor ve hemen ardından gidiyor. Eskiden kimliğe göre
+   * siliniyordu; uzayan hâl gönderilmeden düşüyor, tekrar ya da çalışma süresi kayboluyordu.
+   */
   const flush = useCallback(async () => {
-    const pending = storeRef.current.pending;
-    if (!pending.length || flushing.current) return;
+    if (!storeRef.current.pending.length || flushing.current) return;
     flushing.current = true;
-    lastFlush.current = Date.now();
     try {
-      const response = await fetch("/api/profile/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessions: pending.slice(0, 500) }) });
-      const sent = new Set(pending.slice(0, 500).map((session) => session.id));
-      // 400: geçersiz bir oturum (ör. saati çok ileri bir sekme) sonsuza kadar denenmesin.
-      if (response.ok || response.status === 400) commit({ ...storeRef.current, pending: storeRef.current.pending.filter((session) => !sent.has(session.id)) });
+      for (let round = 0; round < 5 && storeRef.current.pending.length; round += 1) {
+        lastFlush.current = Date.now();
+        const batch = storeRef.current.pending.slice(0, 500);
+        const response = await fetch("/api/profile/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessions: batch }) });
+        // 400: geçersiz bir oturum (ör. saati çok ileri bir sekme) sonsuza kadar denenmesin.
+        if (!response.ok && response.status !== 400) break;
+        const sent = new Set(batch);
+        commit({ ...storeRef.current, pending: storeRef.current.pending.filter((session) => !sent.has(session)) });
+        if (!response.ok) break;
+      }
     } catch {
       // Sunucu kapalı: oturumlar bekleme listesinde, sonra yeniden deneniyor.
     } finally {
@@ -351,7 +410,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     const run = saving.current.then(async () => {
       const response = await fetch("/api/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: next }) });
       const data = (await response.json().catch(() => undefined)) as { profile?: Profile; error?: string } | undefined;
-      if (!response.ok || !data?.profile) throw new Error(data?.error ?? "Your profile could not be saved.");
+      if (!response.ok || !data?.profile) throw new Error(data?.error ?? messagesRef.current.focus.provider.profileNotSaved);
       return data.profile;
     });
     saving.current = run.catch(() => undefined);
@@ -365,7 +424,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       setProfileError(undefined);
       return true;
     } catch (caught) {
-      setProfileError(caught instanceof Error ? caught.message : "Your profile could not be saved.");
+      setProfileError(caught instanceof Error ? caught.message : messagesRef.current.focus.provider.profileNotSaved);
       return false;
     }
   }, []);
@@ -404,15 +463,15 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     }
     const alerts: FocusAlert[] = [];
     for (const event of events) {
-      const alert = alertFor(event, current, profileNow, at);
+      const alert = alertFor(event, current, profileNow, at, messagesRef.current);
       if (alert) alerts.push(alert);
     }
     const rung = dueAlarms(profileNow.alarms, current.alarmCheck || at, at);
-    for (const { alarm, at: moment } of rung) alerts.push(alarmAlert(alarm, moment, at, profileNow.preferences.clock));
+    for (const { alarm, at: moment } of rung) alerts.push(alarmAlert(alarm, moment, at, profileNow.preferences.clock, messagesRef.current));
     const snoozed = current.snoozes.filter((snooze) => snooze.at <= at);
     for (const snooze of snoozed) {
       const alarm = profileNow.alarms.find((item) => item.id === snooze.alarmId);
-      if (alarm && at - snooze.at <= ALARM_GRACE_MS) alerts.push(alarmAlert(alarm, snooze.at, at, profileNow.preferences.clock));
+      if (alarm && at - snooze.at <= ALARM_GRACE_MS) alerts.push(alarmAlert(alarm, snooze.at, at, profileNow.preferences.clock, messagesRef.current));
     }
     const onceRung = rung.filter(({ alarm }) => !alarm.days.length).map(({ alarm }) => alarm.id);
     if (onceRung.length) {
@@ -465,12 +524,12 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       try {
         const response = await fetch("/api/profile", { cache: "no-store" });
         const data = (await response.json()) as { profile?: Profile; error?: string };
-        if (!data.profile) throw new Error(data.error ?? "Your profile could not be read.");
+        if (!data.profile) throw new Error(data.error ?? messagesRef.current.focus.provider.profileNotRead);
         if (cancelled) return;
         setProfile(data.profile);
         profileRef.current = data.profile;
       } catch (caught) {
-        if (!cancelled) setProfileError(caught instanceof Error ? caught.message : "Your profile could not be read.");
+        if (!cancelled) setProfileError(caught instanceof Error ? caught.message : messagesRef.current.focus.provider.profileNotRead);
       } finally {
         if (!cancelled) {
           readyRef.current = true;
@@ -482,10 +541,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       try {
         const response = await fetch("/api/profile/sessions", { cache: "no-store" });
         const data = (await response.json()) as { log?: WorkLog; error?: string };
-        if (!data.log) throw new Error(data.error ?? "Your work log could not be read.");
+        if (!data.log) throw new Error(data.error ?? messagesRef.current.focus.provider.logNotRead);
         if (!cancelled) setLog((local) => addSessions(data.log!, [...local.sessions, ...storeRef.current.pending]));
       } catch (caught) {
-        if (!cancelled) setLogError(caught instanceof Error ? caught.message : "Your work log could not be read.");
+        if (!cancelled) setLogError(caught instanceof Error ? caught.message : messagesRef.current.focus.provider.logNotRead);
       } finally {
         if (!cancelled) setLogReady(true);
       }
@@ -556,21 +615,21 @@ export function FocusProvider({ children }: { children: ReactNode }) {
     };
   }, [tick]);
 
-  // Sekmenin başlığı çalışan sayacı gösteriyor: başka bir sekmedeyken de görülsün.
-  const baseTitle = useRef<string>("");
+  // Sekmenin başlığı çalışan sayacı gösteriyor: başka bir sekmedeyken de görülsün. Başlık arayüzün dilinde; dil değişince o da.
   useEffect(() => {
-    if (!baseTitle.current) baseTitle.current = document.title;
+    const base = messages.studio.documentTitle;
+    const words = messages.focus.provider.titles;
     const at = now || Date.now();
     const { focus, timer, stopwatch } = store;
     const title = focus?.clock.running
-      ? `${formatClock(focusRemaining(focus, at), "up")} · ${focus.phase === "work" ? "Focus" : "Break"}`
+      ? `${formatClock(focusRemaining(focus, at), "up")} · ${focus.phase === "work" ? words.focus : words.break}`
       : timer?.clock.running
-        ? `${formatClock(countdownRemaining(timer, at), "up")} · Timer`
+        ? `${formatClock(countdownRemaining(timer, at), "up")} · ${words.timer}`
         : stopwatch?.clock.running
-          ? `${formatClock(elapsedOf(stopwatch.clock, at))} · Stopwatch`
+          ? `${formatClock(elapsedOf(stopwatch.clock, at))} · ${words.stopwatch}`
           : "";
-    document.title = title ? `${title} — ${baseTitle.current}` : baseTitle.current;
-  }, [now, store]);
+    document.title = title ? `${title} — ${base}` : base;
+  }, [messages, now, store]);
 
   const act = useCallback(
     (change: (current: FocusStore, at: number) => { store: FocusStore; segments?: Segment[] }) => {
@@ -647,7 +706,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       const response = await fetch("/api/profile/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessions }) }).catch(() => undefined);
       if (!response?.ok) {
         const data = (await response?.json().catch(() => undefined)) as { error?: string } | undefined;
-        setLogError(data?.error ?? "The time could not be added.");
+        setLogError(data?.error ?? messagesRef.current.focus.provider.timeNotAdded);
         return false;
       }
       setLog((existing) => addSessions(existing, sessions));
@@ -689,7 +748,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
         return;
       }
       const at = Date.now();
-      const alert: FocusAlert = { id: `week-${summary.from}`, kind: "summary", title: "Your week", body: weekSummaryText(summary), color: preferences.color, at, ringUntil: 0, action: "report", actionLabel: "See the weekly report" };
+      const alert: FocusAlert = { id: `week-${summary.from}`, kind: "summary", ...said({ type: "week", summary }, messagesRef.current), color: preferences.color, at, ringUntil: 0, action: "report" };
       commit(raise([alert], storeRef.current, at));
     }, 1500);
     return () => clearTimeout(show);
@@ -712,7 +771,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   const deleteSession = useCallback(async (id: string) => {
     const response = await fetch(`/api/profile/sessions?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
     if (!response?.ok && response?.status !== 404) {
-      setLogError("The session could not be deleted.");
+      setLogError(messagesRef.current.focus.provider.sessionNotDeleted);
       return false;
     }
     setLog((existing) => removeSession(existing, id));
@@ -721,16 +780,17 @@ export function FocusProvider({ children }: { children: ReactNode }) {
   }, [commit]);
 
   const importData = useCallback(async (file: File) => {
+    const t = messagesRef.current.focus.provider;
     let body: unknown;
     try {
       body = JSON.parse(await file.text());
     } catch {
-      throw new Error("The file is not valid JSON.");
+      throw new Error(t.notJson);
     }
-    if ((body as { kind?: string })?.kind !== WORK_DATA_KIND) throw new Error("This is not a Trace work data file.");
+    if ((body as { kind?: string })?.kind !== WORK_DATA_KIND) throw new Error(t.notWorkData);
     const response = await fetch("/api/profile/data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = (await response.json().catch(() => undefined)) as { added?: number; profileAdopted?: boolean; library?: BackupSummary; error?: string } | undefined;
-    if (!response.ok || data?.added === undefined) throw new Error(data?.error ?? "Your data could not be imported.");
+    if (!response.ok || data?.added === undefined) throw new Error(data?.error ?? t.importFailed);
     const [profileResponse, logResponse] = await Promise.all([fetch("/api/profile", { cache: "no-store" }), fetch("/api/profile/sessions", { cache: "no-store" })]);
     const fresh = (await profileResponse.json()) as { profile?: Profile };
     const freshLog = (await logResponse.json()) as { log?: WorkLog };
@@ -739,7 +799,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
       profileRef.current = fresh.profile;
     }
     if (freshLog.log) setLog(freshLog.log);
-    return describeBackupImport(data.added, Boolean(data.profileAdopted), data.library);
+    return messagesRef.current.focus.provider.imported(data.added, Boolean(data.profileAdopted), data.library);
   }, []);
 
   const previewSound = useCallback(() => {

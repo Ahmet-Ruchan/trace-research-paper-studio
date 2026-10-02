@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { splitPages } from "@/lib/paper-text";
+import { UserFacingError, type UserErrorArgs } from "@/lib/user-error";
 
 /**
  * PDF'ten sayfa sayfa metin — `pdftotext -layout`, plugin köprüsünün
@@ -15,15 +16,15 @@ import { splitPages } from "@/lib/paper-text";
  */
 
 /**
- * Mesajı kullanıcıya olduğu gibi gösterilen hata: ne kurulacağını söylüyor.
- * `publicError` bu bayrağı taşıyan hataları genel bir üst kaynak hatasına
- * çevirmeden aynen iletiyor.
+ * Mesajı kullanıcıya (kendi dilinde) olduğu gibi gösterilen hata: ne
+ * kurulacağını söylüyor. `publicError` bu bayrağı taşıyan hataları genel bir
+ * üst kaynak hatasına çevirmeden iletiyor.
  */
-export class PaperTextError extends Error {
+export class PaperTextError extends UserFacingError {
   readonly incompatibleModel = true;
   /** Neden; akış kontrolü mesaj metnine değil buna bakar. */
-  constructor(message: string, readonly reason: "missing-tool" | "no-text" | "failed") {
-    super(message);
+  constructor(readonly reason: "missing-tool" | "no-text" | "failed", ...args: UserErrorArgs) {
+    super(...args);
   }
 }
 
@@ -45,22 +46,16 @@ export async function extractPaperPages(file: File, signal?: AbortSignal): Promi
         (error) => {
           if (!error) return resolve();
           if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-            return reject(new PaperTextError(
-              "Reading the paper as text needs pdftotext, which was not found. Install Poppler (macOS: brew install poppler · Debian/Ubuntu: apt install poppler-utils · Windows: choco install poppler) and try again, or assign a cloud provider to the Evidence and Technical stages.",
-              "missing-tool",
-            ));
+            return reject(new PaperTextError("missing-tool", "pdftotextMissing"));
           }
-          reject(new PaperTextError(`The PDF text could not be extracted: ${error.message}`, "failed"));
+          reject(new PaperTextError("failed", "pdfTextFailed", error.message));
         },
       );
     });
     const pages = splitPages(await readFile(textPath, "utf8"));
     const characters = pages.reduce((sum, page) => sum + page.trim().length, 0);
     if (characters < MIN_USEFUL_CHARACTERS) {
-      throw new PaperTextError(
-        "This PDF has almost no extractable text — it is probably a scan. A local model cannot read it; assign a cloud provider to the Evidence and Technical stages, which receive the PDF itself.",
-        "no-text",
-      );
+      throw new PaperTextError("no-text", "pdfNoText");
     }
     return pages;
   } finally {

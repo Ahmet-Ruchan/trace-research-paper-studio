@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Clock, X } from "lucide-react";
+import { useUiLanguage } from "@/i18n/client";
 import { LanguageProvider } from "@/visuals";
 import { buildExam, EXAM_MINUTES, EXAM_SIZES, examPool, gradeExam, missedToReview, type ExamQuestion, type ExamResult } from "@/lib/exam";
 import type { ResearchProject } from "@/lib/schema";
-import { formatClock, formatDuration } from "@/lib/work-log";
+import { formatClock } from "@/lib/work-log";
 import { putStudyProgress, readLibraryStudy } from "./study-progress";
 import { StudioNav } from "./focus/studio-nav";
 
@@ -15,7 +16,6 @@ import { StudioNav } from "./focus/studio-nav";
  */
 
 type Run = { exam: ExamQuestion[]; startedAt: number; minutes: number };
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 export function ExamView({
   projects,
@@ -31,13 +31,16 @@ export function ExamView({
   backLabel: string;
   onOpen: (project: ResearchProject) => void;
 }) {
+  const { language, t: messages } = useUiLanguage();
+  const t = messages.learning.examView;
   const scoped = useMemo(() => (projectId ? projects.filter((item) => item.id === projectId) : projects), [projects, projectId]);
-  const pool = useMemo(() => examPool(scoped), [scoped]);
+  const drillWords = messages.learning.words.readingDrill;
+  const pool = useMemo(() => examPool(scoped, drillWords), [scoped, drillWords]);
   // 10, 20, 30 ve hepsi (en çok elli): kısa ya da tam bir deneme.
   const sizeOptions = useMemo(() => {
     const all = Math.min(pool.length, 50);
-    return [...EXAM_SIZES.filter((option) => option < all).map((option) => ({ value: option, label: String(option) })), { value: all, label: all === pool.length ? `All ${all}` : String(all) }];
-  }, [pool.length]);
+    return [...EXAM_SIZES.filter((option) => option < all).map((option) => ({ value: option, label: String(option) })), { value: all, label: all === pool.length ? t.allCount(all) : String(all) }];
+  }, [pool.length, t]);
   const [size, setSize] = useState<number>(Math.min(20, pool.length) || 10);
   const [minutes, setMinutes] = useState<number>(20);
   const [run, setRun] = useState<Run>();
@@ -88,14 +91,14 @@ export function ExamView({
     const missed = grade.items.filter((entry) => !entry.right);
     if (!missed.length) return;
     try {
-      const study = await readLibraryStudy();
+      const study = await readLibraryStudy(messages.learning.studyProgress);
       const at = new Date().toISOString();
       const changed = new Map<string, NonNullable<ReturnType<typeof study.get>>>();
       for (const { item } of missed) changed.set(item.projectId, missedToReview(changed.get(item.projectId) ?? study.get(item.projectId), item.question, at));
-      for (const [id, progress] of changed) await putStudyProgress(id, progress);
-      setSaved({ text: `${plural(missed.length, "question")} will come back in Review tomorrow.` });
+      for (const [id, progress] of changed) await putStudyProgress(id, progress, messages.learning.studyProgress);
+      setSaved({ text: t.comeBack(missed.length) });
     } catch (error) {
-      setSaved({ text: error instanceof Error ? error.message : "The questions could not be added to review.", error: true });
+      setSaved({ text: error instanceof Error ? error.message : t.addFailed, error: true });
     }
   }
 
@@ -108,7 +111,7 @@ export function ExamView({
       <header className="library-header">
         <button className="brand" onClick={onBack} aria-label={backLabel}>
           <span className="brand-glyph">t</span>
-          <span><strong>trace</strong><small>research studio</small></span>
+          <span><strong>trace</strong><small>{messages.learning.shell.brandTagline}</small></span>
         </button>
         <div className="library-header-actions">
           <button className="text-button" onClick={onBack}><ArrowLeft size={15} /> {backLabel}</button>
@@ -117,56 +120,54 @@ export function ExamView({
       </header>
 
       <section className="compare-hero">
-        <p className="landing-eyebrow"><span /> Practice exam{paper ? ` · ${paper}` : ""}</p>
+        <p className="landing-eyebrow"><span /> {t.eyebrow}{paper ? ` · ${paper}` : ""}</p>
         <h1>
           {result
-            ? `${result.grade.correct} of ${result.grade.total} right.`
+            ? t.headingResult(result.grade.correct, result.grade.total)
             : run
-              ? `Question ${index + 1} of ${run.exam.length}.`
+              ? t.headingQuestion(index + 1, run.exam.length)
               : pool.length
-                ? "Test yourself, against the clock."
-                : "No questions to ask yet."}
+                ? t.headingReady
+                : t.headingEmpty}
         </h1>
         <p>
-          Questions from {paper ? "this paper" : "every paper in your library"}, mixed, whether you studied them or not and whether they are due or
-          not. Nothing is shown until the end; then each question comes with its answer, why, and the page. Your review schedule does not
-          change unless you ask.
+          {t.intro(Boolean(paper))}
         </p>
       </section>
 
       {!run && !result && pool.length ? (
-        <section className="exam-setup" aria-label="Set up the exam">
-          <div role="group" aria-label="Questions">
-            <span>Questions</span>
+        <section className="exam-setup" aria-label={t.setup}>
+          <div role="group" aria-label={t.questions}>
+            <span>{t.questions}</span>
             {sizeOptions.map((option) => (
               <button key={option.value} type="button" aria-pressed={size === option.value} onClick={() => setSize(option.value)}>{option.label}</button>
             ))}
           </div>
-          <div role="group" aria-label="Time">
-            <span>Time</span>
+          <div role="group" aria-label={t.time}>
+            <span>{t.time}</span>
             {EXAM_MINUTES.map((option) => (
-              <button key={option} type="button" aria-pressed={minutes === option} onClick={() => setMinutes(option)}>{option ? `${option} min` : "No limit"}</button>
+              <button key={option} type="button" aria-pressed={minutes === option} onClick={() => setMinutes(option)}>{option ? messages.common.minutes(option) : t.noLimit}</button>
             ))}
           </div>
-          <button type="button" className="review-next" onClick={start}>Start the exam <ArrowRight size={14} /></button>
+          <button type="button" className="review-next" onClick={start}>{t.start} <ArrowRight size={14} /></button>
         </section>
       ) : null}
 
       {!pool.length ? (
         <section className="review-empty">
-          <p>Questions come from a paper&rsquo;s quiz and its reading drill. Open a paper and generate its learning layer, then come back.</p>
+          <p>{t.empty}</p>
           <button onClick={onBack}>{backLabel}</button>
         </section>
       ) : null}
 
       {run && current && project ? (
-        <LanguageProvider language={current.language}>
-          <article className="review-card exam-card" aria-label={`Question ${index + 1} of ${run.exam.length}`} style={{ "--accent": project.story.accent } as React.CSSProperties}>
+        <LanguageProvider language={current.language} ui={language}>
+          <article className="review-card exam-card" aria-label={t.questionLabel(index + 1, run.exam.length)} style={{ "--accent": project.story.accent } as React.CSSProperties}>
             <header className="review-card-head">
-              <span className="review-kind">Question</span>
+              <span className="review-kind">{t.question}</span>
               <span className="review-paper" lang={current.language}>{current.paperTitle}</span>
               {left !== undefined ? (
-                <span className={`exam-clock${left < 60_000 ? " is-low" : ""}`} role="timer" aria-label={`${formatClock(left)} left`}><Clock size={13} aria-hidden="true" /> {formatClock(left)}</span>
+                <span className={`exam-clock${left < 60_000 ? " is-low" : ""}`} role="timer" aria-label={t.timeLeft(formatClock(left))}><Clock size={13} aria-hidden="true" /> {formatClock(left)}</span>
               ) : (
                 <span className="review-count">{index + 1} / {run.exam.length}</span>
               )}
@@ -174,7 +175,7 @@ export function ExamView({
             <div className="review-progress" aria-hidden="true"><i style={{ width: `${(answers.size / run.exam.length) * 100}%` }} /></div>
             <fieldset className="exam-question">
               <legend lang={current.language}>{current.question.prompt}</legend>
-              {current.question.kind === "multi" ? <p className="review-prompt">Choose every answer that is right.</p> : null}
+              {current.question.kind === "multi" ? <p className="review-prompt">{t.chooseEvery}</p> : null}
               {current.question.options.map((option, position) => {
                 const multi = current.question.kind === "multi";
                 const checked = chosen.includes(position);
@@ -200,36 +201,34 @@ export function ExamView({
               })}
             </fieldset>
             <footer className="review-card-foot exam-foot">
-              <button type="button" className="review-skip" disabled={index === 0} onClick={() => setIndex((at) => at - 1)}>Previous</button>
-              <span className="exam-answered">{answers.size} of {run.exam.length} answered</span>
+              <button type="button" className="review-skip" disabled={index === 0} onClick={() => setIndex((at) => at - 1)}>{t.previous}</button>
+              <span className="exam-answered">{t.answered(answers.size, run.exam.length)}</span>
               {index + 1 < run.exam.length ? (
-                <button type="button" className="review-next" onClick={() => setIndex((at) => at + 1)}>Next <ArrowRight size={14} /></button>
+                <button type="button" className="review-next" onClick={() => setIndex((at) => at + 1)}>{messages.common.next} <ArrowRight size={14} /></button>
               ) : (
-                <button type="button" className="review-next" onClick={() => finish()}>Finish the exam</button>
+                <button type="button" className="review-next" onClick={() => finish()}>{t.finish}</button>
               )}
             </footer>
           </article>
-          {index + 1 < run.exam.length ? <p className="exam-early"><button type="button" className="review-skip" onClick={() => finish()}>Finish now</button></p> : null}
+          {index + 1 < run.exam.length ? <p className="exam-early"><button type="button" className="review-skip" onClick={() => finish()}>{t.finishNow}</button></p> : null}
         </LanguageProvider>
       ) : null}
 
       {result ? (
-        <section className="exam-result" aria-label="Your result">
+        <section className="exam-result" aria-label={t.result}>
           <p className="exam-score">
-            {Math.round((result.grade.correct / Math.max(1, result.grade.total)) * 100)}% in {formatDuration(result.seconds)}
-            {result.timedOut ? ", when the time ran out" : ""}
-            {result.grade.unanswered ? `; ${plural(result.grade.unanswered, "question")} left unanswered` : ""}.
+            {t.score(Math.round((result.grade.correct / Math.max(1, result.grade.total)) * 100), messages.focus.duration(result.seconds), result.timedOut, result.grade.unanswered)}
           </p>
           {result.grade.byPaper.length > 1 ? (
             <table className="exam-papers">
-              <thead><tr><th scope="col">Paper</th><th scope="col">Right</th></tr></thead>
+              <thead><tr><th scope="col">{t.paper}</th><th scope="col">{t.right}</th></tr></thead>
               <tbody>
                 {result.grade.byPaper.map((row) => {
                   const target = scoped.find((item) => item.id === row.projectId);
                   return (
                     <tr key={row.projectId}>
                       <th scope="row">{target ? <button type="button" className="text-link" onClick={() => onOpen(target)}>{row.paper}</button> : row.paper}</th>
-                      <td>{row.correct} of {row.total}</td>
+                      <td>{t.rightOf(row.correct, row.total)}</td>
                     </tr>
                   );
                 })}
@@ -239,25 +238,25 @@ export function ExamView({
           <div className="review-actions">
             {result.grade.correct < result.grade.total ? (
               <button type="button" onClick={() => void bringBack(result.grade)} disabled={Boolean(saved && !saved.error)}>
-                Bring the {plural(result.grade.total - result.grade.correct, "missed question")} back in Review tomorrow
+                {t.bringBack(result.grade.total - result.grade.correct)}
               </button>
             ) : null}
-            <button type="button" className="review-secondary" onClick={start}>Take another</button>
+            <button type="button" className="review-secondary" onClick={start}>{t.another}</button>
           </div>
           {saved ? <p className={saved.error ? "regen-error" : "exam-saved"} role="status">{saved.text}</p> : null}
           <ol className="exam-answers">
             {result.grade.items.map(({ item, answer, right, correct }) => (
               <li key={item.key} className={right ? "is-right" : "is-wrong"} lang={item.language}>
                 <p className="exam-answer-head">
-                  {right ? <Check size={15} aria-label="Right" /> : <X size={15} aria-label={answer.length ? "Wrong" : "Not answered"} />}
+                  {right ? <Check size={15} aria-label={t.rightMark} /> : <X size={15} aria-label={answer.length ? t.wrongMark : t.notAnsweredMark} />}
                   <strong>{item.question.prompt}</strong>
                 </p>
                 <p className="exam-answer-line">
-                  {answer.length ? <>You chose {answer.map((at) => `“${item.question.options[at].label}”`).join(", ")}. </> : <>Not answered. </>}
-                  {right ? "" : <>The answer: {correct.map((at) => `“${item.question.options[at].label}”`).join(", ")}.</>}
+                  {answer.length ? t.youChose(answer.map((at) => `“${item.question.options[at].label}”`).join(", ")) : t.notAnswered}
+                  {right ? "" : t.theAnswer(correct.map((at) => `“${item.question.options[at].label}”`).join(", "))}
                 </p>
                 <p className="exam-why">{correct.map((at) => item.question.options[at].explanation).filter(Boolean).join(" ")}</p>
-                <small>{item.paperTitle}{item.question.page ? ` · p. ${item.question.page}` : ""}</small>
+                <small>{item.paperTitle}{item.question.page ? ` · ${messages.common.page(item.question.page)}` : ""}</small>
               </li>
             ))}
           </ol>
