@@ -3305,6 +3305,120 @@ test.describe("reader notes", () => {
     await expect.poll(() => painted(page, "blue")).toBe(1);
   });
 
+  test("highlights the Overview, the Method and the Limitations too, and says how on the page until dismissed", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-notes-overview"));
+    await page.goto(`/?project=${project.id}`);
+
+    // Nasıl yapıldığı ilk ekranda yazıyor.
+    const hint = page.getByRole("note").filter({ hasText: "Select any text on this page" });
+    await expect(hint).toBeVisible();
+
+    // Genel bakış: ana tez.
+    const thesis = await selectIn(page, '[data-note-section="paper:thesis"]', 30);
+    const bar = page.getByRole("toolbar", { name: "Highlight the selected text" });
+    await bar.getByRole("button", { name: "Highlight in green" }).click();
+    await expect.poll(() => stored(request, project.id)).toEqual([expect.objectContaining({ quote: thesis, color: "green", target: { kind: "section", place: "paper", sectionId: "thesis" } })]);
+    await expect.poll(() => painted(page, "green")).toBe(1);
+
+    // Yöntem ve sınırlılıklar: ipucu orada da, vurgu da.
+    await page.locator(".lab-nav > button", { hasText: "Method" }).click();
+    await expect(hint).toBeVisible();
+    const method = await selectIn(page, '[data-note-section="paper:methods"]', 20);
+    await bar.getByRole("button", { name: "Highlight in pink" }).click();
+    await page.locator(".lab-nav > button", { hasText: "Limitations" }).click();
+    const limit = await selectIn(page, '[data-note-section="paper:limitations"]', 20);
+    await bar.getByRole("button", { name: "Note" }).click();
+    const form = page.getByRole("form", { name: "Note on the highlight" });
+    await form.getByLabel("Your note").fill("Does this still hold?");
+    await form.getByRole("button", { name: "Save" }).click();
+    await expect.poll(async () => (await stored(request, project.id)).map((note) => [note.quote, note.target])).toEqual([
+      [thesis, { kind: "section", place: "paper", sectionId: "thesis" }],
+      [method, { kind: "section", place: "paper", sectionId: "methods" }],
+      [limit, { kind: "section", place: "paper", sectionId: "limitations" }],
+    ]);
+
+    // Notlarda Lab başlığıyla, makaledeki sırayla; "Show it" geri götürüyor.
+    await page.locator(".lab-nav > button", { hasText: "Notes (3)" }).click();
+    await expect(page.locator(".notes-group .notes-place")).toHaveText(["Lab", "Lab", "Lab"]);
+    await expect(page.locator(".notes-group h3")).toHaveText(["Core thesis", "Method", "Limitations"]);
+    await page.locator(".notes-group").first().getByRole("button", { name: "Show it" }).click();
+    await expect(page.locator('[data-note-section="paper:thesis"]')).toBeVisible();
+    await expect.poll(() => painted(page, "green")).toBe(1);
+
+    // "Got it": bu tarayıcıda bir daha gösterilmiyor.
+    await hint.getByRole("button", { name: "Got it" }).click();
+    await expect(hint).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('[data-note-section="paper:thesis"]')).toBeVisible();
+    await expect(page.getByRole("note").filter({ hasText: "Select any text on this page" })).toHaveCount(0);
+    await expect.poll(() => painted(page, "green")).toBe(1);
+  });
+
+  test("highlights and notes on the standalone page too, kept in that browser and downloadable", async ({ page, request }) => {
+    const project = await seed(request, projectNamed("e2e-notes-viewer"));
+    const created = await request.post("/api/publications", {
+      data: { projectId: project.id, settings: { include: { deepReport: true, technicalAppendix: true, learning: true, figures: false }, expiresAt: null } },
+    });
+    const { publication } = (await created.json()) as { publication: { path: string } };
+    await page.goto(publication.path);
+    const hint = page.getByRole("note").filter({ hasText: "Select any text on this page" });
+    await expect(hint).toBeVisible();
+    const notesButton = page.locator(".viewer-notes-button");
+    await expect(notesButton).toHaveText("Notes");
+
+    // Lab: ana tez ve bir rapor bölümü (yayın Hikâye'de açılıyor).
+    await page.locator(".viewer-tabs button", { hasText: "Lab" }).click();
+    const thesis = await selectIn(page, '[data-note-section="paper:thesis"]', 30);
+    const bar = page.getByRole("toolbar", { name: "Highlight the selected text" });
+    await bar.getByRole("button", { name: "Highlight in green" }).click();
+    await expect.poll(() => painted(page, "green")).toBe(1);
+    const report = project.deepReport!.sections[0];
+    await selectIn(page, `[data-note-section="report:${report.id}"]`, 24);
+    await page.keyboard.press("h");
+    await expect(notesButton).toHaveText("Notes (2)");
+
+    // Hikâye: vurgulayıp not.
+    await page.locator(".viewer-tabs button", { hasText: "Story" }).click();
+    const story = project.story.sections[1];
+    const fromStory = await selectIn(page, `[data-note-section="story:${story.id}"] p`, 26);
+    await bar.getByRole("button", { name: "Note" }).click();
+    const form = page.getByRole("form", { name: "Note on the highlight" });
+    await form.getByLabel("Your note").fill("Read this twice.");
+    await form.getByRole("button", { name: "Save" }).click();
+    await expect(notesButton).toHaveText("Notes (3)");
+    await expect.poll(() => painted(page, "yellow")).toBe(1);
+
+    // Yenilenince yerinde; sunucuya hiçbir şey gitmedi.
+    await page.reload();
+    await expect.poll(() => painted(page, "yellow")).toBe(1);
+    await expect(notesButton).toHaveText("Notes (3)");
+    expect(await stored(request, project.id)).toEqual([]);
+
+    // Notlar: makaledeki sırayla; Markdown iniyor; silinebiliyor; "Show it" Lab'e götürüyor.
+    await notesButton.click();
+    const panel = page.getByRole("dialog", { name: "Your highlights and notes" });
+    await expect(panel.locator(".viewer-notes-group h3")).toHaveText(["Core thesis", story.title, report.title]);
+    await expect(panel).toContainText("Read this twice.");
+    const [download] = await Promise.all([page.waitForEvent("download"), panel.getByRole("button", { name: "Download as Markdown" }).click()]);
+    expect(download.suggestedFilename()).toBe("attention-is-all-you-need-notes.md");
+    const markdown = readFileSync((await download.path())!, "utf8");
+    expect(markdown).toContain(`> ${thesis}`);
+    expect(markdown).toContain(`> ${fromStory}\n\nRead this twice.`);
+    await panel.locator(".viewer-notes-group").nth(2).getByRole("button", { name: "Delete this note" }).click();
+    await expect(notesButton).toHaveText("Notes (2)");
+    await panel.locator(".viewer-notes-group").first().getByRole("button", { name: "Show it" }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(page.locator(".viewer-tabs button.is-active")).toHaveText("Lab");
+    await expect(page.locator('[data-note-section="paper:thesis"]')).toBeInViewport();
+    await expect.poll(() => painted(page, "green")).toBe(1);
+
+    // "Got it": bir daha gösterilmiyor.
+    await hint.getByRole("button", { name: "Got it" }).click();
+    await page.reload();
+    await expect(notesButton).toHaveText("Notes (2)");
+    await expect(page.getByRole("note").filter({ hasText: "Select any text on this page" })).toHaveCount(0);
+  });
+
   test.describe("on a phone", () => {
     // Tarayıcı türü dışında telefonun her şeyi: ekran, dokunma, mobil görünüm alanı.
     const { defaultBrowserType: _browser, ...pixel } = devices["Pixel 7"];
@@ -4105,6 +4219,13 @@ test.describe("interface language", () => {
       await page.reload();
       await expect(page.locator(".workspace-actions")).toBeVisible();
       expect(await measure(), `${width}px, ${size} text`).toEqual({ overlap: false, overflow: 0 });
+      // Düğme etiketleri 1660 px altında gizleniyor ama dil düğmesinin "EN"si düğmenin kendisi
+      // (1240 px altında düğme başlıktan çekiliyor; dil komut paletinde).
+      const language = page.locator(".workspace-actions .studio-nav-language span");
+      if (width > 1240) {
+        await expect(language, `${width}px`).toBeVisible();
+        await expect(language).toHaveText("EN");
+      }
     }
   });
 });

@@ -11,6 +11,7 @@
  * kuralla: makale Türkçeyse Türkçe, değilse İngilizce.
  */
 import { READING_DRILL_WORDS, type ReadingDrillWords } from "@/lib/reading-drill";
+import { PAPER_BLOCK_WORDS, type NoteColor, type NoteGroup, type PaperBlockWords } from "@/lib/reader-notes";
 import type { Claim, DeepReport, Misreading, Source } from "@/lib/schema";
 
 /** BCP-47 dil etiketi; artık iki dille sınırlı değil. */
@@ -228,6 +229,32 @@ export type Strings = {
   copied: string;
   close: string;
   labSectionsAria: string;
+  // Vurgular ve notlar (bağımsız sitede; tarayıcıda kalıyor)
+  notesButton: (count: number) => string;
+  notesTitle: string;
+  notesPrivate: string;
+  notesEmpty: string;
+  notesNotKept: string;
+  notesMarkdown: string;
+  notesObsidian: string;
+  notesShow: string;
+  notesDelete: string;
+  /** Notun yeri (`groupNotes`): kayıttaki İngilizce adın karşılığı. */
+  notePlaces: Record<NoteGroup["place"], string>;
+  /** Lab'deki analiz metinlerinin başlığı. */
+  paperBlocks: PaperBlockWords;
+  notesOrphans: string;
+  highlightHint: string;
+  highlightHintDismiss: string;
+  noteToolbar: string;
+  highlightIn: (color: string) => string;
+  noteColors: Record<NoteColor, string>;
+  noteAction: string;
+  writeNote: string;
+  noteForm: string;
+  yourNote: string;
+  save: string;
+  cancel: string;
   // Makalenin kendi şekilleri
   figuresHeading: string;
   figureExpand: string;
@@ -517,6 +544,29 @@ const en: Strings = {
   copied: "Copied",
   close: "Close",
   labSectionsAria: "Paper review sections",
+  notesButton: (count) => (count ? `Notes (${count})` : "Notes"),
+  notesTitle: "Your highlights and notes",
+  notesPrivate: "They stay in this browser only: nothing is sent anywhere or written into this page or its project file. Download them to keep them.",
+  notesEmpty: "Nothing yet. Select any text on the page to highlight it or write a note beside it.",
+  notesNotKept: "This browser is not keeping them (its storage is off), so they last until the page is closed. Download them to keep them.",
+  notesMarkdown: "Download as Markdown",
+  notesObsidian: "For Obsidian",
+  notesShow: "Show it",
+  notesDelete: "Delete this note",
+  notePlaces: { Lab: "Lab", Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" },
+  paperBlocks: PAPER_BLOCK_WORDS,
+  notesOrphans: "No longer in the paper",
+  highlightHint: "Select any text on this page to highlight it or write a note beside it: a bar with five colours and Note appears above the selection. With text selected, H highlights and N opens a note. Notes, at the top, lists them and downloads them.",
+  highlightHintDismiss: "Got it",
+  noteToolbar: "Highlight the selected text",
+  highlightIn: (color) => `Highlight in ${color}`,
+  noteColors: { yellow: "yellow", green: "green", blue: "blue", pink: "pink", purple: "purple" },
+  noteAction: "Note",
+  writeNote: "Write a note (N)",
+  noteForm: "Note on the highlight",
+  yourNote: "Your note",
+  save: "Save",
+  cancel: "Cancel",
   figuresHeading: "Figures from the paper",
   figureExpand: "View full size",
   figureCollapse: "Fit to width",
@@ -832,6 +882,36 @@ const tr: Strings = {
   copied: "Kopyalandı",
   close: "Kapat",
   labSectionsAria: "Makale analizinin bölümleri",
+  notesButton: (count) => (count ? `Notlar (${count})` : "Notlar"),
+  notesTitle: "Vurguların ve notların",
+  notesPrivate: "Yalnızca bu tarayıcıda kalıyorlar: hiçbir yere gönderilmiyor, bu sayfaya ya da proje dosyasına yazılmıyor. Saklamak için indir.",
+  notesEmpty: "Henüz bir şey yok. Vurgulamak ya da yanına not yazmak için sayfadaki herhangi bir metni seç.",
+  notesNotKept: "Bu tarayıcı onları tutmuyor (depolaması kapalı), sayfa kapanana kadar duruyorlar. Saklamak için indir.",
+  notesMarkdown: "Markdown olarak indir",
+  notesObsidian: "Obsidian için",
+  notesShow: "Göster",
+  notesDelete: "Bu notu sil",
+  notePlaces: { Lab: "Lab", Story: "Hikâye", "Deep report": "Ayrıntılı rapor", Primer: "Ön bilgi", Claim: "İddia" },
+  paperBlocks: {
+    thesis: "Ana tez",
+    question: "Araştırma sorusu",
+    summary: "Sade dille özet",
+    methods: "Yöntem",
+    limitations: "Sınırlılıklar",
+    technical: "Teknik ek",
+  },
+  notesOrphans: "Artık makalede yok",
+  highlightHint: "Vurgulamak ya da yanına not yazmak için bu sayfadaki herhangi bir metni seç: seçimin üstünde beş renk ve Not düğmesi olan bir çubuk açılır. Metin seçiliyken H vurgular, N not açar. Üstteki Notlar hepsini listeler ve indirir.",
+  highlightHintDismiss: "Anladım",
+  noteToolbar: "Seçili metni vurgula",
+  highlightIn: (color) => `${color} renkle vurgula`,
+  noteColors: { yellow: "sarı", green: "yeşil", blue: "mavi", pink: "pembe", purple: "mor" },
+  noteAction: "Not",
+  writeNote: "Not yaz (N)",
+  noteForm: "Vurguya not",
+  yourNote: "Notun",
+  save: "Kaydet",
+  cancel: "Vazgeç",
   figuresHeading: "Makaledeki şekiller",
   figureExpand: "Tam boyutta gör",
   figureCollapse: "Genişliğe sığdır",

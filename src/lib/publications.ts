@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { canonicalJson, stableHash } from "./canonical-json";
-import { groupNotes, ORPHAN_HEADING, type NoteGroup, type ReaderNote } from "./reader-notes";
+import { groupNotes, ORPHAN_HEADING, PAPER_BLOCK_WORDS, PAPER_BLOCKS, type NoteGroup, type PaperBlockWords, type ReaderNote } from "./reader-notes";
 import { researchProjectSchema, type ResearchProject } from "./schema";
 
 /**
@@ -127,13 +127,16 @@ export type PublishedNotesWords = {
   heading: string;
   intro: string;
   places: Record<NoteGroup["place"], string>;
+  /** Lab'deki analiz metinlerinin başlığı; kayıtta İngilizcesi duruyor. */
+  paperBlocks: PaperBlockWords;
   page: (page: number) => string;
 };
 
 export const PUBLISHED_NOTES_WORDS: PublishedNotesWords = {
   heading: "Notes from the author",
   intro: "The person who shared this story added their own notes. They are not part of the analysis and carry no evidence of their own.",
-  places: { Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" },
+  places: { Lab: "Lab", Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" },
+  paperBlocks: PAPER_BLOCK_WORDS,
   page: (page) => `p. ${page}`,
 };
 
@@ -142,11 +145,18 @@ export function publishedNotePlace(place: string, words: PublishedNotesWords = P
   return Object.hasOwn(words.places, place) ? words.places[place as NoteGroup["place"]] : place;
 }
 
+/** Lab bloğunun başlığı sayfanın dilinde (kayıtta İngilizcesi); diğerleri içeriğin kendi başlığı. */
+function publishedNoteHeading(note: Pick<PublishedNote, "place" | "heading">, words: PublishedNotesWords) {
+  if (note.place !== "Lab") return note.heading;
+  const block = PAPER_BLOCKS.find((item) => PAPER_BLOCK_WORDS[item] === note.heading);
+  return block ? words.paperBlocks[block] : note.heading;
+}
+
 /** Yayın sayfasının sonuna eklenen not bölümü: betiksiz, kaçışlı, kendi stiliyle. */
 export function publishedNotesHtml(notes: readonly PublishedNote[], words: PublishedNotesWords = PUBLISHED_NOTES_WORDS) {
   if (!notes.length) return "";
   const items = notes
-    .map((note) => `<li><span>${escapeHtml(publishedNotePlace(note.place, words))} · ${escapeHtml(note.heading)}${note.page ? ` · ${escapeHtml(words.page(note.page))}` : ""}</span>${note.quote ? `<blockquote>${escapeHtml(note.quote)}</blockquote>` : ""}${note.text ? `<p>${escapeHtml(note.text).replace(/\n/g, "<br>")}</p>` : ""}</li>`)
+    .map((note) => `<li><span>${escapeHtml(publishedNotePlace(note.place, words))} · ${escapeHtml(publishedNoteHeading(note, words))}${note.page ? ` · ${escapeHtml(words.page(note.page))}` : ""}</span>${note.quote ? `<blockquote>${escapeHtml(note.quote)}</blockquote>` : ""}${note.text ? `<p>${escapeHtml(note.text).replace(/\n/g, "<br>")}</p>` : ""}</li>`)
     .join("");
   return `<section class="trace-shared-notes" aria-label="${escapeHtml(words.heading)}"><style>.trace-shared-notes{max-width:44rem;margin:48px auto 64px;padding:0 20px;font:16px/1.6 Georgia,serif;color:inherit}.trace-shared-notes h2{font-weight:500;margin:0 0 6px}.trace-shared-notes>p{margin:0 0 18px;opacity:.75;font:14px/1.5 system-ui,sans-serif}.trace-shared-notes ol{list-style:none;margin:0;padding:0;display:grid;gap:14px}.trace-shared-notes li{padding:14px 16px;border:1px solid rgba(127,127,127,.35);border-radius:12px}.trace-shared-notes li span{display:block;opacity:.7;font:12px/1.4 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase}.trace-shared-notes blockquote{margin:8px 0 0;padding-left:12px;border-left:3px solid #e5b832;font-style:italic}.trace-shared-notes li p{margin:8px 0 0}</style><h2>${escapeHtml(words.heading)}</h2><p>${escapeHtml(words.intro)}</p><ol>${items}</ol></section>`;
 }

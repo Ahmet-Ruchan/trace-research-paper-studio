@@ -1,0 +1,64 @@
+/*
+ * Vurgular, seçim çubuğu ve not kartı (`note-bar.tsx`): stüdyo ve eklentinin
+ * bağımsız sitesi ortak kullanıyor. Stüdyoya özgü olanlar `src/app/notes.css`.
+ */
+:root {
+  --note-yellow: rgba(250, 204, 21, .42);
+  --note-green: rgba(34, 197, 94, .32);
+  --note-blue: rgba(56, 189, 248, .34);
+  --note-pink: rgba(236, 72, 153, .28);
+  --note-purple: rgba(167, 139, 250, .36);
+}
+
+/* Vurgular metne eklenmiyor; tarayıcı bu aralıkları boyuyor. */
+::highlight(trace-note-yellow) { background-color: var(--note-yellow); }
+::highlight(trace-note-green) { background-color: var(--note-green); }
+::highlight(trace-note-blue) { background-color: var(--note-blue); }
+::highlight(trace-note-pink) { background-color: var(--note-pink); }
+::highlight(trace-note-purple) { background-color: var(--note-purple); }
+
+.note-swatch { width: 22px; height: 22px; flex: none; padding: 0; border: 1px solid var(--line-dark); border-radius: 50%; cursor: pointer; }
+.note-swatch.is-yellow { background: #facc15; }
+.note-swatch.is-green { background: #22c55e; }
+.note-swatch.is-blue { background: #38bdf8; }
+.note-swatch.is-pink { background: #ec4899; }
+.note-swatch.is-purple { background: #a78bfa; }
+.note-swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+
+.note-bar { position: fixed; z-index: 120; box-sizing: border-box; display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid var(--line-dark); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink-soft); transform: translateX(-50%); }
+.note-bar-write, .note-bar-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: var(--text-sm); }
+.note-bar.is-writing { width: min(360px, calc(100vw - 24px)); max-height: 250px; display: grid; gap: 8px; padding: 12px; overflow: auto; }
+/* Dokunmatik: ekranın kenarına yaslı, çentik ve ev çubuğu payıyla; parmak için büyük hedefler (note-bar.tsx, dockAt). */
+.note-bar.is-docked { max-width: calc(100vw - 24px); }
+.note-bar.is-docked-bottom { margin-top: calc(-1 * env(safe-area-inset-bottom, 0px)); }
+.note-bar.is-docked-top { margin-top: env(safe-area-inset-top, 0px); }
+@media (pointer: coarse) {
+  .note-bar:not(.is-writing) { gap: 8px; padding: 8px 12px; }
+  .note-bar .note-swatch { width: 32px; height: 32px; }
+  .note-bar-write, .note-bar-actions button { min-height: 40px; padding: 0 14px; }
+}
+.note-bar blockquote, .note-item blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--note-yellow); color: var(--ink-soft); font: italic var(--text-sm)/1.5 Georgia, serif; }
+.note-bar textarea, .claim-note-form textarea, .note-edit textarea, .notes-add textarea { width: 100%; min-height: 64px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); color: var(--ink); font: inherit; font-size: var(--text-sm); resize: vertical; }
+.note-bar-actions { display: flex; gap: 8px; }
+.note-bar-actions .note-save { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+
+.note-item { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.note-item.is-green blockquote { border-left-color: var(--note-green); }
+.note-item.is-blue blockquote { border-left-color: var(--note-blue); }
+.note-item.is-pink blockquote { border-left-color: var(--note-pink); }
+.note-item.is-purple blockquote { border-left-color: var(--note-purple); }
+.note-item p { margin: 0; color: var(--ink); font-size: var(--text-md); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.note-item-actions > button { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: var(--ink-soft); cursor: pointer; font-size: var(--text-sm); }
+.note-item-actions > button:hover { color: var(--ink); }
+
+/* Vurgulamanın nasıl yapıldığı (stüdyoda Lab'in vurgulanabilen ekranlarında, sitede sayfanın üstünde; kapatılana kadar). */
+.highlight-hint { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; padding: 12px 14px; border: 1px dashed var(--line-dark); border-radius: 10px; background: var(--surface); color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.5; }
+.highlight-hint > svg { flex: none; color: var(--ink); }
+.highlight-hint p { flex: 1; margin: 0; }
+.highlight-hint button { flex: none; padding: 6px 12px; border: 1px solid var(--line-dark); border-radius: 999px; background: var(--paper); color: var(--ink); cursor: pointer; font-size: var(--text-xs); }
+.highlight-hint button:hover { border-color: var(--ink); }
+@media (max-width: 600px) {
+  .highlight-hint { flex-wrap: wrap; }
+  .highlight-hint p { flex-basis: calc(100% - 30px); }
+}

@@ -267,17 +267,28 @@ Quiz me on my due Trace review cards.
 
 ### Highlight what matters, and keep your own notes
 
-Select any text in the Deep report, the Story preview, a step of the Study path or a Primer concept,
-and a small bar offers five highlight colours and **Note**: the passage is highlighted where it
-stands, and the note sits beside it. A story section highlighted in Study shows in the Story preview
-too, and a concept highlighted in Study shows in the Primer. From the keyboard, with text selected,
+Select any text on the Overview (the core thesis, the research question, the plain-language
+summary), in the Method, the Limitations, the Technical appendix, the Deep report, the Story preview,
+a step of the Study path or a Primer concept, and a small bar offers five highlight colours and
+**Note**: the passage is highlighted where it stands, and the note sits beside it. Until you close
+it with **Got it**, a short line at the top of these screens says how. A story section highlighted
+in Study shows in the Story preview too, and a concept highlighted in Study shows in the Primer.
+From the keyboard, with text selected,
 <kbd>H</kbd> highlights it in the colour you last picked on the bar (yellow to begin with) and
 <kbd>N</kbd> opens the note. On a phone or tablet the bar sits at the bottom edge of the screen (the top
 edge when the passage is down there), clear of the phone's own Copy menu above the selection and of
 the handles below it, with buttons sized for a finger. Open a
 claim and write a note on it, or mark it as important; the claim list shows a star next to it.
-**Notes** in the Lab gathers everything for the paper in reading order (story, report, Primer, then
-claims with their page) to edit, recolour or delete, and to add a note to any section or claim.
+**Notes** in the Lab gathers everything for the paper in reading order (the Lab's own analysis,
+story, report, Primer, then claims with their page) to edit, recolour or delete, and to add a note
+to any section or claim; **Show it** takes you back to the passage.
+
+The page your agent opens with the paper highlights too, and so do a single-file copy and a
+published link: select text in the Lab, the Story, the Study path, Learn & Try or the Technical tab
+and the same bar appears, with the same keys and the same line saying how. Those highlights stay
+in that browser only: nothing is sent anywhere or written into the page or the project file.
+**Notes** at the top of the page lists them in the paper's order, takes you back to each one, and
+downloads them as Markdown or for Obsidian.
 
 A highlight worth remembering becomes a review card: **Make a review card** under it hides one word
 of the passage, a term of the paper first, then a number, then its longest words, and you can pick
@@ -1037,6 +1048,7 @@ What should I do today?
 When it finishes, the browser is already open — both the self-contained site and the full
 application, with the project sitting in your Library. Nothing to export, nothing to import,
 no server to start. The same folder keeps a portable `.trace.json` you can archive or share.
+Select any text on either to highlight it or write a note beside it.
 
 ### Your library as MCP tools
 
@@ -1320,7 +1332,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.42.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.43.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live [--require-live codex,claude]] [--report report.json]
 ```
 
@@ -1715,9 +1727,12 @@ The complete list, in one place. Each item is described in its own section above
 
 ### Notes, highlights and the reading list
 
-- Highlight in five colours and write notes in the deep report, the story, the study path or the
-  primer, or on a claim; <kbd>H</kbd> and <kbd>N</kbd> from the keyboard, a bar sized for a finger on a
-  phone; mark claims as important.
+- Highlight in five colours and write notes on the Overview, the Method, the Limitations, the
+  Technical appendix, the deep report, the story, the study path or the primer, or on a claim;
+  <kbd>H</kbd> and <kbd>N</kbd> from the keyboard, a bar sized for a finger on a phone, a line at the top
+  that says how until you close it; mark claims as important.
+- The same highlights and notes on the page the agent opens, a single-file copy or a published
+  link, kept in that browser, with Markdown and Obsidian downloads.
 - **Notes** in the Lab gathers them in reading order; notes are searched across the library too.
 - Notes as Markdown, as an Obsidian note, or the whole library as an Obsidian vault (`.zip`).
 - **Read later** from the citation graph or a concept's references; the reading list sits in the

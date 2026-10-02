@@ -24,6 +24,8 @@ import {
 } from "@/visuals";
 import { sectionPrerequisites, termIndex } from "@/lib/term-index";
 import { parseStudyProgress, type StudyProgress } from "@/lib/study-path";
+import { sectionMark, type NoteTarget } from "@/lib/reader-notes";
+import { useViewerNotes, ViewerHighlightHint, ViewerNoteHighlights, ViewerNotesPanel, ViewerSelectionBar } from "./notes";
 
 type Tab = "lab" | "story" | "study" | "practice" | "technical";
 
@@ -118,6 +120,21 @@ export function ViewerShell({
     return () => window.removeEventListener("hashchange", onHashChange);
   }, [tab]);
   const [studioOpen, setStudioOpen] = useState(false);
+  // Okuyucunun vurguları ve notları: bu tarayıcıda (`notes.tsx`).
+  const notes = useViewerNotes(project.id);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const closeNotes = useCallback(() => setNotesOpen(false), []);
+
+  /** Notlardan "Göster": notun bulunduğu sekmeye geçip yerine kaydırıyor. */
+  function showNote(target: NoteTarget) {
+    if (target.kind !== "section") return;
+    const nextTab: Tab =
+      target.place === "story" ? "story" : target.place === "concept" ? "practice" : target.place === "paper" && target.sectionId === "technical" ? "technical" : "lab";
+    setNotesOpen(false);
+    if (tabs.includes(nextTab)) setTab(nextTab);
+    const mark = sectionMark(target.place, target.sectionId);
+    window.setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(mark)}"]`)?.scrollIntoView({ block: "center" }), 60);
+  }
   const surface: ViewerSurface = studio.surface ?? (studio.url || studio.command ? "local" : "export");
   const surfaceLabel = surface === "published" ? t.publishedStory : surface === "export" ? t.exportedCopy : t.localStudio;
 
@@ -165,6 +182,9 @@ export function ViewerShell({
           ))}
         </div>
         <div className="viewer-actions">
+          <button type="button" className="viewer-notes-button" aria-haspopup="dialog" onClick={() => setNotesOpen(true)}>
+            {t.notesButton(notes.notes.length)}
+          </button>
           {studio.url ? (
             <a className="viewer-studio" href={studio.url}>
               {t.openInStudio} →
@@ -186,8 +206,14 @@ export function ViewerShell({
         </div>
       ) : null}
       {studioOpen && <StudioPanel studio={studio} onClose={() => setStudioOpen(false)} />}
+      {notesOpen ? (
+        <ViewerNotesPanel project={project} notes={notes.notes} kept={notes.kept} onRemove={notes.remove} onShow={showNote} onClose={closeNotes} />
+      ) : null}
+      <ViewerSelectionBar onAdd={notes.add} />
+      <ViewerNoteHighlights notes={notes.notes} />
 
       <main className="viewer-main">
+        <ViewerHighlightHint />
         {tab === "lab" ? <LabTab project={project} /> : null}
         {tab === "story" ? <StoryTab project={project} /> : null}
         {tab === "study" ? <StudyTab project={project} drill={drill} /> : null}
@@ -295,11 +321,11 @@ function LabTab({ project }: { project: ResearchProject }) {
 
       <section className="viewer-block">
         <h2>{t.thesis}</h2>
-        <p className="viewer-lead">{evidence.thesis}</p>
+        <p className="viewer-lead" data-note-section={sectionMark("paper", "thesis")}>{evidence.thesis}</p>
         <h2>{t.plainSummary}</h2>
-        <p>{evidence.plainSummary}</p>
+        <p data-note-section={sectionMark("paper", "summary")}>{evidence.plainSummary}</p>
         <h2>{t.researchQuestion}</h2>
-        <p>{evidence.researchQuestion}</p>
+        <p data-note-section={sectionMark("paper", "question")}>{evidence.researchQuestion}</p>
       </section>
 
       {/* Makalenin kendi şekilleri: "bu şey neye benziyor" sorusu, yöntemin
@@ -316,7 +342,7 @@ function LabTab({ project }: { project: ResearchProject }) {
         <div className="viewer-tri">
           <article>
             <span className="viewer-eyebrow">{t.methods}</span>
-            <ul>{evidence.methods.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            <ul data-note-section={sectionMark("paper", "methods")}>{evidence.methods.map((item, index) => <li key={index}>{item}</li>)}</ul>
           </article>
           <article>
             <span className="viewer-eyebrow">{t.findings}</span>
@@ -324,7 +350,7 @@ function LabTab({ project }: { project: ResearchProject }) {
           </article>
           <article>
             <span className="viewer-eyebrow">{t.limitations}</span>
-            <ul>{evidence.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            <ul data-note-section={sectionMark("paper", "limitations")}>{evidence.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul>
           </article>
         </div>
       </section>
@@ -378,7 +404,7 @@ function LabTab({ project }: { project: ResearchProject }) {
           <h2>{project.deepReport.title}</h2>
           <p className="viewer-lead">{project.deepReport.dek}</p>
           {project.deepReport.sections.map((section) => (
-            <article className="viewer-report-section" key={section.id}>
+            <article className="viewer-report-section" key={section.id} data-note-section={sectionMark("report", section.id)}>
               <span className="viewer-eyebrow">{t.reportKindBadge[section.kind]}</span>
               <h3>{section.title}</h3>
               <p className="viewer-summary">{section.summary}</p>
@@ -459,7 +485,7 @@ function StoryTab({ project }: { project: ResearchProject }) {
       <div className="viewer-story-grid">
         <div className="viewer-story-copy">
           {story.sections.map((section) => (
-            <section className="viewer-story-section" data-section={section.id} key={section.id}>
+            <section className="viewer-story-section" data-section={section.id} data-note-section={sectionMark("story", section.id)} key={section.id}>
               <span className="viewer-eyebrow">
                 {section.indexLabel} · {section.kicker}
               </span>
@@ -602,7 +628,7 @@ function TechnicalTab({ project }: { project: ResearchProject }) {
   if (!appendix) return null;
 
   return (
-    <div className="viewer-page">
+    <div className="viewer-page" data-note-section={sectionMark("paper", "technical")}>
       <header className="viewer-page-head">
         <h1>{appendix.title}</h1>
         <p className="viewer-lead">{appendix.overview}</p>

@@ -46,8 +46,9 @@ html[data-theme="dark"] *, html[data-theme="dark"] ::before, html[data-theme="da
 .studio-nav-profile { width: 36px; height: 36px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
 .studio-nav-profile[aria-current="page"] .focus-avatar { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .workspace-actions .studio-nav-focus.has-timer span { display: inline; }
-/* Dar başlıkta düğme etiketleri gizleniyor; profil resmi bir etiket değil. */
+/* Dar başlıkta düğme etiketleri gizleniyor; profil resmi ve dil düğmesinin "TR"/"EN"si etiket değil, düğmenin kendisi. */
 .workspace-actions .studio-nav-profile span.focus-avatar { display: grid; }
+.workspace-actions .studio-nav-language span { display: inline; }
 @keyframes studio-pulse { 50% { opacity: .3; } }
 
 .focus-avatar { display: grid; place-items: center; flex: none; overflow: hidden; border-radius: 50%; background: var(--focus-fill); color: var(--on-focus); font-weight: 650; letter-spacing: .02em; }

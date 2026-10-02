@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET, PUT } from "@/app/api/library/notes/route";
 import { loadExampleProject } from "./example-fixture";
-import { cleanQuote, groupNotes, isNotesFile, notesFileName, notesFileToJson, notesMarkdown, parseNotesFile, readerNoteSchema, type ReaderNote } from "./reader-notes";
+import { cleanQuote, groupNotes, isNotesFile, notesFileName, notesFileToJson, notesMarkdown, PAPER_BLOCK_WORDS, parseNotesFile, readerNoteSchema, type ReaderNote } from "./reader-notes";
 import { deleteStoredProject, readReaderNotes, saveReaderNotes, saveStoredProject } from "./trace-storage";
 
 const project = loadExampleProject("attention-is-all-you-need.en.trace.json");
@@ -57,6 +57,26 @@ describe("reader notes", () => {
     expect(groups[2]).toMatchObject({ heading: concept.term, notes: [onConcept] });
     expect(notesMarkdown(project, [onConcept], { exportedAt: at })).toContain(`## Primer: ${concept.term}\n\n> a line of the concept\n\nRevisit before the exam.`);
     expect(readerNoteSchema.safeParse({ ...onConcept, target: { kind: "section", place: "glossary", sectionId: "x" } }).success).toBe(false);
+  });
+
+  it("keeps highlights on the analysis text in the Lab first, named in the reader's language", () => {
+    const onThesis = note({ id: "n7", target: { kind: "section", place: "paper", sectionId: "thesis" }, quote: "a line of the thesis" });
+    const onLimits = note({ id: "n8", target: { kind: "section", place: "paper", sectionId: "limitations" }, text: "Check this in the next paper." });
+    const onUnknown = note({ id: "n9", target: { kind: "section", place: "paper", sectionId: "nowhere" }, text: "Lost block." });
+    const groups = groupNotes(project, [...notes, onLimits, onThesis, onUnknown]);
+    expect(groups.slice(0, 2).map((group) => [group.place, group.heading])).toEqual([
+      ["Lab", "Core thesis"],
+      ["Lab", "Limitations"],
+    ]);
+    // Bilinmeyen bir blok kaybolmuyor, "artık makalede yok" altında kalıyor.
+    expect(groups.at(-1)!.notes.map((item) => item.id)).toContain("n9");
+    const turkish = { ...PAPER_BLOCK_WORDS, thesis: "Ana tez", limitations: "Sınırlılıklar" };
+    expect(groupNotes(project, [onThesis, onLimits], turkish).map((group) => group.heading)).toEqual(["Ana tez", "Sınırlılıklar"]);
+    expect(notesMarkdown(project, [onThesis], { exportedAt: at })).toContain("## Lab: Core thesis\n\n> a line of the thesis");
+    // Teknik eki olmayan projede teknik ek bloğu yok: notu yetim sayılıyor.
+    const bare = { ...project, technicalAppendix: undefined };
+    const onTechnical = note({ id: "n10", target: { kind: "section", place: "paper", sectionId: "technical" }, text: "x" });
+    expect(groupNotes(bare, [onTechnical])[0].heading).toBe("No longer in the paper");
   });
 
   it("exports Markdown, and Obsidian with front matter and callouts", () => {

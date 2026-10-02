@@ -1,5 +1,5 @@
 import { searchTerms } from "./library-search";
-import { groupNotes, type NotePlace, type ReaderNote } from "./reader-notes";
+import { groupNotes, type NotePlace, type PaperBlockWords, type ReaderNote } from "./reader-notes";
 import type { ResearchProject } from "./schema";
 import { foldForSearch } from "./search-text";
 
@@ -30,14 +30,14 @@ export type PaperHit = {
 
 type Entry = PaperHit & { foldedTitle: string; foldedText: string; order: number };
 
-function entries(project: ResearchProject, notes: readonly ReaderNote[]): Entry[] {
+function entries(project: ResearchProject, notes: readonly ReaderNote[], paperWords?: PaperBlockWords): Entry[] {
   const items: PaperHit[] = [
     ...project.evidence.claims.map((claim) => ({ kind: "claim" as const, id: claim.id, title: claim.statement, text: claim.sourceRefs.map((reference) => reference.excerpt).join(" … ") })),
     ...project.story.sections.map((section) => ({ kind: "story" as const, id: section.id, title: section.title, text: [section.kicker, section.body].filter(Boolean).join(" ") })),
     ...(project.deepReport?.sections ?? []).map((section) => ({ kind: "report" as const, id: section.id, title: section.title, text: [section.summary, ...section.analysis].join(" ") })),
     ...(project.primer?.concepts ?? []).map((concept) => ({ kind: "concept" as const, id: concept.id, title: concept.term, text: [concept.intuition, concept.whyItMatters, concept.formal].filter(Boolean).join(" ") })),
     ...project.evidence.glossary.map((item) => ({ kind: "term" as const, id: item.term, title: item.term, text: item.definition })),
-    ...groupNotes(project, notes).flatMap((group) =>
+    ...groupNotes(project, notes, paperWords).flatMap((group) =>
       group.notes
         .filter((note) => note.text || note.quote)
         .map((note) => ({ kind: "note" as const, id: note.id, title: group.heading, text: [note.quote ? `“${note.quote}”` : "", note.text].filter(Boolean).join(" "), target: note.target })),
@@ -46,12 +46,13 @@ function entries(project: ResearchProject, notes: readonly ReaderNote[]): Entry[
   return items.map((item, order) => ({ ...item, order, foldedTitle: foldForSearch(item.title), foldedText: foldForSearch(item.text) }));
 }
 
-export function searchPaper(project: ResearchProject, notes: readonly ReaderNote[], query: string, limit = DEFAULT_PAPER_HITS) {
+/** `paperWords`: notların Lab bloklarına bağlı olanlarının başlığı, arayüzün dilinde. */
+export function searchPaper(project: ResearchProject, notes: readonly ReaderNote[], query: string, limit = DEFAULT_PAPER_HITS, paperWords?: PaperBlockWords) {
   const terms = searchTerms(query);
   const counts = Object.fromEntries(PAPER_SEARCH_KINDS.map((kind) => [kind, 0])) as Record<PaperHitKind, number>;
   if (!terms.length) return { terms, hits: [] as PaperHit[], total: 0, counts };
   const phrase = terms.join(" ");
-  const scored = entries(project, notes).flatMap((entry) => {
+  const scored = entries(project, notes, paperWords).flatMap((entry) => {
     let score = 0;
     for (const term of terms) {
       if (entry.foldedTitle.includes(term)) score += 3;

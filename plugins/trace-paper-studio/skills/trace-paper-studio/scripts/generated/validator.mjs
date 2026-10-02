@@ -7013,6 +7013,216 @@ function readingDrillFor(project, words) {
 }
 
 //#endregion
+//#region src/lib/reader-notes.ts
+/**
+* Okuyucunun notları ve vurguları.
+*
+* Bir iddiaya, bir bölüme (hikâye ya da derin rapor) ya da bir Primer
+* kavramına bağlı: bölümde
+* seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
+* iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
+*
+* Çalışma ilerlemesi gibi okuyucunun kaydı, makalenin değil: proje
+* dosyasına, dışa aktarımlara ve yayınlara girmiyor; kütüphanenin yanında
+* `notes.json` içinde duruyor. Markdown'a ya da Obsidian'a (ön bilgi,
+* etiketler ve callout'larla) buradan çıkıyor.
+*/
+const NOTE_COLORS = [
+	"yellow",
+	"green",
+	"blue",
+	"pink",
+	"purple"
+];
+const MAX_NOTES_PER_PAPER = 1e3;
+const MAX_NOTE_TEXT = 4e3;
+const MAX_NOTE_QUOTE = 1200;
+const MAX_ID$1 = 300;
+/**
+* Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor
+* bölümü, Primer kavramı ya da Lab'deki analiz metni (`paper`: ana tez,
+* araştırma sorusu, sade özet, yöntem, sınırlılıklar, teknik ek).
+*/
+const NOTE_PLACES = [
+	"story",
+	"report",
+	"concept",
+	"paper"
+];
+/** Lab'de vurgulanabilen analiz metinleri, makaledeki sırayla. */
+const PAPER_BLOCKS = [
+	"thesis",
+	"question",
+	"summary",
+	"methods",
+	"limitations",
+	"technical"
+];
+const PAPER_BLOCK_WORDS = {
+	thesis: "Core thesis",
+	question: "Research question",
+	summary: "Plain-language summary",
+	methods: "Method",
+	limitations: "Limitations",
+	technical: "Technical appendix"
+};
+const noteTargetSchema = discriminatedUnion("kind", [object({
+	kind: literal("claim"),
+	claimId: string().min(1).max(160)
+}), object({
+	kind: literal("section"),
+	place: _enum(NOTE_PLACES),
+	sectionId: string().min(1).max(160)
+})]);
+const readerNoteSchema = object({
+	id: string().min(1).max(80),
+	target: noteTargetSchema,
+	/** Vurgulanan metin, bölümde göründüğü gibi. */
+	quote: string().trim().min(1).max(MAX_NOTE_QUOTE).optional(),
+	text: string().trim().max(MAX_NOTE_TEXT).default(""),
+	color: _enum(NOTE_COLORS).default("yellow"),
+	createdAt: string().max(40),
+	updatedAt: string().max(40),
+	/** Ekip kipinde notu yazan üye; yoksa kütüphanenin sahibinin (ekipten önceki notlar). */
+	author: string().min(1).max(80).optional(),
+	/** Ekiple paylaşıldı: başka üyeler okuyabiliyor, değiştiremiyor. */
+	shared: boolean().optional(),
+	/** Yalnızca gösterim için, sunucu yazıyor: başka bir üyenin notunda onun adı. */
+	authorName: string().max(80).optional()
+}).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
+const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
+const notesFileSchema = object({
+	version: literal(1),
+	projects: array(unknown())
+});
+const notesEntrySchema = object({
+	id: string().min(1).max(MAX_ID$1),
+	notes: array(unknown())
+});
+/** Proje kimliği → notlar. Bozuk bir not tek başına düşüyor, diğerleri kalıyor. */
+function parseNotesFile(raw) {
+	const entries = /* @__PURE__ */ new Map();
+	const file = notesFileSchema.safeParse(raw);
+	if (!file.success) return entries;
+	for (const item of file.data.projects) {
+		const entry = notesEntrySchema.safeParse(item);
+		if (!entry.success) continue;
+		const notes = entry.data.notes.flatMap((note) => {
+			const parsed = readerNoteSchema.safeParse(note);
+			return parsed.success ? [parsed.data] : [];
+		});
+		if (notes.length) entries.set(entry.data.id, notes.slice(0, MAX_NOTES_PER_PAPER));
+	}
+	return entries;
+}
+const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
+/** Artık projede olmayan hedeflerin notlarının başlığı; ekranlar bunu kendi dillerinde gösteriyor. */
+const ORPHAN_HEADING = "No longer in the paper";
+/**
+* Notlar makaledeki sıraya göre: Lab'deki analiz metni (ana tez, soru,
+* özet, yöntem, sınırlılıklar, teknik ek), hikâye bölümleri, rapor
+* bölümleri, Primer kavramları, sonra iddialar. Artık projede olmayan bir
+* hedefe bağlı notlar kaybolmuyor, sonda "no longer in the paper" başlığıyla
+* kalıyor. `paperWords`: Lab bloklarının başlıkları, arayüzün dilinde.
+*/
+function groupNotes(project, notes, paperWords = PAPER_BLOCK_WORDS) {
+	const groups = [];
+	const used = /* @__PURE__ */ new Set();
+	const take = (target, heading, place, extra = {}) => {
+		const matched = notes.filter((note) => sameTarget(note.target, target)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+		if (!matched.length) return;
+		matched.forEach((note) => used.add(note.id));
+		groups.push({
+			target,
+			heading,
+			place,
+			notes: matched,
+			...extra
+		});
+	};
+	for (const block of PAPER_BLOCKS) {
+		if (block === "technical" && !project.technicalAppendix) continue;
+		take({
+			kind: "section",
+			place: "paper",
+			sectionId: block
+		}, paperWords[block], "Lab");
+	}
+	for (const section of project.story.sections) take({
+		kind: "section",
+		place: "story",
+		sectionId: section.id
+	}, section.title, "Story");
+	for (const section of project.deepReport?.sections ?? []) take({
+		kind: "section",
+		place: "report",
+		sectionId: section.id
+	}, section.title, "Deep report");
+	for (const concept of project.primer?.concepts ?? []) take({
+		kind: "section",
+		place: "concept",
+		sectionId: concept.id
+	}, concept.term, "Primer");
+	for (const claim of project.evidence.claims) {
+		const reference = claim.sourceRefs[0];
+		take({
+			kind: "claim",
+			claimId: claim.id
+		}, claim.statement, "Claim", {
+			...reference?.page ? { page: reference.page } : {},
+			...reference?.excerpt ? { excerpt: reference.excerpt } : {}
+		});
+	}
+	const orphans = notes.filter((note) => !used.has(note.id));
+	if (orphans.length) groups.push({
+		target: orphans[0].target,
+		heading: ORPHAN_HEADING,
+		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
+		notes: orphans
+	});
+	return groups;
+}
+const quoted = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
+const yamlString = (value) => JSON.stringify(value);
+/**
+* Markdown dışa aktarımı. `obsidian`: YAML ön bilgisi (başlık, yazarlar, yıl,
+* DOI, etiketler), vurgular `[!quote]`, iddianın kaynağı `[!cite]` callout'u.
+* Düz Markdown'da aynı içerik alıntı bloklarıyla.
+*/
+function notesMarkdown(project, notes, options) {
+	const { paper } = project.evidence;
+	const lines = [];
+	if (options.obsidian) lines.push("---", `title: ${yamlString(paper.title)}`, `authors: [${paper.authors.map(yamlString).join(", ")}]`, ...paper.year ? [`year: ${yamlString(paper.year)}`] : [], ...paper.venue ? [`venue: ${yamlString(paper.venue)}`] : [], ...paper.doi ? [`doi: ${yamlString(paper.doi)}`] : [], "tags: [trace, paper-notes]", `exported: ${options.exportedAt.slice(0, 10)}`, "---", "");
+	lines.push(`# ${paper.title}: notes`, "");
+	if (!options.obsidian) {
+		const byline = [
+			paper.authors.join(", "),
+			paper.venue,
+			paper.year
+		].filter(Boolean).join(" · ");
+		if (byline) lines.push(`*${byline}*`, "");
+		if (paper.doi) lines.push(`DOI: ${paper.doi}`, "");
+	}
+	const groups = groupNotes(project, notes);
+	if (!groups.length) lines.push("No notes or highlights yet.", "");
+	for (const group of groups) {
+		lines.push(`## ${group.place === "Claim" ? "Claim" : group.place}: ${group.heading}${group.page ? ` (p. ${group.page})` : ""}`, "");
+		if (group.excerpt) lines.push(options.obsidian ? `> [!cite] The paper, p. ${group.page ?? "?"}\n${quoted(`“${group.excerpt}”`)}` : quoted(`“${group.excerpt}” (p. ${group.page ?? "?"})`), "");
+		for (const note of group.notes) {
+			if (note.quote) lines.push(options.obsidian ? `> [!quote] Highlight\n${quoted(note.quote)}` : quoted(note.quote), "");
+			if (note.text) lines.push(note.text, "");
+			if (!note.quote && !note.text) lines.push(options.obsidian ? "#highlighted" : "*Marked as important.*", "");
+		}
+	}
+	if (!options.obsidian) lines.push(`Exported from Trace on ${options.exportedAt.slice(0, 10)}.`);
+	return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
+}
+/** Dosya adı: başlıktan, güvenli karakterlerle. */
+function notesFileName(project) {
+	return `${project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "trace-paper"}-notes.md`;
+}
+
+//#endregion
 //#region src/visuals/i18n.ts
 /**
 * Görsellerin arayüz metinleri, iki dilde: İngilizce ve Türkçe.
@@ -7235,6 +7445,41 @@ const en = {
 	copied: "Copied",
 	close: "Close",
 	labSectionsAria: "Paper review sections",
+	notesButton: (count) => count ? `Notes (${count})` : "Notes",
+	notesTitle: "Your highlights and notes",
+	notesPrivate: "They stay in this browser only: nothing is sent anywhere or written into this page or its project file. Download them to keep them.",
+	notesEmpty: "Nothing yet. Select any text on the page to highlight it or write a note beside it.",
+	notesNotKept: "This browser is not keeping them (its storage is off), so they last until the page is closed. Download them to keep them.",
+	notesMarkdown: "Download as Markdown",
+	notesObsidian: "For Obsidian",
+	notesShow: "Show it",
+	notesDelete: "Delete this note",
+	notePlaces: {
+		Lab: "Lab",
+		Story: "Story",
+		"Deep report": "Deep report",
+		Primer: "Primer",
+		Claim: "Claim"
+	},
+	paperBlocks: PAPER_BLOCK_WORDS,
+	notesOrphans: "No longer in the paper",
+	highlightHint: "Select any text on this page to highlight it or write a note beside it: a bar with five colours and Note appears above the selection. With text selected, H highlights and N opens a note. Notes, at the top, lists them and downloads them.",
+	highlightHintDismiss: "Got it",
+	noteToolbar: "Highlight the selected text",
+	highlightIn: (color) => `Highlight in ${color}`,
+	noteColors: {
+		yellow: "yellow",
+		green: "green",
+		blue: "blue",
+		pink: "pink",
+		purple: "purple"
+	},
+	noteAction: "Note",
+	writeNote: "Write a note (N)",
+	noteForm: "Note on the highlight",
+	yourNote: "Your note",
+	save: "Save",
+	cancel: "Cancel",
 	figuresHeading: "Figures from the paper",
 	figureExpand: "View full size",
 	figureCollapse: "Fit to width",
@@ -7537,6 +7782,48 @@ const tr = {
 	copied: "Kopyalandı",
 	close: "Kapat",
 	labSectionsAria: "Makale analizinin bölümleri",
+	notesButton: (count) => count ? `Notlar (${count})` : "Notlar",
+	notesTitle: "Vurguların ve notların",
+	notesPrivate: "Yalnızca bu tarayıcıda kalıyorlar: hiçbir yere gönderilmiyor, bu sayfaya ya da proje dosyasına yazılmıyor. Saklamak için indir.",
+	notesEmpty: "Henüz bir şey yok. Vurgulamak ya da yanına not yazmak için sayfadaki herhangi bir metni seç.",
+	notesNotKept: "Bu tarayıcı onları tutmuyor (depolaması kapalı), sayfa kapanana kadar duruyorlar. Saklamak için indir.",
+	notesMarkdown: "Markdown olarak indir",
+	notesObsidian: "Obsidian için",
+	notesShow: "Göster",
+	notesDelete: "Bu notu sil",
+	notePlaces: {
+		Lab: "Lab",
+		Story: "Hikâye",
+		"Deep report": "Ayrıntılı rapor",
+		Primer: "Ön bilgi",
+		Claim: "İddia"
+	},
+	paperBlocks: {
+		thesis: "Ana tez",
+		question: "Araştırma sorusu",
+		summary: "Sade dille özet",
+		methods: "Yöntem",
+		limitations: "Sınırlılıklar",
+		technical: "Teknik ek"
+	},
+	notesOrphans: "Artık makalede yok",
+	highlightHint: "Vurgulamak ya da yanına not yazmak için bu sayfadaki herhangi bir metni seç: seçimin üstünde beş renk ve Not düğmesi olan bir çubuk açılır. Metin seçiliyken H vurgular, N not açar. Üstteki Notlar hepsini listeler ve indirir.",
+	highlightHintDismiss: "Anladım",
+	noteToolbar: "Seçili metni vurgula",
+	highlightIn: (color) => `${color} renkle vurgula`,
+	noteColors: {
+		yellow: "sarı",
+		green: "yeşil",
+		blue: "mavi",
+		pink: "pembe",
+		purple: "mor"
+	},
+	noteAction: "Not",
+	writeNote: "Not yaz (N)",
+	noteForm: "Vurguya not",
+	yourNote: "Notun",
+	save: "Kaydet",
+	cancel: "Vazgeç",
 	figuresHeading: "Makaledeki şekiller",
 	figureExpand: "Tam boyutta gör",
 	figureCollapse: "Genişliğe sığdır",
@@ -21889,10 +22176,10 @@ function studyPath(project, drill) {
 		questions
 	};
 }
-const MAX_ID$1 = 300;
+const MAX_ID = 300;
 const MAX_ENTRIES = 400;
 const studyAnswerSchema = object({
-	id: string().min(1).max(MAX_ID$1),
+	id: string().min(1).max(MAX_ID),
 	correct: boolean(),
 	attempts: number().int().min(1).max(99),
 	revealed: boolean(),
@@ -21907,13 +22194,13 @@ const studyAnswerSchema = object({
 */
 const studyExplanationSchema = object({
 	/** "story:<id>" ya da "report:<id>". */
-	target: string().min(1).max(MAX_ID$1),
+	target: string().min(1).max(MAX_ID),
 	at: string().max(40),
 	/** Anlatış 3000 karakterle sınırlı (`explain-back.ts`); bu yalnızca bir akıl sınırı. */
 	text: string().min(1).max(4e3),
 	model: string().max(200),
-	covered: array(string().max(MAX_ID$1)).max(200),
-	missed: array(string().max(MAX_ID$1)).max(200),
+	covered: array(string().max(MAX_ID)).max(200),
+	missed: array(string().max(MAX_ID)).max(200),
 	misstated: number().int().min(0).max(200),
 	unsupported: number().int().min(0).max(200),
 	total: number().int().min(0).max(200),
@@ -21949,8 +22236,8 @@ const reviewDaySchema = object({
 });
 const studyProgressSchema = object({
 	version: literal(1),
-	current: string().max(MAX_ID$1).optional(),
-	done: array(string().max(MAX_ID$1)).max(400),
+	current: string().max(MAX_ID).optional(),
+	done: array(string().max(MAX_ID)).max(400),
 	answers: array(studyAnswerSchema).max(400),
 	startedAt: string().max(40),
 	updatedAt: string().max(40),
@@ -22023,7 +22310,7 @@ const studyFileSchema = object({
 	projects: array(unknown())
 });
 const studyEntrySchema = object({
-	id: string().min(1).max(MAX_ID$1),
+	id: string().min(1).max(MAX_ID),
 	progress: studyProgressSchema
 });
 function isStudyFile(raw) {
@@ -23655,184 +23942,6 @@ function sessionsIcs(sessions, options) {
 	}
 	lines.push("END:VCALENDAR");
 	return `${lines.map(fold$1).join("\r\n")}\r\n`;
-}
-
-//#endregion
-//#region src/lib/reader-notes.ts
-/**
-* Okuyucunun notları ve vurguları.
-*
-* Bir iddiaya, bir bölüme (hikâye ya da derin rapor) ya da bir Primer
-* kavramına bağlı: bölümde
-* seçilen metin vurgulanıyor (`quote`), yanına bir not yazılabiliyor;
-* iddiaya not yazılıyor ya da iddia yalnızca işaretleniyor.
-*
-* Çalışma ilerlemesi gibi okuyucunun kaydı, makalenin değil: proje
-* dosyasına, dışa aktarımlara ve yayınlara girmiyor; kütüphanenin yanında
-* `notes.json` içinde duruyor. Markdown'a ya da Obsidian'a (ön bilgi,
-* etiketler ve callout'larla) buradan çıkıyor.
-*/
-const NOTE_COLORS = [
-	"yellow",
-	"green",
-	"blue",
-	"pink",
-	"purple"
-];
-const MAX_NOTES_PER_PAPER = 1e3;
-const MAX_NOTE_TEXT = 4e3;
-const MAX_NOTE_QUOTE = 1200;
-const MAX_ID = 300;
-/** Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor bölümü ya da Primer kavramı. */
-const NOTE_PLACES = [
-	"story",
-	"report",
-	"concept"
-];
-const noteTargetSchema = discriminatedUnion("kind", [object({
-	kind: literal("claim"),
-	claimId: string().min(1).max(160)
-}), object({
-	kind: literal("section"),
-	place: _enum(NOTE_PLACES),
-	sectionId: string().min(1).max(160)
-})]);
-const readerNoteSchema = object({
-	id: string().min(1).max(80),
-	target: noteTargetSchema,
-	/** Vurgulanan metin, bölümde göründüğü gibi. */
-	quote: string().trim().min(1).max(MAX_NOTE_QUOTE).optional(),
-	text: string().trim().max(MAX_NOTE_TEXT).default(""),
-	color: _enum(NOTE_COLORS).default("yellow"),
-	createdAt: string().max(40),
-	updatedAt: string().max(40),
-	/** Ekip kipinde notu yazan üye; yoksa kütüphanenin sahibinin (ekipten önceki notlar). */
-	author: string().min(1).max(80).optional(),
-	/** Ekiple paylaşıldı: başka üyeler okuyabiliyor, değiştiremiyor. */
-	shared: boolean().optional(),
-	/** Yalnızca gösterim için, sunucu yazıyor: başka bir üyenin notunda onun adı. */
-	authorName: string().max(80).optional()
-}).refine((note) => note.target.kind === "claim" || note.quote || note.text, "A note on a section needs a highlight or some text.");
-const readerNotesSchema = array(readerNoteSchema).max(MAX_NOTES_PER_PAPER);
-const notesFileSchema = object({
-	version: literal(1),
-	projects: array(unknown())
-});
-const notesEntrySchema = object({
-	id: string().min(1).max(MAX_ID),
-	notes: array(unknown())
-});
-/** Proje kimliği → notlar. Bozuk bir not tek başına düşüyor, diğerleri kalıyor. */
-function parseNotesFile(raw) {
-	const entries = /* @__PURE__ */ new Map();
-	const file = notesFileSchema.safeParse(raw);
-	if (!file.success) return entries;
-	for (const item of file.data.projects) {
-		const entry = notesEntrySchema.safeParse(item);
-		if (!entry.success) continue;
-		const notes = entry.data.notes.flatMap((note) => {
-			const parsed = readerNoteSchema.safeParse(note);
-			return parsed.success ? [parsed.data] : [];
-		});
-		if (notes.length) entries.set(entry.data.id, notes.slice(0, MAX_NOTES_PER_PAPER));
-	}
-	return entries;
-}
-const sameTarget = (left, right) => left.kind === "claim" ? right.kind === "claim" && left.claimId === right.claimId : right.kind === "section" && left.place === right.place && left.sectionId === right.sectionId;
-/** Artık projede olmayan hedeflerin notlarının başlığı; ekranlar bunu kendi dillerinde gösteriyor. */
-const ORPHAN_HEADING = "No longer in the paper";
-/**
-* Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, Primer
-* kavramları, sonra iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
-* "no longer in the paper" başlığıyla kalıyor.
-*/
-function groupNotes(project, notes) {
-	const groups = [];
-	const used = /* @__PURE__ */ new Set();
-	const take = (target, heading, place, extra = {}) => {
-		const matched = notes.filter((note) => sameTarget(note.target, target)).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-		if (!matched.length) return;
-		matched.forEach((note) => used.add(note.id));
-		groups.push({
-			target,
-			heading,
-			place,
-			notes: matched,
-			...extra
-		});
-	};
-	for (const section of project.story.sections) take({
-		kind: "section",
-		place: "story",
-		sectionId: section.id
-	}, section.title, "Story");
-	for (const section of project.deepReport?.sections ?? []) take({
-		kind: "section",
-		place: "report",
-		sectionId: section.id
-	}, section.title, "Deep report");
-	for (const concept of project.primer?.concepts ?? []) take({
-		kind: "section",
-		place: "concept",
-		sectionId: concept.id
-	}, concept.term, "Primer");
-	for (const claim of project.evidence.claims) {
-		const reference = claim.sourceRefs[0];
-		take({
-			kind: "claim",
-			claimId: claim.id
-		}, claim.statement, "Claim", {
-			...reference?.page ? { page: reference.page } : {},
-			...reference?.excerpt ? { excerpt: reference.excerpt } : {}
-		});
-	}
-	const orphans = notes.filter((note) => !used.has(note.id));
-	if (orphans.length) groups.push({
-		target: orphans[0].target,
-		heading: ORPHAN_HEADING,
-		place: orphans[0].target.kind === "claim" ? "Claim" : "Story",
-		notes: orphans
-	});
-	return groups;
-}
-const quoted = (text) => text.split("\n").map((line) => `> ${line}`).join("\n");
-const yamlString = (value) => JSON.stringify(value);
-/**
-* Markdown dışa aktarımı. `obsidian`: YAML ön bilgisi (başlık, yazarlar, yıl,
-* DOI, etiketler), vurgular `[!quote]`, iddianın kaynağı `[!cite]` callout'u.
-* Düz Markdown'da aynı içerik alıntı bloklarıyla.
-*/
-function notesMarkdown(project, notes, options) {
-	const { paper } = project.evidence;
-	const lines = [];
-	if (options.obsidian) lines.push("---", `title: ${yamlString(paper.title)}`, `authors: [${paper.authors.map(yamlString).join(", ")}]`, ...paper.year ? [`year: ${yamlString(paper.year)}`] : [], ...paper.venue ? [`venue: ${yamlString(paper.venue)}`] : [], ...paper.doi ? [`doi: ${yamlString(paper.doi)}`] : [], "tags: [trace, paper-notes]", `exported: ${options.exportedAt.slice(0, 10)}`, "---", "");
-	lines.push(`# ${paper.title}: notes`, "");
-	if (!options.obsidian) {
-		const byline = [
-			paper.authors.join(", "),
-			paper.venue,
-			paper.year
-		].filter(Boolean).join(" · ");
-		if (byline) lines.push(`*${byline}*`, "");
-		if (paper.doi) lines.push(`DOI: ${paper.doi}`, "");
-	}
-	const groups = groupNotes(project, notes);
-	if (!groups.length) lines.push("No notes or highlights yet.", "");
-	for (const group of groups) {
-		lines.push(`## ${group.place === "Claim" ? "Claim" : group.place}: ${group.heading}${group.page ? ` (p. ${group.page})` : ""}`, "");
-		if (group.excerpt) lines.push(options.obsidian ? `> [!cite] The paper, p. ${group.page ?? "?"}\n${quoted(`“${group.excerpt}”`)}` : quoted(`“${group.excerpt}” (p. ${group.page ?? "?"})`), "");
-		for (const note of group.notes) {
-			if (note.quote) lines.push(options.obsidian ? `> [!quote] Highlight\n${quoted(note.quote)}` : quoted(note.quote), "");
-			if (note.text) lines.push(note.text, "");
-			if (!note.quote && !note.text) lines.push(options.obsidian ? "#highlighted" : "*Marked as important.*", "");
-		}
-	}
-	if (!options.obsidian) lines.push(`Exported from Trace on ${options.exportedAt.slice(0, 10)}.`);
-	return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
-}
-/** Dosya adı: başlıktan, güvenli karakterlerle. */
-function notesFileName(project) {
-	return `${project.evidence.paper.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "trace-paper"}-notes.md`;
 }
 
 //#endregion

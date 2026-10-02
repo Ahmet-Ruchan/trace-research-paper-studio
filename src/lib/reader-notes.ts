@@ -22,9 +22,29 @@ export const MAX_NOTE_TEXT = 4000;
 export const MAX_NOTE_QUOTE = 1200;
 const MAX_ID = 300;
 
-/** Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor bölümü ya da Primer kavramı. */
-export const NOTE_PLACES = ["story", "report", "concept"] as const;
+/**
+ * Vurgunun yeri: hikâye bölümü (Story önizlemesi ve Study yolu), derin rapor
+ * bölümü, Primer kavramı ya da Lab'deki analiz metni (`paper`: ana tez,
+ * araştırma sorusu, sade özet, yöntem, sınırlılıklar, teknik ek).
+ */
+export const NOTE_PLACES = ["story", "report", "concept", "paper"] as const;
 export type NotePlace = (typeof NOTE_PLACES)[number];
+
+/** Lab'de vurgulanabilen analiz metinleri, makaledeki sırayla. */
+export const PAPER_BLOCKS = ["thesis", "question", "summary", "methods", "limitations", "technical"] as const;
+export type PaperBlock = (typeof PAPER_BLOCKS)[number];
+export const isPaperBlock = (value: string): value is PaperBlock => (PAPER_BLOCKS as readonly string[]).includes(value);
+
+/** Blokların başlığı; Türkçesi arayüz sözlüğünde (`learning`). */
+export type PaperBlockWords = Record<PaperBlock, string>;
+export const PAPER_BLOCK_WORDS: PaperBlockWords = {
+  thesis: "Core thesis",
+  question: "Research question",
+  summary: "Plain-language summary",
+  methods: "Method",
+  limitations: "Limitations",
+  technical: "Technical appendix",
+};
 
 export const noteTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("claim"), claimId: z.string().min(1).max(160) }),
@@ -97,14 +117,16 @@ export function cleanQuote(text: string) {
 /** Artık projede olmayan hedeflerin notlarının başlığı; ekranlar bunu kendi dillerinde gösteriyor. */
 export const ORPHAN_HEADING = "No longer in the paper";
 
-export type NoteGroup = { target: NoteTarget; heading: string; place: "Story" | "Deep report" | "Primer" | "Claim"; page?: number; excerpt?: string; notes: ReaderNote[] };
+export type NoteGroup = { target: NoteTarget; heading: string; place: "Lab" | "Story" | "Deep report" | "Primer" | "Claim"; page?: number; excerpt?: string; notes: ReaderNote[] };
 
 /**
- * Notlar makaledeki sıraya göre: hikâye bölümleri, rapor bölümleri, Primer
- * kavramları, sonra iddialar. Artık projede olmayan bir hedefe bağlı notlar kaybolmuyor, sonda
- * "no longer in the paper" başlığıyla kalıyor.
+ * Notlar makaledeki sıraya göre: Lab'deki analiz metni (ana tez, soru,
+ * özet, yöntem, sınırlılıklar, teknik ek), hikâye bölümleri, rapor
+ * bölümleri, Primer kavramları, sonra iddialar. Artık projede olmayan bir
+ * hedefe bağlı notlar kaybolmuyor, sonda "no longer in the paper" başlığıyla
+ * kalıyor. `paperWords`: Lab bloklarının başlıkları, arayüzün dilinde.
  */
-export function groupNotes(project: ResearchProject, notes: readonly ReaderNote[]): NoteGroup[] {
+export function groupNotes(project: ResearchProject, notes: readonly ReaderNote[], paperWords: PaperBlockWords = PAPER_BLOCK_WORDS): NoteGroup[] {
   const groups: NoteGroup[] = [];
   const used = new Set<string>();
   const take = (target: NoteTarget, heading: string, place: NoteGroup["place"], extra: Partial<NoteGroup> = {}) => {
@@ -113,6 +135,10 @@ export function groupNotes(project: ResearchProject, notes: readonly ReaderNote[
     matched.forEach((note) => used.add(note.id));
     groups.push({ target, heading, place, notes: matched, ...extra });
   };
+  for (const block of PAPER_BLOCKS) {
+    if (block === "technical" && !project.technicalAppendix) continue;
+    take({ kind: "section", place: "paper", sectionId: block }, paperWords[block], "Lab");
+  }
   for (const section of project.story.sections) take({ kind: "section", place: "story", sectionId: section.id }, section.title, "Story");
   for (const section of project.deepReport?.sections ?? []) take({ kind: "section", place: "report", sectionId: section.id }, section.title, "Deep report");
   for (const concept of project.primer?.concepts ?? []) take({ kind: "section", place: "concept", sectionId: concept.id }, concept.term, "Primer");

@@ -3,6 +3,7 @@
 @import "../visuals/tokens.css";
 @import "../visuals/styles.css";
 @import "../visuals/learning.css";
+@import "../visuals/notes.css";
 @import "./focus.css";
 @import "./notes.css";
 @theme inline {

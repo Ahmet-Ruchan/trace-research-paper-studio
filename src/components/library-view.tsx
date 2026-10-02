@@ -21,7 +21,7 @@ import {
 import { buildClaimIndex, excerptAround, highlightSegments, searchClaims, type ClaimHit, type ClaimSearch } from "@/lib/library-search";
 import { MAX_TAG_LENGTH, addTag, hasTag, removeTag, tagCounts, tagKey } from "@/lib/library-tags";
 import { buildNoteIndex, searchNotes, type NoteHit, type NoteSearch } from "@/lib/note-search";
-import { ORPHAN_HEADING, parseNotesFile, type ReaderNote } from "@/lib/reader-notes";
+import { isPaperBlock, ORPHAN_HEADING, parseNotesFile, type ReaderNote } from "@/lib/reader-notes";
 import { UNDO_WINDOW_MS } from "@/lib/pending-deletion";
 import { listLibraryTags, saveProjectTags } from "@/lib/project-library";
 import type { ResearchProject } from "@/lib/schema";
@@ -561,7 +561,7 @@ function NoteResults({ state, search, noteCount, paperCount, collection, onOpen 
               <b>{hit.project.evidence.paper.title}</b>
               <small>{t.notePlaces[hit.place]}</small>
             </span>
-            <span className="note-hit-where">{hit.heading === ORPHAN_HEADING ? messages.learning.readerNotes.orphans : hit.heading}</span>
+            <span className="note-hit-where">{hit.heading === ORPHAN_HEADING ? messages.learning.readerNotes.orphans : hit.note.target.kind === "section" && hit.note.target.place === "paper" && isPaperBlock(hit.note.target.sectionId) ? messages.learning.readerNotes.paperBlocks[hit.note.target.sectionId] : hit.heading}</span>
             {hit.note.quote ? <span className={`claim-hit-quote note-hit-quote is-${hit.note.color}`}>“<Highlighted text={excerptAround(hit.note.quote, search.terms)} terms={search.terms} />”</span> : null}
             {hit.note.text ? <span className="note-hit-text"><Highlighted text={excerptAround(hit.note.text, search.terms)} terms={search.terms} /></span> : null}
           </button>

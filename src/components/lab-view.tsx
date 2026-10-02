@@ -72,7 +72,7 @@ import { useConceptAliases, useLibraryStudy, useStudyProgress } from "./study-pr
 import { FocusRoundBar, PaperFocusOffer } from "./focus/paper-time";
 import { useFocus } from "./focus/focus-provider";
 import { extendReviewBlock, type ReviewBlock } from "@/lib/work-log";
-import { NotesPanel, useReaderNotes } from "./reader-notes";
+import { HighlightHint, NotesPanel, useReaderNotes } from "./reader-notes";
 import { ResumeBar, scrollToSection, useReadingTracker } from "./reading-position";
 import { ListenButton, ReadAloudProvider } from "./read-aloud";
 import { reportSpeech } from "@/lib/read-aloud";
@@ -101,6 +101,9 @@ type LabViewProps = {
   jump?: { section: string; reportSectionId?: string; conceptId?: string; term?: string; query?: string; nonce: number };
 };
 
+/** Metni seçince vurgulanabilen Lab ekranları; üstlerinde nasıl yapıldığı söyleniyor. */
+const HIGHLIGHT_SECTIONS = new Set(["overview", "report", "primer", "study", "method", "limits", "technical"]);
+
 export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onProjectChange, onPaperFile, onReview, library, onAnalysePaper, onShowStorySection, jump }: LabViewProps) {
   const notes = useReaderNotes();
   const notedClaims = useMemo(() => new Set((notes?.notes ?? []).flatMap((note) => (note.target.kind === "claim" ? [note.target.claimId] : []))), [notes?.notes]);
@@ -124,7 +127,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
   ) : null;
   // Makale içi arama (`paper-search.ts`); "/" arama kutusunu açıyor.
   const [paperQuery, setPaperQuery] = useState("");
-  const paperSearch = useMemo(() => searchPaper(project, notes?.notes ?? [], paperQuery), [project, notes?.notes, paperQuery]);
+  const paperSearch = useMemo(() => searchPaper(project, notes?.notes ?? [], paperQuery, undefined, messages.learning.readerNotes.paperBlocks), [project, notes?.notes, paperQuery, messages]);
   const searchInput = useRef<HTMLInputElement>(null);
   // Notlardan "Show it" ya da komut paletiyle Primer'de açılacak kavram.
   const [primerOpen, setPrimerOpen] = useState<string>();
@@ -167,6 +170,11 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
 
   /** Bir yere gitmek: notlardaki "Show it" ve arama sonuçları. */
   function showPlace(place: NotePlace, sectionId: string) {
+    if (place === "paper") {
+      setSection(sectionId === "methods" ? "method" : sectionId === "limitations" ? "limits" : sectionId === "technical" ? "technical" : "overview");
+      window.setTimeout(() => document.querySelector(`[data-note-section="${CSS.escape(sectionMark(place, sectionId))}"]`)?.scrollIntoView({ block: "center" }), 60);
+      return;
+    }
     if (place === "story") {
       if (onShowStorySection) return onShowStorySection(sectionId);
       setSection("study");
@@ -384,6 +392,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
           <h1>{project.evidence.paper.title}</h1>
           <p>{project.evidence.paper.authors.join(", ")}</p>
         </header>
+        {HIGHLIGHT_SECTIONS.has(section) ? <HighlightHint /> : null}
 
         {section === "overview" && (
           <div className="lab-content-stack">
@@ -427,16 +436,16 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
             {onProjectChange ? <PaperFocusOffer project={project} /> : null}
             <section className="thesis-card">
               <span>{t.overview.coreThesis}</span>
-              <blockquote>{project.evidence.thesis}</blockquote>
+              <blockquote data-note-section={sectionMark("paper", "thesis")}>{project.evidence.thesis}</blockquote>
             </section>
             <section className="lab-block two-column-block">
               <div>
                 <div className="block-title"><Lightbulb size={16} /> {t.overview.researchQuestion}</div>
-                <p className="large-body">{project.evidence.researchQuestion}</p>
+                <p className="large-body" data-note-section={sectionMark("paper", "question")}>{project.evidence.researchQuestion}</p>
               </div>
               <div>
                 <div className="block-title"><ListChecks size={16} /> {t.overview.plainSummary}</div>
-                <p>{project.evidence.plainSummary}</p>
+                <p data-note-section={sectionMark("paper", "summary")}>{project.evidence.plainSummary}</p>
               </div>
             </section>
             <section className="lab-block">
@@ -660,7 +669,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         {section === "method" && (
           <section className="lab-block">
             <div className="block-title"><FlaskConical size={16} /> {t.method.heading}</div>
-            <div className="method-timeline">
+            <div className="method-timeline" data-note-section={sectionMark("paper", "methods")}>
               {project.evidence.methods.map((method, index) => (
                 <div key={`${method}-${index}`}>
                   <span>{String(index + 1).padStart(2, "0")}</span>
@@ -672,7 +681,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
         )}
 
         {section === "technical" && project.technicalAppendix && (
-          <div className="technical-appendix">
+          <div className="technical-appendix" data-note-section={sectionMark("paper", "technical")}>
             <header className="technical-intro">
               <span>{t.technical.kicker}</span>
               <h2>{project.technicalAppendix.title}</h2>
@@ -747,7 +756,7 @@ export function LabView({ project, fileUrl, selectedClaimId, onClaimSelect, onPr
           <section className="lab-block limit-block">
             <div className="block-title"><TriangleAlert size={16} /> {t.limits.heading}</div>
             <p className="section-intro">{t.limits.intro}</p>
-            <ol>
+            <ol data-note-section={sectionMark("paper", "limitations")}>
               {project.evidence.limitations.map((limitation, index) => (
                 <li key={`${limitation}-${index}`}>
                   <span>{String(index + 1).padStart(2, "0")}</span>

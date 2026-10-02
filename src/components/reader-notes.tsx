@@ -9,12 +9,11 @@ import {
   groupNotes,
   MAX_NOTE_TEXT,
   NOTE_COLORS,
-  NOTE_PLACES,
   notesFileName,
+  PAPER_BLOCKS,
   ORPHAN_HEADING,
   notesMarkdown,
   sameTarget,
-  sectionMark,
   type NoteColor,
   type NotePlace,
   type NoteTarget,
@@ -23,16 +22,16 @@ import {
 import { describeDue } from "@/lib/review-schedule";
 import type { ResearchProject } from "@/lib/schema";
 import type { StudyProgress } from "@/lib/study-path";
+import { paintNotes, SelectionBar, useHighlightHint, type NoteBarWords } from "@/visuals/note-bar";
 import { useTeamMember } from "./team";
 
 /**
  * Okuyucunun notları ve vurguları (`reader-notes.ts`), stüdyoda.
  *
  * Bir makale açıkken notları sağlayıcı tutuyor; yazmalar kısa bir gecikmeyle
- * toplanıp sırayla gidiyor (`study-progress.ts` ile aynı düzen). Vurgular
- * sayfaya CSS Custom Highlight API ile çiziliyor: metne `<mark>` eklenmiyor,
- * bölümlerin DOM'u değişmiyor; tarayıcı desteklemiyorsa vurgu görünmüyor ama
- * not listesi ve dışa aktarım çalışıyor.
+ * toplanıp sırayla gidiyor (`study-progress.ts` ile aynı düzen). Seçim
+ * çubuğu ve vurguların sayfaya çizilmesi eklentinin bağımsız sitesiyle ortak
+ * (`@/visuals/note-bar`).
  */
 
 type Status = { status: "loading" } | { status: "ready" } | { status: "failed"; message: string };
@@ -160,290 +159,49 @@ export function ReaderNotesProvider({ projectId, children }: { projectId: string
 
 /* ---------------------------- Vurgular ---------------------------- */
 
-type HighlightRegistry = { set: (name: string, value: unknown) => void; delete: (name: string) => void };
-
-/** Bölümün metninde alıntıyı bulur; boşluklar sayfada nasıl dağılmış olursa olsun. */
-function findQuote(root: Element, quote: string): Range | undefined {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const map: Array<{ node: Text; offset: number }> = [];
-  let text = "";
-  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-    const value = node.data;
-    for (let index = 0; index < value.length; index += 1) {
-      const space = /\s/.test(value[index]);
-      if (space && (!text.length || text.endsWith(" "))) continue;
-      text += space ? " " : value[index];
-      map.push({ node, offset: index });
-    }
-  }
-  const at = text.indexOf(quote);
-  if (at < 0) return undefined;
-  const start = map[at];
-  const end = map[at + quote.length - 1];
-  const range = document.createRange();
-  range.setStart(start.node, start.offset);
-  range.setEnd(end.node, end.offset + 1);
-  return range;
-}
-
-/** Bölümlerdeki vurgular; sayfa değiştikçe (bölüm açılınca, yeniden çizilince) yeniden. */
+/** Bölümlerdeki vurgular (`paintNotes`); yalnızca makalenin alanı izleniyor: başlıktaki saat her saniye değişiyor, orayı izlemek boşuna yeniden çizerdi. */
 export function NoteHighlights() {
-  const context = useReaderNotes();
-  const notes = context?.notes;
-  useEffect(() => {
-    const registry = (globalThis as { CSS?: { highlights?: HighlightRegistry } }).CSS?.highlights;
-    const HighlightType = (globalThis as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
-    if (!registry || !HighlightType || !notes) return;
-    const paint = () => {
-      const byColor = new Map<NoteColor, Range[]>();
-      for (const note of notes) {
-        if (!note.quote || note.target.kind !== "section") continue;
-        const root = document.querySelector(`[data-note-section="${CSS.escape(sectionMark(note.target.place, note.target.sectionId))}"]`);
-        const range = root ? findQuote(root, note.quote) : undefined;
-        if (range) byColor.set(note.color, [...(byColor.get(note.color) ?? []), range]);
-      }
-      for (const color of NOTE_COLORS) {
-        const ranges = byColor.get(color);
-        if (ranges?.length) registry.set(`trace-note-${color}`, new HighlightType(...ranges));
-        else registry.delete(`trace-note-${color}`);
-      }
-    };
-    paint();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const observer = new MutationObserver(() => {
-      clearTimeout(timer);
-      timer = setTimeout(paint, 120);
-    });
-    // Yalnızca makalenin alanı: başlıktaki saat her saniye değişiyor, orayı izlemek boşuna yeniden çizerdi.
-    observer.observe(document.querySelector(".workspace-content") ?? document.body, { childList: true, subtree: true, characterData: true });
-    return () => {
-      observer.disconnect();
-      clearTimeout(timer);
-      for (const color of NOTE_COLORS) registry.delete(`trace-note-${color}`);
-    };
-  }, [notes]);
+  const notes = useReaderNotes()?.notes;
+  useEffect(() => (notes ? paintNotes(notes, document.querySelector(".workspace-content") ?? document.body) : undefined), [notes]);
   return null;
 }
 
 /* ------------------------- Seçim araç çubuğu ------------------------- */
 
-type Picked = { target: NoteTarget; quote: string; above: number; below: number; left: number };
-
 /**
- * Araç çubuğunun yeri, fareyle: seçimin altında; sığmıyorsa üstünde; ne
- * olursa olsun ekranın içinde.
+ * Vurgulamanın nasıl yapıldığı, vurgulanabilen Lab ekranlarının üstünde.
+ * Özellik metni seçince açılıyor ve kimse bunu kendiliğinden bulmuyordu;
+ * okuyucu "Anladım" deyince bu tarayıcıda bir daha gösterilmiyor
+ * (`useHighlightHint`).
  */
-function placeAt(picked: Picked, height: number, width: number) {
-  const room = window.innerHeight - 12;
-  const top = picked.below + height <= room ? picked.below : picked.above - height;
-  const half = Math.min(width, window.innerWidth - 24) / 2;
-  return { top: Math.max(12, Math.min(top, room - height)), left: Math.max(12 + half, Math.min(picked.left, window.innerWidth - 12 - half)) };
+export function HighlightHint() {
+  const context = useReaderNotes();
+  const t = useT().learning.readerNotes;
+  const [seen, dismiss] = useHighlightHint();
+  if (!context || seen) return null;
+  return (
+    <aside className="highlight-hint" role="note">
+      <Highlighter size={16} aria-hidden="true" />
+      <p>{t.hint}</p>
+      <button type="button" onClick={dismiss}>{t.hintDismiss}</button>
+    </aside>
+  );
 }
 
 /**
- * Dokunmatik ekranda seçimin hemen üstünde telefonun kendi menüsü (Kopyala,
- * Paylaş), hemen altında seçimi büyütüp küçülten tutamaçlar duruyor. Çubuk
- * seçimin yanına konunca ikisinden birini örtüyordu; burada ekranın altına
- * yaslanıyor, görünür alana göre (açılan klavye de sayılıyor). Seçim alttaki
- * yere kadar iniyorsa çubuk ekranın üstüne geçiyor.
- */
-const HANDLE_ROOM = 48;
-
-function dockAt(picked: Picked, height: number) {
-  const view = window.visualViewport;
-  const top = view?.offsetTop ?? 0;
-  const bottom = top + (view?.height ?? window.innerHeight);
-  const left = (view?.offsetLeft ?? 0) + (view?.width ?? window.innerWidth) / 2;
-  // Altta `bottom` ile: çubuğun gerçek yüksekliği ne olursa olsun kenara oturuyor; `height` yalnızca yer hesabı için.
-  if (picked.below + HANDLE_ROOM > bottom - height - 12) return { style: { top: top + 12, left }, edge: "top" as const };
-  return { style: { bottom: window.innerHeight - bottom + 12, left }, edge: "bottom" as const };
-}
-
-/** Parmakla mı kullanılıyor: telefon ve tablet. Fare bağlı bir tablette `false`. */
-function useCoarsePointer() {
-  const [coarse, setCoarse] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(pointer: coarse)");
-    const update = () => setCoarse(query.matches);
-    const first = setTimeout(update, 0);
-    query.addEventListener("change", update);
-    return () => {
-      clearTimeout(first);
-      query.removeEventListener("change", update);
-    };
-  }, []);
-  return coarse;
-}
-
-function pickedSelection(): Picked | undefined {
-  const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || !selection.rangeCount) return undefined;
-  const element = (node: Node | null) => (node instanceof Element ? node : node?.parentElement ?? null);
-  const root = element(selection.anchorNode)?.closest("[data-note-section]");
-  if (!root || root !== element(selection.focusNode)?.closest("[data-note-section]")) return undefined;
-  const quote = cleanQuote(selection.toString());
-  if (quote.length < 2) return undefined;
-  const [place, ...rest] = (root.getAttribute("data-note-section") ?? "").split(":");
-  if (!NOTE_PLACES.includes(place as NotePlace) || !rest.length) return undefined;
-  const rect = selection.getRangeAt(0).getBoundingClientRect();
-  const left = Math.min(window.innerWidth - 12, Math.max(12, rect.left + rect.width / 2));
-  return { target: { kind: "section", place: place as NotePlace, sectionId: rest.join(":") }, quote, above: rect.top - 10, below: rect.bottom + 10, left };
-}
-
-/** Klavyeyle vurgunun rengi: araç çubuğunda en son seçilen, ilk seferde sarı. Bu cihaza ait. */
-const LAST_COLOR_KEY = "trace-note-color";
-
-function lastColor(): NoteColor {
-  try {
-    const stored = window.localStorage.getItem(LAST_COLOR_KEY);
-    return NOTE_COLORS.find((color) => color === stored) ?? "yellow";
-  } catch {
-    return "yellow";
-  }
-}
-
-function rememberColor(color: NoteColor) {
-  try {
-    window.localStorage.setItem(LAST_COLOR_KEY, color);
-  } catch {
-    // Depolama kapalı: bir sonraki kısayol yine sarı.
-  }
-}
-
-/** Yazı alanındayken harfler yazıya gidiyor, kısayola değil. */
-const typing = (target: EventTarget | null) =>
-  target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-
-/**
- * Bir bölümde metin seçilince: renkle vurgula ya da vurgulayıp not yaz.
- * Klavyeden de: seçim varken H son rengiyle vurguluyor, N not kutusunu açıyor.
+ * Bir bölümde metin seçilince: renkle vurgula ya da vurgulayıp not yaz
+ * (`SelectionBar`, bağımsız siteyle ortak). Klavyeden de: seçim varken H son
+ * rengiyle vurguluyor, N not kutusunu açıyor.
  */
 export function SelectionNoteBar() {
   const messages = useT();
-  const t = messages.learning.readerNotes;
   const context = useReaderNotes();
-  const [picked, setPicked] = useState<Picked>();
-  const [writing, setWriting] = useState<Picked>();
-  const [draft, setDraft] = useState("");
-  const [shortcutColor, setShortcutColor] = useState<NoteColor>("yellow");
-  const coarse = useCoarsePointer();
-  // Dokunmatikte görünür alan değişince (klavye açılınca, yakınlaştırınca) çubuk yeniden yaslanıyor.
-  const [, setViewport] = useState(0);
-
-  useEffect(() => {
-    if (!context || context.state.status !== "ready") return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const check = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => setPicked(pickedSelection()), 180);
-    };
-    document.addEventListener("selectionchange", check);
-    window.addEventListener("scroll", check, true);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("selectionchange", check);
-      window.removeEventListener("scroll", check, true);
-    };
-  }, [context]);
-
-  // Seçim o anda okunuyor: araç çubuğu kısa bir gecikmeyle çıkıyor, kısayol onu beklemiyor.
-  useEffect(() => {
-    if (!context || context.state.status !== "ready" || writing) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || typing(event.target)) return;
-      const key = event.key.toLowerCase();
-      if (key !== "h" && key !== "n") return;
-      const selected = pickedSelection();
-      if (!selected) return;
-      event.preventDefault();
-      if (key === "n") {
-        setPicked(selected);
-        setWriting(selected);
-        return;
-      }
-      context.add({ target: selected.target, quote: selected.quote, color: lastColor() });
-      window.getSelection()?.removeAllRanges();
-      setPicked(undefined);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [context, writing]);
-
-  useEffect(() => {
-    const view = window.visualViewport;
-    if (!coarse || !view || !(picked || writing)) return;
-    const update = () => setViewport((tick) => tick + 1);
-    view.addEventListener("resize", update);
-    view.addEventListener("scroll", update);
-    return () => {
-      view.removeEventListener("resize", update);
-      view.removeEventListener("scroll", update);
-    };
-  }, [coarse, picked, writing]);
-
-  // Araç çubuğu açılınca H'nin rengi gösteriliyor.
-  useEffect(() => {
-    if (!picked) return;
-    const read = setTimeout(() => setShortcutColor(lastColor()), 0);
-    return () => clearTimeout(read);
-  }, [picked]);
-
+  const words = useMemo<NoteBarWords>(() => {
+    const t = messages.learning.readerNotes;
+    return { toolbar: t.highlightSelection, highlightIn: t.highlightIn, colors: t.colors, note: t.note, writeNote: t.writeNote, form: t.noteOnHighlight, yourNote: t.yourNote, save: messages.common.save, cancel: messages.common.cancel };
+  }, [messages]);
   if (!context || context.state.status !== "ready") return null;
-  const place = writing ?? picked;
-  if (!place) return null;
-  const dock = coarse ? dockAt(place, writing ? 250 : 56) : undefined;
-  const style = dock ? dock.style : placeAt(place, writing ? 250 : 44, writing ? 360 : 250);
-  const docked = dock ? ` is-docked is-docked-${dock.edge}` : "";
-  const done = () => {
-    window.getSelection()?.removeAllRanges();
-    setPicked(undefined);
-    setWriting(undefined);
-    setDraft("");
-  };
-
-  if (writing) {
-    return (
-      <form
-        className={`note-bar is-writing${docked}`}
-        style={style}
-        aria-label={t.noteOnHighlight}
-        onSubmit={(event) => {
-          event.preventDefault();
-          context.add({ target: writing.target, quote: writing.quote, text: draft });
-          done();
-        }}
-      >
-        <blockquote>{writing.quote.length > 140 ? `${writing.quote.slice(0, 140)}…` : writing.quote}</blockquote>
-        <textarea autoFocus rows={3} maxLength={MAX_NOTE_TEXT} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t.yourNote} aria-label={t.yourNote} />
-        <div className="note-bar-actions">
-          <button type="submit" className="note-save">{messages.common.save}</button>
-          <button type="button" onClick={done}>{messages.common.cancel}</button>
-        </div>
-      </form>
-    );
-  }
-
-  return (
-    <div className={`note-bar${docked}`} style={style} role="toolbar" aria-label={t.highlightSelection} onMouseDown={(event) => event.preventDefault()}>
-      <Highlighter size={14} aria-hidden="true" />
-      {NOTE_COLORS.map((color) => (
-        <button
-          key={color}
-          type="button"
-          className={`note-swatch is-${color}`}
-          aria-label={t.highlightIn(t.colors[color])}
-          title={`${t.highlightIn(t.colors[color])}${color === shortcutColor ? " (H)" : ""}`}
-          aria-keyshortcuts={color === shortcutColor ? "H" : undefined}
-          onClick={() => {
-            context.add({ target: place.target, quote: place.quote, color });
-            rememberColor(color);
-            done();
-          }}
-        />
-      ))}
-      <button type="button" className="note-bar-write" onClick={() => setWriting(place)} title={t.writeNote} aria-keyshortcuts="N"><NotebookPen size={14} /> {t.note}</button>
-    </div>
-  );
+  return <SelectionBar words={words} onAdd={context.add} icon={<Highlighter size={14} aria-hidden="true" />} noteIcon={<NotebookPen size={14} />} />;
 }
 
 /* ---------------------------- İddia notları ---------------------------- */
@@ -661,13 +419,14 @@ export function NotesPanel({
   const context = useReaderNotes();
   const [targetKey, setTargetKey] = useState("");
   const [draft, setDraft] = useState("");
-  const groups = useMemo(() => (context ? groupNotes(project, context.notes) : []), [context, project]);
+  const groups = useMemo(() => (context ? groupNotes(project, context.notes, t.paperBlocks) : []), [context, project, t.paperBlocks]);
   const targets = useMemo(() => [
+    ...PAPER_BLOCKS.filter((block) => block !== "technical" || project.technicalAppendix).map((block) => ({ key: `paper:${block}`, label: `${places.Lab} · ${t.paperBlocks[block]}`, target: { kind: "section", place: "paper", sectionId: block } as NoteTarget })),
     ...project.story.sections.map((section) => ({ key: `story:${section.id}`, label: `${places.Story} · ${section.title}`, target: { kind: "section", place: "story", sectionId: section.id } as NoteTarget })),
     ...(project.deepReport?.sections ?? []).map((section) => ({ key: `report:${section.id}`, label: `${places["Deep report"]} · ${section.title}`, target: { kind: "section", place: "report", sectionId: section.id } as NoteTarget })),
     ...(project.primer?.concepts ?? []).map((concept) => ({ key: `concept:${concept.id}`, label: `${places.Primer} · ${concept.term}`, target: { kind: "section", place: "concept", sectionId: concept.id } as NoteTarget })),
     ...project.evidence.claims.map((claim) => ({ key: `claim:${claim.id}`, label: `${places.Claim} · ${claim.statement.length > 90 ? `${claim.statement.slice(0, 90)}…` : claim.statement}`, target: { kind: "claim", claimId: claim.id } as NoteTarget })),
-  ], [places, project]);
+  ], [places, project, t.paperBlocks]);
   if (!context) return null;
   if (context.state.status === "loading") return <p className="section-intro" role="status">{t.loading}</p>;
   if (context.state.status === "failed") return <p className="regen-error" role="alert">{context.state.message}</p>;

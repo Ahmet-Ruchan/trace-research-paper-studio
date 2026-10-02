@@ -106,7 +106,7 @@ const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SKILL_DIRECTORY = resolve(dirname(SCRIPT_PATH), "..");
 // Eklentinin sürümü; `scripts/set-version.mjs` manifestlerle birlikte yazıyor. Teslimat,
 // çalışan ya da başlatılacak stüdyonun bundan eski olup olmadığına bakıyor.
-const PLUGIN_VERSION = "0.42.0";
+const PLUGIN_VERSION = "0.43.0";
 
 const TRACE_ACCENT_PALETTE = [
   "#2563EB", "#38BDF8", "#06B6D4", "#1E3A8A", "#7C3AED",
@@ -2617,7 +2617,7 @@ function printNotes(args) {
     console.log(JSON.stringify({ ...summary, wrote: target }, null, 2));
     return;
   }
-  console.log(JSON.stringify({ ...summary, markdown, note: notes.length ? "The reader's own notes, from the studio. Show or save them as they are; never write them into the project." : "No notes on this paper yet. In the studio, select text in the Deep report or the Story preview to highlight it, or open a claim to write a note." }, null, 2));
+  console.log(JSON.stringify({ ...summary, markdown, note: notes.length ? "The reader's own notes, from the studio. Show or save them as they are; never write them into the project." : "No notes on this paper yet. In the studio, select any text on the Overview, in the Deep report, the Story preview, the Study path or the Primer to highlight it, or open a claim to write a note. Highlights made on the standalone site stay in that browser; its Notes button downloads them." }, null, 2));
 }
 
 async function main() {

@@ -92,7 +92,7 @@ const en = {
   noteSearchScope: "The search reads your notes, your highlights and where they are.",
   matchingNotes: "Matching notes",
   /** Notun makaledeki yeri (`reader-notes.ts` `NoteGroup.place`). */
-  notePlaces: { Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" },
+  notePlaces: { Lab: "Lab", Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" },
   openClaim: "Open this claim in its project",
   openNotes: "Open your notes on this paper",
   moreNotes: (shown: number, total: number) => `Showing the first ${shown} of ${total} notes. Add a word to narrow the search.`,
@@ -206,7 +206,7 @@ const tr: typeof en = {
   noNoteMatch: "Yazdığın kelimelerin hepsini içeren not ya da vurgu yok.",
   noteSearchScope: "Arama notlarını, vurgularını ve bulundukları yeri okuyor.",
   matchingNotes: "Eşleşen notlar",
-  notePlaces: { Story: "Hikâye", "Deep report": "Ayrıntılı rapor", Primer: "Ön bilgi", Claim: "İddia" },
+  notePlaces: { Lab: "Lab", Story: "Hikâye", "Deep report": "Ayrıntılı rapor", Primer: "Ön bilgi", Claim: "İddia" },
   openClaim: "Bu iddiayı kendi projesinde aç",
   openNotes: "Bu makaledeki notlarını aç",
   moreNotes: (shown, total) => `${total} nottan ilk ${shown} tanesi gösteriliyor. Aramayı daraltmak için bir kelime ekle.`,

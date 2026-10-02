@@ -80,6 +80,10 @@ describe("paper: lib modüllerinin sözcükleri", () => {
     expect(html).toContain('aria-label="Yazarın notları"');
     expect(html).toContain("Ayrıntılı rapor · Yöntem · s. 4");
     expect(publishedNotesHtml(notes)).toContain("Deep report · Yöntem · p. 4");
+    // Lab'deki analiz metnine bağlı not: kayıtta İngilizce başlık, sayfada sayfanın dili.
+    const onThesis = [{ place: "Lab", heading: "Core thesis", quote: "Bir satır.", text: "" }];
+    expect(publishedNotesHtml(onThesis, tr.sharedNotes)).toContain("Lab · Ana tez");
+    expect(publishedNotesHtml(onThesis)).toContain("Lab · Core thesis");
   });
 
   it("dışa aktarma menüsü Türkçe; köprünün İngilizce nedeni yerinde", () => {

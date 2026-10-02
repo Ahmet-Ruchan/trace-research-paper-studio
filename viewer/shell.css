@@ -123,10 +123,15 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t
   .viewer-mobile-visual { display: block; }
 }
 
+/* Telefonda başlık iki satır: sekmeler ayrı satırda kayıyor, Notlar ve indirme ekranın içinde kalıyor (eskiden sağdan taşıyordu). */
 @media (max-width: 700px) {
   .viewer-local { display: none; }
-  .viewer-topbar { gap: 10px; padding: 0 14px; }
-  .viewer-tabs button { padding: 7px 10px; font-size: var(--text-sm); }
+  .viewer-topbar { height: auto; flex-wrap: wrap; gap: 8px 10px; padding: 10px 14px; }
+  .viewer-actions { min-width: 0; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .viewer-actions > * { padding: 6px 10px; }
+  .viewer-tabs { order: 3; flex: 1 1 100%; min-width: 0; margin-left: 0; overflow-x: auto; scrollbar-width: none; }
+  .viewer-tabs button { flex: none; padding: 7px 10px; font-size: var(--text-sm); }
+  .viewer-hint { padding: 0 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -146,3 +151,23 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t
 /* Bağlantıyla gelinen iddia kendini belli etsin: aksi hâlde okuyucu uzun
    bir listenin ortasına düşüyor ve hangisi olduğunu anlamıyor. */
 .viewer-claims article:target { border-color: var(--accent); background: var(--surface-2); }
+
+/* --- Vurgular ve notlar (notes.tsx; çubuk ve vurgular src/visuals/notes.css) --- */
+.viewer-notes-button { padding: 8px 13px; border: 1px solid var(--line); border-radius: 20px; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--text-sm); white-space: nowrap; cursor: pointer; }
+.viewer-notes-button:hover { border-color: var(--accent); color: var(--accent-ink); }
+.viewer-hint { max-width: 900px; margin: 22px auto 0; padding: 0 22px; }
+.viewer-hint .highlight-hint { margin: 0; }
+.viewer-notes-overlay { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; background: rgba(25,27,24,.32); }
+.viewer-notes-panel { width: min(460px, 100vw); height: 100%; overflow-y: auto; display: grid; align-content: start; gap: 16px; padding: 22px; border-left: 1px solid var(--line); background: var(--paper); color: var(--ink); box-shadow: -18px 0 50px rgba(35,31,24,.16); }
+.viewer-notes-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.viewer-notes-head h2 { margin: 0; font: 1.375rem/1.25 Georgia, serif; }
+.viewer-notes-head button, .viewer-notes-group header button, .viewer-notes-export button { flex: none; min-height: 32px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.viewer-notes-head button:hover, .viewer-notes-group header button:hover, .viewer-notes-export button:hover { border-color: var(--ink); }
+.viewer-notes-private, .viewer-notes-empty { margin: 0; color: var(--ink-soft); font-size: var(--text-sm); line-height: 1.6; }
+.viewer-notes-group { display: grid; gap: 10px; }
+.viewer-notes-group header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: end; }
+.viewer-notes-place { grid-column: 1; color: var(--ink-soft); font-size: var(--text-2xs); letter-spacing: .08em; text-transform: uppercase; }
+.viewer-notes-group h3 { grid-column: 1; margin: 0; font: 1.0625rem/1.35 Georgia, serif; }
+.viewer-notes-group header button { grid-column: 2; grid-row: 1 / span 2; }
+.viewer-notes-export { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.viewer-notes-export button:first-child { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }

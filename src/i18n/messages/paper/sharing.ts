@@ -17,7 +17,7 @@ const en = {
       figures: "The paper's own figures",
     } as Record<PublishBlock, string>,
     /** `groupNotes` yerleri; İngilizcesi kayıttaki adın kendisi. */
-    places: { Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" } as Record<NotePlace, string>,
+    places: { Lab: "Lab", Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" } as Record<NotePlace, string>,
     loadFailed: "The publications could not be loaded.",
     kicker: "Share",
     title: "Publish this story",
@@ -83,6 +83,7 @@ const en = {
 };
 
 const trPlaces: Record<NotePlace, string> = {
+  Lab: "Lab",
   Story: "Hikâye",
   "Deep report": "Ayrıntılı rapor",
   Primer: "Ön bilgi",
@@ -133,6 +134,14 @@ const tr: typeof en = {
     heading: "Yazarın notları",
     intro: "Bu hikâyeyi paylaşan kişi kendi notlarını ekledi. Notlar analizin parçası değil ve kendi başlarına kanıt taşımıyor.",
     places: trPlaces,
+    paperBlocks: {
+      thesis: "Ana tez",
+      question: "Araştırma sorusu",
+      summary: "Sade dille özet",
+      methods: "Yöntem",
+      limitations: "Sınırlılıklar",
+      technical: "Teknik ek",
+    },
     page: (page) => `s. ${page}`,
   },
   citations: {

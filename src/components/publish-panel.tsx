@@ -50,8 +50,8 @@ export function PublishPanel({ project, onClose }: PublishPanelProps) {
   const [notes, setNotes] = useState<ReaderNote[]>([]);
   const [noteIds, setNoteIds] = useState<string[]>([]);
   const noteGroups = useMemo(
-    () => groupNotes(project, notes).filter((group) => group.heading !== ORPHAN_HEADING).map((group) => ({ ...group, notes: group.notes.filter((note) => note.text || note.quote) })).filter((group) => group.notes.length),
-    [notes, project],
+    () => groupNotes(project, notes, messages.learning.readerNotes.paperBlocks).filter((group) => group.heading !== ORPHAN_HEADING).map((group) => ({ ...group, notes: group.notes.filter((note) => note.text || note.quote) })).filter((group) => group.notes.length),
+    [messages, notes, project],
   );
   const [expiryDays, setExpiryDays] = useState<(typeof EXPIRY_CHOICES)[number]>(null);
   const [busy, setBusy] = useState<string>();

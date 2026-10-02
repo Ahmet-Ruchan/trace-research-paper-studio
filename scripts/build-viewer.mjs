@@ -62,6 +62,7 @@ function collectStyles() {
     "src/visuals/tokens.css",
     "src/visuals/styles.css",
     "src/visuals/learning.css",
+    "src/visuals/notes.css",
     "viewer/shell.css",
   ];
   return files

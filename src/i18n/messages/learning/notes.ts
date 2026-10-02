@@ -1,4 +1,4 @@
-import type { NoteColor, NoteGroup } from "@/lib/reader-notes";
+import { PAPER_BLOCK_WORDS, type NoteColor, type NoteGroup, type PaperBlockWords } from "@/lib/reader-notes";
 
 /** Okuyucunun notları ve vurguları: seçim çubuğu, iddia notları, vurgudan kart, notlar paneli. */
 const en = {
@@ -40,12 +40,17 @@ const en = {
     makeCard: "Make a review card",
     deleteNote: "Delete this note",
     /** Notun yeri (`groupNotes`): kayıttaki İngilizce adın karşılığı. */
-    places: { Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" } satisfies Record<NoteGroup["place"], string>,
+    places: { Lab: "Lab", Story: "Story", "Deep report": "Deep report", Primer: "Primer", Claim: "Claim" } satisfies Record<NoteGroup["place"], string>,
+    /** Lab'deki analiz metinlerinin başlığı (`groupNotes`, `PAPER_BLOCK_WORDS`). */
+    paperBlocks: PAPER_BLOCK_WORDS as PaperBlockWords,
     /** Makaleden kalkmış bir yere bağlı notların başlığı. */
     orphans: "No longer in the paper",
     loading: "Reading your notes…",
     intro:
-      "Select any text in the Deep report, the Story preview, a Study step or a Primer concept to highlight it (or press H, and N for a note), or open a claim to write a note on it. Your notes are kept in your library, never in the project file, so exports and published pages do not carry them.",
+      "Select any text on the Overview, in the Deep report, the Story preview, a Study step, a Primer concept, the Method, the Limitations or the Technical appendix to highlight it (or press H, and N for a note), or open a claim to write a note on it. Your notes are kept in your library, never in the project file, so exports and published pages do not carry them.",
+    /** Lab'de, vurgulanabilen ekranların üstünde; kapatılınca bir daha gösterilmiyor. */
+    hint: "Select any text on this page to highlight it or write a note beside it: a bar with five colours and Note appears above the selection. With text selected, H highlights and N opens a note. Everything you mark is gathered under Notes.",
+    hintDismiss: "Got it",
     forObsidian: "For Obsidian",
     count: (count: number) => `${count} ${count === 1 ? "note" : "notes and highlights"}`,
     none: "No notes yet",
@@ -94,11 +99,21 @@ const tr: typeof en = {
     changeCard: "Kartı değiştir",
     makeCard: "Tekrar kartı yap",
     deleteNote: "Bu notu sil",
-    places: { Story: "Hikâye", "Deep report": "Ayrıntılı rapor", Primer: "Ön bilgi", Claim: "İddia" },
+    places: { Lab: "Lab", Story: "Hikâye", "Deep report": "Ayrıntılı rapor", Primer: "Ön bilgi", Claim: "İddia" },
+    paperBlocks: {
+      thesis: "Ana tez",
+      question: "Araştırma sorusu",
+      summary: "Sade dille özet",
+      methods: "Yöntem",
+      limitations: "Sınırlılıklar",
+      technical: "Teknik ek",
+    },
     orphans: "Artık makalede yok",
     loading: "Notların okunuyor…",
     intro:
-      "Ayrıntılı rapordaki, Hikâye önizlemesindeki, bir Çalış adımındaki ya da bir Ön bilgi kavramındaki herhangi bir metni seçip vurgula (ya da H'ye, not için N'ye bas) ya da bir iddiayı açıp ona not yaz. Notların proje dosyasında değil kütüphanende tutulur; bu yüzden dışa aktarımlar ve yayımlanan sayfalar onları taşımaz.",
+      "Genel bakıştaki, Ayrıntılı rapordaki, Hikâye önizlemesindeki, bir Çalış adımındaki, bir Ön bilgi kavramındaki, Yöntem'deki, Sınırlılıklar'daki ya da Teknik ek'teki herhangi bir metni seçip vurgula (ya da H'ye, not için N'ye bas) ya da bir iddiayı açıp ona not yaz. Notların proje dosyasında değil kütüphanende tutulur; bu yüzden dışa aktarımlar ve yayımlanan sayfalar onları taşımaz.",
+    hint: "Vurgulamak ya da yanına not yazmak için bu sayfadaki herhangi bir metni seç: seçimin üstünde beş renk ve Not düğmesi olan bir çubuk açılır. Metin seçiliyken H vurgular, N not açar. İşaretlediğin her şey Notlar'da toplanır.",
+    hintDismiss: "Anladım",
     forObsidian: "Obsidian için",
     count: (count) => (count === 1 ? "1 not" : `${count} not ve vurgu`),
     none: "Henüz not yok",
