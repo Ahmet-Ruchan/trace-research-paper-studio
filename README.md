@@ -1369,6 +1369,13 @@ eslint-restricted zone: no `next/*`, no `lucide-react`, no `node:*`.
 is a bundle of the application's actual Zod schema and integrity rules. A rule cannot pass one
 side and fail the other.
 
+**Interface text lives in dictionaries.** Every word on a screen comes from `src/i18n/messages`
+(English and Turkish, the Turkish typed by the English so a missing key does not compile) or, for the
+shared visuals, from `src/visuals/i18n.ts`. `src/lib/interface-language.test.ts` fails on Turkish text
+outside them and on literal text in a component; `src/i18n/glossary.md` keeps the Turkish terms. Code
+reachable from the plugin bundle takes its words as a parameter with an English default instead of
+importing the dictionaries.
+
 **Two files are generated but committed**, because the plugin must stay dependency-free at run
 time:
 
@@ -1392,6 +1399,7 @@ src/
 ├── components/                 # Lab, Story editor, Preview, Library and the other screens
 │   ├── app-shell.tsx           #   which screen is open, and moving between them
 │   ├── studio/                 #   the paper screen, analysis run, deletion, address bar
+├── i18n/                       # interface language: choice, provider, English + Turkish dictionaries
 ├── visuals/                    # SHARED render layer — compiled for both hosts
 │   ├── tokens.css              #   type scale, colours and the dark theme
 │   ├── visual-renderer.tsx     #   eleven visual grammars
@@ -1429,10 +1437,12 @@ library, templates and published links live in `/data` (`TRACE_DATA_DIR`); mount
 `railway.json` builds the same Dockerfile on Railway with `/api/health` as the health check; any
 host that runs a Dockerfile works the same way.
 
-Trace has no accounts. On your own machine that is fine. On a server anyone can reach, set
-`TRACE_ACCESS_PASSWORD`: the studio and its API then ask for that password (HTTP Basic, any user
-name), while `/p/<id>` published stories, `/r/<id>` shared reading lists and the health check stay
-open. Use HTTPS in front of it.
+Out of the box Trace has no accounts. On your own machine that is fine. On a server anyone can
+reach, set `TRACE_ACCESS_PASSWORD`: the studio and its API then ask for that password (HTTP Basic,
+any user name), while `/p/<id>` published stories, `/r/<id>` shared reading lists and the health
+check stay open. When several people use it, turn on team accounts as well
+([Review as a team](#review-as-a-team)), so each one signs in with their own name. Use HTTPS in
+front of it.
 Provider keys are still typed into the browser by whoever uses the studio and are never stored on
 the server.
 
@@ -1606,6 +1616,192 @@ generated artifacts, lints, tests and builds, and will tell you if a committed a
 ## License
 
 [MIT](LICENSE) © Ahmet Ruçhan Avcı
+
+## Everything Trace can do
+
+The complete list, in one place. Each item is described in its own section above.
+
+### Bring a paper in
+
+- Start from a paper's name, an arXiv id or link, a PDF, a DOI, or a bioRxiv, medRxiv, PubMed
+  Central, ACL Anthology or OpenReview link or id; the open-access copy is found on arXiv, the
+  repository itself, Europe PMC or OpenAlex (and Unpaywall with `UNPAYWALL_EMAIL`).
+- A title that matches less than near-exactly is not guessed: the candidates come back to choose from.
+- Published context is gathered with it: version history, DOI, venue and citation counts; an
+  unreliable source is dropped rather than trusted.
+- The studio has the same search under the upload box, opens the built-in example (English or
+  Turkish) and imports any `.trace.json`.
+
+### The analysis
+
+- Every claim carries its page and exact quote, and its kind: reported result, author
+  interpretation, method, background or limitation; unsupported claims stay `needs-review`.
+- Metrics with their context, a glossary, and the sources the paper relies on.
+- A deep report, a technical appendix (equations, algorithm steps, code sketches, complexity,
+  implementation notes) and a visual story in eleven visual grammars (metric, flow, comparison,
+  concept, layers, quote, architecture, equation, timeline, matrix, infographic), with the paper's own
+  figures placed beside the paragraph that argues them.
+- A learning layer sized by depth: primer, step-by-step derivations, formula playgrounds,
+  simulations, a data explorer, a quiz, common misreadings and an application guide; made-up teaching
+  numbers are labelled as illustrative; **Add the learning layer** fills it in later.
+- Written in the language you asked in (any BCP-47 tag), for the reader and depth you choose, with an
+  optional narrative template.
+- Through the plugin, with the model your agent already runs; in the studio, with Gemini, OpenAI,
+  Claude, OpenRouter or a local model server (Ollama, LM Studio, llama.cpp), one model or a team of
+  five roles, each role tested for speed before the PDF is sent. A local model reads the extracted
+  text, so a whole analysis can stay on your machine.
+- Validation that blocks, not advises: no citation of a missing claim, no number absent from the
+  evidence, formulas parsed by a restricted grammar and evaluated without `eval`.
+- Every quote checked against the page it cites; a claim whose quote is not found is downgraded,
+  never upgraded, and the result travels with the project.
+
+### Read and check the evidence
+
+- The evidence drawer with **Show on the page**: the cited page rendered with the quoted words marked.
+- Evidence health: verified versus needs-review claims, pages nothing cites, claims the story never
+  uses, thin sections, and **Strengthen** to rewrite a thin section with more evidence.
+- Learning health: unchecked sections, a one-sided quiz, playgrounds that do not respond, derivation
+  steps that only restate, unused primer concepts, each with its fix ready to send.
+- A claim review queue where a person approves or rejects claims, kept apart from the model's own
+  confidence; a rejected claim cannot be cited by a rewrite.
+- **Ask**: questions answered only from the collected evidence, each answer citing its claims.
+- Terms defined where they are used, the concepts to know before each section, and a link to every
+  claim and section.
+- **Search** inside a paper (<kbd>/</kbd>): claims, quotes, story, report, primer, glossary and your notes.
+- Remembers where you stopped in the story and the deep report (**Continue reading**).
+- **Listen**: the story or report read aloud with the browser's own voice.
+- **Model record**: how each model's quotes held up across the library, with the range the evidence
+  allows, and two models side by side on the same paper.
+
+### Learn it
+
+- Predict before you look: what each curve does, whether two cross, and the next derivation step.
+- A quiz that does not give the answer away, and **Read it like a reviewer**: questions made from the
+  evidence itself, in every project.
+- **Study**: a path through the paper in order, with a question after every section, a final check,
+  **How it went** and what to read again; progress is saved, and can be carried to another device in a
+  file (from the studio, the published page or the exported page).
+- **Explain it in your own words**: checked against the section's claims, with what you added or
+  dropped since your last explanation.
+- Spaced review across the library (3, 7, 16, 35 and 90 days): **Review**, a paper's own queue in the
+  Lab, a few cards in short breaks, cards made from your highlights, and review in your agent's chat.
+- **Practice exam**: 10, 20, 30 or all questions, mixed across papers, timed or not, graded at the
+  end, the missed ones optionally back in Review.
+- **Progress**: papers finished, reviews remembered, cards kept long-term, the week ahead, the cards
+  you forget most, and a table of every paper you studied.
+- A weekly learning goal: papers to finish and cards to review.
+
+### Connect papers
+
+- **Concepts**: for each concept a paper assumes, whether you studied it here or in another paper, or
+  which paper of your library explains it.
+- **Look in the references**: the cited works whose title or abstract names a concept you have not
+  studied, each one ready to analyse.
+- A concept map across the library, and a reading order: each paper after the papers that define
+  what it assumes, with **Next** and **Read first**.
+- **Names for the same concept**: link two names yourself, or have a model propose pairs for you to
+  confirm.
+- Compare two papers (the same benchmark, the same term, each one's limits) without a verdict, and
+  **Test yourself on the two** with questions that tell them apart.
+- A literature map of three to six papers in year order.
+- The citation graph: the most-cited works a paper references and that cite it, each one ready to analyse.
+
+### Notes, highlights and the reading list
+
+- Highlight in five colours and write notes in the deep report, the story, the study path or the
+  primer, or on a claim; <kbd>H</kbd> and <kbd>N</kbd> from the keyboard, a bar sized for a finger on a
+  phone; mark claims as important.
+- **Notes** in the Lab gathers them in reading order; notes are searched across the library too.
+- Notes as Markdown, as an Obsidian note, or the whole library as an Obsidian vault (`.zip`).
+- **Read later** from the citation graph or a concept's references; the reading list sits in the
+  reading order and remembers why each work was saved.
+- Import a bibliography from Zotero, Mendeley, EndNote or a `.bib` file (BibTeX, RIS, CSL JSON), with
+  a preview before anything is added.
+- **Share the list**: a link at `/r/<id>` with the works in order, which can expire or be taken down.
+
+### Edit, rewrite and keep versions
+
+- The story editor, and **Preview** for the reading experience.
+- Regenerate one story or report section, a primer concept, a quiz question, a derivation or an
+  equation with the evidence locked, comparing the old and new versions before anything changes.
+- **Explain it differently**: Simpler, With an analogy, With a worked example, More technical,
+  Shorter, Harder, Easier, Test a misconception, Smaller steps, Intuition first, Explain each symbol.
+- Version history: every rewrite, restore and import keeps the version it replaced, a snapshot every
+  ten minutes, named versions, and word-by-word differences; a restore can be undone.
+- Narrative templates: two built in (*Method walkthrough*, *Results briefing*), save a story's
+  structure as your own, edit it with the rules checked as you go, or customise a copy.
+
+### Share and export
+
+- **Publish** a frozen copy at `/p/<id>`: choose what goes out, add only the notes you pick, update,
+  unpublish, let it expire after 7, 30 or 90 days, or delete it.
+- Export a Markdown report, a printable report (PDF), slides, a Jupyter notebook that runs the
+  paper's formulas, BibTeX, RIS, Anki flashcards, the self-contained interactive site and the portable
+  `.trace.json`.
+
+### Your library
+
+- Projects kept as files under `~/.trace`, shared by the studio and all three agents.
+- Library search by paper, by claim (with every claim's trust marks) or by your notes.
+- Tags as collections; sort by update, title or year; a list view; deletion undone within eight
+  seconds.
+- How many review cards are due, and **Continue** on a paper's card where you stopped reading.
+- <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> command palette: papers, authors, screens, Lab tabs, sections,
+  concepts, terms and every action.
+
+### Work timer and profile
+
+- Focus rounds with short and long breaks, a countdown timer, a stopwatch with laps, and alarms for a
+  time of day, each in a colour of your choice.
+- Runs across every screen, in the browser tab and in the background, with chimes, desktop
+  notifications, a full-screen timer, background sound (white noise, brown noise, rain) and
+  keyboard control; a closed tab or a sleeping computer pauses it instead of counting the night.
+- Time per paper: from the timer, the Lab, Study and Review, counted once.
+- A note at the end of each round on what you did.
+- A profile (name, role, institution, field, email, photo), a daily goal, a calendar of the days you
+  worked, streaks, time added by hand, and the sessions as an `.ics` calendar file.
+- A weekly report: this week against last up to the same moment, by day and by paper, the notes you
+  wrote, and the hours of the week you work most; a summary of the last week when a new one starts.
+
+### Your data
+
+- **Download my data**: everything in one file, imported elsewhere by merging and removing nothing.
+- A weekly automatic backup of everything, seven daily copies of notes, profile and work log, atomic
+  writes, and a damaged file set aside rather than overwritten.
+- Installable as an app on a computer or phone; the library opens offline from the last copy.
+
+### The interface
+
+- English or Turkish, switched with one button (or the command palette), remembered on the device;
+  dates, durations, notifications and the server's messages follow it.
+- Text size from compact to larger, light, dark or system theme, contrast at WCAG AA in both themes,
+  a readable text colour for every paper's accent, and layouts that fit a phone.
+
+### Teams and servers
+
+- Team accounts: an owner and members, claims approved by a set number of votes, notes shared with
+  the team by choice.
+- A Docker image (`docker compose up`), a Railway config, a health check, one shared password with
+  `TRACE_ACCESS_PASSWORD`, and published stories and shared reading lists that stay open behind it.
+
+### For your agent
+
+- One plugin for Claude Code, Codex and Antigravity CLI; one sentence starts an analysis, and the
+  site and the studio open when it is done.
+- Bridge commands: `prepare`, `validate`, `deliver`, `serve`, `stop`, `section`, `splice`, `verify`,
+  `export`, `anki`, `graph`, `record`, `explain`, `explain-check`, `concepts`, `alias`, `today`,
+  `review`, `progress`, `work`, `notes`, `obsidian`, `reading`, `templates`, `save-template` and
+  `publish`.
+- An MCP server named `trace` with eight tools: `library`, `paper`, `search_claims`, `notes`,
+  `reading_list`, `save_to_reading_list`, `remove_from_reading_list` and `today`.
+- Everything the agent writes goes through the application's own schema and integrity rules.
+
+### Checked on every change
+
+- Unit tests, browser tests in parallel, lint and a build on every push; the plugin installed and run
+  in all three agent CLIs on every push and weekly.
+- Tests that hold the colours and type sizes, the contrast, the interface language and the committed
+  generated files.
 
 <div align="center">
 <br>
