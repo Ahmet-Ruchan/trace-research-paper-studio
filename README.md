@@ -9,6 +9,10 @@
 Trace turns a research paper into something you can verify, learn from and experiment with —
 running on the coding agent you already use, with no second API key.
 
+[![Install in under a minute](https://img.shields.io/badge/Install_in_under_a_minute-%E2%86%93-E75B37?style=for-the-badge&labelColor=191B18)](#install)
+[![Already installed? Update](https://img.shields.io/badge/Already_installed%3F-Update_%E2%86%93-2E7254?style=for-the-badge&labelColor=191B18)](#update)
+[![Everything Trace can do](https://img.shields.io/badge/Everything_Trace_can_do-%E2%86%93-666B64?style=for-the-badge&labelColor=191B18)](#everything)
+
 [![Check](https://img.shields.io/github/actions/workflow/status/Ahmet-Ruchan/trace-research-paper-studio/check.yml?branch=main&style=for-the-badge&label=check&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/actions/workflows/check.yml)
 [![Plugins](https://img.shields.io/github/actions/workflow/status/Ahmet-Ruchan/trace-research-paper-studio/plugins.yml?branch=main&style=for-the-badge&label=plugin%20on%203%20agents&color=2E7254&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/actions/workflows/plugins.yml)
 [![Stars](https://img.shields.io/github/stars/Ahmet-Ruchan/trace-research-paper-studio?style=for-the-badge&color=E75B37&labelColor=191B18)](https://github.com/Ahmet-Ruchan/trace-research-paper-studio/stargazers)
@@ -937,6 +941,8 @@ HTTPS there (localhost is fine on the computer itself).
 
 ---
 
+<a id="install"></a>
+
 ## Install in under a minute
 
 Pick your agent. Two commands, then restart — the plugin is the same on all three.
@@ -977,6 +983,8 @@ agy plugin install trace-research-paper-studio/plugins/trace-paper-studio
 
 Confirm with `agy plugin list`, then restart the CLI or open a new session.
 Do not have the CLI yet? `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+
+<a id="update"></a>
 
 ### Already installed? Update
 
@@ -1635,6 +1643,8 @@ generated artifacts, lints, tests and builds, and will tell you if a committed a
 ## License
 
 [MIT](LICENSE) © Ahmet Ruçhan Avcı
+
+<a id="everything"></a>
 
 ## Everything Trace can do
 
