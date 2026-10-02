@@ -39,6 +39,13 @@ running on the coding agent you already use, with no second API key.
 
 ---
 
+> [!TIP]
+> **Here to install it?** Skip the tour and jump straight there:
+>
+> [![Install in under a minute](https://img.shields.io/badge/Install_in_under_a_minute-%E2%86%93-E75B37?style=for-the-badge&labelColor=191B18)](#install)
+> [![Already installed? Update](https://img.shields.io/badge/Already_installed%3F-Update_%E2%86%93-2E7254?style=for-the-badge&labelColor=191B18)](#update)
+> [![Everything Trace can do](https://img.shields.io/badge/Everything_Trace_can_do-%E2%86%93-666B64?style=for-the-badge&labelColor=191B18)](#everything)
+
 ## The problem
 
 Summarising a paper takes seconds. Trusting the summary takes hours.
