@@ -1288,6 +1288,13 @@ loopback-only server, and the studio — reused if already running, otherwise st
 project handed straight into its Library. Once a studio has been started successfully its
 location is remembered, so later deliveries find it from any directory.
 
+A studio left running from an older copy, or an older copy of the repository, is not used: the
+studio reports its version on `/api/health`, and anything older than the plugin would show the paper
+without the newest screens. `deliver` then starts an up-to-date copy beside it and says the old one
+is still running, or, when only the old copy exists, opens no studio and gives the command that
+updates and restarts it (`git pull && npm install && npm run dev`). The paper is in the library
+either way.
+
 Each paper also receives one accent from a 20-color palette. Trace shuffles the palette once,
 uses every color before repeating, and remembers a paper by its PDF fingerprint so regenerating
 the same paper keeps the same visual identity.
@@ -1313,7 +1320,7 @@ npm run build            # production build
 npm run build:artifacts  # regenerate the committed viewer + validator
 npm run check            # everything above, in order
 npm run test:e2e         # browser tests against the production build (run after build)
-npm run version:set -- 0.41.0  # write one version into the package and every plugin manifest
+npm run version:set -- 0.42.0  # write one version into the package and every plugin manifest
 npm run test:plugins -- --codex "$(which codex)" --claude "$(which claude)" --agy "$(which agy)" [--live [--require-live codex,claude]] [--report report.json]
 ```
 
@@ -1787,7 +1794,7 @@ The complete list, in one place. Each item is described in its own section above
 ### For your agent
 
 - One plugin for Claude Code, Codex and Antigravity CLI; one sentence starts an analysis, and the
-  site and the studio open when it is done.
+  site and the studio open when it is done (never an outdated studio: it says how to update it).
 - Bridge commands: `prepare`, `validate`, `deliver`, `serve`, `stop`, `section`, `splice`, `verify`,
   `export`, `anki`, `graph`, `record`, `explain`, `explain-check`, `concepts`, `alias`, `today`,
   `review`, `progress`, `work`, `notes`, `obsidian`, `reading`, `templates`, `save-template` and

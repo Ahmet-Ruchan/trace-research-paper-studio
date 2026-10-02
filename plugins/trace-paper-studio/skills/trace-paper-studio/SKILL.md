@@ -99,13 +99,16 @@ Use the host CLI's active model as the reasoning engine. Do not request or call 
    - `url` — the self-contained site (works with no install, shareable as a folder).
    - `appUrl` — the studio with the project already adopted.
    - `appNote` and `studioCommand` — present only when the studio could not be brought up. **Pass both to the user.** The delivery still succeeded and the standalone site carries an *Open in Studio* button showing the same command, but the user should not have to find that on their own.
+   - `appWarning` — present when an older Trace studio is still running beside the one used, or the studio at `--app-url` is older than this plugin. **Tell the user**, in their language: an older studio shows the same library without the newest screens.
    - `jsonPath` / `jsonUrl` — the portable project file.
    - `libraryPath` — the persistent copy under the user's shared Trace Library.
 
-   The studio usually needs nothing: `deliver` saves the project under `~/.trace/library` before opening anything, so Codex, Claude Code and Antigravity see the same Library regardless of their current directory. A running studio is reused, and once one has been started successfully its location is remembered, so later deliveries find it from any directory. It fails only when no copy of the Trace repository has its dependencies installed — the plugin's own clone ships without them. `--install-app` installs them once (minutes, hundreds of megabytes: offer it, do not assume it).
+   The studio usually needs nothing: `deliver` saves the project under `~/.trace/library` before opening anything, so Codex, Claude Code and Antigravity see the same Library regardless of their current directory. A running studio is reused when it is not older than this plugin (its version comes from its health check), and once one has been started successfully its location is remembered, so later deliveries find it from any directory. An older studio, or an older copy of the repository, is not opened: `appNote` says so and `studioCommand` updates and restarts it (`git pull && npm install && npm run dev`). It fails only when no copy of the Trace repository has its dependencies installed — the plugin's own clone ships without them. `--install-app` installs them once (minutes, hundreds of megabytes: offer it, do not assume it).
 
    `--no-app` skips the studio. `--app <dir>` or `TRACE_APP_DIR` points at the Trace repository directly; `--app-url` targets a studio already running elsewhere. `stop --site <site-directory>` shuts down whatever `deliver` started.
-9b. **If `appNote` is present, the studio did not open. Ask the user before finishing — do not just report it.** The studio at `localhost:3000` is the product's main surface; the standalone page is the portable copy. Ask plainly, in the user's language, something like:
+9b. **If `appNote` says the studio is older than this plugin**, give the user `studioCommand` verbatim and say why: the running studio, or the copy it would start from, predates the newest screens; after updating, the paper is already in the library. Offer `--install-app` only when `appNote` mentions it.
+
+   **If `appNote` is present for any other reason, the studio did not open. Ask the user before finishing — do not just report it.** The studio at `localhost:3000` is the product's main surface; the standalone page is the portable copy. Ask plainly, in the user's language, something like:
 
    > The full Trace Studio is not running on this machine. Starting it is a one-time setup that installs its dependencies (a few minutes, a few hundred megabytes). Shall I do that now and open it?
 

@@ -104,6 +104,9 @@ import { extractFigures } from "./lib/figures.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SKILL_DIRECTORY = resolve(dirname(SCRIPT_PATH), "..");
+// Eklentinin sürümü; `scripts/set-version.mjs` manifestlerle birlikte yazıyor. Teslimat,
+// çalışan ya da başlatılacak stüdyonun bundan eski olup olmadığına bakıyor.
+const PLUGIN_VERSION = "0.42.0";
 
 const TRACE_ACCENT_PALETTE = [
   "#2563EB", "#38BDF8", "#06B6D4", "#1E3A8A", "#7C3AED",
@@ -1375,17 +1378,102 @@ const APP_BOOT_TIMEOUT_MS = 180_000;
  * olabilir ve projeyi oraya devretmek sessizce boşa giderdi.
  */
 async function probeTraceApp(baseUrl, timeoutMs = 1_500) {
+  return Boolean(await traceAppAt(baseUrl, timeoutMs));
+}
+
+/** Porttaki Trace stüdyosu ve sürümü; Trace değilse `undefined`. Sürümü söylemeyen stüdyo 0.42'den eski. */
+async function traceAppAt(baseUrl, timeoutMs = 1_500) {
   try {
     const response = await fetch(new URL("/api/health", baseUrl), {
       signal: AbortSignal.timeout(timeoutMs),
       headers: { Accept: "application/json" },
     });
-    if (!response.ok) return false;
+    if (!response.ok) return undefined;
     const body = await response.json();
-    return body?.app === APP_HEALTH_MARKER;
+    if (body?.app !== APP_HEALTH_MARKER) return undefined;
+    return { version: typeof body.version === "string" ? body.version : undefined };
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+/** `version`, `wanted`dan eski mi? Sürümü olmayan (bilinmeyen) her zaman eski sayılıyor. */
+export function versionBehind(version, wanted) {
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+/.test(version)) return true;
+  const parts = (value) => value.split(/[.-]/).slice(0, 3).map(Number);
+  const [have, need] = [parts(version), parts(wanted)];
+  for (let index = 0; index < 3; index += 1) if (have[index] !== need[index]) return have[index] < need[index];
+  return false;
+}
+
+/**
+ * Teslimatın stüdyo kararı. Saf: testler doğrudan çağırıyor.
+ *
+ * Eskiden 3000–3002'de cevap veren ilk Trace stüdyosu kullanılıyor, yoksa
+ * hatırlanan depo kopyası başlatılıyordu; ikisinin de sürümüne bakılmıyordu.
+ * Günler önce eski bir kopyadan açılmış bir dev sunucusu yeni analizi en
+ * yeni ekranlar olmadan gösteriyor, okuyucu da sebebini göremiyordu. Şimdi:
+ *
+ * - eklentiden eski olmayan çalışan bir stüdyo varsa o (`reuse`);
+ * - yoksa bağımlılıkları kurulu, eski olmayan bir kopya başlatılıyor (`start`),
+ *   eski olan açık kalsa da;
+ * - yalnızca eski bir stüdyo ya da eski bir kopya varsa hiçbiri açılmıyor,
+ *   okuyucuya güncelleme komutu veriliyor (`update`);
+ * - bağımlılıksız güncel bir kopya (eklentinin kendi klonu) kurulumu bekliyor (`install`).
+ *
+ * `running`: `{ url, port, version }`; `roots`: `{ path, version, installed }`.
+ */
+export function chooseStudio({ running, roots, pluginVersion, installApp = false }) {
+  const behind = (version) => versionBehind(version, pluginVersion);
+  const outdated = running.filter((studio) => behind(studio.version));
+  const current = running.find((studio) => !behind(studio.version));
+  if (current) return { action: "reuse", studio: current, outdated };
+  const fresh = roots.find((root) => root.installed && !behind(root.version));
+  if (fresh) return { action: "start", root: fresh, outdated };
+  const uninstalled = roots.find((root) => !root.installed && !behind(root.version));
+  if (installApp && uninstalled) return { action: "install", root: uninstalled, outdated };
+  const stale = roots.find((root) => root.installed);
+  if (stale || outdated.length) return { action: "update", root: stale, uninstalled, outdated };
+  if (roots.length) return { action: "install", root: uninstalled ?? roots[0], outdated };
+  return { action: "none", outdated };
+}
+
+// Stüdyolar sürümlerini 0.42.0'dan beri söylüyor; söylemeyen ondan eski.
+const describeStudio = (studio) => `${studio.url} (${studio.version ? `version ${studio.version}` : "from before 0.42.0"})`;
+
+/** Eski stüdyo açık kalırken yeni analiz güncel olanda açıldı: okuyucu bilmeli. */
+function outdatedWarning(outdated, url) {
+  if (!outdated.length) return undefined;
+  return `An older Trace studio is still running at ${outdated.map(describeStudio).join(", ")}. This paper opened in the up-to-date studio at ${url}. Stop the old one (Ctrl+C in its terminal) so it is not opened by mistake; it shows the same library without the newest screens.`;
+}
+
+/** Yalnızca eski bir stüdyo ya da kopya var: hiçbirine açılmıyor, güncelleme komutu veriliyor. */
+function outdatedStudio(decision) {
+  const { root, uninstalled, outdated } = decision;
+  const where = outdated.length
+    ? `The Trace studio running at ${outdated.map(describeStudio).join(", ")}`
+    : `The Trace copy in ${root.path} (version ${root.version ?? "unknown"})`;
+  const command = root ? `cd "${root.path}" && git pull && npm install && npm run dev` : "git pull && npm install && npm run dev";
+  const stop = outdated.length ? " Stop the running studio first (Ctrl+C in its terminal)." : "";
+  const folder = root ? "" : " Run it in the folder that studio was started from.";
+  const install = uninstalled ? " Or run deliver again with --install-app to set up the plugin's own up-to-date copy instead." : "";
+  return {
+    ok: false,
+    outdated: true,
+    appRoot: root?.path,
+    command,
+    reason: `${where} is older than this plugin (${PLUGIN_VERSION}), so the paper was not opened there: it would show without the newest screens. Update it and start it again with the command below.${stop}${folder} The paper is already saved in the library and will be there.${install}`,
+  };
+}
+
+function appRootInfo(root) {
+  let version;
+  try {
+    version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+  } catch {
+    // okunamayan package.json: sürümü bilinmiyor, eski sayılıyor
+  }
+  return { path: root, version: typeof version === "string" ? version : undefined, installed: existsSync(join(root, "node_modules", "next")) };
 }
 
 /**
@@ -1445,11 +1533,6 @@ function rememberAppRoot(appRoot) {
   } catch {
     // hatırlamak bir kolaylık; başarısız olması teslimatı etkilemez
   }
-}
-
-function findAppRoot(startDirectories) {
-  const roots = findAppRoots([readRememberedAppRoot(), ...startDirectories]);
-  return roots.find((root) => existsSync(join(root, "node_modules", "next"))) ?? roots[0];
 }
 
 function npmCommand() {
@@ -1526,24 +1609,50 @@ async function ensureTraceApp(args, logDirectory) {
   const explicitUrl = args["app-url"] ?? process.env.TRACE_APP_URL;
   if (explicitUrl) {
     const url = explicitUrl.replace(/\/+$/, "");
-    if (await probeTraceApp(url, 4_000)) return { ok: true, url, started: false, reused: true };
-    return { ok: false, reason: `No Trace app answered at ${url}.` };
+    const found = await traceAppAt(url, 4_000);
+    if (!found) return { ok: false, reason: `No Trace app answered at ${url}.` };
+    // Okuyucu bu adresi kendisi verdi: kullanılıyor, eskiyse söyleniyor.
+    const warning = versionBehind(found.version, PLUGIN_VERSION)
+      ? `The studio at ${describeStudio({ url, version: found.version })} is older than this plugin (${PLUGIN_VERSION}); it shows this paper without the newest screens. Update it with git pull && npm install in its folder, then restart it.`
+      : undefined;
+    return { ok: true, url, started: false, reused: true, version: found.version, ...(warning ? { warning } : {}) };
   }
 
+  const running = [];
   for (const port of [3000, 3001, 3002]) {
     const url = `http://127.0.0.1:${port}`;
-    if (await probeTraceApp(url)) return { ok: true, url, port, started: false, reused: true };
+    const found = await traceAppAt(url);
+    if (found) running.push({ url, port, version: found.version });
   }
 
-  const appRoot = args.app ?? process.env.TRACE_APP_DIR
-    ?? findAppRoot([SKILL_DIRECTORY, process.cwd()]);
-  if (!appRoot) {
-    return { ok: false, reason: "The Trace repository was not found; point at it with --app <dir> or TRACE_APP_DIR." };
+  const explicitRoot = args.app ?? process.env.TRACE_APP_DIR;
+  if (explicitRoot) {
+    // Depo açıkça verildi: eski de olsa o başlatılıyor (güncel bir stüdyo zaten çalışmıyorsa).
+    const root = appRootInfo(resolve(explicitRoot));
+    const current = running.find((studio) => !versionBehind(studio.version, PLUGIN_VERSION));
+    if (current) return { ok: true, ...current, started: false, reused: true };
+    if (!existsSync(join(root.path, "package.json"))) return { ok: false, reason: `${root.path} is not a Node project.` };
+    return startTraceApp(root.path, logDirectory, args);
   }
-  if (!existsSync(join(resolve(appRoot), "package.json"))) {
-    return { ok: false, reason: `${appRoot} is not a Node project.` };
+
+  const roots = findAppRoots([readRememberedAppRoot(), SKILL_DIRECTORY, process.cwd()]).map(appRootInfo);
+  const decision = chooseStudio({ running, roots, pluginVersion: PLUGIN_VERSION, installApp: Boolean(args["install-app"]) });
+  switch (decision.action) {
+    case "reuse": {
+      const warning = outdatedWarning(decision.outdated, decision.studio.url);
+      return { ok: true, ...decision.studio, started: false, reused: true, ...(warning ? { warning } : {}) };
+    }
+    case "start":
+    case "install": {
+      const started = await startTraceApp(decision.root.path, logDirectory, args);
+      const warning = started.ok ? outdatedWarning(decision.outdated, started.url) : undefined;
+      return warning ? { ...started, warning } : started;
+    }
+    case "update":
+      return outdatedStudio(decision);
+    default:
+      return { ok: false, reason: "The Trace repository was not found; point at it with --app <dir> or TRACE_APP_DIR." };
   }
-  return startTraceApp(resolve(appRoot), logDirectory, args);
 }
 
 function isAlive(pid) {
@@ -1754,6 +1863,7 @@ async function deliver(args) {
     appUrl,
     appStarted: app.ok ? Boolean(app.started) : false,
     appNote: app.ok ? undefined : (app.reason ?? app.skipped),
+    appWarning: app.ok ? app.warning : undefined,
     opened,
     siteDirectory,
     jsonPath,
@@ -1763,9 +1873,9 @@ async function deliver(args) {
     serverPid,
     appPid: app.ok ? app.pid : undefined,
     studioCommand: app.ok ? undefined : app.command,
-    note: opened.length > 0
+    note: `${opened.length > 0
       ? `Opened: ${opened.join(", ")}. The JSON stays in the same folder.`
-      : `Could not open a browser. Standalone site: ${url}${appUrl ? ` · Studio: ${appUrl}` : ""}`,
+      : `Could not open a browser. Standalone site: ${url}${appUrl ? ` · Studio: ${appUrl}` : ""}`}${app.ok && app.warning ? ` ${app.warning}` : ""}`,
   }, null, 2));
 }
 
@@ -2550,4 +2660,4 @@ try {
 
 if (resolve(process.argv[1] ?? "") === SCRIPT_PATH) await main();
 
-export { TRACE_ACCENT_PALETTE, assignPaperAccent, persistLibraryProject, readLibrary, readingListReport, todayReport, traceDataDirectory };
+export { PLUGIN_VERSION, TRACE_ACCENT_PALETTE, assignPaperAccent, persistLibraryProject, readLibrary, readingListReport, todayReport, traceDataDirectory };

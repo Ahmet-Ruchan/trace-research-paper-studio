@@ -34,6 +34,8 @@ const targets = [
   { path: `plugins/${PLUGIN_NAME}/.codex-plugin/plugin.json`, read: (json) => [json.version] },
   // MCP sunucusunun kendini tanıttığı sürüm: Antigravity'nin kopyasında sürümlü bir manifest yok.
   { path: `plugins/${PLUGIN_NAME}/skills/${PLUGIN_NAME}/scripts/trace-mcp.mjs`, pattern: /^const SERVER_VERSION = "([^"]*)";$/m },
+  // Köprü, çalışan ya da başlatılacak stüdyonun bundan eski olmadığına bakıyor (`deliver`).
+  { path: `plugins/${PLUGIN_NAME}/skills/${PLUGIN_NAME}/scripts/trace-agent.mjs`, pattern: /^const PLUGIN_VERSION = "([^"]*)";$/m },
 ];
 
 function versionsOf(target) {
