@@ -1,0 +1,9 @@
+# Ham footage, ses ve render çıktıları git'e girmez
+*/renders/
+*/.hyperframes/
+*.mp4
+*.mov
+*.webm
+*.m4a
+*.mp3
+*.wav
