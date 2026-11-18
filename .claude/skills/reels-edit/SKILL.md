@@ -90,10 +90,11 @@ cp -r ../.claude/skills/reels-edit/assets/fonts <YYYY-MM-DD-konu>/assets/fonts
 
 ## 5. Altyazı — sade cümle
 
-- Transkript: Türkçe için `npx hyperframes transcribe <video> --model small --language tr --json`
-  (teknik terim çoksa `--model medium --language tr`). whisper-cpp yoksa önce kur
-  (`hyperframes doctor` ipucunu verir). **Asla varsayılan `small.en` kullanma** — Türkçeyi
-  İngilizceye çevirir.
+- Transkript: Türkçe için `npx hyperframes transcribe <video> --engine whisper --model medium --language tr --json`
+  (medium, Türkçede small'dan belirgin şekilde daha doğru; 4 çekirdekte gerçek sürenin ~2-3 katı).
+  Sadece hızlı taslak için `--model small`. **Asla varsayılan `small.en` kullanma** — Türkçeyi
+  İngilizceye çevirir. whisper.cpp ilk çalıştırmada otomatik derlenir (`~/.cache/hyperframes/whisper`,
+  cmake + derleyici gerekir); modeller ilk kullanımda iner. Kurulumu `hyperframes doctor` ile doğrula.
 - Transkripti oku; teknik terimleri (transformer, gradient descent, LLM, PyTorch, makale ve
   kişi adları) düzelt. Emin olmadığın kelimeleri storyboard'da işaretle.
 - Stil: 1–2 satır, satır başına en fazla ~32 karakter, cümle/duraklama sınırından böl, kelime
